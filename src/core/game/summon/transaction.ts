@@ -193,6 +193,7 @@ export function serializeSummonTransaction(
     summonId: transaction.summonId ?? null,
     status: transaction.status || SUMMON_STATUSES.PREPARED,
     summonOrigin: transaction.summonOrigin,
+    ...(transaction.skipFinalTiming ? { skipFinalTiming: true, negationWindowPolicy: transaction.negationWindowPolicy } : {}),
     summonMode: transaction.summonMode,
     summonMethod: transaction.summonMethod,
     summonProcedure: transaction.summonProcedure || null,
@@ -286,6 +287,7 @@ export function createPreparedSummon(
     onSuccess: typeof input.onSuccess === "function" ? input.onSuccess : null,
     finalContext: input.finalContext || null,
     skipFinalTiming: input.skipFinalTiming === true,
+    negationWindowPolicy: input.negationWindowPolicy || "auto",
   };
 }
 

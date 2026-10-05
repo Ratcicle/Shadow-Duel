@@ -15,7 +15,8 @@ import {
   establishProperSummon,
 } from "../../../game/summon/eligibility.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
-import { estimateMonsterValue, hasArchetype } from "../cardValue.js";
+import { compareMaterialCombinations, estimateCardCost, estimateMonsterValue, hasArchetype,
+  valueMaterialCombination, type MaterialCombinationValue } from "../cardValue.js";
 import {
   evaluateSimulatedConditions,
   getStoredBlueprints,
@@ -645,7 +646,8 @@ export function simulateSynchroSummon(
   const metadata = materials.map(card => captureSimSynchroMaterialMetadata(card, player, state, materialRoles.get(card) === "tuner"));
   const contextId = `sim:synchro:${state._simGeneratedInstanceCounter = (state._simGeneratedInstanceCounter || 0) + 1}`;
   const actionContext = { ...options.actionContext, synchroSummonContextId: contextId };
-  const deferred: SimulatedEventOccurrence[] = [];
+  const frame = createDeferredSimulatedEventFrame(state, options, event => event === "card_to_grave" || event === "after_summon");
+  const eventOptions = frame.options;
   for (const material of materials) {
     const wasFaceupBeforeMove = !material.isFacedown;
     const effectsNegatedAtFieldExit = material.effectsNegated === true;
@@ -654,15 +656,14 @@ export function simulateSynchroSummon(
     const payload = { card: material, player, fromPlayer: player, toPlayer: toZone === "removed" ? null : player,
       fromZone: "field", toZone,
       wasFaceupBeforeMove, effectsNegatedAtFieldExit, movedByEffect: false,
-      contextLabel: "synchro_material", sourceCard: synchroCard, actionContext };
+      contextLabel: "synchro_material", sourceCard: synchroCard, actionContext, deferActivationChecks: true };
     if (toZone === "graveyard") {
       updateSimulatedSentToGraveMaterialMarker({ card: material, state, player, fromZone: "field", contextLabel: "synchro_material" });
       // The runtime emits movement immediately and holds its trigger until the
       // Synchro attempt finishes. Observe now; resolve the batch below.
-      options.onSimulatedEvent?.("card_to_grave", payload);
-      deferred.push({ event: "card_to_grave", payload, observed: true });
+      eventOptions.emitSimulatedEvent?.("card_to_grave", payload);
     }
-    options.emitSimulatedEvent?.("card_moved", payload);
+    eventOptions.emitSimulatedEvent?.("card_moved", payload);
   }
   if (!moveCardToZone(player, synchroCard, "field", player, { state })) return false;
   applySummonState(
@@ -682,7 +683,7 @@ export function simulateSynchroSummon(
   });
   synchroCard.synchroMaterials = metadata;
   recordCompletedSimulatedSummon(state, { card: synchroCard, player, method: "synchro" });
-  const summonEvent: SimulatedEventOccurrence = { event: "after_summon", observed: true, payload: {
+  const summonEvent: SimulatedEventOccurrence = { event: "after_summon", payload: {
     card: synchroCard,
     player,
     method: "synchro",
@@ -690,16 +691,11 @@ export function simulateSynchroSummon(
     fromZone: "extraDeck",
     sourceCard: synchroCard,
     actionContext,
+    deferActivationChecks: true,
   } };
-  options.onSimulatedEvent?.(summonEvent.event, summonEvent.payload);
-  options.emitSimulatedEvent?.("card_moved", { card: synchroCard, player, fromZone: "extraDeck", toZone: "field", actionContext });
-  // The runtime finishes the material trigger window before discovering the
-  // summoned monster's queued trigger targets. Keep those choices separate:
-  // a material effect can remove a prospective target from the Graveyard.
-  if (options.emitSimulatedEvents) options.emitSimulatedEvents(deferred);
-  else for (const entry of deferred) options.emitSimulatedEvent?.(entry.event, entry.payload);
-  if (options.emitSimulatedEvents) options.emitSimulatedEvents([summonEvent]);
-  else options.emitSimulatedEvent?.(summonEvent.event, summonEvent.payload);
+  eventOptions.emitSimulatedEvent?.(summonEvent.event, summonEvent.payload);
+  eventOptions.emitSimulatedEvent?.("card_moved", { card: synchroCard, player, fromZone: "extraDeck", toZone: "field", actionContext });
+  frame.finishResolution();
   const followups = (state.pendingSynchroMaterialFollowups || []).filter(entry => entry.synchroSummonContextId === contextId);
   state.pendingSynchroMaterialFollowups = (state.pendingSynchroMaterialFollowups || []).filter(entry => entry.synchroSummonContextId !== contextId);
   for (const followup of followups) {
@@ -710,6 +706,7 @@ export function simulateSynchroSummon(
     });
   }
   return true;
+
 }
 
 export function applySearchThenOptionalSpecialSummonFromHand(
@@ -1214,20 +1211,19 @@ export function applyPolymerizationFusionSummon(
   const options = attachSimulatedEventEmitter(state, { ...suppliedOptions, enableSimulatedEvents: true });
   const targetPlayer = resolveActionPlayer(action, self, opponent);
   const otherPlayer = targetPlayer === self ? opponent : self;
+  const costPreference = mergeCostPreference(
+    getTargetPreference(options, (action as LegacyPolymerizationAction).targetRef ||
+      (action as LegacyPolymerizationAction).id), getCostPreference(options));
+  const preferenceArchetype: unknown = costPreference ? Reflect.get(costPreference, "archetype") : undefined;
+  const costOptions = { fieldSpell: targetPlayer.fieldSpell, preference: costPreference,
+    archetype: typeof preferenceArchetype === "string" ? preferenceArchetype : null };
   const materialPool = rankCandidates([
     ...(targetPlayer.field || []),
     ...(targetPlayer.hand || []),
   ].filter((card) => card?.cardKind === "monster"), "cost", {
       ...options,
-      fieldSpell: targetPlayer.fieldSpell,
-      targetPreference: mergeCostPreference(
-        getTargetPreference(
-          options,
-          (action as LegacyPolymerizationAction).targetRef ||
-            (action as LegacyPolymerizationAction).id,
-        ),
-        getCostPreference(options),
-      ),
+      ...costOptions,
+      targetPreference: costPreference,
     });
   const canPayMaterials = (
     fusionCard: SimulatedCardState,
@@ -1249,14 +1245,29 @@ export function applyPolymerizationFusionSummon(
     if (!canSimulatedProcedureEnterField(fusionCard, targetPlayer, otherPlayer,
       candidatesBySlot.flat())) return null;
     const picked: SimulatedCardState[] = [];
-    // Preserve cost ranking, but backtrack until every requirement and the
-    // destination are legal together (a cheap hand-only combo may leave no room).
-    const search = (index: number): SimulatedCardState[] | null => {
+    const best: { entry: { materials: SimulatedCardState[]; value: MaterialCombinationValue } | null } = { entry: null };
+    // Minima may reuse cards across remaining slots. That relaxation is a safe
+    // lower bound, including negative preferences; equality still explores ties.
+    const costs = new Map(materialPool.map(card => [card, estimateCardCost(card, costOptions)]));
+    const search = (index: number): void => {
       const requirement = slots[index];
       if (!requirement) {
-        return canSimulatedProcedureEnterField(fusionCard, targetPlayer, otherPlayer, picked)
-          ? [...picked] : null;
+        if (!canSimulatedProcedureEnterField(fusionCard, targetPlayer, otherPlayer, picked)) return;
+        const value = valueMaterialCombination(picked, targetPlayer.field, costOptions);
+        if (!best.entry || compareMaterialCombinations(value, best.entry.value) < 0) best.entry = { materials: [...picked], value };
+        return;
       }
+      const lowerBoundTerms = picked.map(card => costs.get(card) ?? Infinity);
+      for (const candidates of candidatesBySlot.slice(index)) {
+        let minimum = Infinity;
+        for (const candidate of candidates) {
+          if (!picked.includes(candidate)) minimum = Math.min(minimum, costs.get(candidate) ?? Infinity);
+        }
+        if (!Number.isFinite(minimum)) return;
+        lowerBoundTerms.push(minimum);
+      }
+      const lowerBound = lowerBoundTerms.sort((left, right) => left - right).reduce((sum, cost) => sum + cost, 0);
+      if (best.entry && lowerBound > best.entry.value.cost) return;
       const candidates = candidatesBySlot[index] || [];
       const previous = picked[index - 1];
       // Slots expanded from one count requirement are interchangeable.
@@ -1265,13 +1276,12 @@ export function applyPolymerizationFusionSummon(
       for (const candidate of candidates.slice(start)) {
         if (picked.includes(candidate)) continue;
         picked.push(candidate);
-        const combo = search(index + 1);
-        if (combo) return combo;
+        search(index + 1);
         picked.pop();
       }
-      return null;
     };
-    return search(0);
+    search(0);
+    return best.entry?.materials ?? null;
   };
   const fusionEntries = (targetPlayer.extraDeck || [])
     .filter((card) => card?.monsterType === "fusion")

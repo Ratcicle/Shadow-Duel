@@ -5,7 +5,7 @@ import type {
   ResolvedTargetMap,
 } from "../../contracts/actionRuntime.js";
 import type { ActionOf } from "../../contracts/actions.js";
-import type { CardPermanentBuffMap } from "../../contracts/cards.js";
+import type { CardPermanentBuffMap, LevelModificationContribution } from "../../contracts/cards.js";
 import { suppressTemporaryDynamicStatIncreasesForDebuff } from "../passives/passiveBuffs.js";
 
 interface StatsRuntimeCard extends ActionRuntimeCard {
@@ -21,6 +21,71 @@ interface PersistentStatsCard {
   atk?: number | undefined;
   def?: number | undefined;
   permanentBuffsBySource?: CardPermanentBuffMap | null | undefined;
+}
+
+interface LevelModificationCard {
+  level?: number | undefined;
+  originalLevel?: number | null | undefined;
+  levelModificationContributions?: LevelModificationContribution[] | undefined;
+}
+
+/** Store actual clamped deltas; presence and turn durations expire independently. */
+export function applyLevelModification(
+  card: LevelModificationCard,
+  nextLevel: number,
+  duration: string = "while_faceup",
+): void {
+  const current = Number(card.level || 0);
+  if (nextLevel === current) return;
+  if (duration === "permanent") {
+    if (card.originalLevel != null && card.levelModificationContributions?.length) {
+      card.originalLevel += nextLevel - current;
+    }
+    card.level = nextLevel;
+    return;
+  }
+  const contributions = card.levelModificationContributions || [];
+  // Adopt existing hand-level/legacy baselines without changing their turn expiry.
+  if (contributions.length === 0 && card.originalLevel != null && current !== card.originalLevel) {
+    contributions.push({ amount: current - card.originalLevel, duration: "until_end_turn" });
+  }
+  card.originalLevel ??= current;
+  contributions.push({
+    amount: nextLevel - current,
+    duration: duration === "while_faceup" ? "while_faceup" : "until_end_turn",
+  });
+  card.levelModificationContributions = contributions;
+  card.level = nextLevel;
+}
+
+export function expireLevelModifications(
+  card: LevelModificationCard,
+  duration: LevelModificationContribution["duration"],
+): void {
+  const entries = card.levelModificationContributions || [];
+  if (entries.length === 0) {
+    if (duration === "until_end_turn" && card.originalLevel != null) {
+      card.level = card.originalLevel;
+      card.originalLevel = null;
+    }
+    return;
+  }
+  const expired = entries.filter(entry => entry.duration === duration);
+  if (expired.length === 0) return;
+  const remaining = entries.filter(entry => entry.duration !== duration);
+  card.level = Math.max(1, Number(card.level || 0) - expired.reduce((sum, entry) => sum + entry.amount, 0));
+  card.levelModificationContributions = remaining;
+  if (remaining.length === 0) {
+    if (card.originalLevel != null) card.level = card.originalLevel;
+    card.originalLevel = null;
+  }
+}
+
+/** A field departure ends all level changes tied to that affected presence. */
+export function clearLevelModifications(card: LevelModificationCard): void {
+  if (card.originalLevel != null) card.level = card.originalLevel;
+  card.originalLevel = null;
+  card.levelModificationContributions = [];
 }
 
 export function applyNamedStatChange(

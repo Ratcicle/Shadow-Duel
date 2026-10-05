@@ -10,8 +10,9 @@ import {
   isQuickSpell,
 } from "../../game/spellTrap/quickSpellRules.js";
 import { getCanonicalEffectActivationZones } from "../../chain/legality.js";
+import { captureChainResponseDecisionCards } from "../../game/decisions/chainResponse.js";
 import type { NormalizedActionExecutionResult } from "../../contracts/actionRuntime.js";
-import type { ActivationZone } from "../../contracts/activation.js";
+import type { ActivationAfterResolutionState, ActivationZone } from "../../contracts/activation.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
 import type { CanonicalSelectionMap } from "../../contracts/selection.js";
 import { asQuickSpellWindowContext } from "./runtime.js";
@@ -51,6 +52,80 @@ function actionsResultFailed(
     actionsResult.success === false &&
     actionsResult.needsSelection !== true
   );
+}
+
+async function continueAfterActivationActions(engine: ActivationEngineHost,
+  activationContext: ActivationRuntimeContext, state: ActivationAfterResolutionState,
+  selections: CanonicalSelectionMap | null = null): Promise<ActivationExecutionResult> {
+  if (state.selectionGeneration !== (engine.game.selectionAbortGeneration ?? 0)) {
+    if (engine.game.afterResolutionActivation === state) engine.game.afterResolutionActivation = null;
+    return { success: false, needsSelection: false, reason: "Selection was aborted by system teardown." };
+  }
+  if (state.completed) return { success: true, needsSelection: false, activationContext, effect: state.effect };
+  activationContext.afterResolution = state;
+  engine.game.afterResolutionActivation = state;
+  if (selections) {
+    activationContext.resolutionSelections = { ...activationContext.resolutionSelections, ...selections };
+    state.context.activationContext = { ...state.context.activationContext,
+      resolutionSelections: activationContext.resolutionSelections };
+  }
+  const actions = state.effect.afterResolutionActions || [];
+  while (state.actionIndex < actions.length) {
+    const action = actions[state.actionIndex];
+    if (!action) break;
+    state.context.afterEffectResolution = { chainLevel: 1, actionIndex: state.actionIndex };
+    const result = await engine.applyActions([action], state.context as ActivationActionExecutionContext,
+      { ...state.targets, ...state.context._actionTargets });
+    if (state.selectionGeneration !== (engine.game.selectionAbortGeneration ?? 0)) {
+      if (!state.deferCleanup && engine.game.afterResolutionActivation === state) engine.game.afterResolutionActivation = null;
+      return { success: false, needsSelection: false, reason: "Selection was aborted by system teardown." };
+    }
+    if (result.needsSelection) return { ...buildActionsSelection(result), activationContext, effect: state.effect,
+      targets: state.targets };
+    if (actionsResultFailed(result)) {
+      state.completed = true;
+      delete state.context.afterEffectResolution;
+      if (!state.deferCleanup && engine.game.afterResolutionActivation === state) engine.game.afterResolutionActivation = null;
+      return { ...buildActionsFailure(result), activationContext, effect: state.effect };
+    }
+    state.actionIndex++;
+  }
+  state.completed = true;
+  delete state.context.afterEffectResolution;
+  if (!state.deferCleanup && engine.game.afterResolutionActivation === state) engine.game.afterResolutionActivation = null;
+  engine.game.updateBoard?.();
+  engine.commitEffectUsage(state.source, state.player, state.effect);
+  engine.game.checkWinCondition();
+  if (state.storeBlueprint) await engine.handleBlueprintStorageAfterResolution(state.source, state.effect,
+    state.context as ActivationBlueprintContext);
+  return { success: true, needsSelection: false, activationContext, effect: state.effect,
+    targets: state.targets };
+}
+
+function startAfterActivationActions(engine: ActivationEngineHost, card: ActivationCard, player: ActivationPlayer,
+  effect: EffectDefinition, context: ActivationActionExecutionContext, activationContext: ActivationRuntimeContext,
+  targets: NonNullable<ActivationActionExecutionContext["_actionTargets"]>, storeBlueprint: boolean): Promise<ActivationExecutionResult> {
+  const cards = [player, engine.game.getOpponent(player)].flatMap(player => player ? [
+    ...player.deck, ...player.extraDeck, ...player.hand, ...player.field, ...player.spellTrap,
+    ...player.graveyard, ...player.banished, ...(player.fieldSpell ? [player.fieldSpell] : []),
+  ] : []);
+  const decisions = context.activationContext?.decisions;
+  const decisionCards = decisions ? captureChainResponseDecisionCards(decisions, cards) : [];
+  for (const card of decisionCards) engine.game.ensureDuelCardId?.(card);
+  return continueAfterActivationActions(engine, activationContext, { source: card, player, effect, context, targets,
+    actionIndex: 0, selectionGeneration: engine.game.selectionAbortGeneration ?? 0, completed: false, storeBlueprint,
+    deferCleanup: activationContext.deferAfterResolutionCleanup === true,
+    ...(decisionCards.length ? { decisionCards } : {}),
+    ...(activationContext.referenceSnapshots ? { referenceSnapshots: activationContext.referenceSnapshots } : {}) });
+}
+
+function resumeAfterActivationActions(engine: ActivationEngineHost, card: ActivationCard, player: ActivationPlayer,
+  activationContext: ActivationRuntimeContext, selections: CanonicalSelectionMap | null): Promise<ActivationExecutionResult> | null {
+  const state = activationContext.afterResolution;
+  if (!state) return null;
+  if (state.source !== card || state.player !== player) return Promise.resolve({ success: false, needsSelection: false,
+    reason: "Post-effect continuation belongs to another activation." });
+  return continueAfterActivationActions(engine, activationContext, state, selections);
 }
 
 function buildActionsFailure(
@@ -173,6 +248,11 @@ export async function activateMonsterFromGraveyard(
       reason: "Missing card or player.",
     };
   }
+  if (card && player) {
+    const continuation = resumeAfterActivationActions(this, card, player, activationContext, selections);
+    if (continuation) return continuation;
+  }
+
   if (this.game?.turn !== player.id) {
     return {
       success: false,
@@ -240,6 +320,7 @@ export async function activateMonsterFromGraveyard(
   }
 
   const normalizedActivationContext: ActivationRuntimeContext = {
+    deferAfterResolutionCleanup: activationContext.deferAfterResolutionCleanup === true,
     fromHand: activationContext?.fromHand === true,
     activationZone: "graveyard",
     sourceZone: activationContext?.sourceZone || "graveyard",
@@ -335,6 +416,10 @@ export async function activateMonsterFromGraveyard(
   if (actionsResultFailed(actionsResult)) {
     return buildActionsFailure(actionsResult);
   }
+  if (effect.afterResolutionActions?.length) {
+    return startAfterActivationActions(this, card, player, effect, ctx as ActivationActionExecutionContext,
+      normalizedActivationContext, targetResult.targets || {}, false);
+  }
 
   // Only register usage and check win after successful resolution
   this.commitEffectUsage(card, player, effect);
@@ -366,6 +451,11 @@ export async function activateFieldSpell(
     };
   }
 
+
+  if (card && player) {
+    const continuation = resumeAfterActivationActions(this, card, player, activationContext, selections);
+    if (continuation) return continuation;
+  }
   const check = this.canActivate(card, player);
   if (!check.ok) {
     return { success: false, needsSelection: false, reason: check.reason };
@@ -403,6 +493,7 @@ export async function activateFieldSpell(
   }
 
   const normalizedActivationContext: ActivationRuntimeContext = {
+    deferAfterResolutionCleanup: activationContext.deferAfterResolutionCleanup === true,
     fromHand: activationContext?.fromHand === true,
     activationZone: "fieldSpell",
     sourceZone: activationContext?.sourceZone || "fieldSpell",
@@ -483,6 +574,10 @@ export async function activateFieldSpell(
   if (actionsResultFailed(actionsResult)) {
     return buildActionsFailure(actionsResult);
   }
+  if (effect.afterResolutionActions?.length) {
+    return startAfterActivationActions(this, card, player, effect, ctx as ActivationActionExecutionContext,
+      normalizedActivationContext, targetResult.targets || {}, true);
+  }
 
   // Only register usage and check win after successful resolution
   this.commitEffectUsage(card, player, effect);
@@ -531,6 +626,11 @@ export async function activateSpellTrapEffect(
   if (!card || !player) {
     return fail("Missing card or player.");
   }
+  if (card && player) {
+    const continuation = resumeAfterActivationActions(this, card, player, activationContext, selections);
+    if (continuation) return continuation;
+  }
+
   if (
     card.owner !== player.id &&
     !canContinueWithCommittedMovedSource(card, player, activationZone, activationContext)
@@ -605,6 +705,7 @@ export async function activateSpellTrapEffect(
   }
 
   const normalizedActivationContext: ActivationRuntimeContext = {
+    deferAfterResolutionCleanup: activationContext.deferAfterResolutionCleanup === true,
     fromHand,
     activationZone,
     sourceZone:
@@ -867,6 +968,10 @@ export async function activateSpellTrapEffect(
   if (actionsResultFailed(actionsResult)) {
     return buildActionsFailure(actionsResult);
   }
+  if (effect.afterResolutionActions?.length) {
+    return startAfterActivationActions(this, card, player, effect, ctx as ActivationActionExecutionContext,
+      normalizedActivationContext, targetResult.targets || {}, true);
+  }
   this.game?.updateBoard?.();
   if (typeof this.game?.waitForAiPresentationStep === "function") {
     await this.game.waitForAiPresentationStep(player);
@@ -911,6 +1016,11 @@ export async function activateMonsterEffect(
       reason: "Missing card or player.",
     };
   }
+  if (card && player) {
+    const continuation = resumeAfterActivationActions(this, card, player, activationContext, selections);
+    if (continuation) return continuation;
+  }
+
   if (
     card.owner !== player.id &&
     !canContinueWithCommittedMovedSource(card, player, activationZone, activationContext)
@@ -1037,6 +1147,7 @@ export async function activateMonsterEffect(
   const fromHand =
     activationContext?.fromHand === true || activationZone === "hand";
   const normalizedActivationContext: ActivationRuntimeContext = {
+    deferAfterResolutionCleanup: activationContext.deferAfterResolutionCleanup === true,
     fromHand,
     activationZone,
     sourceZone:
@@ -1143,6 +1254,10 @@ export async function activateMonsterEffect(
   }
   if (actionsResultFailed(actionsResult)) {
     return buildActionsFailure(actionsResult);
+  }
+  if (effect.afterResolutionActions?.length) {
+    return startAfterActivationActions(this, card, player, effect, ctx as ActivationActionExecutionContext,
+      normalizedActivationContext, targetResult.targets || {}, false);
   }
   this.commitEffectUsage(card, player, effect);
 

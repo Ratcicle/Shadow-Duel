@@ -17,6 +17,7 @@ import type {
   ResolvableEventName,
 } from "../../contracts/events.js";
 import { captureEventReferenceSnapshots } from "../../effects/targeting/references.js";
+import { hasChainPostEffectSummonCapability } from "../../contracts/chainRuntime.js";
 
 /**
  * Resolve an event by collecting and executing triggers
@@ -197,6 +198,7 @@ export async function resolveEvent<Name extends ResolvableEventName>(
         results: [],
       };
     } else if (
+      this.afterResolutionActivation != null ||
       this.chainSystem?.isChainResolving?.() === true ||
       this.chainSystem?.isPreparingActivation === true ||
       this.chainSystem?.isChainWindowOpen?.() === true ||
@@ -324,9 +326,11 @@ export async function flushPendingTriggerOccurrences(
     return { ok: true, flushed: 0, deferred: true };
   }
   if (
+    this.afterResolutionActivation != null ||
     chain?.isChainResolving?.() === true ||
     chain?.isChainWindowOpen?.() === true ||
-    chain?.isPreparingActivation === true
+    chain?.isPreparingActivation === true ||
+    (hasChainPostEffectSummonCapability(chain) && chain.isPostEffectTriggerBarrierActive())
   ) {
     return { ok: true, flushed: 0, deferred: true };
   }

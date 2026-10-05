@@ -19,7 +19,7 @@ import type {
 
 export const CANONICAL_REPLAY_FORMAT = "shadow-duel-canonical-replay" as const;
 export const CANONICAL_REPLAY_SCHEMA_VERSION = 2 as const;
-export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v18" as const;
+export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v22" as const;
 
 export type SerializablePrimitive = string | number | boolean | null;
 
@@ -344,6 +344,8 @@ export type CanonicalReplayEvent = {
 }[CanonicalReplayEventName];
 
 export interface CanonicalCardStatusSnapshot {
+  faceupStatuses?: SerializableValue;
+  attackLimit?: { amount: number; duration: string | number };
   effectsNegated: boolean;
   effectsNegatedDuration: SerializableValue;
   effectsNegationContributions: import("./cards.js").EffectNegationContribution[];
@@ -353,6 +355,12 @@ export interface CanonicalCardStatusSnapshot {
   piercing: boolean;
   piercingDamageMultiplier: number;
   piercingGrantedByEffect: boolean;
+}
+
+export interface CanonicalStatBuffContribution {
+  atk: number;
+  def: number;
+  duration: "while_faceup" | "until_field_exit";
 }
 
 export interface CanonicalCardStateSnapshot {
@@ -382,6 +390,10 @@ export interface CanonicalCardStateSnapshot {
   baseDef: number;
   level: number;
   baseLevel: number;
+  originalLevel: number | null;
+  levelModificationContributions: import("./cards.js").LevelModificationContribution[];
+  declaredValues?: import("./cards.js").CardDeclaredValueMap;
+  statBuffContributions?: CanonicalStatBuffContribution[];
   counters: SerializableValue;
   equipTargetId: DuelCardId | number | null;
   statuses: CanonicalCardStatusSnapshot;
@@ -410,6 +422,7 @@ export interface CanonicalPlayerStateSnapshot {
 }
 
 export interface CanonicalChainStateSnapshot {
+  afterResolution?: SerializableValue;
   state: SerializableValue;
   links: SerializableValue;
   timing: SerializableValue;
@@ -475,6 +488,7 @@ export interface CanonicalReplay {
 }
 
 export interface ReplayRuntimeCard {
+  faceupStatuses?: import("./cards.js").CardStatusRegistry;
   id?: (RawCardDefinitionId | null) | undefined;
   duelCardId?: DuelCardId | number | null;
   owner?: string | null;
@@ -503,12 +517,18 @@ export interface ReplayRuntimeCard {
   baseDef?: number;
   level?: number | undefined;
   baseLevel?: number;
+  originalLevel?: number | null;
+  levelModificationContributions?: readonly import("./cards.js").LevelModificationContribution[];
+  declaredValues?: import("./cards.js").CardDeclaredValueMap;
+  permanentBuffsBySource?: import("./cards.js").CardPermanentBuffMap;
   counters?: object | null;
   equippedTo?: ReplayRuntimeCard | null;
   effectsNegated?: boolean;
   effectsNegatedDuration?: string | number | null;
   effectsNegationContributions?: import("./cards.js").EffectNegationContribution[];
   cannotAttackThisTurn?: boolean;
+  attackLimitThisTurn?: number | null;
+  attackLimitDuration?: string | number | null;
   battlePositionLocked?: boolean;
   banishWhenLeavesField?: boolean;
   cardKind?: (string | null) | undefined;
@@ -546,6 +566,7 @@ export type CanonicalReplayChainPort = Partial<
 };
 
 export interface CanonicalReplayGamePort {
+  afterResolutionActivation?: import("./activation.js").ActivationAfterResolutionState | null;
   oncePerTurnTurnCounter?: number;
   oncePerTurnUsage?: { player: ReadonlyMap<string, unknown>; bot: ReadonlyMap<string, unknown>; card?: { get(card: ReplayRuntimeCard): unknown } };
   generatedIdCounters?: ReadonlyMap<string, number>;

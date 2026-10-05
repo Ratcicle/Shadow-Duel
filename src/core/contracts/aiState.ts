@@ -601,12 +601,15 @@ export interface PublicFieldCardState {
   def: number | null;
   level: number | null;
   baseLevel: number | null;
+  originalLevel: number | null;
+  levelModificationContributions: import("./cards.js").LevelModificationContribution[] | null;
   piercing: boolean | null;
   piercingDamageMultiplier: number | null;
   piercingGrantedByEffect: boolean | null;
   isTuner: boolean | null;
   faceDown: boolean;
   status: {
+    faceupStatuses?: import("./cards.js").CardStatusRegistry | null;
     cannotAttackThisTurn: boolean | null;
     battlePositionLocked: boolean | null;
     effectsNegated: boolean | null;
@@ -624,6 +627,8 @@ export interface PublicHandCardState {
   def: number;
   level: number;
   baseLevel: number;
+  originalLevel: number | null;
+  levelModificationContributions: import("./cards.js").LevelModificationContribution[];
   isTuner: boolean;
   cardKind: CardKind;
   properSummonEstablished: boolean;
@@ -749,6 +754,7 @@ export interface PublicGameState {
   cardActivationHistory?: TurnCardActivationHistory;
   currentPlayer: PlayerId;
   chain: {
+    afterResolution?: object;
     chainId: number | null;
     windowOpen: boolean;
     resolving: boolean;

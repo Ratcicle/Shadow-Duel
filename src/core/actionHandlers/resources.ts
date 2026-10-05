@@ -826,7 +826,7 @@ export async function handleRestrictEffectActivationsByAttribute(
 function resolveMarkerExpirationTurn(
   game: ActionRuntimeGamePort,
   markerConfig: MarkerConfig = {},
-): number {
+): number | null {
   const currentTurn = Number(game?.turnCounter || 0);
   if (
     typeof markerConfig.expiresOnTurn === "number" &&
@@ -843,7 +843,8 @@ function resolveMarkerExpirationTurn(
   if (markerConfig.duration === "end_of_next_turn") {
     return currentTurn + 1;
   }
-  return currentTurn;
+  if (markerConfig.duration === "end_of_turn") return currentTurn;
+  return null;
 }
 
 function markAddedCards(

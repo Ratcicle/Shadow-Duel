@@ -25,6 +25,7 @@ import type {
   FullChainHost,
   PendingChainSelection,
   PendingTriggerSelection,
+  SuspendedChainFrame,
 } from "./contracts/chainRuntime.js";
 import type { ChainId } from "./contracts/primitives.js";
 
@@ -41,6 +42,7 @@ class ChainSystem implements FullChainHost {
     this.isResolving = false;
     this.cardsBeingResolved = new Set<ChainCard>();
     this.pendingChainSelection = null as PendingChainSelection | null;
+    this.suspendedChainFrames = [] as SuspendedChainFrame[];
     this.isPreparingActivation = false;
     this.activeResponseAbortController = null as AbortController | null;
     this.responseTimeoutMs = Number.isFinite(options.responseTimeoutMs)

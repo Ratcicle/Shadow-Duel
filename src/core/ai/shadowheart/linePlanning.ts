@@ -1260,6 +1260,7 @@ export function buildShadowHeartPlanningProfile(analysis: Analysis = {}, context
     candidateLimit: Number.isFinite(game.turnLineSearchCandidateLimit)
       ? game.turnLineSearchCandidateLimit!
       : 8,
+    allowEarlyStop: true,
     reasons,
     critical: reasons.length > 0,
   };

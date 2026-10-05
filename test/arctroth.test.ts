@@ -19,7 +19,7 @@ for (const duration of ["damage_calculation", "end_of_damage_step"] as const) {
     await game.effectEngine.applyActions([{ type: "buff_stats_temp", targetRef: "target", atkBoost: 1000, defBoost: 700, duration }], ctx, targets);
     await game.effectEngine.applyActions([{ type: "remove_stat_increases", targetRef: "target", stats: ["atk", "def"] }], ctx, targets);
     assert.deepEqual([monster.atk, monster.def], [2000, 2000]);
-    await game.effectEngine.applyActions([{ type: "buff_stats_temp", targetRef: "target", atkBoost: 500, defBoost: 200 }], ctx, targets);
+    await game.effectEngine.applyActions([{ type: "buff_stats_temp", targetRef: "target", atkBoost: 500, defBoost: 200, duration: "end_of_turn" }], ctx, targets);
     game.clearDamageCalculationBuffs();
     game.clearEndOfDamageStepBuffs();
     assert.deepEqual([monster.atk, monster.def], [2500, 2200]);

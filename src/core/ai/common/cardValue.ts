@@ -21,7 +21,7 @@ interface CardValueEffectView {
   actions?: readonly CardAction[] | null;
 }
 
-interface CardValueCardView extends MultiAttackCardView {
+export interface CardValueCardView extends MultiAttackCardView {
   name?: string | null | undefined;
   cardKind?: string | null | undefined;
   atk?: number | null | undefined;
@@ -44,11 +44,119 @@ interface CardValueCardView extends MultiAttackCardView {
   effects?: readonly CardValueEffectView[];
 }
 
-interface CardValueOptions {
+export interface CardValueOptions {
   preferDefense?: boolean;
   archetype?: string | null | undefined;
   fieldSpell?: CardValueCardView | null;
   owner?: MultiAttackOwnerView | null;
+}
+
+type CardInstanceKey = number | string;
+
+export interface CardCostCardView extends CardValueCardView {
+  instanceId?: CardInstanceKey | null | undefined;
+  _instanceId?: CardInstanceKey | null | undefined;
+  uid?: CardInstanceKey | null | undefined;
+  uuid?: CardInstanceKey | null | undefined;
+  simInstanceId?: CardInstanceKey | null | undefined;
+}
+
+export interface CardValuePreference {
+  forceNames?: readonly string[] | string;
+  preferNames?: readonly string[] | string;
+  preserveNames?: readonly string[] | string;
+  preferredNames?: readonly string[] | string;
+  avoidNames?: readonly string[] | string;
+  preferredInstanceIds?: readonly CardInstanceKey[] | CardInstanceKey;
+  avoidInstanceIds?: readonly CardInstanceKey[] | CardInstanceKey;
+}
+
+export interface CardCostOptions extends CardValueOptions {
+  preference?: CardValuePreference | null;
+}
+
+export interface MaterialCombinationValue {
+  readonly cost: number;
+  readonly battleAtk: number;
+  readonly fieldCount: number;
+  readonly instanceIds: readonly (CardInstanceKey | null)[];
+}
+
+export function getCardValueInstanceId(card: CardCostCardView | null | undefined): CardInstanceKey | null {
+  return card?.instanceId ?? card?._instanceId ?? card?.uid ?? card?.uuid ?? card?.simInstanceId ?? null;
+}
+
+function preferenceIncludes<Value>(values: Value | readonly Value[] | undefined, value: Value): boolean {
+  return Array.isArray(values) ? values.includes(value) : values === value;
+}
+
+export function applyCardValuePreference(
+  score: number,
+  card: CardCostCardView | null | undefined,
+  preference: CardValuePreference | null | undefined,
+  intent: "benefit" | "cost" | "harm" | "reference",
+): number {
+  if (!preference || !card) return score;
+  const name = card.name || "";
+  const instanceId = getCardValueInstanceId(card);
+  const forced = preferenceIncludes(preference.forceNames, name);
+  const preferredByPolicy = preferenceIncludes(preference.preferNames, name);
+  const preserved = preferenceIncludes(preference.preserveNames, name);
+  const preferred = preferenceIncludes(preference.preferredNames, name) ||
+    (instanceId !== null && preferenceIncludes(preference.preferredInstanceIds, instanceId));
+  const avoided = preferenceIncludes(preference.avoidNames, name) ||
+    (instanceId !== null && preferenceIncludes(preference.avoidInstanceIds, instanceId));
+  const weight = intent === "cost" ? -100 : 100;
+  let adjusted = score;
+  if (forced) adjusted += intent === "cost" ? -120 : 120;
+  if (preferred) adjusted += weight;
+  if (preferredByPolicy) adjusted += intent === "cost" ? -8 : 8;
+  if (avoided) adjusted -= weight;
+  if (preserved && intent === "cost") adjusted += 80;
+  return adjusted;
+}
+
+/** Cost ranking is shared by public AI resolution and simulated selections. */
+export function estimateCardCost(card: CardCostCardView, options: CardCostOptions = {}): number {
+  return applyCardValuePreference(estimateCardValue(card, options), card, options.preference, "cost");
+}
+
+function compareInstanceIds(left: CardInstanceKey | null, right: CardInstanceKey | null): number {
+  if (left === right) return 0;
+  if (left === null) return 1;
+  if (right === null) return -1;
+  if (typeof left === "number" && typeof right === "number") return left - right;
+  if (typeof left !== typeof right) return typeof left === "number" ? -1 : 1;
+  return String(left) < String(right) ? -1 : 1;
+}
+
+export function valueMaterialCombination<Card extends CardCostCardView>(
+  materials: readonly Card[],
+  field: readonly Card[],
+  options: CardCostOptions = {},
+): MaterialCombinationValue {
+  return {
+    cost: materials.map(card => estimateCardCost(card, options)).sort((left, right) => left - right)
+      .reduce((sum, cost) => sum + cost, 0),
+    battleAtk: materials.reduce((sum, card) => sum +
+      (field.includes(card) && isBattleReadyAttacker(card) ? getEffectiveAtk(card) : 0), 0),
+    fieldCount: materials.filter(card => field.includes(card)).length,
+    instanceIds: materials.map(getCardValueInstanceId).sort(compareInstanceIds),
+  };
+}
+
+/** Equal total costs preserve ready attackers, field bodies, then stable copies. */
+export function compareMaterialCombinations(left: MaterialCombinationValue, right: MaterialCombinationValue): number {
+  const difference = left.cost - right.cost || left.battleAtk - right.battleAtk || left.fieldCount - right.fieldCount;
+  if (difference !== 0) return difference;
+  for (let index = 0; index < Math.max(left.instanceIds.length, right.instanceIds.length); index++) {
+    const leftId = left.instanceIds[index];
+    const rightId = right.instanceIds[index];
+    if (leftId === undefined || rightId === undefined) return left.instanceIds.length - right.instanceIds.length;
+    const order = compareInstanceIds(leftId, rightId);
+    if (order !== 0) return order;
+  }
+  return 0;
 }
 
 export function getCardArchetypes(

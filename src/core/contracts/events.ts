@@ -339,6 +339,7 @@ export interface CardToGraveEventPayload extends EventPayloadBase {
   destroySource?: EventCard | null;
   contextLabel?: string | null;
   deferTargetPrecheck?: boolean;
+  deferActivationChecks?: boolean;
   effectsNegatedAtFieldExit?: boolean;
 }
 
@@ -1263,6 +1264,7 @@ export interface PendingEventSelection {
 }
 
 export interface EventResolverHost extends EventBusHost {
+  afterResolutionActivation?: import("./activation.js").ActivationAfterResolutionState | null;
   eventResolutionDepth: number;
   eventResolutionCounter: number;
   summonProcedureDepth?: number;

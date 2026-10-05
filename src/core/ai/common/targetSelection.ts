@@ -1,4 +1,6 @@
 import { requiresUnnegatedTarget } from "../../effects/negation.js";
+import { getPaidCostReferenceValues } from "../../effects/targeting/references.js";
+import type { ChainCostPayment, PaidCostReferenceValues } from "../../contracts/chainRuntime.js";
 import { hasActivePiercing } from "../../game/combat/availability.js";
 import {
   getBattleStatForAttackTarget,
@@ -13,6 +15,8 @@ import type { AIDecisionPlan } from "../../contracts/ai.js";
 import { cardMatchesFilter } from "./cardFilters.js";
 import {
   estimateCardValue,
+  estimateCardCost,
+  applyCardValuePreference,
   estimateMonsterValue,
   isBattleReadyAttacker,
 } from "./cardValue.js";
@@ -72,6 +76,7 @@ interface ActionPreferenceContext {
 }
 
 interface TargetSelectionOptions {
+  costPayment?: ChainCostPayment;
   referenceSnapshots?: Record<string, SimulatedReferenceSnapshot[]>;
   targetPreferences?: TargetPreferenceMap | null;
   targetPreference?: TargetPreference | null;
@@ -125,16 +130,20 @@ export function matchesTargetAttributeComparison(
   candidate: TargetableCard | null | undefined,
   reference: TargetableCard | null | undefined,
   comparison: AttributeComparison = {},
+  paidValues?: readonly PaidCostReferenceValues[],
 ): boolean {
-  if (!candidate || !reference) return false;
+  if (!candidate) return false;
   const attr = comparison.attr || comparison.attribute;
   const candidateAttr =
     comparison.targetAttr || comparison.pairedAttr || attr;
   const referenceAttr =
     comparison.refAttr || comparison.sourceAttr || attr;
   if (!candidateAttr || !referenceAttr) return false;
+  if (referenceAttr === "level" && paidValues !== undefined && paidValues.length === 0) return false;
+  if (!reference && !(referenceAttr === "level" && paidValues !== undefined)) return false;
   const left = getCardComparableAttribute(candidate, candidateAttr);
-  const right = getCardComparableAttribute(reference, referenceAttr);
+  const right = referenceAttr === "level" && paidValues !== undefined
+    ? paidValues[0]?.level : getCardComparableAttribute(reference!, referenceAttr);
   const op = comparison.op || "eq";
   if (op === "eq" || op === "==" || op === "===") return left === right;
   if (op === "neq" || op === "!=" || op === "!==") return left !== right;
@@ -316,28 +325,7 @@ function applyNameAndInstancePreference(
   preference: TargetPreference | null | undefined,
   intent: TargetIntent,
 ): number {
-  if (!preference || !card) return score;
-  let adjusted = score;
-  const name = card.name as string;
-  const instanceId = getCardInstanceId(card);
-  const forced = asArray(preference.forceNames).includes(name);
-  const preferredByPolicy = asArray(preference.preferNames).includes(name);
-  const preserved = asArray(preference.preserveNames).includes(name);
-  const prefers =
-    asArray(preference.preferredNames).includes(name) ||
-    (instanceId !== null &&
-      asArray(preference.preferredInstanceIds).includes(instanceId));
-  const avoids =
-    asArray(preference.avoidNames).includes(name) ||
-    (instanceId !== null &&
-      asArray(preference.avoidInstanceIds).includes(instanceId));
-  const weight = intent === "cost" ? -100 : 100;
-  if (forced) adjusted += intent === "cost" ? -120 : 120;
-  if (prefers) adjusted += weight;
-  if (preferredByPolicy) adjusted += intent === "cost" ? -8 : 8;
-  if (avoids) adjusted -= weight;
-  if (preserved && intent === "cost") adjusted += 80;
-  return adjusted;
+  return applyCardValuePreference(score, card, preference, intent);
 }
 
 export function buildActionFilter<Action extends object>(
@@ -507,7 +495,7 @@ export function rankCandidates(
   const targetPreference = options.targetPreference || null;
   const scored = candidates.map((card) => ({
     card,
-    score: applyNameAndInstancePreference(
+    score: intent === "cost" ? estimateCardCost(card, { ...options, preference: targetPreference }) : applyNameAndInstancePreference(
       intent === "benefit" && targetPreference?.role === "recursion"
         ? estimateRecursionTargetValue(card, targetPreference)
         : intent === "benefit" &&
@@ -838,7 +826,8 @@ export function selectSimulatedTargets({
           }
         : target;
     const excludedNameCards = asArray(result[target.excludeNameRef!]) as readonly SimulatedCardState[];
-    const excludedNames = excludedNameCards
+    const paidNameValues = getPaidCostReferenceValues(options.costPayment, target.excludeNameRef);
+    const excludedNames = (paidNameValues ?? excludedNameCards)
       .map((card) => card?.name)
       .filter(Boolean) as string[];
     if (excludedNames.length > 0) {
@@ -893,7 +882,8 @@ export function selectSimulatedTargets({
         const comparison = effectiveTarget.compareAttribute;
         if (comparison?.ref) {
           const reference = asArray(result[comparison.ref])[0] as SimulatedCardState;
-          if (!matchesTargetAttributeComparison(card, reference, comparison)) return false;
+          if (!matchesTargetAttributeComparison(card, reference, comparison,
+            getPaidCostReferenceValues(options.costPayment, comparison.ref))) return false;
         }
         return true;
       })

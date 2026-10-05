@@ -13,6 +13,7 @@ import * as chainTiming from "./timing.js";
 import * as chainSegoc from "./segoc.js";
 import * as chainUsage from "./usage.js";
 import * as chainFinalization from "./finalization.js";
+import * as chainAfterResolution from "./afterResolution.js";
 
 import type { FullChainHost } from "../contracts/chainRuntime.js";
 
@@ -186,6 +187,12 @@ const resolutionMethods = defineChainMethods({
   determineCardZone: chainResolution.determineCardZone,
 });
 
+const afterResolutionMethods = defineChainMethods({
+  runPostEffectSummonAttempt: chainAfterResolution.runPostEffectSummonAttempt,
+  isPostEffectTriggerBarrierActive: chainAfterResolution.isPostEffectTriggerBarrierActive,
+  getAfterResolutionState: chainAfterResolution.getAfterResolutionState,
+});
+
 export const CHAIN_ATTACHMENT_GROUPS = Object.freeze([
   Object.freeze({ id: "link", methods: linkMethods }),
   Object.freeze({ id: "usage", methods: usageMethods }),
@@ -208,6 +215,7 @@ export const CHAIN_ATTACHMENT_GROUPS = Object.freeze([
   Object.freeze({ id: "selection", methods: selectionMethods }),
   Object.freeze({ id: "stack", methods: stackMethods }),
   Object.freeze({ id: "resolution", methods: resolutionMethods }),
+  Object.freeze({ id: "afterResolution", methods: afterResolutionMethods }),
 ] as const);
 
 export const CHAIN_METHOD_MANIFEST = Object.freeze({
@@ -226,6 +234,7 @@ export const CHAIN_METHOD_MANIFEST = Object.freeze({
   ...selectionMethods,
   ...stackMethods,
   ...resolutionMethods,
+  ...afterResolutionMethods,
 });
 
 type MethodWithoutThis<Value> = Value extends ChainMethodReference
@@ -313,8 +322,8 @@ export const CHAIN_METHOD_NAMES = Object.freeze(
   Object.keys(CHAIN_METHOD_MANIFEST),
 );
 
-if (CHAIN_METHOD_NAMES.length !== 89) {
+if (CHAIN_METHOD_NAMES.length !== 92) {
   throw new TypeError(
-    `Chain attachment manifest must contain 89 methods; received ${CHAIN_METHOD_NAMES.length}.`,
+    `Chain attachment manifest must contain 92 methods; received ${CHAIN_METHOD_NAMES.length}.`,
   );
 }

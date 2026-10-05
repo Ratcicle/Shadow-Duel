@@ -6,8 +6,9 @@ import { addEffectNegation, clearEffectNegation, expireEffectNegation } from "..
  */
 
 import { isAI } from "../Player.js";
+import { expireFaceupDeclaredValues, restoreFaceupStatuses, trackFaceupStatus } from "../Card.js";
 import { isNonTargetingEffectReference } from "../effects/targeting/filters.js";
-import { applyNamedStatChange, expireFaceupStatBuffs, removeTrackedStatChange } from "../effects/actions/stats.js";
+import { applyLevelModification, expireLevelModifications, applyNamedStatChange, expireFaceupStatBuffs, removeTrackedStatChange } from "../effects/actions/stats.js";
 import { suppressTemporaryDynamicStatIncreasesForDebuff } from "../effects/passives/passiveBuffs.js";
 import type { ActionOf } from "../contracts/actions.js";
 import type {
@@ -710,7 +711,9 @@ export async function handleBuffStatsTemp(
     }
   }
 
-  const duration = statsAction.duration || "end_of_turn";
+  const duration = statsAction.duration ||
+    (action.type === "buff_stats_temp_with_second_attack" || action.type === "grant_second_attack"
+      ? "end_of_turn" : "while_faceup");
   const isDamageCalculationBuff = duration === "damage_calculation";
   const isEndOfDamageStepBuff = duration === "end_of_damage_step";
   const durationTurns = Number(statsAction.durationTurns ?? statsAction.turns);
@@ -728,6 +731,7 @@ export async function handleBuffStatsTemp(
   const useTurnBasedBuff =
     Number.isFinite(turnBasedExpiresOnTurn) &&
     typeof game.applyTurnBasedBuff === "function";
+  const isFaceupBuff = !permanent && !useTurnBasedBuff && duration === "while_faceup";
   const durationText = permanent
     ? ""
     : isDamageCalculationBuff
@@ -738,7 +742,7 @@ export async function handleBuffStatsTemp(
           ? " until end of next turn"
           : useTurnBasedBuff
             ? ` until turn ${turnBasedExpiresOnTurn}`
-            : " until end of turn";
+            : isFaceupBuff ? " while face-up" : " until end of turn";
 
   const applyStatChange = (
     card: ActionRuntimeCard,
@@ -750,6 +754,7 @@ export async function handleBuffStatsTemp(
     if (
       boost < 0 &&
       !permanent &&
+      !isFaceupBuff &&
       !useTurnBasedBuff &&
       !isDamageCalculationBuff &&
       !isEndOfDamageStepBuff
@@ -783,9 +788,12 @@ export async function handleBuffStatsTemp(
       return applied;
     }
 
-    if (permanent) {
-      const sourceName = statsAction.sourceName || getLinkedSourceName(ctx.source, action.type);
+    if (permanent || isFaceupBuff) {
+      const baseName = statsAction.sourceName || getLinkedSourceName(ctx.source, action.type);
+      const sourceName = isFaceupBuff ? `${baseName}:while_faceup` : baseName;
       applyNamedStatChange(card, sourceName, stat === "atk" ? applied : 0, stat === "def" ? applied : 0);
+      const buff = card.permanentBuffsBySource?.[sourceName];
+      if (isFaceupBuff && buff) buff.duration = "while_faceup";
       return applied;
     }
     if (!permanent) {
@@ -1506,7 +1514,7 @@ export async function handleSetAttackLimitFromZoneCount(
     ? Math.max(0, Math.floor(Number(action.minAttacks)))
     : 0;
   const attackLimit = Math.max(minAttacks, count);
-  const duration = action.duration || "until_end_turn";
+  const duration = action.duration || "while_faceup";
 
   for (const card of targetCards) {
     card.attackLimitThisTurn = attackLimit;
@@ -1521,7 +1529,7 @@ export async function handleSetAttackLimitFromZoneCount(
   getUI(game)?.log(
     `${cardList} can declare up to ${attackLimit} attack${
       attackLimit === 1 ? "" : "s"
-    } this turn.`,
+    }${duration === "while_faceup" ? " while face-up" : " this turn"}.`,
   );
   game.updateBoard?.();
   return true;
@@ -1687,6 +1695,24 @@ export async function handleAddStatus(
     }
   }
 
+  targetCards = targetCards.filter((card) => isStatTargetStillValid(card, ctx, game));
+  const payingDeclaredCost = ctx.activationContext?.payingActivationCosts === true &&
+    declaredTarget?.intent === "cost";
+  if (!payingDeclaredCost) {
+    const { allowed, skipped } = engine.filterCardsListByImmunity(targetCards, player, {
+      actionType: action.type,
+      effectType: action.targetScope || !action.targetRef ||
+        isNonTargetingEffectReference(ctx.effect, action.targetRef)
+        ? null : engine.inferEffectType?.(action.type),
+      sourceCard: ctx.source || null,
+      customImmunityCheck: Reflect.get(action, "customImmunityCheck"),
+    });
+    if (Reflect.get(action, "immunityMode") === "skip_action" && skipped.length > 0) {
+      return false;
+    }
+    targetCards = allowed;
+  }
+
   if (targetCards.length === 0) {
     if (action.targetScope) return true;
 
@@ -1717,6 +1743,11 @@ export async function handleAddStatus(
   for (const card of targetCards) {
     if (!card) continue;
 
+    if (!remove && !untilEndOfTurn && status !== "effectsNegated") {
+      trackFaceupStatus(card, status);
+      if (status === "piercing") trackFaceupStatus(card, "piercingGrantedByEffect");
+    }
+
     if (!remove && untilEndOfTurn && status !== "effectsNegated") {
       if (!card.tempStatuses) {
         card.tempStatuses = {};
@@ -1730,6 +1761,7 @@ export async function handleAddStatus(
     }
 
     if (remove) {
+      if (card.faceupStatuses) Reflect.deleteProperty(card.faceupStatuses, status);
       if (readCardProperty(card, status) !== undefined) {
         // For additive status, subtract instead of delete
         if (
@@ -1768,6 +1800,7 @@ export async function handleAddStatus(
       }
       if (status === "piercing") {
         delete card.piercingGrantedByEffect;
+        if (card.faceupStatuses) Reflect.deleteProperty(card.faceupStatuses, "piercingGrantedByEffect");
         if (card.tempStatuses) Reflect.deleteProperty(card.tempStatuses, "piercingGrantedByEffect");
       }
     } else {
@@ -2116,14 +2149,22 @@ export async function handleBanishAndBuff(
 
   const buffType = action.buffType || "atk";
 
-  const duration = action.duration || "end_of_turn";
+  const duration = action.duration || "while_faceup";
 
   const isTemporary = duration === "end_of_turn";
 
   for (const recipient of buffRecipients) {
     if (!recipient || recipient.cardKind !== "monster") continue;
 
-    if (buffType === "atk" || buffType === "both") {
+    if (!isTemporary) {
+      const baseName = getLinkedSourceName(source, action.type);
+      const sourceName = duration === "while_faceup" ? `${baseName}:while_faceup` : baseName;
+      applyNamedStatChange(recipient, sourceName,
+        buffType === "atk" || buffType === "both" ? totalBuffValue : 0,
+        buffType === "def" || buffType === "both" ? totalBuffValue : 0);
+      const buff = recipient.permanentBuffsBySource?.[sourceName];
+      if (duration === "while_faceup" && buff) buff.duration = "while_faceup";
+    } else if (buffType === "atk" || buffType === "both") {
       recipient.atk = (recipient.atk || 0) + totalBuffValue;
 
       if (isTemporary) {
@@ -2131,7 +2172,7 @@ export async function handleBanishAndBuff(
       }
     }
 
-    if (buffType === "def" || buffType === "both") {
+    if (isTemporary && (buffType === "def" || buffType === "both")) {
       recipient.def = (recipient.def || 0) + totalBuffValue;
 
       if (isTemporary) {
@@ -2139,7 +2180,7 @@ export async function handleBanishAndBuff(
       }
     }
 
-    const durationText = isTemporary ? " until end of turn" : "";
+    const durationText = isTemporary ? " until end of turn" : duration === "while_faceup" ? " while face-up" : "";
 
     const statText = buffType === "both" ? "ATK/DEF" : buffType.toUpperCase();
 
@@ -2195,7 +2236,14 @@ export async function handleSetFacedownDefense(
     card.isFacedown = true;
     card.fieldPresenceSummons = [];
     expireFaceupStatBuffs(card);
+    if (card.attackLimitDuration === "while_faceup") {
+      delete card.attackLimitThisTurn;
+      delete card.attackLimitDuration;
+    }
     expireEffectNegation(card, "while_faceup");
+    restoreFaceupStatuses(card);
+    expireFaceupDeclaredValues(card);
+    expireLevelModifications(card, "while_faceup");
     card.hasChangedPosition = true;
     card.positionChangedThisTurn = true;
     if (action.lockBattlePosition === true) {
@@ -2824,7 +2872,7 @@ export async function handleModifyLevel(
     return false;
   }
 
-  const duration = action.duration || "until_end_turn";
+  const duration = action.duration || "while_faceup";
   const minLevel = Number.isFinite(Number(action.minLevel))
     ? Number(action.minLevel)
     : 1;
@@ -2844,10 +2892,7 @@ export async function handleModifyLevel(
     }
     if (nextLevel === currentLevel) continue;
 
-    if (duration !== "permanent" && card.originalLevel == null) {
-      card.originalLevel = currentLevel;
-    }
-    card.level = nextLevel;
+    applyLevelModification(card, nextLevel, duration);
     modified = true;
     queueCardFeedback(game, amount > 0 ? "buff" : "debuff", card, {
       sourceCard: ctx?.source || null,
@@ -2858,7 +2903,7 @@ export async function handleModifyLevel(
   if (modified) {
     const direction = amount > 0 ? "increased" : "decreased";
     getUI(game)?.log(
-      `Level ${direction} by ${Math.abs(amount)} until the end of the turn.`,
+      `Level ${direction} by ${Math.abs(amount)}${duration === "until_end_turn" ? " until the end of the turn" : ""}.`,
     );
     game.effectEngine?.clearTargetingCache?.();
     game.updateBoard?.();

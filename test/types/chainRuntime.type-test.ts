@@ -256,6 +256,7 @@ type ExactAttachmentGroups = Expect<
     | "selection"
     | "stack"
     | "resolution"
+    | "afterResolution"
   >
 >;
 

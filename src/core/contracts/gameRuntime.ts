@@ -62,6 +62,8 @@ export type CardStateSnapshot = Partial<GameCard> & {
 export interface ZoneSnapshot {
   contextLabel: string;
   temporaryControlEffects: TemporaryControlEffect[];
+  damageCalculationTempBuffs: DamageStepBuff[];
+  endOfDamageStepTempBuffs: DamageStepBuff[];
   players: {
     player: ZonePlayerSnapshot;
     bot: ZonePlayerSnapshot;
@@ -348,6 +350,8 @@ export interface SummonNegationSnapshot {
 }
 
 export interface SummonTransactionSnapshot {
+  negationWindowPolicy?: "auto" | "suppressed";
+  skipFinalTiming?: true;
   fieldPlacement?: Omit<import("./placement.js").FieldPlacementIntent, "generation"> | null;
   summonId: SummonId | number | null;
   status: SummonStatus;
@@ -402,6 +406,7 @@ export interface PreparedSummonInput {
   onSuccess?: (transaction: SummonTransaction) => void;
   finalContext?: unknown;
   skipFinalTiming?: boolean;
+  negationWindowPolicy?: "auto" | "suppressed";
 }
 
 export interface PreparedSummon {
@@ -431,6 +436,7 @@ export interface PreparedSummon {
   onSuccess: PreparedSummonInput["onSuccess"] | null;
   finalContext: unknown;
   skipFinalTiming: boolean;
+  negationWindowPolicy: "auto" | "suppressed";
 }
 
 export interface SummonTransaction
@@ -787,6 +793,7 @@ export interface GameRuntimeState {
   graveyardSelection: unknown;
   /** Monotonic runtime-only invalidation of action continuations awaiting a selection. */
   selectionAbortGeneration: number;
+  afterResolutionActivation: import("./activation.js").ActivationAfterResolutionState | null;
   selectionSessionCounter: number;
   lastSelectionSessionId: number;
   eventListeners: Record<

@@ -12,16 +12,19 @@ export interface NegationState {
 export function normalizeNegationDuration(action: {
   readonly negateEffectsDuration?: string;
   readonly duration?: string;
+  readonly untilEndOfTurn?: boolean;
 } = {}): EffectNegationContribution["duration"] {
-  return action.negateEffectsDuration === "while_faceup" || action.duration === "while_faceup"
-    ? "while_faceup" : "until_end_turn";
+  const duration = action.negateEffectsDuration ?? action.duration;
+  return duration === "until_end_turn" || duration === "end_of_turn" || (duration === undefined && action.untilEndOfTurn === true)
+    ? "until_end_turn" : "while_faceup";
 }
 
 /** Legacy projected states (including fixtures) are adopted without inventing a source. */
 export function getNegationContributions(card: NegationState): EffectNegationContribution[] {
   if (card.effectsNegationContributions?.length) return card.effectsNegationContributions;
   return card.effectsNegated === true ? [{
-    duration: card.effectsNegatedDuration === "while_faceup" ? "while_faceup" : "until_end_turn",
+    duration: card.effectsNegatedDuration === "until_end_turn" || card.effectsNegatedDuration === "end_of_turn"
+      ? "until_end_turn" : "while_faceup",
     sourceDuelCardId: null,
     sourceEffectId: null,
   }] : [];

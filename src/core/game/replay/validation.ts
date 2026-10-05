@@ -1,3 +1,4 @@
+import { CHAIN_RESOLUTION_STATUSES, CHAIN_FINALIZATION_STATUSES, FAST_EFFECT_STATES, FAST_EFFECT_ORIGINS } from "../../contracts/chain.js";
 import { SELECTION_KINDS } from "../../contracts/selection.js";
 import { readChainResponseDecisions } from "../decisions/chainResponse.js";
 import {
@@ -141,6 +142,32 @@ function requireHash(value: unknown, path: string): void {
 function requireIdentity(value: unknown, path: string, nullable = false): void {
   if (nullable && value === null) return;
   requireInteger(value, path, 1);
+}
+
+/** Validate only optional paid scalar evidence on serialized Chain links. */
+function validatePaidReferenceMetadata(value: unknown, path: string): void {
+  if (!isObject(value)) return;
+  const payment = read(value, "costPayment");
+  if (isObject(payment) && hasOwn(payment, "paidReferences")) {
+    const mapPath = `${path}.costPayment.paidReferences`;
+    const references = requireObject(read(payment, "paidReferences"), mapPath);
+    for (const ref of Object.keys(references)) {
+      const referencePath = `${mapPath}.${ref}`;
+      const entries = requireArray(read(references, ref), referencePath);
+      entries.forEach((value, index) => {
+        const entryPath = `${referencePath}[${index}]`;
+        const entry = requireObject(value, entryPath);
+        requireIdentity(read(entry, "cardDuelCardId"), `${entryPath}.cardDuelCardId`, true);
+        requireString(read(entry, "name"), `${entryPath}.name`);
+        if (requireFiniteNumber(read(entry, "level"), `${entryPath}.level`) < 0) {
+          invalid(`${entryPath}.level`, "a nonnegative finite Level");
+        }
+        if (Object.keys(entry).some(key => !["cardDuelCardId", "name", "level"].includes(key))) {
+          invalid(entryPath, "only canonical paid identity, name and Level scalars");
+        }
+      });
+    }
+  }
 }
 
 function assertSerializable(
@@ -675,11 +702,62 @@ function validateCardSnapshot(value: unknown, path: string, onField = false): vo
     read(card, "properSummonEstablished"),
     `${path}.properSummonEstablished`,
   );
+  if (read(card, "originalLevel") !== null) requireFiniteNumber(read(card, "originalLevel"), `${path}.originalLevel`);
+  requireArray(read(card, "levelModificationContributions"), `${path}.levelModificationContributions`).forEach((value, index) => {
+    const entryPath = `${path}.levelModificationContributions[${index}]`;
+    const entry = requireObject(value, entryPath);
+    requireFiniteNumber(read(entry, "amount"), `${entryPath}.amount`);
+    if (!["until_end_turn", "while_faceup"].includes(String(read(entry, "duration")))) invalid(`${entryPath}.duration`, "a level modification duration");
+    if (read(card, "originalLevel") === null) invalid(`${path}.originalLevel`, "the baseline for tracked level modifications");
+  });
   requireBoolean(read(card, "facedown"), `${path}.facedown`);
+  if (hasOwn(card, "declaredValues")) {
+    const declarations = requireObject(read(card, "declaredValues"), `${path}.declaredValues`);
+    for (const [key, value] of Object.entries(declarations)) {
+      const entryPath = `${path}.declaredValues.${key}`;
+      if (typeof value === "string" || typeof value === "boolean") continue;
+      if (typeof value === "number") { requireFiniteNumber(value, entryPath); continue; }
+      const entry = requireObject(value, entryPath);
+      if (typeof read(entry, "property") !== "string") invalid(`${entryPath}.property`, "a declared property");
+      const declared = read(entry, "value");
+      if (typeof declared !== "string" && typeof declared !== "boolean") requireFiniteNumber(declared, `${entryPath}.value`);
+      if (hasOwn(entry, "declaredOnTurn")) requireFiniteNumber(read(entry, "declaredOnTurn"), `${entryPath}.declaredOnTurn`);
+      if (hasOwn(entry, "expiresOnTurn") && read(entry, "expiresOnTurn") !== null) requireFiniteNumber(read(entry, "expiresOnTurn"), `${entryPath}.expiresOnTurn`);
+      if (hasOwn(entry, "duration") && typeof read(entry, "duration") !== "string") invalid(`${entryPath}.duration`, "a declaration duration");
+    }
+  }
+  if (hasOwn(card, "statBuffContributions")) {
+    requireArray(read(card, "statBuffContributions"), `${path}.statBuffContributions`).forEach((value, index) => {
+      const entryPath = `${path}.statBuffContributions[${index}]`;
+      const entry = requireObject(value, entryPath);
+      requireFiniteNumber(read(entry, "atk"), `${entryPath}.atk`);
+      requireFiniteNumber(read(entry, "def"), `${entryPath}.def`);
+      const duration = read(entry, "duration");
+      if (duration !== "while_faceup" && duration !== "until_field_exit") {
+        invalid(`${entryPath}.duration`, "a stat buff duration");
+      }
+    });
+  }
   if (!hasOwn(card, "counters"))
     invalid(`${path}.counters`, "a serialized value");
   requireIdentity(read(card, "equipTargetId"), `${path}.equipTargetId`, true);
   const statuses = requireObject(read(card, "statuses"), `${path}.statuses`);
+  if (hasOwn(statuses, "attackLimit")) {
+    const entryPath = `${path}.statuses.attackLimit`;
+    const entry = requireObject(read(statuses, "attackLimit"), entryPath);
+    requireFiniteNumber(read(entry, "amount"), `${entryPath}.amount`);
+    const duration = read(entry, "duration");
+    if (typeof duration !== "string") requireFiniteNumber(duration, `${entryPath}.duration`);
+  }
+  if (hasOwn(statuses, "faceupStatuses")) {
+    const registry = requireObject(read(statuses, "faceupStatuses"), `${path}.statuses.faceupStatuses`);
+    for (const [status, value] of Object.entries(registry)) {
+      const entry = requireObject(value, `${path}.statuses.faceupStatuses.${status}`);
+      if (!hasOwn(entry, "previous") || !hasOwn(entry, "current")) {
+        invalid(`${path}.statuses.faceupStatuses.${status}`, "previous and current status values");
+      }
+    }
+  }
   if (!hasOwn(statuses, "effectsNegatedDuration")) {
     invalid(`${path}.statuses.effectsNegatedDuration`, "a serialized value");
   }
@@ -755,7 +833,173 @@ function validateProcedureSnapshot(value: unknown, path: string): void {
   for (const key of ["last", "transaction"]) {
     if (!hasOwn(procedure, key))
       invalid(`${path}.${key}`, "a serialized value");
+    const transaction = read(procedure, key);
+    if (isObject(transaction)) {
+      if (hasOwn(transaction, "negationWindowPolicy") && read(transaction, "negationWindowPolicy") !== "auto" && read(transaction, "negationWindowPolicy") !== "suppressed") {
+        invalid(`${path}.${key}.negationWindowPolicy`, "auto or suppressed");
+      }
+      if (hasOwn(transaction, "skipFinalTiming") && read(transaction, "skipFinalTiming") !== true) invalid(`${path}.${key}.skipFinalTiming`, "true");
+    }
   }
+}
+
+function validateAfterResolutionSnapshot(value: unknown, path: string): void {
+  const state = requireObject(value, path);
+  const checkEnum = (value: unknown, choices: readonly string[], path: string) => {
+    if (typeof value !== "string" || !choices.includes(value)) invalid(path, "a canonical state value");
+  };
+  const validateLocation = (value: unknown, path: string) => {
+    const location = requireObject(value, path);
+    requireNullableString(read(location, "controllerId"), `${path}.controllerId`);
+    const zone = read(location, "zone");
+    if (zone !== null && (typeof zone !== "string" || ![...CARD_ZONES, "token", "temporary", "unknown"].includes(zone))) invalid(`${path}.zone`, "a canonical card zone or null");
+    requireBoolean(read(location, "faceUp"), `${path}.faceUp`);
+    requireInteger(read(location, "locationVersion"), `${path}.locationVersion`, 0);
+  };
+  const validateTiming = (value: unknown, path: string) => {
+    const timing = requireObject(value, path);
+    checkEnum(read(timing, "state"), Object.values(FAST_EFFECT_STATES), `${path}.state`);
+    checkEnum(read(timing, "origin"), Object.values(FAST_EFFECT_ORIGINS), `${path}.origin`);
+    for (const key of ["timingWindowId", "chainId"]) requireIdentity(read(timing, key), `${path}.${key}`, true);
+    for (const key of ["turnPlayerId", "actionPlayerId", "priorityPlayerId", "lastLinkControllerId"]) requireNullableString(read(timing, key), `${path}.${key}`);
+    requireInteger(read(timing, "consecutivePasses"), `${path}.consecutivePasses`, 0);
+    if (read(timing, "phaseIntent") !== null) {
+      const intent = requireObject(read(timing, "phaseIntent"), `${path}.phaseIntent`);
+      requirePhase(read(intent, "fromPhase"), `${path}.phaseIntent.fromPhase`, true);
+      requirePhase(read(intent, "toPhase"), `${path}.phaseIntent.toPhase`, true);
+    }
+  };
+  const validatePayment = (value: unknown, path: string) => {
+    const cost = value;
+    if (cost !== null) {
+      const payment = requireObject(cost, `${path}.costPayment`);
+      checkEnum(read(payment, "status"), ["not_required", "paid"], `${path}.costPayment.status`);
+      requireArray(read(payment, "actions"), `${path}.costPayment.actions`).forEach((value, index) => {
+        const entryPath = `${path}.costPayment.actions[${index}]`;
+        const entry = requireObject(value, entryPath);
+        requireInteger(read(entry, "index"), `${entryPath}.index`, 0);
+        requireNullableString(read(entry, "type"), `${entryPath}.type`);
+        if (hasOwn(entry, "targetRef")) requireNullableString(read(entry, "targetRef"), `${entryPath}.targetRef`);
+      });
+      if (hasOwn(payment, "summonMarkers")) requireArray(read(payment, "summonMarkers"), `${path}.costPayment.summonMarkers`).forEach((value, index) => {
+        const markerPath = `${path}.costPayment.summonMarkers[${index}]`;
+        const marker = requireObject(value, markerPath);
+        requireNullableString(read(marker, "sourceEffectId"), `${markerPath}.sourceEffectId`);
+        requireString(read(marker, "costTargetRef"), `${markerPath}.costTargetRef`);
+        requireString(read(marker, "key"), `${markerPath}.key`);
+        requireInteger(read(marker, "matchingCostCount"), `${markerPath}.matchingCostCount`, 0);
+      });
+      validatePaidReferenceMetadata({ costPayment: payment }, path);
+    }
+  };
+  const validateSource = (value: unknown, path: string) => {
+    if (value === null) return;
+    const source = requireObject(value, path);
+    requireIdentity(read(source, "cardDuelCardId"), `${path}.cardDuelCardId`, true);
+    validateLocation(source, path);
+    if (hasOwn(source, "counters")) for (const [key, count] of Object.entries(requireObject(read(source, "counters"), `${path}.counters`))) {
+      requireInteger(count, `${path}.counters.${key}`, 0);
+    }
+  };
+  const validateReferences = (value: unknown, path: string) => {
+    requireArray(value, path).forEach((value, index) => {
+      const refPath = `${path}[${index}]`, ref = requireObject(value, refPath);
+      requireNullableString(read(ref, "targetId"), `${refPath}.targetId`);
+      requireArray(read(ref, "cards"), `${refPath}.cards`).forEach((card, index) => {
+        const cardPath = `${refPath}.cards[${index}]`;
+        validateSource(requireObject(card, cardPath), cardPath);
+      });
+    });
+  };
+  const validateLink = (value: unknown, path: string) => {
+    const link = requireObject(value, path);
+    requireInteger(read(link, "chainId"), `${path}.chainId`, 1);
+    requireInteger(read(link, "linkId"), `${path}.linkId`, 1);
+    requireInteger(read(link, "chainLevel"), `${path}.chainLevel`, 1);
+    requireIdentity(read(link, "cardDuelCardId"), `${path}.cardDuelCardId`, true);
+    requireIdentity(read(link, "cardId"), `${path}.cardId`, true);
+    requireString(read(link, "controllerId"), `${path}.controllerId`);
+    requireNullableString(read(link, "effectId"), `${path}.effectId`);
+    checkEnum(read(link, "resolutionStatus"), CHAIN_RESOLUTION_STATUSES, `${path}.resolutionStatus`);
+    checkEnum(read(link, "finalizationStatus"), CHAIN_FINALIZATION_STATUSES, `${path}.finalizationStatus`);
+    requireBoolean(read(link, "sourceMoved"), `${path}.sourceMoved`);
+    requireBoolean(read(link, "sourceDestroyed"), `${path}.sourceDestroyed`);
+    if (read(link, "latestSourceLocation") !== null) validateLocation(read(link, "latestSourceLocation"), `${path}.latestSourceLocation`);
+    validateSource(read(link, "sourceAtActivation"), `${path}.sourceAtActivation`);
+    if (hasOwn(link, "decisions") && !readChainResponseDecisions(read(link, "decisions"), id => id, true)) invalid(`${path}.decisions`, "a canonical decision plan");
+    if (hasOwn(link, "referenceSnapshots")) validateReferences(read(link, "referenceSnapshots"), `${path}.referenceSnapshots`);
+    validateResults(read(link, "costSelections"), `${path}.costSelections`);
+    validateResults(read(link, "targetSelections"), `${path}.targetSelections`);
+    validateResults(read(link, "resolutionSelections"), `${path}.resolutionSelections`);
+    requireArray(read(link, "declaredTargetSnapshots"), `${path}.declaredTargetSnapshots`).forEach((value, index) => {
+      const targetPath = `${path}.declaredTargetSnapshots[${index}]`;
+      const target = requireObject(value, targetPath);
+      requireNullableString(read(target, "targetId"), `${targetPath}.targetId`);
+      requireArray(read(target, "cards"), `${targetPath}.cards`).forEach((value, index) => {
+        const cardPath = `${targetPath}.cards[${index}]`;
+        const card = requireObject(value, cardPath);
+        requireIdentity(read(card, "cardDuelCardId"), `${cardPath}.cardDuelCardId`, true);
+        validateLocation(card, cardPath);
+      });
+    });
+    validatePayment(read(link, "costPayment"), path);
+  };
+  const validateResults = (value: unknown, path: string) => {
+    for (const [ref, cards] of Object.entries(requireObject(value, path))) {
+      requireArray(cards, `${path}.${ref}`).forEach((id, index) => {
+        if (id !== null) requireInteger(id, `${path}.${ref}[${index}]`, 1);
+      });
+    }
+  };
+  const validatePhase = (value: unknown, path: string) => {
+    const phase = requireObject(value, path);
+    if (read(phase, "stage") !== "after_resolution") invalid(`${path}.stage`, "after_resolution");
+    requireInteger(read(phase, "actionIndex"), `${path}.actionIndex`, 0);
+    validateLink(read(phase, "link"), `${path}.link`);
+    validateResults(read(phase, "results"), `${path}.results`);
+  };
+  if (hasOwn(state, "direct")) {
+    const direct = requireObject(read(state, "direct"), `${path}.direct`);
+    if (read(direct, "stage") !== "after_resolution") invalid(`${path}.direct.stage`, "after_resolution");
+    requireIdentity(read(direct, "sourceDuelCardId"), `${path}.direct.sourceDuelCardId`, true);
+    requireIdentity(read(direct, "sourceCardId"), `${path}.direct.sourceCardId`);
+    requireString(read(direct, "controllerId"), `${path}.direct.controllerId`);
+    requireString(read(direct, "effectId"), `${path}.direct.effectId`);
+    requireInteger(read(direct, "actionIndex"), `${path}.direct.actionIndex`, 0);
+    requireInteger(read(direct, "selectionGeneration"), `${path}.direct.selectionGeneration`, 0);
+    validateResults(read(direct, "results"), `${path}.direct.results`);
+    validateSource(read(direct, "sourceAtActivation"), `${path}.direct.sourceAtActivation`);
+    if (hasOwn(direct, "decisions") && !readChainResponseDecisions(read(direct, "decisions"), id => id, true)) invalid(`${path}.direct.decisions`, "a canonical decision plan");
+    if (hasOwn(direct, "referenceSnapshots")) validateReferences(read(direct, "referenceSnapshots"), `${path}.direct.referenceSnapshots`);
+    validatePayment(read(direct, "costPayment"), `${path}.direct`);
+  }
+  if (hasOwn(state, "active")) validatePhase(read(state, "active"), `${path}.active`);
+  const frames = hasOwn(state, "suspended") ? requireArray(read(state, "suspended"), `${path}.suspended`) : [];
+  if (!hasOwn(state, "active") && !hasOwn(state, "direct") && frames.length === 0) invalid(path, "an active phase or non-empty suspended frames");
+  frames.forEach((value, index) => {
+    const framePath = `${path}.suspended[${index}]`;
+    const frame = requireObject(value, framePath);
+    requireInteger(read(frame, "chainId"), `${framePath}.chainId`, 1);
+    requireBoolean(read(frame, "resolving"), `${framePath}.resolving`);
+    requireBoolean(read(frame, "windowOpen"), `${framePath}.windowOpen`);
+    validateTiming(read(frame, "timing"), `${framePath}.timing`);
+    requireArray(read(frame, "links"), `${framePath}.links`).forEach((link, index) => validateLink(link, `${framePath}.links[${index}]`));
+    if (read(frame, "afterResolution") !== null) validatePhase(read(frame, "afterResolution"), `${framePath}.afterResolution`);
+    requireArray(read(frame, "finalizations"), `${framePath}.finalizations`).forEach((value, index) => {
+      const entryPath = `${framePath}.finalizations[${index}]`;
+      const entry = requireObject(value, entryPath);
+      checkEnum(read(entry, "status"), CHAIN_FINALIZATION_STATUSES, `${entryPath}.status`);
+      validateLink(read(entry, "link"), `${entryPath}.link`);
+    });
+    const selection = read(frame, "selection");
+    if (selection !== null) {
+      const selected = requireObject(selection, `${framePath}.selection`);
+      const phase = read(selected, "phase");
+      if (phase !== "resolution" && phase !== "after_resolution") invalid(`${framePath}.selection.phase`, "a resolution phase");
+      validateLink(read(selected, "link"), `${framePath}.selection.link`);
+      validateResults(read(selected, "selections"), `${framePath}.selection.selections`);
+    }
+  });
 }
 
 function validateStateSnapshot(value: unknown, path: string): void {
@@ -773,6 +1017,10 @@ function validateStateSnapshot(value: unknown, path: string): void {
     if (!hasOwn(chain, key))
       invalid(`${path}.chain.${key}`, "a serialized value");
   }
+  const links = read(chain, "links");
+  if (Array.isArray(links)) links.forEach((link, index) =>
+    validatePaidReferenceMetadata(link, `${path}.chain.links[${index}]`));
+  if (hasOwn(chain, "afterResolution")) validateAfterResolutionSnapshot(read(chain, "afterResolution"), `${path}.chain.afterResolution`);
   for (const key of [
     "usage",
     "namedOncePerTurnUsage",

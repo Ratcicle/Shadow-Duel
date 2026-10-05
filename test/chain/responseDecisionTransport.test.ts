@@ -81,7 +81,8 @@ for (const seat of ["player", "bot"] as const) {
     const preparation = await chain.prepareChainResponse(offered, player, context);
     assert.equal(preparation.success, true);
     const prepared = required(preparation.preparedActivation);
-    assert.deepEqual(Reflect.get(prepared.targetSelections, "tech_zero_scrapyard_tuner"), [core]);
+    assert.deepEqual(prepared.targetSelections, {});
+    assert.deepEqual(prepared.activationContext.decisions?.specialSummons?.tech_zero_scrapyard_activation, [core.instanceId]);
     assert.deepEqual(prepared.activationContext.decisions?.synchroSummons?.tech_zero_scrapyard_activation, {
       synchroInstanceId: machine.instanceId,
       materialInstanceIds: [core.instanceId, prism.instanceId],
@@ -99,7 +100,8 @@ for (const seat of ["player", "bot"] as const) {
     const offered = required(await live.chain.offerChainResponse(live.player, live.context));
     assert.ok("candidateKey" in offered);
     const prepared = required((await live.chain.prepareChainResponse(offered, live.player, live.context)).preparedActivation);
-    assert.deepEqual(Reflect.get(prepared.targetSelections, "tech_zero_scrapyard_tuner"), [live.core]);
+    assert.deepEqual(prepared.targetSelections, {});
+    assert.deepEqual(prepared.activationContext.decisions?.specialSummons?.tech_zero_scrapyard_activation, [live.core.instanceId]);
     live.chain.addToChain(prepared);
     await live.chain.resolveChain();
     assert.ok(live.player.field.includes(live.machine));
@@ -110,7 +112,8 @@ for (const seat of ["player", "bot"] as const) {
     const replayed = required(await playback.chain.offerChainResponse(playback.player, playback.context));
     assert.ok("candidateKey" in replayed);
     const replayPrepared = required((await playback.chain.prepareChainResponse(replayed, playback.player, playback.context)).preparedActivation);
-    assert.deepEqual(Reflect.get(replayPrepared.targetSelections, "tech_zero_scrapyard_tuner"), [playback.core]);
+    assert.deepEqual(replayPrepared.targetSelections, {});
+    assert.deepEqual(replayPrepared.activationContext.decisions?.specialSummons?.tech_zero_scrapyard_activation, [playback.core.instanceId]);
     assert.deepEqual(replayPrepared.activationContext.decisions?.synchroSummons?.tech_zero_scrapyard_activation, {
       synchroInstanceId: playback.machine.instanceId,
       materialInstanceIds: [playback.core.instanceId, playback.prism.instanceId],

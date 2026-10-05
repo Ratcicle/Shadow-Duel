@@ -1315,7 +1315,7 @@
     },
     "507": {
       "name": "Drag\u00e3o Conector Tech-Zero",
-      "description": "Se este card estiver com a face para cima no campo: você pode Invocar por Invocação-Normal 1 monstro \"Tech-Zero\" em adição à sua Invocação-Normal/Baixar.\n\nSe este card for enviado para o Cemitério como Matéria Sincro: você pode escolher 1 Magia/Armadilha \"Tech-Zero\" no seu Cemitério; adicione-a à sua mão.\n\nVocê só pode usar cada efeito de \"Dragão Conector Tech-Zero\" uma vez por turno."
+      "description": "Se este card estiver com a face para cima no campo: você pode realizar 1 Invocação-Normal/Baixar de 1 monstro \"Tech-Zero\" em adição à sua Invocação-Normal/Baixar.\n\nSe este card for enviado para o Cemitério como Matéria Sincro: você pode escolher 1 Magia/Armadilha \"Tech-Zero\" no seu Cemitério; adicione-a à sua mão.\n\nVocê só pode usar cada efeito de \"Dragão Conector Tech-Zero\" uma vez por turno."
     },
     "508": {
       "name": "Soldado de Pulso Tech-Zero",
@@ -1359,7 +1359,7 @@
     },
     "518": {
       "name": "Laborat\u00f3rio de Desenvolvimento Tech-Zero",
-      "description": "Uma vez por turno: voc\u00ea pode escolher 1 monstro Sincro \"Tech-Zero\" no seu Cemit\u00e9rio; devolva-o ao Deck Adicional e, se isso acontecer, escolha 1 monstro no seu Cemit\u00e9rio; embaralhe-o no Deck."
+      "description": "Uma vez por turno: você pode escolher 1 monstro Sincro \"Tech-Zero\" no seu Cemitério; devolva-o ao Deck Adicional e, se isso acontecer, escolha 1 monstro no seu Cemitério e embaralhe-o no Deck."
     },
     "519": {
       "name": "Linha de Montagem Tech-Zero",

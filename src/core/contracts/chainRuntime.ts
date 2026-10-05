@@ -85,6 +85,7 @@ export interface ChainEffect {
   readonly activationCosts?: readonly CardAction[];
   readonly activationCommitActions?: readonly CardAction[];
   readonly actions?: readonly CardAction[];
+  readonly afterResolutionActions?: readonly CardAction[];
   readonly targets?: readonly ChainEffectTarget[];
   readonly conditions?: readonly EffectCondition[];
   readonly canRespondTo?: readonly EffectResponseContext[];
@@ -299,6 +300,8 @@ export interface ChainSummonTransactionReference {
 
 /** Fields propagated to EffectEngine while a Chain action is evaluated. */
 export interface ChainActionContext extends ChainContextPayload {
+  _actionTargets?: ChainSelectionMap;
+  afterEffectResolution?: { chainLevel: number; actionIndex: number };
   /** Strategy preferences carried unchanged to resolution-time decisions. */
   costPreferences?: object | null;
   source?: ChainCard | null;
@@ -320,6 +323,14 @@ export interface ChainCostPayment {
   status: "not_required" | "paid";
   actions: ChainActionTraceEntry[];
   summonMarkers?: PaidCostMarkerEvidence[];
+  paidReferences?: Record<string, PaidCostReferenceValues[]>;
+}
+
+/** Scalar values captured immediately before a successfully paid card moves. */
+export interface PaidCostReferenceValues {
+  readonly cardDuelCardId: number | null;
+  readonly name: string;
+  readonly level: number;
 }
 
 /** Filter results captured when a card actually pays a cost, before responses. */
@@ -752,6 +763,7 @@ export type ChainPipelineFinalization = (
 
 /** Canonical mutable link stored in the LIFO stack. */
 export interface ChainLink {
+  afterResolution?: ChainAfterResolutionState;
   chainId: ChainId;
   linkId: ChainLinkId;
   chainLevel: number;
@@ -1044,9 +1056,51 @@ export interface PendingChainSelection {
   selectionContract: ChainSelectionContract | null;
   selectionSource: string;
   baseTargets: ChainSelectionMap | null;
+  phase?: "after_resolution";
+}
+
+export interface ChainAfterResolutionState {
+  decisionCards?: readonly ChainCard[];
+  context: ChainActionContext;
+  targets: ChainSelectionMap;
+  actionIndex: number;
+  primaryResult: ChainOperationResult;
+  completed: boolean;
+}
+
+/** A detached execution frame; global counters, usage and trigger queue stay shared. */
+export interface SuspendedChainFrame {
+  chainStack: ChainLink[];
+  chainWindowContext: FastEffectContextInput | null;
+  chainWindowOpen: boolean;
+  isResolving: boolean;
+  currentChainLevel: number;
+  activeChainId: ChainId | null;
+  currentResolvingLink: ChainLink | null;
+  cardsBeingResolved: Set<ChainCard>;
+  pendingChainSelection: PendingChainSelection | null;
+  isPreparingActivation: boolean;
+  activeResponseAbortController: AbortController | null;
+  chainEventCompletions: ChainTriggerCompletion[];
+  chainTriggerEffectsOffered: Map<ChainCard, Set<ChainEffect>>;
+  pendingChainFinalizations: ChainFinalizationEntry[];
+  isFinalizingChain: boolean;
+  currentFinalizingLink: ChainLink | null;
+  activeTriggerOpportunity: ChainTriggerOpportunity | null;
+  pendingTriggerSelection: PendingTriggerSelection | null;
+  fastEffectState: FastEffectState;
+  activeTimingWindowId: number | null;
+  timingDepth: number;
+}
+
+export interface ChainPostEffectSummonCapability {
+  runPostEffectSummonAttempt(input: FastEffectTimingInput): Promise<ChainOperationResult>;
+  isPostEffectTriggerBarrierActive(): boolean;
+  getAfterResolutionState(): object | null;
 }
 
 export interface ChainTriggerEntryConfig {
+  activationConditionCheck?: () => { ok: boolean; reason?: string };
   card?: ChainCard;
   effect?: ChainEffect;
   owner?: ChainPlayer;
@@ -1723,7 +1777,9 @@ export interface FullChainHost
     ChainFastEffectTransitionCapability,
     ChainTurnPlayerCapability,
     ChainInternalTimingHost,
-    ChainLinkMutationCapability {
+    ChainLinkMutationCapability,
+    ChainPostEffectSummonCapability {
+  suspendedChainFrames: SuspendedChainFrame[];
   chainStack: ChainLink[];
   chainWindowContext: FastEffectContextInput | null;
   cardsBeingResolved: Set<ChainCard>;
@@ -1967,6 +2023,10 @@ function hasFunction(value: unknown, key: string): boolean {
     value !== null &&
     typeof Reflect.get(value, key) === "function"
   );
+}
+
+export function hasChainPostEffectSummonCapability(value: unknown): value is ChainPostEffectSummonCapability {
+  return hasFunction(value, "runPostEffectSummonAttempt") && hasFunction(value, "isPostEffectTriggerBarrierActive") && hasFunction(value, "getAfterResolutionState");
 }
 
 /** Narrow optional integrations without exposing a permissive base port. */

@@ -14,10 +14,7 @@ import {
   fingerprintAction,
   summarizePlanningState,
 } from "./common/planningDiagnostics.js";
-import {
-  filterAiActionsForCurrentPhase,
-  hasPreBattleValueActions,
-} from "./common/phaseTiming.js";
+import { filterAiActionsForCurrentPhase } from "./common/phaseTiming.js";
 import {
   fieldHasTributeValue,
   getTributeCardsFromIndices,
@@ -1747,65 +1744,40 @@ export async function turnLineSearch(
       };
     }
 
-    let candidates = getCandidatesForDepth(currentState, strategy, depth, options);
-    if (!Array.isArray(candidates) || candidates.length === 0) {
-      if (nodesEvaluated < nodeBudget) {
-        const bridge = tryMainBattleMain2Bridge(
-          currentState,
-          sequence,
-          strategy,
-          options,
+    // Reserve the phase alternative before Main actions can exhaust the shared
+    // budget. Its terminal score is complete even when Main2 cannot be expanded.
+    const bridge = tryMainBattleMain2Bridge(currentState, sequence, strategy, options);
+    let bridgeBranch: SearchBranch | null = null;
+    let bridgeHash: string | null = null;
+    if (bridge) {
+      bridgeHash = getPlanningStateHash(bridge.state);
+      if (seenStates.has(bridgeHash)) {
+        repeatedStates += 1;
+      } else {
+        nodesEvaluated += 1;
+        const bridgeSequence = [...sequence, bridge.action];
+        const terminal = evaluatePlanningTerminal(
+          bridge.state, strategy, options, bridgeSequence, root,
         );
-        if (bridge) {
-          nodesEvaluated += 1;
-          const bridgeHash = getPlanningStateHash(bridge.state);
-          if (!seenStates.has(bridgeHash)) {
-            seenStates.add(bridgeHash);
-            const future = await search(bridge.state, depth + 1, [
-              ...sequence,
-              bridge.action,
-            ]);
-            return {
-              action: bridge.action,
-              sequence: future.sequence,
-              score: future.score,
-              baseScore: future.baseScore,
-              milestoneScore: future.milestoneScore,
-              milestones: future.milestones,
-              terminalContext: future.terminalContext,
-              finalState: future.finalState,
-              reason: future.reason,
-            };
-          }
-        }
+        bridgeBranch = {
+          action: bridge.action,
+          sequence: bridgeSequence,
+          score: terminal.score,
+          baseScore: terminal.baseScore,
+          milestoneScore: terminal.milestoneScore,
+          milestones: terminal.milestones,
+          terminalContext: terminal.context,
+          finalState: bridge.state,
+          reason: "no_candidates",
+        };
       }
-      const terminal = terminalEval();
-      return {
-        sequence,
-        score: terminal.score,
-        baseScore: terminal.baseScore,
-        milestoneScore: terminal.milestoneScore,
-        milestones: terminal.milestones,
-        terminalContext: terminal.context,
-        finalState: currentState,
-        reason: "no_candidates",
-      };
     }
 
-    const hasPreBattleValueCandidate = hasPreBattleValueActions(candidates, {
-      state: currentState,
-      game: currentState,
-      bot: currentState?.bot,
-      player: currentState?.bot,
-      strategy,
-      analysis: {
-        phase: currentState?.phase,
-        turnCounter: currentState?.turnCounter,
-      },
-    });
+    let candidates = getCandidatesForDepth(currentState, strategy, depth, options);
+    const hadCandidates = candidates.length > 0;
 
     candidates = candidates.slice().sort((a, b) => (b.priority || 0) - (a.priority || 0));
-    if (typeof strategy.selectPlanningCandidates === "function") {
+    if (candidates.length > 0 && typeof strategy.selectPlanningCandidates === "function") {
       const selectionLimit = Math.max(1, Math.min(beamWidth, candidateLimit, candidates.length));
       const legalCandidates = new Set(candidates);
       const selected = strategy.selectPlanningCandidates(candidates, currentState, selectionLimit);
@@ -1851,37 +1823,23 @@ export async function turnLineSearch(
       });
     }
 
-    const canBridgeNow = !hasPreBattleValueCandidate;
-
-    if (nodesEvaluated < nodeBudget && canBridgeNow) {
-      const bridge = tryMainBattleMain2Bridge(
-        currentState,
-        sequence,
-        strategy,
-        options,
-      );
-      if (bridge) {
-        nodesEvaluated += 1;
-        const bridgeHash = getPlanningStateHash(bridge.state);
-        if (!seenStates.has(bridgeHash)) {
-          seenStates.add(bridgeHash);
-          const future = await search(bridge.state, depth + 1, [
-            ...sequence,
-            bridge.action,
-          ]);
-          branches.push({
-            action: bridge.action,
-            sequence: future.sequence,
-            score: future.score,
-            baseScore: future.baseScore,
-            milestoneScore: future.milestoneScore,
-            milestones: future.milestones,
-            terminalContext: future.terminalContext,
-            finalState: future.finalState,
-            reason: future.reason,
-          });
-        }
+    if (bridgeBranch && bridgeHash !== null && bridge) {
+      // Do not mark a terminal-only reservation as expanded. Refinement uses
+      // the already simulated Battle state and costs no second bridge node.
+      if (
+        depth + 1 < maxDepth && nodesEvaluated < nodeBudget &&
+        !bridgeBranch.finalState._simRequiresReplan
+      ) {
+        seenStates.add(bridgeHash);
+        const future = await search(bridgeBranch.finalState, depth + 1, bridgeBranch.sequence);
+        bridgeBranch = { ...future, action: bridge.action };
+      } else {
+        bridgeBranch.reason = bridgeBranch.finalState._simRequiresReplan
+          ? "requires_replan"
+          : depth + 1 >= maxDepth ? "max_depth" : "node_budget";
       }
+      // Stable score ties continue to prefer Main actions.
+      branches.push(bridgeBranch);
     }
 
     if (branches.length === 0) {
@@ -1894,7 +1852,9 @@ export async function turnLineSearch(
         milestones: terminal.milestones,
         terminalContext: terminal.context,
         finalState: currentState,
-        reason: unsupportedAtThisDepth > 0 ? "unsupported_branches" : "no_state_changing_branches",
+        reason: unsupportedAtThisDepth > 0
+          ? "unsupported_branches"
+          : hadCandidates ? "no_state_changing_branches" : "no_candidates",
       };
     }
 

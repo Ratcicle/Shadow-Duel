@@ -120,7 +120,7 @@ Os contratos fundamentais ficam em [src/core/contracts/chain.ts](src/core/contra
 
 | Arquivo | Responsabilidade |
 | --- | --- |
-| `attachments.ts` | Manifest canônico com referências diretas dos 89 métodos anexados e preflight de colisões |
+| `attachments.ts` | Manifest canônico com referências diretas dos 92 métodos anexados e preflight de colisões |
 | `contexts.ts` | `CHAIN_CONTEXTS` e definições de janelas de Chain |
 | `link.ts` | Factory, classificação, snapshots, IDs e serialização de Chain Links |
 | `usage.ts` | Reservas e consumo das políticas `use` e `activate` |
@@ -137,6 +137,7 @@ Os contratos fundamentais ficam em [src/core/contracts/chain.ts](src/core/contra
 | `playerResponse.ts` | Respostas humanas e coleta de decisões |
 | `botResponsePolicy.ts` | Política de resposta para IA |
 | `resolution.ts` | Preparação, resolução e cleanup dos links |
+| `afterResolution.ts` | Continuação pós-efeito, janela filha CL1, barreira de triggers e projeções dos contextos suspensos |
 | `finalization.ts` | Destino e cleanup pós-Chain de Spell/Trap |
 
 Os métodos anexados são expostos no tipo da fachada por declaration merging, sem class fields emitidos. Ao alterar o Chain, execute somente os testes de Chain e de consumidores diretamente afetados, inclusive no encerramento. Justifique a cobertura de decisões, replay e IA pelo caminho alterado; Bot smoke é necessário apenas quando pertinente ao impacto, com cenários focados.

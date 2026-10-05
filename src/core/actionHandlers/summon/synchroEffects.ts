@@ -27,7 +27,7 @@ import {
   getUI,
   requestOptionalConfirmation,
   resolveTargetCards,
-  selectCards,
+  selectResolutionCards,
 } from "../shared.js";
 
 type CardInstanceId = string | number | null;
@@ -539,38 +539,17 @@ export async function handleSynchroSummonFromExtraDeck(
     ctx.effect?.id || action.type
   ] : undefined;
   if (planned && action.position && action.position !== "choice" && action.position !== planned.position) return false;
-  if (isAI(player)) {
-    selectedEntry = planned ? legalEntries.find(entry => entry.card.instanceId === planned.synchroInstanceId) : legalEntries
-      .slice()
-      .sort(
-        (a, b) =>
-          Number(b.card?.atk || 0) +
-          Number(b.card?.def || 0) -
-          (Number(a.card?.atk || 0) + Number(a.card?.def || 0)),
-      )[0];
-  } else {
-    const cardContract = buildCardChoiceContract(
-      game,
-      player,
-      legalEntries.map((entry) => entry.card),
-      action,
-    );
-    const keys = await selectCards({
-      game,
-      player,
-      selectionContract: cardContract,
-      requirementId: "synchro_extra_deck_card",
-      kind: "synchro_extra_deck",
-    });
-    if (!Array.isArray(keys) || keys.length === 0) {
-      return false;
-    }
-    const selectedKey = keys[0];
-    const candidate = cardContract.requirements[0].candidates.find(
-      (entry) => entry.key === selectedKey,
-    )?.cardRef;
-    selectedEntry = legalEntries.find((entry) => entry.card === candidate);
-  }
+  const cardContract = buildCardChoiceContract(game, player, legalEntries.map(entry => entry.card), action);
+  const chosenCards = await selectResolutionCards({ game, player,
+    cards: legalEntries.map(entry => entry.card), requirementId: "synchro_extra_deck_card", min: 1, max: 1,
+    message: cardContract.message, locate: card => ({ player, zone: "extraDeck", index: player.extraDeck.indexOf(card) }),
+    resolveAI: () => {
+      const entry = planned ? legalEntries.find(candidate => candidate.card.instanceId === planned.synchroInstanceId)
+        : legalEntries.slice().sort((a, b) => Number(b.card.atk || 0) + Number(b.card.def || 0) - Number(a.card.atk || 0) - Number(a.card.def || 0))[0];
+      return entry ? [entry.card] : null;
+    },
+  });
+  selectedEntry = legalEntries.find(entry => entry.card === chosenCards?.[0]);
 
   if (!selectedEntry) return false;
   const synchroCard = selectedEntry.card;
@@ -584,68 +563,35 @@ export async function handleSynchroSummonFromExtraDeck(
     return false;
   }
 
-  let materials: ActionRuntimeCard[] = [];
-  if (planned) {
-    const chosen = resolveExactInstanceSelection(player.field || [], planned.materialInstanceIds, { min: 1, max: 5 });
-    if (!chosen) return false;
-    const combos: unknown = Reflect.get(check, "materialCombos");
-    if (!Array.isArray(combos) || !combos.some(combo => Array.isArray(combo) && combo.length === chosen.length && chosen.every(card => combo.includes(card)))) return false;
-    materials = chosen;
-  } else if (isAI(player)) {
-    const materialCombos: unknown = Reflect.get(check, "materialCombos");
-    const firstCombo = Array.isArray(materialCombos) ? materialCombos[0] : null;
-    materials = Array.isArray(firstCombo)
-      ? firstCombo.filter((material): material is ActionRuntimeCard =>
-          Boolean(
-            material &&
-              typeof material === "object" &&
-              typeof Reflect.get(material, "name") === "string",
-          ),
-        )
-      : [];
-  } else {
-    const rawCandidates: unknown = Reflect.get(check, "candidates");
-    const materialCandidates = Array.isArray(rawCandidates)
-      ? rawCandidates.filter((candidate): candidate is ActionRuntimeCard =>
-          Boolean(
-            candidate &&
-              typeof candidate === "object" &&
-              typeof Reflect.get(candidate, "name") === "string",
-          ),
-        )
-      : [];
-    const materialContract = buildMaterialSelectionContract(
-      game,
-      synchroCard,
-      player,
-      materialCandidates,
-    );
-    const keys = await selectCards({
-      game,
-      player,
-      selectionContract: materialContract,
-      requirementId: "synchro_materials",
-      kind: "synchro",
-    });
-    if (!Array.isArray(keys) || keys.length === 0) return false;
-    materials = keys
-      .map(
-        (key) =>
-          materialContract.requirements[0].candidates.find(
-            (candidate) => candidate.key === key,
-          )?.cardRef,
-      )
-      .filter((material): material is ActionRuntimeCard => Boolean(material));
-  }
+  const rawCandidates: unknown = Reflect.get(check, "candidates");
+  const materialCandidates = Array.isArray(rawCandidates) ? rawCandidates.filter((card): card is ActionRuntimeCard =>
+    Boolean(card && typeof card === "object" && typeof Reflect.get(card, "name") === "string")) : [];
+  const materialContract = buildMaterialSelectionContract(game, synchroCard, player, materialCandidates);
+  const materials = await selectResolutionCards({ game, player, cards: materialCandidates,
+    requirementId: "synchro_materials", min: 2, max: materialCandidates.length,
+    message: materialContract.message, locate: card => ({ player, zone: "field", index: player.field.indexOf(card) }),
+    resolveAI: () => {
+      const combos: unknown = Reflect.get(check, "materialCombos");
+      if (planned) {
+        const chosen = resolveExactInstanceSelection(player.field, planned.materialInstanceIds, { min: 2, max: 5 });
+        return chosen && Array.isArray(combos) && combos.some(combo => Array.isArray(combo) && combo.length === chosen.length && chosen.every(card => combo.includes(card))) ? chosen : null;
+      }
+      const combo = Array.isArray(combos) ? combos[0] : null;
+      return Array.isArray(combo) ? combo.filter((card): card is ActionRuntimeCard =>
+        Boolean(card && typeof card === "object" && typeof Reflect.get(card, "name") === "string")) : null;
+    },
+  });
+  if (!materials) return false;
 
   const result = await game.performSynchroSummon?.(
     player,
-    materials,
+    [...materials],
     synchroCard,
     {
       checkActionWindow: false,
       position: planned?.position || action.position,
-      summonOrigin: "effect_resolution",
+      summonOrigin: ctx.afterEffectResolution ? "procedure" : "effect_resolution",
+      ...(ctx.afterEffectResolution ? { negationWindowPolicy: ctx.afterEffectResolution.chainLevel === 1 ? "auto" : "suppressed", skipFinalTiming: true } : {}),
       actionContext:
         ctx?.actionContext || ctx?.activationContext?.actionContext,
     },

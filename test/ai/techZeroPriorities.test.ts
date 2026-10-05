@@ -29,7 +29,7 @@ test("Core selects the exact level-three Catapult that opens Multimodal", () => 
   const ctx = context({ player: { field: [core, wrongCopy, catapult], extraDeck: [multimodal] } });
   assert.deepEqual(chooseTechZeroLevelAdjustment(core, [wrongCopy, core, catapult], ctx), {
     caseId: "decrease", targetInstanceId: catapult.instanceId,
-    targetRef: "tech_zero_energy_core_level_down_target",
+    targetRef: "tech_zero_energy_core_level_target",
   });
   assert.equal(catapult.level, 3, "analysis does not apply the adjustment");
 });
@@ -40,7 +40,7 @@ test("Multimodal reduces itself to one for Core plus Multimodal into Portal", ()
   const ctx = context({ player: { field: [multimodal, core], extraDeck: [portal] } });
   assert.deepEqual(chooseTechZeroLevelAdjustment(multimodal, [core, multimodal], ctx), {
     caseId: "decrease_2", targetInstanceId: multimodal.instanceId,
-    targetRef: "tech_zero_multimodal_machine_level_down_2_target",
+    targetRef: "tech_zero_multimodal_machine_level_target",
   });
   multimodal.effectsNegated = true;
   assert.equal(chooseTechZeroLevelAdjustment(multimodal, [core, multimodal], ctx), null);
@@ -58,11 +58,11 @@ test("level policy opens different exact materials for an already available Lanc
   const ctx = context({ player: { field: [machine, phoenix, reactor], extraDeck: [lancer] } });
   assert.deepEqual(chooseTechZeroLevelAdjustment(machine, [machine], ctx), {
     caseId: "decrease_1", targetInstanceId: machine.instanceId,
-    targetRef: "tech_zero_multimodal_machine_level_down_1_target",
+    targetRef: "tech_zero_multimodal_machine_level_target",
   });
   assert.deepEqual(chooseTechZeroLevelAdjustment(machine, [reactor], ctx), {
     caseId: "decrease_1", targetInstanceId: reactor.instanceId,
-    targetRef: "tech_zero_multimodal_machine_level_down_1_target",
+    targetRef: "tech_zero_multimodal_machine_level_target",
   });
   assert.equal(machine.level, 3);
   assert.equal(reactor.level, 8);
@@ -182,7 +182,7 @@ test("activation context gives Core's case and target by exact IDs", () => {
   const core = card(501), catapult = card(502), effect = required(core.effects[0]);
   const result = buildTechZeroActivationContext(core, effect,
     context({ player: { field: [core, catapult], extraDeck: [card(503)] } }));
-  assert.deepEqual(result.decisions?.selections, { tech_zero_energy_core_level_down_target: [catapult.instanceId] });
+  assert.deepEqual(result.decisions?.selections, { tech_zero_energy_core_level_target: [catapult.instanceId] });
   assert.equal(result.decisions?.cases?.action_case_choice, "decrease");
 });
 
@@ -202,7 +202,7 @@ test("Lab's exact decisions never recycle one instance twice or take Scrapyard's
   } }));
   assert.deepEqual(result.decisions?.selections, {
     tech_zero_development_lab_synchro_target: [portal.instanceId],
-    tech_zero_development_lab_shuffle_target: [wyvern.instanceId],
+    tech_zero_development_lab_shuffle_choice: [wyvern.instanceId],
   });
 });
 
@@ -228,7 +228,7 @@ test("Scrapyard context reserves the exact revived tuner and exact Synchro mater
   const result = buildTechZeroActivationContext(scrapyard, required(scrapyard.effects[0]), context({ player: {
     field: [phoenix], graveyard: [core, multimodal], extraDeck: [lancer],
   } }));
-  assert.deepEqual(result.decisions?.selections?.tech_zero_scrapyard_tuner, [multimodal.instanceId]);
+  assert.deepEqual(result.decisions?.specialSummons?.tech_zero_scrapyard_activation, [multimodal.instanceId]);
   const synchro = required(result.decisions?.synchroSummons?.tech_zero_scrapyard_activation);
   assert.equal(synchro.synchroInstanceId, lancer.instanceId);
   assert.deepEqual(new Set(synchro.materialInstanceIds), new Set([phoenix.instanceId, multimodal.instanceId]));

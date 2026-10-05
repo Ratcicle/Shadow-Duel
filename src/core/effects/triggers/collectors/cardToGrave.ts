@@ -1,4 +1,5 @@
 import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import { captureProcedureTriggerConditions } from "../../conditions/runtime.js";
 import type {
   TriggerCollectorHost,
   TriggerEffect,
@@ -34,6 +35,7 @@ export async function collectCardToGraveTriggers(
   const actionContext = payload?.actionContext || null;
   const contextLabel = payload?.contextLabel || null;
   const deferTargetPrecheck = payload?.deferTargetPrecheck === true;
+  const deferActivationChecks = payload?.deferActivationChecks === true;
   if (!card || !player) return { entries, orderRule };
 
   const resolvedOpponent = opponent || this.game?.getOpponent?.(player);
@@ -239,8 +241,11 @@ export async function collectCardToGraveTriggers(
       actionContext,
     };
 
+    const capturedConditions = deferActivationChecks
+      ? captureProcedureTriggerConditions(effect.conditions || [], condition => this.evaluateConditions([condition], ctx))
+      : null;
     if (Array.isArray(effect.conditions) && effect.conditions.length > 0) {
-      const conditionResult = this.evaluateConditions(effect.conditions, ctx);
+      const conditionResult = capturedConditions ? { ok: capturedConditions.possible } : this.evaluateConditions(effect.conditions, ctx);
       if (!conditionResult?.ok) {
         debugLog(
           `[card_to_grave] Skipping ${effect.id}: ${
@@ -339,6 +344,8 @@ export async function collectCardToGraveTriggers(
       selectionKind: "triggered",
       selectionMessage: "Select target(s) for the triggered effect.",
       skipTargetPreview: deferTargetPrecheck,
+      deferActivationChecks,
+      ...(capturedConditions ? { activationConditionCheck: capturedConditions.check } : {}),
     });
 
     if (entry) {

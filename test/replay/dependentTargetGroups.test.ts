@@ -4,9 +4,10 @@ import { createRuntimeGame, type RuntimeGame } from "../helpers/game.js";
 import { required, unsafeFixture } from "../helpers/fixtures.js";
 import { validateCanonicalReplay, createCanonicalStateSnapshot } from "../../src/core/game/replay/canonical.js";
 import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
-import type { ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
+import { CANONICAL_REPLAY_ENGINE_VERSION, type ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
 
 const first = "tech_zero_development_lab_synchro_target";
+const second = "tech_zero_development_lab_shuffle_choice";
 function install(game: RuntimeGame, seat: "player" | "bot", ai: boolean) {
   const start = game.startWithDecks.bind(game);
   game.startWithDecks = async options => {
@@ -25,7 +26,7 @@ function install(game: RuntimeGame, seat: "player" | "bot", ai: boolean) {
   };
 }
 for (const seat of ["player", "bot"] as const) for (const mode of ["twin", "main-monster", "ai"] as const) {
-  test(`Lab dependent choices replay exactly (${seat}/${mode})`, { timeout: 10000 }, async t => {
+  test(`Lab activation target and later graveyard choice replay exactly (${seat}/${mode})`, { timeout: 10000 }, async t => {
     const live = createRuntimeGame({ laboratoryMode: true, laboratoryUseBot: false, captureReplay: true, randomSeed: 1801, chainResponseTimeoutMs: 0 });
     const playback = createRuntimeGame({ laboratoryMode: true, laboratoryUseBot: false, captureReplay: false, replayMode: "playback", chainResponseTimeoutMs: 0 });
     t.after(() => { live.dispose(); playback.dispose(); });
@@ -39,19 +40,26 @@ for (const seat of ["player", "bot"] as const) for (const mode of ["twin", "main
     if (mode !== "ai") {
       for (let attempt = 0; !live.targetSelection && attempt < 100; attempt++) await new Promise(resolve => setTimeout(resolve, 1));
       const session = required(live.targetSelection);
-      for (const requirement of session.requirements) session.selections[requirement.id] =
-        [required(requirement.candidates.find(candidate => candidate.cardRef === (requirement.id === first ? a : b))).key];
-      await live.finishTargetSelection();
+      assert.deepEqual(session.requirements.map(requirement => requirement.id), [first]);
+      session.selections[first] = [required(required(session.requirements[0]).candidates.find(candidate => candidate.cardRef === a)).key];
+      const completion = live.finishTargetSelection();
+      for (let attempt = 0; (!live.targetSelection || live.targetSelection === session) && attempt < 200; attempt++) await new Promise(resolve => setTimeout(resolve, 1));
+      const resolution = required(live.targetSelection);
+      assert.notEqual(resolution, session);
+      assert.ok(owner.extraDeck.includes(a));
+      assert.deepEqual(resolution.requirements.map(requirement => requirement.id), [second]);
+      resolution.selections[second] = [required(required(resolution.requirements[0]).candidates.find(candidate => candidate.cardRef === b)).key];
+      await live.finishTargetSelection(); await completion;
     }
     assert.equal((await activation).success, true);
     assert.equal(owner.graveyard.length, 1);
     if (mode !== "ai") { assert.ok(owner.extraDeck.includes(a)); assert.ok((mode === "twin" ? owner.extraDeck : owner.deck).includes(b)); }
     const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "dependent-target-groups" }))));
     assert.equal(replay.commands.length, 1);
-    assert.equal(replay.engineVersion, "engine-rules-v18");
-    assert.throws(() => validateCanonicalReplay({ ...replay, engineVersion: "engine-rules-v17" }), /engineVersion/);
+    assert.equal(replay.engineVersion, CANONICAL_REPLAY_ENGINE_VERSION);
+    assert.throws(() => validateCanonicalReplay({ ...replay, engineVersion: "incompatible-Lab-choice-rules" }), /engineVersion/);
     playback.ui.showTargetSelection = () => assert.fail("replay must consume recorded selections");
-    playback.autoSelector.select = () => assert.fail("replay must not recompute dependent selections");
+    playback.autoSelector.select = () => assert.fail("replay must not recompute the activation target or resolution choice");
     playback.ui.showChainResponseModal = async () => assert.fail("replay must consume response");
     const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback, "Concrete Game with identical deterministic initial zones.") });
     assert.equal(result.ok, true);

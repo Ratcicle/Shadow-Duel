@@ -77,6 +77,16 @@ export function isChainResolving(this: FullChainHost): boolean {
 }
 
 export function cancelChain(this: FullChainHost): void {
+  for (const frame of this.suspendedChainFrames || []) {
+    frame.activeResponseAbortController?.abort("chain_cancelled");
+    for (const entry of frame.pendingChainFinalizations) {
+      if (entry.status === "queued") {
+        entry.status = "cancelled"; entry.disposition = "chain_cancelled";
+        entry.link.finalizationStatus = "cancelled";
+      }
+    }
+  }
+  this.suspendedChainFrames = [];
   this.log("Chain cancelled");
   this.activeResponseAbortController?.abort?.("chain_cancelled");
   this.activeResponseAbortController = null;

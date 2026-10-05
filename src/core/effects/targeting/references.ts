@@ -5,6 +5,17 @@ import type {
   EventTriggerReferenceSnapshots,
 } from "../../contracts/events.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
+import type { ChainCostPayment, PaidCostReferenceValues } from "../../contracts/chainRuntime.js";
+
+/** Paid values do not bind or substitute a card's current physical presence. */
+export function getPaidCostReferenceValues(
+  payment: ChainCostPayment | null | undefined,
+  targetRef: string | null | undefined,
+): readonly PaidCostReferenceValues[] | undefined {
+  if (payment?.status !== "paid" || !targetRef || !payment.paidReferences ||
+      !Object.hasOwn(payment.paidReferences, targetRef)) return undefined;
+  return payment.paidReferences[targetRef];
+}
 
 const REFERENCE_ZONES = ["field", "spellTrap", "hand", "graveyard", "banished", "deck", "extraDeck"] as const;
 const eventEffectOrigins = new WeakMap<object, object>();

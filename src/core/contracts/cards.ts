@@ -267,6 +267,11 @@ export interface DynamicExtraAttacksDefinition {
 }
 
 /** Independent contributions to the current affected presence. */
+export interface LevelModificationContribution {
+  amount: number;
+  duration: "until_end_turn" | "while_faceup";
+}
+
 export interface EffectNegationContribution {
   duration: "until_end_turn" | "while_faceup";
   sourceDuelCardId: number | null;
@@ -597,7 +602,7 @@ export interface CardDeclaredValueDetail {
   value: string | number | boolean;
   valueLabel?: string;
   declaredOnTurn?: number;
-  expiresOnTurn?: number;
+  expiresOnTurn?: number | null;
   duration?: string;
 }
 
@@ -715,6 +720,7 @@ export interface GameCard {
   level: number;
   baseLevel: number;
   originalLevel?: number | null;
+  levelModificationContributions?: LevelModificationContribution[];
   position: BattlePosition;
   previousPosition?: BattlePosition | null;
   positionChangedThisTurn?: boolean;
@@ -734,6 +740,7 @@ export interface GameCard {
   cannotAttackThisTurn: boolean;
   cannotAttackUntilTurn: number | null;
   immuneToOpponentEffectsUntilTurn: number | null;
+  unaffectedByOpponentCardEffects?: boolean;
   altTribute: AlternateTributeDefinition | null;
   tributeValue:
     | TributeValueDefinition
@@ -786,6 +793,7 @@ export interface GameCard {
   turnBasedBuffs: CardTurnBasedBuff[];
   tempStatuses: CardStatusRegistry;
   fieldExitStatuses: CardStatusRegistry;
+  faceupStatuses?: CardStatusRegistry;
   fieldPresenceId: string | number | null;
   fieldPresenceState: Record<string, number> | null;
   fieldPresenceSummons: FieldPresenceSummonRecord[];

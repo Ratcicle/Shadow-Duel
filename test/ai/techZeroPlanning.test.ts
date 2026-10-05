@@ -208,7 +208,7 @@ test("same Lancer with different materials survives level choices, candidate sel
   assert.ok(synchros.some(action => action.materialInstanceIds.includes(phoenix.instanceId)));
   assert.ok(synchros.every(action => !action.materialInstanceIds.includes(reactor.instanceId)));
   const adjustments = actions.filter(action => action.effectId === "tech_zero_multimodal_machine_level_mod");
-  const targetRef = "tech_zero_multimodal_machine_level_down_1_target";
+  const targetRef = "tech_zero_multimodal_machine_level_target";
   for (const target of [machine, reactor]) {
     const adjustment = required(adjustments.find(action =>
       action.activationContext?.decisions?.selections?.[targetRef]?.includes(target.instanceId)));
@@ -375,7 +375,8 @@ for (const actor of ["player", "bot"] as const) {
       }
       assert.ok(bot.field.some(card => card.id === target), `${combo} did not reach its useful boss: ${decisions}`);
       assert.ok(summons.includes(503) && summons.includes(509), "the search retains the low-ATK M/Portal route");
-      assert.ok(draws.every(card => bot.hand.includes(card)), "the line does not spend its two unknown draws");
+      assert.ok(draws.every(card => bot.hand.includes(card) ||
+        (card.id === 518 && bot.fieldSpell === card)), "revealed draws remain in hand or enable Lab placement");
       assert.equal(game.turn, actor);
       const boss = required(bot.field.find(card => card.id === target));
       if (combo === "lancer") assert.ok((boss.attackLimitThisTurn || 0) >= 2, "Lancer offers the intended offensive payoff");

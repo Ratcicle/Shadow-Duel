@@ -155,7 +155,8 @@ export default class TechZeroStrategy extends BaseStrategy {
     })) return false;
     if (sourceCard.id === TZ.CORE && effect.id === "tech_zero_energy_core_level_mod")
       return Object.keys(decisions?.cases || {}).length > 0;
-    if ([TZ.GHOST, TZ.KAISER, TZ.PORTAL].some(id => id === sourceCard.id)) {
+    if ([TZ.GHOST, TZ.KAISER, TZ.PORTAL].some(id => id === sourceCard.id) ||
+        (sourceCard.id === TZ.PRISM && effect.id === "tech_zero_prism_activator_synchro_summon")) {
       const groups = [...Object.values(decisions?.selections || {}), ...Object.values(decisions?.specialSummons || {})];
       if (groups.length) return groups.some(ids => ids.length > 0);
     }
@@ -207,7 +208,7 @@ export default class TechZeroStrategy extends BaseStrategy {
         const effect = findSpellActivationEffect(card);
         const decision = card.id === TZ.ASSEMBLY ? shouldUseTechZeroAssembly(policy) : { allow: true, reason: "Support the available Tech-Zero resources" };
         const activation = context(card, effect, "hand");
-        return { yes: decision.allow && !!effect && useful(card, effect, activation),
+        return { yes: decision.allow && (effect ? useful(card, effect, activation) : card.subtype === "field"),
           priority: card.id === TZ.ASSEMBLY ? 7 : 4, reason: decision.reason };
       },
       buildActivationContext: card => context(card, findSpellActivationEffect(card), "hand"),

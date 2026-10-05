@@ -18,6 +18,23 @@ import type {
   SelectionKind,
 } from "./selection.js";
 import type { CanonicalZone } from "./zones.js";
+import type { EffectContext, ResolvedTargetMap } from "./actionRuntime.js";
+
+/** A single direct activation's post-effect continuation, retained through selection. */
+export interface ActivationAfterResolutionState {
+  decisionCards?: readonly GameCard[];
+  source: GameCard;
+  player: GamePlayer;
+  effect: EffectDefinition;
+  context: EffectContext;
+  targets: ResolvedTargetMap;
+  actionIndex: number;
+  selectionGeneration: number;
+  completed: boolean;
+  storeBlueprint: boolean;
+  deferCleanup: boolean;
+  referenceSnapshots?: ChainDeclaredTargetSnapshot[];
+}
 
 export type ActivationZone = CanonicalZone | null;
 
@@ -30,6 +47,8 @@ export interface ActivationCommitInfo {
 }
 
 export interface ActivationPipelineContext {
+  deferAfterResolutionCleanup?: boolean;
+  afterResolution?: ActivationAfterResolutionState;
   equipHostExitBinding?: EventEquipHostExitBinding;
   /** Frozen rules for this activation, captured before any cost can change its source. */
   preparedEffect?: EffectDefinition;
@@ -127,6 +146,7 @@ export interface ActivationPipelineFinalizeInfo {
 }
 
 export interface ActivationPipelineConfig {
+  activationConditionCheck?: () => { ok: boolean; reason?: string };
   card?: GameCard | null;
   owner?: GamePlayer | null;
   activationZone?: ActivationZone;

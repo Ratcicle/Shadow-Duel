@@ -213,6 +213,7 @@ export function applyConditionalTargetActions(
         selfId,
         options,
         sourceCard,
+        ...(selections ? { _actionTargets: selections } : {}),
       })
     ) {
       return false;
@@ -271,6 +272,7 @@ export function applyConditionalActions(
       options,
       sourceCard: options.sourceCard,
       ...options.actionContext,
+      ...(selections ? { _actionTargets: selections } : {}),
     })
   ) {
     return;
@@ -306,6 +308,7 @@ export function applyOptionalTargetActions(
       options,
       sourceCard: options.sourceCard,
       ...options.actionContext,
+      ...(selections ? { _actionTargets: selections } : {}),
     })
   ) {
     return false;
@@ -547,6 +550,7 @@ export function applyChooseActionCase(
         !evaluateSimulatedConditions(choiceCase.conditions, {
           state,
           selfId,
+          _actionTargets: selections,
           options,
         })
       ) {
@@ -559,6 +563,7 @@ export function applyChooseActionCase(
         sourceCard: options.sourceCard,
         selfId,
         options,
+        ...(selections ? { selections } : {}),
       });
       if (!hasRequiredSelections(choiceCase.targets || [], caseSelections)) {
         return null;
@@ -601,7 +606,7 @@ export function applyChooseActionCase(
 
   applySimulatedActions({
     actions: chosenEntry!.choiceCase.actions || [],
-    selections: chosenEntry!.caseSelections,
+    selections: { ...selections, ...chosenEntry!.caseSelections },
     state,
     selfId,
     options,

@@ -167,6 +167,9 @@ export interface ActivationAnimationSource {
 }
 
 export interface ActivationGamePort {
+  ensureDuelCardId?(card: ActivationCard): number | null;
+  selectionAbortGeneration?: number;
+  afterResolutionActivation?: import("../../contracts/activation.js").ActivationAfterResolutionState | null;
   turn?: string | null | undefined;
   phase?: GamePhase | string | null | undefined;
   turnCounter?: number | undefined;

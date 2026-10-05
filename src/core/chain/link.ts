@@ -22,6 +22,7 @@ import type {
 import type {
   ChainCard,
   ChainCardInstanceId,
+  ChainCostPayment,
   ChainDeclaredTarget,
   ChainDeclaredTargetSnapshot,
   ChainEffect,
@@ -42,6 +43,31 @@ import type { ChainId, ChainLinkId } from "../contracts/primitives.js";
 
 const VALID_ACTIVATION_KINDS = new Set(Object.values(CHAIN_ACTIVATION_KINDS));
 const VALID_EFFECT_KINDS = new Set(Object.values(CHAIN_EFFECT_KINDS));
+
+/** Detach payment evidence from the mutable activation preparation context. */
+export function copyCostPayment(payment: ChainCostPayment): ChainCostPayment {
+  return {
+    ...payment,
+    actions: Array.isArray(payment.actions) ? payment.actions.map(entry => ({ ...entry })) : [],
+    ...(payment.summonMarkers ? { summonMarkers: payment.summonMarkers.map(entry => ({ ...entry })) } : {}),
+    ...(payment.paidReferences ? { paidReferences: Object.fromEntries(Object.entries(payment.paidReferences)
+      .map(([ref, entries]) => [ref, entries.map(entry => ({ ...entry }))])) } : {}),
+  };
+}
+
+/** Canonical continuation bindings retain presence while omitting process-local identities. */
+export function projectAfterResolutionSource(snapshot: ChainSourceSnapshot | null | undefined, cardDuelCardId: number | null) {
+  return snapshot ? { cardDuelCardId, controllerId: snapshot.controllerId, zone: snapshot.zone,
+    faceUp: snapshot.faceUp, locationVersion: snapshot.locationVersion,
+    ...(snapshot.counters ? { counters: { ...snapshot.counters } } : {}) } : null;
+}
+
+export function projectAfterResolutionReferences(groups: readonly ChainDeclaredTargetSnapshot[]) {
+  return groups.map(group => ({ targetId: group.targetId, cards: group.cards.map(snapshot => ({
+    cardDuelCardId: snapshot.card.duelCardId ?? null, controllerId: snapshot.controllerId, zone: snapshot.zone,
+    faceUp: snapshot.faceUp, locationVersion: snapshot.locationVersion,
+  })) }));
+}
 
 function isSpellTrap(card?: ChainCard | null): boolean {
   return card?.cardKind === "spell" || card?.cardKind === "trap";
@@ -447,7 +473,7 @@ export function createChainLink(
     resolutionSelections,
     resolvedSelectionCounts,
     costPayment: preparedInput.costPayment
-      ? { ...preparedInput.costPayment }
+      ? copyCostPayment(preparedInput.costPayment)
       : null,
     activationCommitment: preparedInput.activationCommitment
       ? {
@@ -578,6 +604,10 @@ export function recordChainSourceMovement(
 ): number {
   if (!card) return 0;
   const candidates = [
+    ...(this.suspendedChainFrames || []).flatMap(frame => [
+      ...frame.chainStack, ...frame.pendingChainFinalizations.map(entry => entry.link),
+      frame.currentResolvingLink, frame.currentFinalizingLink,
+    ]),
     ...(this.chainStack || []),
     ...(this.pendingChainFinalizations || []).map((entry) => entry?.link),
     this.currentResolvingLink || null,
@@ -677,6 +707,10 @@ export function serializeChainLink(
           status: link.costPayment.status || null,
           ...(link.costPayment.summonMarkers ? {
             summonMarkers: link.costPayment.summonMarkers.map(entry => ({ ...entry })),
+          } : {}),
+          ...(link.costPayment.paidReferences ? {
+            paidReferences: Object.fromEntries(Object.entries(link.costPayment.paidReferences)
+              .map(([ref, entries]) => [ref, entries.map(entry => ({ ...entry }))])),
           } : {}),
           actions: Array.isArray(link.costPayment.actions)
             ? link.costPayment.actions.map((entry) => ({ ...entry }))

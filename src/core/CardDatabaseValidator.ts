@@ -330,7 +330,7 @@ export function validateEffectActionTree(
 
     if (
       flow === "activation" &&
-      stage === "resolution" &&
+      (stage === "resolution" || stage === "after_resolution") &&
       visit.depth === 0 &&
       (action.activationStage === "cost" ||
         action.stage === "cost" ||
@@ -367,6 +367,12 @@ export function validateEffectActionTree(
       continue;
     }
 
+    if (action.capturePaidReference === true &&
+        (flow !== "activation" || stage !== "cost" ||
+          typeof action.targetRef !== "string" || action.targetRef.trim().length === 0)) {
+      push(errors, '"capturePaidReference" requires an activation cost with a non-empty targetRef.', actionIndex, pathText);
+    }
+
     if (
       flow === "activation" &&
       stage === "cost" &&
@@ -400,7 +406,7 @@ export function validateEffectActionTree(
     }
     if (
       flow === "activation" &&
-      stage === "resolution" &&
+      (stage === "resolution" || stage === "after_resolution") &&
       // Legacy resolution wrappers may select a benefit before consuming a
       // deferred cost. Activation cases explicitly separate payment from
       // resolution, so their cost targets stay protected at every depth.

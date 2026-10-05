@@ -1,4 +1,7 @@
 import { getNegationContributions } from "../../effects/negation.js";
+import { hasChainPostEffectSummonCapability } from "../../contracts/chainRuntime.js";
+import { projectAfterResolutionReferences, projectAfterResolutionSource, copyCostPayment } from "../../chain/link.js";
+import { serializeChainResponseDecisions } from "../decisions/chainResponse.js";
 import { projectOncePerTurnUsage } from "../turn/oncePerTurn.js";
 import { getTurnCardActivations } from "../events/activationHistory.js";
 import { cardDatabase } from "../../../data/cards.js";
@@ -217,9 +220,37 @@ function cardState(
     baseDef: numericValue(card.baseDef),
     level: numericValue(card.level),
     baseLevel: Number(card.baseLevel ?? card.level ?? 0),
+    originalLevel: card.originalLevel ?? null,
+    levelModificationContributions: (card.levelModificationContributions || []).map(entry => ({ ...entry })),
+    ...(card.declaredValues ? { declaredValues: Object.fromEntries(Object.entries(card.declaredValues).map(([key, value]) =>
+      [key, typeof value === "object" ? {
+        property: value.property,
+        value: value.value,
+        ...(value.declaredOnTurn !== undefined ? { declaredOnTurn: value.declaredOnTurn } : {}),
+        ...(value.expiresOnTurn !== undefined ? { expiresOnTurn: value.expiresOnTurn } : {}),
+        ...(value.duration !== undefined ? { duration: value.duration } : {}),
+      } : value],
+    )) } : {}),
+    ...(card.permanentBuffsBySource ? {
+      statBuffContributions: Object.values(card.permanentBuffsBySource).map(entry => ({
+        atk: entry.atk ?? 0,
+        def: entry.def ?? 0,
+        duration: entry.duration ?? "until_field_exit" as const,
+      })).sort((left, right) => left.atk - right.atk || left.def - right.def ||
+        compareCodeUnits(left.duration, right.duration)),
+    } : {}),
     counters: stableValue(card.counters || {}) ?? {},
     equipTargetId: card.equippedTo?.duelCardId ?? null,
     statuses: {
+      ...(card.attackLimitThisTurn != null ? {
+        attackLimit: { amount: card.attackLimitThisTurn, duration: card.attackLimitDuration ?? "until_end_turn" },
+      } : {}),
+      ...(Object.keys(card.faceupStatuses || {}).length ? {
+        faceupStatuses: stableValue(Object.fromEntries(Object.entries(card.faceupStatuses || {}).map(([status, previous]) => [status, {
+          previous: previous ?? null,
+          current: Reflect.get(card, status) ?? null,
+        }]))) ?? {},
+      } : {}),
       effectsNegated: card.effectsNegated === true,
       effectsNegatedDuration: card.effectsNegatedDuration || null,
       effectsNegationContributions: getNegationContributions(card).map(entry => ({ ...entry })),
@@ -392,6 +423,9 @@ export function createCanonicalStateSnapshot(
       state: stableValue(game.chainSystem?.getPublicState?.() || null) ?? null,
       timing: stableValue(game.chainSystem?.getFastEffectState?.() || null) ?? null,
       triggers: stableValue(game.chainSystem?.getTriggerState?.() || null) ?? null,
+      ...(hasChainPostEffectSummonCapability(game.chainSystem) && game.chainSystem.getAfterResolutionState()
+        ? { afterResolution: stableValue(game.chainSystem.getAfterResolutionState()) ?? null }
+        : getDirectAfterResolutionSnapshot(game) ? { afterResolution: stableValue(getDirectAfterResolutionSnapshot(game)) ?? null } : {}),
     },
     summon: procedureState(game.getSummonState?.() || null),
     combat: procedureState(game.getDamageStepState?.() || null),
@@ -400,6 +434,34 @@ export function createCanonicalStateSnapshot(
 
 export function hashCanonicalGameState(game: CanonicalReplayGamePort): string {
   return hashCanonicalValue(createCanonicalStateSnapshot(game));
+}
+
+/** Detached direct-activation metadata uses duel identities, never runtime card objects. */
+export function getDirectAfterResolutionSnapshot(game: Pick<CanonicalReplayGamePort, "afterResolutionActivation" | "player" | "bot" | "ensureDuelCardId">): object | null {
+  const state = game.afterResolutionActivation;
+  if (!state || state.completed) return null;
+  const results: Record<string, (number | null)[]> = {};
+  const cards = [game.player, game.bot].flatMap(player => player ? [
+    ...(player.deck || []), ...(player.extraDeck || []), ...(player.hand || []), ...(player.field || []),
+    ...(player.spellTrap || []), ...(player.graveyard || []), ...(player.banished || []), ...(player.fieldSpell ? [player.fieldSpell] : []),
+  ] : []);
+  for (const [ref, value] of Object.entries(state.context._actionTargets || {})) {
+    results[ref] = (Array.isArray(value) ? value : [value]).map(card => {
+      const physical = card && "card" in card ? card.card : card;
+      return physical?.duelCardId ?? null;
+    });
+  }
+  return { direct: { stage: "after_resolution", sourceDuelCardId: state.source.duelCardId ?? null,
+    sourceCardId: state.source.id, controllerId: state.player.id, effectId: state.effect.id,
+    sourceAtActivation: projectAfterResolutionSource(state.context.activationContext?.sourceAtActivation, state.source.duelCardId ?? null),
+    ...(state.referenceSnapshots ? { referenceSnapshots: projectAfterResolutionReferences(state.referenceSnapshots) } : {}),
+    costPayment: state.context.activationContext?.costPayment ? copyCostPayment(state.context.activationContext.costPayment) : null,
+    ...(state.context.activationContext?.decisions ? { decisions: serializeChainResponseDecisions(state.context.activationContext.decisions, id => {
+      const card = cards.find(card => String(readProperty(card, "instanceId")) === String(id));
+      if (card) return game.ensureDuelCardId?.(card) ?? card.duelCardId ?? null;
+      return state.decisionCards?.find(card => String(card.instanceId) === String(id))?.duelCardId ?? null;
+    }) } : {}),
+    actionIndex: state.actionIndex, selectionGeneration: state.selectionGeneration, results } };
 }
 
 export function serializeReplayEventPayload(

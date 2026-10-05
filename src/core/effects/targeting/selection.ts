@@ -1,4 +1,6 @@
 import { requiresUnnegatedTarget } from "../negation.js";
+import { getPaidCostReferenceValues } from "./references.js";
+import type { ChainCostPayment } from "../../contracts/chainRuntime.js";
 /**
  * Targeting Selection Module
  * Extracted from EffectEngine.js - candidate selection and key building
@@ -192,6 +194,7 @@ interface RuntimeEffectTarget extends TargetingCardFilter {
 }
 
 interface TargetingActivationContext {
+  costPayment?: ChainCostPayment | null;
   timing?: string | undefined;
   logTargets?: boolean;
   excludedDamageStepTargets?: TargetingCard[];
@@ -1347,9 +1350,12 @@ export function selectCandidates(
     const { attr, ref, op } = def.compareAttribute;
     const targetMap = ctx._selectCandidatesTargetMap || {};
     const refCards = targetMap[ref];
+    const paidLevel = attr === "level"
+      ? getPaidCostReferenceValues(ctx.activationContext?.costPayment, ref)?.[0]?.level
+      : undefined;
 
-    if (refCards && refCards.length > 0) {
-      const refValue = getCardComparableAttribute(refCards[0], attr);
+    if (paidLevel !== undefined || (refCards && refCards.length > 0)) {
+      const refValue = paidLevel ?? getCardComparableAttribute(refCards?.[0], attr);
 
       if (refValue !== undefined) {
         log(

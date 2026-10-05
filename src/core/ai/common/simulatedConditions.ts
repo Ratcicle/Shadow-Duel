@@ -37,6 +37,7 @@ interface BlueprintCardView {
 }
 
 interface SimConditionContext {
+  _actionTargets?: import("../../contracts/selection.js").CanonicalSelectionMap;
   player?: SimulatedPlayerState | null;
   opponent?: SimulatedPlayerState | null;
   state?: object | null;
@@ -1594,7 +1595,10 @@ export function evaluateSimulatedConditions(
       const max = Number.isFinite(Number(condition.max))
         ? Number(condition.max)
         : null;
-      const matching = simCollectTargetRefCards(targetRef, ctx, options).filter(
+      const referenced = ctx._actionTargets && Object.hasOwn(ctx._actionTargets, targetRef)
+        ? simCollectTargetRefCards(targetRef, { _actionTargets: ctx._actionTargets })
+        : simCollectTargetRefCards(targetRef, ctx, options);
+      const matching = referenced.filter(
         (card) =>
           simCardInAllowedZones(card, condition.zones || condition.zone, [
             self,

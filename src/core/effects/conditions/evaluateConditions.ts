@@ -851,6 +851,38 @@ function collectActionsBanishCandidates(
   return cards;
 }
 
+/** Preview may inspect an unbound declaration, but never replace a bound ref. */
+function collectFilterConditionTargetCards(
+  engine: ConditionHost,
+  targetRef: string,
+  ctx: ConditionContext,
+): readonly ConditionCard[] {
+  if (ctx._actionTargets && Object.prototype.hasOwnProperty.call(ctx._actionTargets, targetRef)) {
+    return collectContextTargetCards(targetRef, ctx);
+  }
+  const stored = collectContextTargetCards(targetRef, ctx);
+  const activationContext = ctx.activationContext;
+  if (stored.length > 0 || activationContext?.preview !== true) return stored;
+  for (const source of [activationContext, activationContext.context, activationContext.respondingToChainLink]) {
+    const selections = mergeCanonicalSelections(source);
+    if (Object.prototype.hasOwnProperty.call(selections, targetRef)) {
+      return cardsFromSelectionValue(selections[targetRef]);
+    }
+  }
+  const planned = activationContext.decisions?.selections;
+  if (planned && Object.prototype.hasOwnProperty.call(planned, targetRef)) {
+    const targetDefs = (ctx.effect?.targets || []).filter(target => target.id === targetRef);
+    if (targetDefs.length === 0) return [];
+    const result = engine.resolveTargets(targetDefs, {
+      ...ctx,
+      activationContext: { ...activationContext, autoSelectTargets: false, autoSelectSingleTarget: false },
+    } as Parameters<ConditionHost["resolveTargets"]>[1], null);
+    if (result?.ok === false) return [];
+    return asArray(result?.targets?.[targetRef]).filter((card): card is ConditionCard => !!card);
+  }
+  return collectTargetRefCandidateCards(engine, targetRef, ctx.effect, ctx, activationContext);
+}
+
 function previewBanishBranchConditions(
   engine: ConditionHost,
   conditions: readonly RuntimeCondition[] | undefined,
@@ -2334,7 +2366,7 @@ export function evaluateConditions(
           ? Number(cond.min ?? cond.count)
           : 1;
         const max = Number.isFinite(Number(cond.max)) ? Number(cond.max) : null;
-        const matching = collectContextTargetCards(targetRef, ctx).filter(
+        const matching = collectFilterConditionTargetCards(this, targetRef, ctx).filter(
           (card) =>
             cardIsInAllowedConditionZones(this, card, zones) &&
             this.cardMatchesFilters(card, filters),

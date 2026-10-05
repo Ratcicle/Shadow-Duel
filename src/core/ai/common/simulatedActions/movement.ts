@@ -1,3 +1,4 @@
+import { restoreFaceupStatuses } from "../../../Card.js";
 import { refreshSimulatedFieldAuras } from "../zones.js";
 import type { SimulatedMoveReceipt } from "../zones.js";
 import { captureCostMarkerEvidence } from "../../../effects/costs/summonMarkers.js";
@@ -314,7 +315,7 @@ export function applyMove(
   if (targetCards.length === 0) {
     return action.allowEmpty === true ? undefined : STOP_SIMULATION;
   }
-  const payingCost = options.effect?.activationCosts?.includes(action) === true;
+  const payingCost = options.payingActivationCosts ?? options.effect?.activationCosts?.includes(action) === true;
   if (action.requireAll || payingCost) {
     if (new Set(targetCards).size !== targetCards.length) return STOP_SIMULATION;
     for (const card of targetCards) {
@@ -360,6 +361,11 @@ export function applyMove(
     const wasFaceupBeforeMove = card.isFacedown !== true;
     const effectsNegatedAtFieldExit = fromZone === "field" && card.effectsNegated === true;
     const levelBeforeMove = Number(card.level || 0);
+    const paidReference = payingCost && action.capturePaidReference === true ? {
+      cardDuelCardId: card.duelCardId ?? null,
+      name: card.name || "",
+      level: Number.isFinite(levelBeforeMove) ? levelBeforeMove : 0,
+    } : null;
     const receipt: { value: SimulatedMoveReceipt | null } = { value: null };
     if (moveCardToZone(destPlayer || owner, card, to, owner, { state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer: self,
       ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}), onMoveCommitted: result => { receipt.value = result; },
@@ -380,6 +386,11 @@ export function applyMove(
         continue;
       }
       movedCards.push(card);
+      if (paidReference) {
+        options.costPayment ??= { status: "paid", actions: [], summonMarkers: [] };
+        const paidReferences = options.costPayment.paidReferences ??= {};
+        (paidReferences[action.targetRef || "self"] ??= []).push(paidReference);
+      }
       if (evidence.length) {
         options.costPayment ??= { status: "paid", actions: [], summonMarkers: [] };
         (options.costPayment.summonMarkers ??= []).push(...evidence);
@@ -521,6 +532,7 @@ export function resolveSimulatedTemporaryControlEffects(
     clearSimulatedTemporaryControl(state, card);
     card.battlePositionLocked = false;
     restoreFieldExitStatuses(card);
+    restoreFaceupStatuses(card);
     if (card.isTrapMonster && card.trapMonsterOriginalState) {
       Object.assign(card, card.trapMonsterOriginalState);
       card.isTrapMonster = false;

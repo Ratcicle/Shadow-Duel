@@ -1276,6 +1276,7 @@ export const shadowHeartCards = [
           {
             type: "buff_stats_temp",
             atkBoost: 700,
+            duration: "end_of_turn",
           },
         ],
       },

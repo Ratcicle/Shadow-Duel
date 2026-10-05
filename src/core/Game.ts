@@ -225,6 +225,7 @@ class Game {
     this.selectionState = "idle";
     this.graveyardSelection = null;
     this.selectionAbortGeneration = 0;
+    this.afterResolutionActivation = null;
     this.selectionSessionCounter = 0;
     this.lastSelectionSessionId = 0;
     this.eventListeners = {};
@@ -400,6 +401,7 @@ class Game {
     this.disposed = true;
     this.gameOver = true;
     this.disposeReason = reason;
+    this.afterResolutionActivation = null;
     this.targetSelection = null;
     this.selectionState = "idle";
     this.graveyardSelection = null;

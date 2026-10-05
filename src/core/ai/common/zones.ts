@@ -1,3 +1,4 @@
+import { restoreFaceupStatuses } from "../../Card.js";
 import { clearEffectNegation } from "../../effects/negation.js";
 import { captureEventCardPresence } from "../../game/zones/ownership.js";
 import type { EventCardPresenceSnapshot, EventEquipHostExitBinding } from "../../contracts/events.js";
@@ -5,7 +6,7 @@ import { restoreFieldExitStatuses, restoreTemporaryStatuses } from "../../Card.j
 import { cardMatchesFilter } from "./cardFilters.js";
 import { countTurnCardActivations } from "../../game/events/activationHistory.js";
 import { getCounterValue } from "./counters.js";
-import { clearPermanentStatBuffs, expireFaceupStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
+import { clearLevelModifications, clearPermanentStatBuffs, expireFaceupStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
 import { clearPassiveBuffsForCard, getModeledPassiveContributions, pruneModeledPassiveContributions, registerModeledPassiveContribution, applyPassiveBuffValue, getFieldAuraBuffKey, getFieldCounterStatAuraBuffKey, getEquippedFieldCounterBuffKeys, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
 import {
   assignAutomaticFieldSlot,
@@ -572,6 +573,9 @@ export function moveCardToZone(
       }
     }
   }
+  if ((fromZone === "field" || fromZone === "spellTrap" || fromZone === "fieldSpell") && fromZone !== toZone) {
+    delete card.declaredValues;
+  }
   if ((fromZone === "field" || fromZone === "spellTrap" || fromZone === "fieldSpell") &&
       toZone !== "field" && toZone !== "spellTrap" && toZone !== "fieldSpell") {
     const field = options.state ? [...options.state.player.field, ...options.state.bot.field] : sourcePlayer.field;
@@ -587,6 +591,7 @@ export function moveCardToZone(
     delete card.banishWhenLeavesField;
     card.battlePositionLocked = false;
     restoreFieldExitStatuses(card);
+    restoreFaceupStatuses(card);
     restoreTemporaryStatuses(card);
     if (card.cardKind === "monster") {
       card.summonedTurn = null;
@@ -601,7 +606,7 @@ export function moveCardToZone(
       if (card.tempDefBoost) { removeTrackedStatChange(card, "def", card.tempDefBoost); card.tempDefBoost = 0; }
       if (card.originalAtk != null) { card.atk = card.originalAtk; card.originalAtk = null; }
       if (card.originalDef != null) { card.def = card.originalDef; card.originalDef = null; }
-      if (card.originalLevel != null) { card.level = card.originalLevel; card.originalLevel = null; }
+      clearLevelModifications(card);
       for (const buff of card.turnBasedBuffs || []) {
         if (buff.stat === "atk") removeTrackedStatChange(card, "atk", buff.value);
         if (buff.stat === "def") removeTrackedStatChange(card, "def", buff.value);
@@ -627,6 +632,8 @@ export function moveCardToZone(
   if ((fromZone === "spellTrap" || fromZone === "fieldSpell") &&
       toZone !== "field" && toZone !== "spellTrap" && toZone !== "fieldSpell") {
     clearEffectNegation(card);
+    restoreFaceupStatuses(card);
+    restoreTemporaryStatuses(card);
   }
   for (const { equip } of attachedEquips) detachSimulatedEquip(equip);
   removeCardFromZones(sourcePlayer, card);

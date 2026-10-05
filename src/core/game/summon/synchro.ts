@@ -184,6 +184,8 @@ interface PerformSynchroOptions extends SynchroCheckOptions {
   synchroSummonContextId?: string;
   actionContext?: unknown;
   summonOrigin?: PreparedSummonInput["summonOrigin"];
+  skipFinalTiming?: boolean;
+  negationWindowPolicy?: "auto" | "suppressed";
 }
 
 interface ExtraDeckSynchroOptions extends SynchroCheckOptions {
@@ -1142,6 +1144,8 @@ export async function performSynchroSummon(
     summonMethod: "synchro",
     summonProcedure: "synchro",
     position: resolvedPosition,
+    skipFinalTiming: options.skipFinalTiming === true,
+    negationWindowPolicy: options.negationWindowPolicy || "auto",
     costPayments: materials.map((material) => ({
       card: material,
       owner: player,

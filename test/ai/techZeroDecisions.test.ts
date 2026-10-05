@@ -150,10 +150,10 @@ test("Core level decision uses the selected case and exact Electrocatapult in th
   const action = required((effect.actions || []).find(entry => entry.type === "choose_action_case"));
   assert.equal(action.type, "choose_action_case");
   if (action.type !== "choose_action_case") return;
-  const context: EffectContext = { source: core, player, effect, activationContext: {
-    decisions: { cases: { tech_zero_energy_core_level_mod: "decrease" }, selections: { tech_zero_energy_core_level_down_target: [second.instanceId] } },
+  const context: EffectContext = { source: core, player, effect, _actionTargets: { tech_zero_energy_core_level_target: [second] }, activationContext: {
+    decisions: { cases: { tech_zero_energy_core_level_mod: "decrease" }, selections: { tech_zero_energy_core_level_target: [second.instanceId] } },
   } };
-  const result = await handleChooseActionCase(action, context, {}, engine);
+  const result = await handleChooseActionCase(action, context, { tech_zero_energy_core_level_target: [second] }, engine);
   assert.ok(typeof result === "object" && result !== null && "success" in result && result.success);
   assert.equal(first.level, 3);
   assert.equal(second.level, 2);

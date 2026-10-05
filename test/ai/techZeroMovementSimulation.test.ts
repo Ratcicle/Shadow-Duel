@@ -6,6 +6,7 @@ import { moveCardToZone, canMoveCardToZone, findCardZone } from "../../src/core/
 import { applySimulatedActions } from "../../src/core/ai/common/simulatedActions/index.js";
 import type { SimulatedActionOptions } from "../../src/core/ai/common/simulatedActions/shared.js";
 import { simulationCard, simulationState } from "../helpers/simulation.js";
+import { required } from "../helpers/fixtures.js";
 
 function card(id: number) {
   const definition = cardDatabase.find(entry => entry.id === id);
@@ -144,4 +145,44 @@ test("Kaiser level storage counts only successful moves and captures levels befo
   assert.deepEqual(state.bot.extraDeck, [adjusted]);
   assert.deepEqual(state.bot.deck, []);
   assert.ok(state.bot.field.includes(blocked));
+});
+
+test("Lab simulation chooses a graveyard monster after its Synchro target returns", () => {
+  const source = card(518), synchro = card(509), remaining = card(501), arriving = card(502);
+  const effect = source.effects?.find(candidate => candidate.id === "tech_zero_development_lab_recycle");
+  assert.ok(effect?.actions);
+  const state = simulationState({ bot: { fieldSpell: source, graveyard: [synchro, remaining], hand: [arriving] } });
+  const moves: number[] = [];
+  applySimulatedActions({ state, selfId: "bot", selections: { tech_zero_development_lab_synchro_target: [synchro] },
+    actions: effect.actions,
+    options: { sourceCard: source, effect, activationContext: { decisions: { selections: {
+      tech_zero_development_lab_shuffle_choice: [required(arriving.instanceId)],
+    } } }, emitSimulatedEvent(event, payload) {
+      if (event !== "card_moved") return;
+      const moved = Reflect.get(payload, "card");
+      if (moved === synchro) {
+        assert.ok(state.bot.extraDeck.includes(synchro));
+        assert.equal(moveCardToZone(state.bot, arriving, "graveyard"), true);
+      }
+      moves.push(Reflect.get(moved, "id"));
+    } },
+  });
+  assert.deepEqual(state.bot.extraDeck, [synchro]);
+  assert.deepEqual(state.bot.graveyard, [remaining]);
+  assert.deepEqual(state.bot.deck, [arriving]);
+  assert.deepEqual(moves, [509, 502]);
+  assert.deepEqual(state._simUnsupportedActions || [], []);
+});
+
+test("Lab simulation returns its sole target without fabricating a second choice", () => {
+  const source = card(518), synchro = card(509);
+  const effect = source.effects?.find(candidate => candidate.id === "tech_zero_development_lab_recycle");
+  assert.ok(effect?.actions);
+  const state = simulationState({ bot: { fieldSpell: source, graveyard: [synchro] } });
+  applySimulatedActions({ state, selfId: "bot", selections: { tech_zero_development_lab_synchro_target: [synchro] },
+    actions: effect.actions, options: { sourceCard: source, effect } });
+  assert.deepEqual(state.bot.extraDeck, [synchro]);
+  assert.deepEqual(state.bot.graveyard, []);
+  assert.deepEqual(state.bot.deck, []);
+  assert.deepEqual(state._simUnsupportedActions || [], []);
 });

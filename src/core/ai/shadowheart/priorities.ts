@@ -1398,6 +1398,9 @@ export function buildShadowHeartCostPreferences(analysis: Analysis) {
     ...(offensivePlan.preserveNames || []),
     ...(resourcePreferences.preserveNames || []),
   ]);
+  for (const monster of analysis.field || []) {
+    if (isExtraDeckBoss(monster) && monster.name) preserveNames.add(monster.name);
+  }
   if (heartbearerCompletesTributeLine(analysis)) {
     preserveNames.add(SH.heartbearer);
   }

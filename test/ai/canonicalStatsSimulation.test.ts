@@ -280,7 +280,7 @@ for (const seat of ["bot", "player"] as const) {
           const copy = createPlanningCopy(), simulated = copy.cloneCardForSim(target);
           const state = simulationState({ turnCounter: 3, [seat]: { field: [simulated] },
             cardActivationHistory: structuredClone(required(game.cardActivationHistory)) });
-          const bonus: ActionOf<"buff_stats_temp"> = { type: "buff_stats_temp", targetRef: "target", atkBoost: 31, defBoost: 37 };
+          const bonus: ActionOf<"buff_stats_temp"> = { type: "buff_stats_temp", targetRef: "target", atkBoost: 31, defBoost: 37, duration: "end_of_turn" };
           const half: ActionOf<"modify_stats_temp"> = { type: "modify_stats_temp", targetRef: "target", atkFactor: factor, defFactor: factor };
           for (const action of bonusBefore ? [bonus, half] : [half, bonus]) {
             await game.effectEngine.applyActions([action], { player: owner, opponent, source: target }, { target: [target] });

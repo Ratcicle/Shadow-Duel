@@ -4,9 +4,11 @@ import type {
   ResolvedTargetMap,
 } from "../../contracts/actionRuntime.js";
 import type { CardEffectMarkerMap } from "../../contracts/cards.js";
+import type { AIDecisionPlan } from "../../contracts/ai.js";
 import type { ActionOf } from "../../contracts/actions.js";
 import type {
   EffectDefinition,
+  EffectCondition,
   StructuredEffectCondition,
 } from "../../contracts/effects.js";
 import type {
@@ -60,6 +62,59 @@ export function evaluateActivationPreviewConditions(
   return !conditions || conditions.every(visit);
 }
 
+type CapturedProcedureCondition =
+  | { readonly kind: "frozen"; readonly result: ConditionResult }
+  | { readonly kind: "capacity"; readonly condition: EffectCondition }
+  | { readonly kind: "any"; readonly children: readonly CapturedProcedureCondition[]; readonly reason?: string };
+
+/** Only unfiltered upper bounds describe open Monster Zones, rather than event facts. */
+function isProcedureCapacityCondition(condition: EffectCondition): boolean {
+  return "type" in condition && condition.type === "field_card_count" &&
+    (condition.zone || "field") === "field" &&
+    (!condition.zones || condition.zones.length === 1 && condition.zones[0] === "field") &&
+    condition.max !== undefined && condition.min === undefined && condition.count === undefined &&
+    !condition.filters && !condition.excludeSource && !condition.requireFaceup;
+}
+
+/** Freeze event predicates once; read Monster Zone capacity only at the activation opportunity. */
+export function captureProcedureTriggerConditions(
+  conditions: readonly EffectCondition[],
+  evaluate: (condition: EffectCondition) => ConditionResult,
+): { readonly possible: boolean; readonly check: () => ConditionResult } {
+  const active = new WeakSet<object>();
+  const capture = (condition: EffectCondition): CapturedProcedureCondition => {
+    if (active.has(condition)) return { kind: "frozen", result: { ok: false, reason: "Cyclic trigger condition." } };
+    if ("type" in condition && condition.type === "any_of" && condition.conditions?.length) {
+      active.add(condition);
+      const children = condition.conditions.map(capture);
+      active.delete(condition);
+      return { kind: "any", children, ...(condition.reason ? { reason: condition.reason } : {}) };
+    }
+    return isProcedureCapacityCondition(condition) ? { kind: "capacity", condition } :
+      { kind: "frozen", result: evaluate(condition) };
+  };
+  const captured = conditions.map(capture);
+  const check = (condition: CapturedProcedureCondition, possible: boolean): ConditionResult => {
+    if (condition.kind === "frozen") return condition.result;
+    if (condition.kind === "capacity") return possible ? { ok: true } : evaluate(condition.condition);
+    let failure: ConditionResult = { ok: false };
+    for (const child of condition.children) {
+      const result = check(child, possible);
+      if (result.ok) return result;
+      failure = result;
+    }
+    return condition.reason ? { ok: false, reason: condition.reason } : failure;
+  };
+  const checkAll = (possible: boolean): ConditionResult => {
+    for (const condition of captured) {
+      const result = check(condition, possible);
+      if (!result.ok) return result;
+    }
+    return { ok: true };
+  };
+  return { possible: checkAll(true).ok, check: () => checkAll(false) };
+}
+
 export interface ConditionCard extends ActionRuntimeCard {
   effectMarkers?: CardEffectMarkerMap;
   fieldPresenceId?: string | number | null;
@@ -88,6 +143,7 @@ export interface ConditionPlayer {
 
 /** Conditions inspect legacy replay/Chain data without extending card authoring. */
 export interface ConditionActivationContext extends SelectionChannelSource {
+  decisions?: AIDecisionPlan;
   context?: ConditionActivationContext | null;
   actionContext?: object | null;
   activationAttempt?: {

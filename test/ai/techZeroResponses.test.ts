@@ -159,8 +159,9 @@ for (const seat of ["player", "bot"] as const) {
     const effect = required(core.effects.find(entry => entry.id === "tech_zero_energy_core_level_mod"));
     required(chain.addToChain(chain.createPreparedActivation({ card: core, controller: player,
       effect, activationZone: "field", committed: true, costsPaid: true,
+      targetSelections: chainSelections({ tech_zero_energy_core_level_target: [core] }),
       activationContext: { decisions: { cases: { tech_zero_energy_core_level_mod: "increase" },
-        selections: { tech_zero_energy_core_level_up_target: [core.instanceId] } } },
+        selections: { tech_zero_energy_core_level_target: [core.instanceId] } } },
     })));
     const { choice } = await choose();
     assert.ok(choice === null, "the only Scrapyard Synchro consumes the pending effect's field target");
@@ -287,7 +288,7 @@ for (const seat of ["player", "bot"] as const) {
     const { link } = pending([{ type: "destroy", targetRef: "victim" }], [slasher]);
     const { choice } = await activateChoice();
     const decisions = required(choice.context.activationContext?.decisions);
-    assert.deepEqual(decisions.selections?.tech_zero_scrapyard_tuner, [tuner.instanceId]);
+    assert.deepEqual(decisions.specialSummons?.tech_zero_scrapyard_activation, [tuner.instanceId]);
     assert.deepEqual(decisions.synchroSummons?.tech_zero_scrapyard_activation, {
       synchroInstanceId: boss.instanceId, materialInstanceIds: [tuner.instanceId, slasher.instanceId, mage.instanceId], position: "attack",
     });
@@ -334,7 +335,7 @@ for (const seat of ["player", "bot"] as const) {
       else placeFieldCards(player.field, replacement);
       const { choice } = await activateChoice();
       const decisions = required(choice.context.activationContext?.decisions);
-      const tunerIds = required(decisions.selections?.tech_zero_scrapyard_tuner);
+      const tunerIds = required(decisions.specialSummons?.tech_zero_scrapyard_activation);
       const materialIds = required(decisions.synchroSummons?.tech_zero_scrapyard_activation?.materialInstanceIds);
       const selected = removed === "tuner" ? required(player.graveyard.find(card => tunerIds.includes(card.instanceId))) :
         required(player.field.find(card => card.id === slasher.id && materialIds.includes(card.instanceId)));

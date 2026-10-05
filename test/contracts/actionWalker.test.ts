@@ -287,6 +287,6 @@ test("walker inventories every declarative action in the live database", () => {
   }
 
   assert.deepEqual(diagnostics, []);
-  assert.equal(actionCount, 585); // T01 adds five resolution-choice wrappers to the current 580-action baseline.
+  assert.equal(actionCount, 587); // Includes Scrapyard's approved post-effect conditional root.
   assert.equal(types.size, 96);
 });

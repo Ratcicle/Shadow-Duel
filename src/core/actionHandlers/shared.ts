@@ -406,7 +406,11 @@ export function resolveTargetCards(
     );
   };
 
-  if (targetRef === "self") {
+  // A handler's per-action map is authoritative, including an explicitly empty
+  // selection after immunity or presence filtering.
+  if (typeof targetRef === "string" && Object.hasOwn(targets, targetRef)) {
+    resolved = targets[targetRef];
+  } else if (targetRef === "self") {
     if (ctx?.source) {
       resolved = [ctx.source];
     }
@@ -479,8 +483,6 @@ export function resolveTargetCards(
     targetRef in ctx._actionTargets
   ) {
     resolved = ctx._actionTargets[targetRef];
-  } else if (targetRef && targets && targetRef in targets) {
-    resolved = targets[targetRef];
   } else if (options.fallbackList) {
     resolved = options.fallbackList;
   }

@@ -224,6 +224,71 @@ test("greedy search keeps the last equally scored candidate", async () => {
   });
 });
 
+for (const search of [beamSearchTurn, greedySearchWithEvalV2]) {
+  test(`${search.name} can preserve the current board when every complete action is worse`, async () => {
+    const game = makeGame();
+    const strategy = {
+      bot: game.bot,
+      generateMainPhaseActions: () => SEARCH_ACTIONS,
+      simulateMainPhaseAction(state: MutableScoreState) { state.bot.lp -= 10; },
+      evaluateBoardV2: (state: MutableScoreState) => state.bot.lp,
+      evaluateBoard: (state: MutableScoreState) => state.bot.lp,
+    };
+    assert.equal(await search(game, strategy, { maxDepth: 2, allowEarlyStop: true }), null);
+    assert.ok(await search(game, strategy), "profiles without conservation keep their legacy fallback");
+    assert.equal(game.bot.lp, 8000, "search leaves the runtime untouched");
+  });
+
+  test(`${search.name} preserves its tie preference when conservation is enabled`, async () => {
+    const game = makeGame();
+    const strategy = {
+      bot: game.bot,
+      generateMainPhaseActions: () => SEARCH_ACTIONS,
+      simulateMainPhaseAction() {},
+      evaluateBoardV2: (state: MutableScoreState) => state.bot.lp,
+      evaluateBoard: (state: MutableScoreState) => state.bot.lp,
+    };
+    const result = await search(game, strategy, { allowEarlyStop: true });
+    assert.equal(result?.action, search === beamSearchTurn ? SEARCH_ACTIONS[0] : SEARCH_ACTIONS[2]);
+    assert.equal(result?.score, 8000);
+  });
+}
+
+test("beam conservation explores a losing preparation whose continuation pays off", async () => {
+  const game = makeGame();
+  const setup = SEARCH_ACTIONS[0];
+  const finish = SEARCH_ACTIONS[1];
+  assert.ok(setup && finish);
+  const strategy = {
+    bot: game.bot,
+    generateMainPhaseActions: (state: MutableScoreState) => state.bot.lp === 8000 ? [setup] : state.bot.lp === 7990 ? [finish] : [],
+    simulateMainPhaseAction(state: MutableScoreState, action: SearchAction) { state.bot.lp += action === setup ? -10 : 30; },
+    evaluateBoardV2: (state: MutableScoreState) => state.bot.lp - 8000,
+    evaluateBoard: (state: MutableScoreState) => state.bot.lp - 8000,
+  };
+  const result = await beamSearchTurn(game, strategy, { maxDepth: 3, allowEarlyStop: true });
+  assert.equal(result?.action, setup);
+  assert.deepEqual(result?.sequence, [setup, finish]);
+  assert.equal(result?.score, 14, "the existing future discount remains active");
+});
+
+test("beam conservation stops at a stronger intermediate board", async () => {
+  const game = makeGame();
+  const action = SEARCH_ACTIONS[0];
+  assert.ok(action);
+  const strategy = {
+    bot: game.bot,
+    generateMainPhaseActions: () => [action],
+    simulateMainPhaseAction(state: MutableScoreState) { state.bot.lp += state.bot.lp === 8000 ? 10 : -2; },
+    evaluateBoardV2: (state: MutableScoreState) => state.bot.lp - 8000,
+    evaluateBoard: (state: MutableScoreState) => state.bot.lp - 8000,
+  };
+  const result = await beamSearchTurn(game, strategy, { maxDepth: 3, allowEarlyStop: true });
+  assert.deepEqual(result?.sequence, [action]);
+  assert.equal(result?.score, 10);
+  assert.equal((await beamSearchTurn(game, strategy, { maxDepth: 3 }))?.sequence.length, 3);
+});
+
 test("game-tree search freezes defaults, three-candidate beam and first-tie behavior", () => {
   const game = makeGame();
   let generationCalls = 0;
