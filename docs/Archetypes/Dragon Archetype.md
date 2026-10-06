@@ -1,21 +1,5 @@
 # Dragon — Catálogo do Arquétipo
 
-Fonte dos dados canônicos: `src/data/cards/dragon.ts` via `src/data/cards.ts`.
-Nomes e textos PT-BR: `public/locales/pt-br.json`.
-
-## Regras textuais aprovadas
-
-Os textos em inglês e português das cartas, refletidos neste catálogo, são a fonte de verdade para o comportamento esperado. A implementação deve seguir essas regras. As decisões abaixo foram aprovadas em 30 de setembro de 2026, com o complemento de 268 em 1 de outubro.
-
-- **262:** a Ignition envia a própria Magia de Campo ao Cemitério como custo, antes de abrir a janela de respostas. A Invocação-Especial acontece na resolução da Chain.
-- **272:** a trava considera somente monstros Invocados pelo oponente durante a permanência atual da Névoa com a face para cima no campo e somente no turno da Invocação. Monstros que já estavam no campo quando ela entrou e monstros que mudarem de controle ficam fora da restrição; a troca de controle também encerra a restrição para um monstro antes abrangido.
-- **267:** a proteção é uma Ignition opcional, com escolha de alvo pelo jogador.
-- **270:** a destruição em batalha não concede uma Invocação do Extremo Vulcânico.
-- **264:** a Invocação da mão ao banir 3 Dragões do Cemitério é um procedimento, sem ativação de efeito, limitado por nome a uma tentativa por turno desta forma, inclusive se a Invocação for negada. O compromisso da tentativa consome o uso antes do primeiro pagamento; cancelar antes dele preserva recursos e uso. Permanecem as janelas normais de tentativa e conclusão da Invocação. O hard OPT final continua independente para cada efeito. O procedimento não conta para as três ativações exigidas pela Ascensão de 267.
-- **273:** a substituição da destruição é opcional, inclusive com campo adversário vazio. Após banir a fonte, se houver cards adversários, o jogador deve escolher 1 para banir.
-- **268:** o nome PT-BR é "Santuário do Espírito do Dragão". A devolução e a Invocação acontecem na mesma resolução; a janela de respostas é da ativação da Armadilha. O substituto é escolhido depois da devolução e pode ser o próprio monstro devolvido. O limite usa o Nível desse monstro na mão.
-- **263 e 274:** Standby Phase é traduzida como "Fase de Espera".
-
 ## Resumo
 
 Dragon reúne 30 cartas com foco em sinergias entre monstros do tipo Dragão, combate e reaproveitamento do Cemitério.
@@ -26,6 +10,15 @@ Dragon reúne 30 cartas com foco em sinergias entre monstros do tipo Dragão, co
 - usa Invocações, posições de batalha e aumentos de ATK/DEF;
 - inclui o subtema Extreme Dragon e sua progressão para Supreme Bahamut Dragon;
 - desenvolve linhas de Fusão e Ascensão.
+
+## Mecânicas do arquétipo
+
+- **Pico Escarpado dos Dragões (262):** o efeito de Invocação envia a própria Magia de Campo ao Cemitério como custo, antes das respostas do oponente. A Invocação-Especial acontece na resolução da Chain.
+- **Dragão Extremo da Névoa (272):** a restrição de ataque considera somente monstros Invocados pelo oponente enquanto a Névoa permanece com a face para cima no campo e somente no turno da Invocação. Monstros que já estavam no campo quando ela entrou ficam fora da restrição. Uma troca de controle também encerra a restrição para o monstro.
+- **Dragão Cósmico Arco-Íris (267):** a proteção é um efeito opcional que você ativa durante sua Fase Principal, escolhendo o alvo.
+- **Dragão de Cristal Purificado (264):** a Invocação da mão ao banir 3 Dragões do Cemitério não ativa um efeito nem inicia Chain. Todas as cópias compartilham o limite de uma tentativa por turno desta forma, inclusive se a Invocação for negada. Confirmar a tentativa consome esse limite antes do pagamento; cancelar antes da confirmação preserva recursos e a tentativa. Cada efeito da carta possui seu próprio limite por turno, independente da tentativa de Invocação. Esse procedimento não conta para as três ativações exigidas pela Ascensão do Dragão Cósmico Arco-Íris (267).
+- **Dragão Extremo da Galáxia (273):** a substituição da destruição é opcional, inclusive com campo adversário vazio. Após banir o próprio Dragão, se houver cards adversários, você deve escolher 1 para banir.
+- **Santuário do Espírito do Dragão (268):** a devolução e a Invocação acontecem na mesma resolução; o oponente pode responder à ativação da Armadilha. O substituto é escolhido depois da devolução e pode ser o próprio monstro devolvido. O limite de Nível considera o monstro devolvido já na mão.
 
 ---
 
@@ -95,11 +88,11 @@ Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 
 **265 — Tech-Void Dragon**
 
-> Materiais: "Dragão Voltaico" + 1 monstro do tipo Dragão de Nível 5 ou maior
+> "Dragão Voltaico" + 1 monstro do tipo Dragão de Nível 5 ou maior
 
 **266 — Radiant Cosmic Dragon**
 
-> Dragão Luminoso + 2 monstros do Tipo Dragão.
+> "Dragão Luminoso" + 2 monstros do Tipo Dragão
 
 **275 — Supreme Bahamut Dragon**
 

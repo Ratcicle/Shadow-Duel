@@ -1,8 +1,5 @@
 # Tech-Zero — Catálogo do Arquétipo
 
-Fonte dos dados canônicos: `src/data/cards/techZero.ts` via `src/data/cards.ts`.
-Nomes e textos PT-BR: `public/locales/pt-br.json`.
-
 ## Resumo
 
 Tech-Zero reúne 20 cartas com foco em Invocação-Sincro, Reguladores e ajuste de Nível.
@@ -66,7 +63,7 @@ Tech-Zero reúne 20 cartas com foco em Invocação-Sincro, Reguladores e ajuste 
 | --- | --- | --- | --- | --- | --- | --- |
 | Raptor Token | 1 | Machine | Light | 500 | 500 | 505 |
 
-Tokens são gerados por efeitos e não entram na contagem de cartas do Main Deck ou Extra Deck. Seus nomes localizados aparecem nos textos PT-BR das cartas que os geram.
+Tokens são gerados por efeitos e não entram na contagem de cartas do Main Deck ou Extra Deck.
 
 ### Suporte genérico relacionado
 
@@ -280,6 +277,8 @@ Sincro, Nível 5, Spellcaster, Light, 2000/2100.
 >
 > Uma vez por turno: você pode enviar 1 monstro "Tech-Zero" de Nível 4 ou menor que você controla para o Cemitério; Invoque por Invocação-Especial 1 monstro "Tech-Zero" do seu Cemitério com o mesmo Nível e nome diferente do monstro enviado.
 
+O efeito de compra exige que Mago de Batalha já esteja com a face para cima no campo quando outro monstro próprio for Invocado por Invocação-Sincro. A própria Invocação-Sincro de Mago de Batalha não dispara esse efeito.
+
 **513 — Kaiser Turbocarga Tech-Zero / Tech-Zero Turbocharge Kaiser**
 
 Sincro, Nível 6, Warrior, Light, 2100/1800.
@@ -356,68 +355,5 @@ Magia Normal.
 - O Main Deck contém 7 monstros, 2 Magias e 1 Armadilhas.
 - O Extra Deck contém 10 de Sincro.
 - As Fichas geradas não são cartas adicionais para montagem do deck.
-
----
-
-## Deck Jogável Sugerido (20 + 10)
-
-Esta é a sugestão geral do catálogo. O preset do bot usa a lista específica de
-20 + 10 cartas definida em [presets.ts](../../src/core/bot/presets.ts),
-com 2 Iron Raptor, 2 Prism Activator, 1 Pulse Soldier, 2 Assembly Line,
-2 Scrapyard e 1 Court of the Dead.
-
-Main Deck legal com todas as cartas Tech-Zero incluidas pelo menos 1 vez.
-
-### Main Deck (20)
-
-| Qtde | ID | PT-BR | Canonico |
-| ---- | -- | ----- | -------- |
-| 3x | 501 | Nucleo de Energia Tech-Zero | Tech-Zero Energy Core |
-| 3x | 502 | Eletrocatapulta Tech-Zero | Tech-Zero Electrocatapult |
-| 2x | 504 | Wyvern Planador Tech-Zero | Tech-Zero Glider Wyvern |
-| 3x | 505 | Raptor de Ferro Tech-Zero | Tech-Zero Iron Raptor |
-| 3x | 506 | Acionador Prisma Tech-Zero | Tech-Zero Prism Activator |
-| 1x | 507 | Dragao Conector Tech-Zero | Tech-Zero Connector Dragon |
-| 2x | 508 | Soldado de Pulso Tech-Zero | Tech-Zero Pulse Soldier |
-| 1x | 518 | Laboratorio de Desenvolvimento Tech-Zero | Tech-Zero Development Lab |
-| 1x | 519 | Linha de Montagem Tech-Zero | Tech-Zero Assembly Line |
-| 1x | 520 | Ferro-Velho Tech-Zero | Tech-Zero Scrapyard |
-
-### Extra Deck (10)
-
-| Qtde | ID | PT-BR | Canonico |
-| ---- | -- | ----- | -------- |
-| 1x | 503 | Maquina Multimodal Tech-Zero | Tech-Zero Multimodal Machine |
-| 1x | 509 | Portal de Invocacao Tech-Zero | Tech-Zero Summoning Portal |
-| 1x | 510 | Retalhador Atomico Tech-Zero | Tech-Zero Atomic Slasher |
-| 1x | 511 | Samurai Fantasma Tech-Zero | Tech-Zero Ghost Samurai |
-| 1x | 512 | Mago de Batalha Tech-Zero | Tech-Zero Battle Mage |
-| 1x | 513 | Kaiser Turbocarga Tech-Zero | Tech-Zero Turbocharge Kaiser |
-| 1x | 514 | Fenix de Plasma Tech-Zero | Tech-Zero Plasma Phoenix |
-| 1x | 515 | Dragao Reator Tech-Zero | Tech-Zero Reactor Dragon |
-| 1x | 516 | Lanceiro Explosivo Tech-Zero | Tech-Zero Explosive Lancer |
-| 1x | 517 | Singularidade Final Tech-Zero | Tech-Zero Final Singularity |
-
-### IDs para referencia rapida
-
-```js
-mainDeck: [
-  501, 501, 501,
-  502, 502, 502,
-  504, 504,
-  505, 505, 505,
-  506, 506, 506,
-  507,
-  508, 508,
-  518, 519, 520,
-]
-
-extraDeck: [
-  503, 509, 510, 511, 512,
-  513, 514, 515, 516, 517,
-]
-```
-
-`De-Sincro` (`19`) e um suporte generico opcional para listas que queiram desfazer Sincros e reconstruir materiais.
 
 ---

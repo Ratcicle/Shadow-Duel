@@ -1,8 +1,5 @@
 # Bloomrot — Catálogo do Arquétipo
 
-Fonte dos dados canônicos: `src/data/cards/bloomrot.ts` via `src/data/cards.ts`.
-Nomes e textos PT-BR: `public/locales/pt-br.json`.
-
 ## Resumo
 
 Bloomrot reúne 20 cartas com foco em Marcadores de Esporo, Fichas e controle gradual do campo.
@@ -66,7 +63,7 @@ Bloomrot reúne 20 cartas com foco em Marcadores de Esporo, Fichas e controle gr
 | --- | --- | --- | --- | --- | --- | --- |
 | Bloomrot Token | 1 | Plant | Earth | 0 | 0 | 403, 410, 416 |
 
-Tokens são gerados por efeitos e não entram na contagem de cartas do Main Deck ou Extra Deck. Seus nomes localizados aparecem nos textos PT-BR das cartas que os geram.
+Tokens são gerados por efeitos e não entram na contagem de cartas do Main Deck ou Extra Deck.
 
 ---
 
@@ -315,34 +312,30 @@ Fusão, Nível 11, Plant, Dark, 0/3000.
 - O Extra Deck contém 1 de Fusão, 2 de Ascensão.
 - As Fichas geradas não são cartas adicionais para montagem do deck.
 
-### Correções funcionais P2 — 03/10/2026
+### Invocações da mão
 
-Os nomes e textos acima permanecem definidos pelo diretor criativo. O lote P2
-corrigiu o escopo por cópia de sete efeitos (402/410/412/413/417/418/420), seis
-referências contextuais de evento, a contribuição independente de cada Armor
-e a observação de destruição do host da Overgrowth para qualquer destino,
-incluindo remoção de Ficha. Negação, presença e controlador histórico são
-revalidados nos caminhos de runtime, Chain e simulação; referências não
-produzem targeting ou escolhas humanas adicionais.
+As Invocações-Especiais da mão de Radícula (402), Cervo-Pútrido (404),
+Viúva-Cogutumba (407) e Casca Ancestral (408) não ativam efeitos. Radícula
+exige que você controle uma Ficha Podriflora; Cervo-Pútrido, Viúva-Cogutumba
+e Casca Ancestral removem respectivamente 2, 3 e 4 Marcadores de Esporo
+do campo.
 
-O replay usa schema 2 / engine-rules-v16 e rejeita versões anteriores antes
-de alterar o jogo. Os 52 replays P2 usam cartas reais/comandos públicos,
-ambos os assentos e humano/IA, com reprodução sem UI/AutoSelector.
-O registro completo está na [auditoria dos IDs 401–420](../Auditoria%20cartas%20Bloomrot%20401-420.md).
-P3 (B12/B14), decisões editoriais e o custo legado da proteção da Armor na
-simulação (L01) continuam fora desse lote.
+### Marcadores e Equipamentos
 
-### Decisões T01/T02/S01 — 04/10/2026
+Colônia Viva (410) reduz o ATK/DEF de cada monstro adversário de acordo
+com os Marcadores de Esporo naquele monstro. Armadura Fúngica (413) concede
+ATK pelos Esporos dos dois lados e 500 DEF fixos; cada Armadura equipada
+contribui separadamente. Supercrescimento (415) espalha Esporos quando o
+monstro equipado é destruído, mesmo que ele seja banido ou seja uma Ficha.
 
-Por decisão do diretor criativo, os textos de 405/407/408/413 permanecem
-intactos. Seus cinco efeitos que apenas colocam Esporos escolhem os cards na
-resolução, sem targeting; proteções contra alvos não os impedem, mas imunidade
-a efeitos permanece. Os limites atuais de escolha e de uso foram preservados.
-Somente a referência ao nome da 419 na restrição PT acima foi corrigida para
-"Podriflora Rainha do Bosque Oco", sem mudança mecânica.
+### Escolhas durante a resolução
 
-Compost Ritual (411) permanece intacta: a semântica textual coloca o primeiro
-Marcador e depois calcula os adicionais, mas a suspeita exige uma interação
-legal reproduzida que altere a quantidade de Podriflora entre as etapas.
-O replay atual usa schema 2 / engine-rules-v17; a auditoria registra provas,
-compatibilidade e limitações dos lotes anteriores e deste fechamento.
+Os efeitos de Chapéu-Carniceiro (405), Viúva-Cogutumba (407), Casca Ancestral
+(408) e Armadura Fúngica (413) que apenas colocam Esporos escolhem os cards
+durante a resolução, sem escolher alvos na ativação. Proteções contra alvos
+não impedem essas escolhas; imunidade a efeitos continua válida.
+
+Colheita Podriflora (414) remove os Marcadores antes de escolher os cards
+para destruir na resolução; o bônus de ATK/DEF vem depois das destruições.
+Uma Ficha criada posteriormente pelo efeito da Colônia não recebe esse
+bônus retroativamente.

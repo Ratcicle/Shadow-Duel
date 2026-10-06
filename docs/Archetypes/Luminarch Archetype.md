@@ -1,8 +1,5 @@
 # Luminarch — Catálogo do Arquétipo
 
-Fonte dos dados canônicos: `src/data/cards/luminarch.ts` via `src/data/cards.ts`.
-Nomes e textos PT-BR: `public/locales/pt-br.json`.
-
 ## Resumo
 
 Luminarch reúne 24 cartas com foco em ganho de PV, defesa e conversão de recursos em presença de campo.
@@ -75,11 +72,11 @@ Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 
 **171 — Luminarch Megashield Barbarias**
 
-> Materiais: "Protetor do Santuário Luminarca" + 1 monstro "Luminarca" de nível 5 ou maior
+> "Protetor do Santuário Luminarca" + 1 monstro "Luminarca" de nível 5 ou maior
 
 **173 — Luminarch Pure Knight**
 
-> Materiais: 2 monstros "Luminarca".
+> 2 monstros "Luminarca"
 
 ### Ascensões
 

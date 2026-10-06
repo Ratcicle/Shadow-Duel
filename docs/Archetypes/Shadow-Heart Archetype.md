@@ -1,8 +1,5 @@
 # Shadow-Heart — Catálogo do Arquétipo
 
-Fonte dos dados canônicos: `src/data/cards/shadowHeart.ts` via `src/data/cards.ts`.
-Nomes e textos PT-BR: `public/locales/pt-br.json`.
-
 ## Resumo
 
 Shadow-Heart reúne 26 cartas com foco em pressão de batalha, reciclagem do Cemitério, Invocações por Tributo e progressão para monstros de Extra Deck.
@@ -86,7 +83,13 @@ Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 
 **122 — Shadow-Heart Warlord**
 
-> Materiais: 2 monstros "Coração Sombrio". Se este card seria destruído em batalha, você pode enviar 1 monstro "Coração Sombrio" que você controla para o Cemitério em vez disso.
+> 2 monstros "Coração Sombrio"
+>
+> Se este card seria destruído em batalha, você pode enviar 1 monstro "Coração Sombrio" que você controla para o Cemitério em vez disso.
+>
+> Se este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 monstro "Coração Sombrio" de Nível 4 ou menor do seu Cemitério, mas ele não pode atacar neste turno.
+>
+> Você só pode usar cada efeito de "Senhor da Guerra do Coração Sombrio" uma vez por turno.
 
 ### Ascensões
 
@@ -102,7 +105,9 @@ Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 
 **124 — Shadow-Heart Devastation Dragon**
 
-> Material de Ascensão: "Dragão de Escamas do Coração Sombrio" Requisito: o material deve ter ficado com a face para cima no campo por 3 turnos.
+> "Dragão de Escamas do Coração Sombrio"
+>
+> Requisito: o material deve ter ficado com a face para cima no campo por 3 turnos.
 
 ---
 
@@ -134,12 +139,12 @@ Nível 8, Fiend, Dark, 2600/2200.
 >
 > Durante o cálculo de dano, se este card batalhar contra um monstro do oponente: remova todos os aumentos de ATK/DEF aplicados a esse monstro.
 
-Os efeitos de combate de Arctroth e Hiperion disparam em `damage_step`, com `damageStepTimings: ["damage_calculation"]`. São efeitos obrigatórios: o do jogador do turno ocupa o Elo 1 e o do oponente, o Elo 2; a Corrente resolve em ordem inversa. Com ambos em Ataque e sem outros modificadores:
+Os efeitos de combate de Arctroth e Hiperion são ativados durante o cálculo de dano. São efeitos obrigatórios: o do jogador do turno ocupa o Elo 1 e o do oponente, o Elo 2; a Corrente resolve em ordem inversa. Com ambos em Ataque e sem outros modificadores:
 
 - Arctroth ataca: Hiperion ganha 1000 ATK/DEF no Elo 2; Arctroth remove o aumento no Elo 1. Hiperion fica com 3000 ATK durante o cálculo, destrói Arctroth e causa 400 de dano.
 - Hiperion ataca: Arctroth remove os aumentos existentes no Elo 2; Hiperion ganha 1000 ATK/DEF no Elo 1. Hiperion fica com 4000 ATK durante o cálculo, destrói Arctroth e causa 1400 de dano.
 
-Não há prioridade especial nem bloqueio de novos aumentos. O bônus temporário do Hiperion termina após o cálculo, sem subtrair novamente um aumento já removido.
+Novos aumentos de ATK/DEF ainda podem ser aplicados. O bônus temporário do Hiperion termina após o cálculo de dano.
 
 **107 — Imp do Coração Sombrio / Shadow-Heart Imp**
 
@@ -365,25 +370,23 @@ Ascensão, Nível 10, Dragon, Dark, 3300/3000.
 - Shadow-Heart Scale Dragon e Shadow-Heart Demon Arctroth são os materiais das duas linhas de Ascensão.
 - Shadow-Heart Scale Dragon também participa da Fusão de Shadow-Heart Demon Dragon.
 
-## Resolução e limites — lote SH7, SH8 e SH11
+## Interações e limites
 
 - Hino de Batalha aplica o bônus ao conjunto de monstros próprios Shadow-Heart
   com a face para cima na resolução, incluindo os que entrarem em resposta.
-- Imp e o revive do Senhor da Guerra escolhem o monstro durante a resolução,
-  após a confirmação única do Trigger opcional.
+- Imp e o efeito de recuperação do Senhor da Guerra escolhem o monstro
+  durante a resolução, depois que o jogador decide ativar o efeito.
 - Infusão descarta exatamente duas cartas como parte do efeito e depois
   escolhe no Cemitério; pode reviver uma das cartas recém-descartadas.
-- Portador mantém o vínculo exclusivo com o monstro destruído do evento.
-  Esse vínculo não é alvo; seu envio ao Cemitério continua sendo custo.
+- Portador pode Invocar apenas o monstro cuja destruição ativou seu efeito,
+  sem escolhê-lo como alvo. Enviar o próprio Portador ao Cemitério é o custo.
 - Dragão Demônio declara um alvo adversário antes das respostas, incluindo
   cartas Baixadas nas zonas de monstros, Magias/Armadilhas e Campo.
-- Proteção e revive do Senhor da Guerra têm limites independentes por nome,
-  compartilhados entre cópias, com política `use`.
+- A proteção e a recuperação do Senhor da Guerra têm limites independentes
+  compartilhados entre cópias, consumidos mesmo se a ativação for negada.
+  Recusar a substituição de destruição não consome o limite.
 
-### Regras verificadas — SH9 a SH14
-
-- Covarde dispara quando chega ao Cemitério vindo da mão: descarte, custo, envio simples e material de Fusão. Banimento e outras zonas de origem não satisfazem o trigger.
-- Fúria exige nenhuma declaração anterior de ataque direto no turno. A restrição é aplicada no compromisso da ativação e permanece sob negação. Um ataque direto negado também conta como declaração.
-- Purificação mantém as reduções entre turnos e após a saída da Magia; cada monstro perde seus modificadores ao deixar o campo. O trigger de destruição continua limitado ao turno e à presença original do alvo.
-- Perseguidor aceita Invocação-Especial, Fusão, Sincro e Ascensão. Redução e ganho têm durações independentes, limitadas à permanência dos respectivos monstros. Os dois efeitos usam hard OPT independentes, consumidos mesmo sob negação.
-- Senhor da Guerra preserva os dois hard OPT independentes. Recusar a substituição de destruição não consome o limite.
+- Covarde ativa seu efeito quando chega ao Cemitério vindo da mão, inclusive por descarte, custo ou como material de Fusão. Banimento e outras zonas de origem não satisfazem essa condição.
+- Fúria exige que nenhum ataque direto tenha sido declarado antes no turno. A restrição começa na ativação e permanece mesmo sob negação. Um ataque direto negado também conta como declaração.
+- Purificação mantém as reduções entre turnos e após a saída da Magia; cada monstro perde esses modificadores ao deixar o campo. A redução adicional de ATK exige que o alvo original seja destruído no mesmo turno, sem ter deixado o campo e retornado antes disso.
+- Perseguidor reconhece Invocação-Especial, Fusão, Sincro e Ascensão. Redução e ganho têm durações independentes, limitadas à permanência dos respectivos monstros. Os dois efeitos têm limites independentes compartilhados entre cópias, consumidos mesmo sob negação.

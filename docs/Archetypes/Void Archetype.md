@@ -1,8 +1,5 @@
 # Void — Catálogo do Arquétipo
 
-Fonte dos dados canônicos: `src/data/cards/void.ts` via `src/data/cards.ts`.
-Nomes e textos PT-BR: `public/locales/pt-br.json`.
-
 ## Resumo
 
 Void reúne 27 cartas com foco em Invocações recorrentes, uso do Cemitério e Fusões com múltiplos materiais.
@@ -387,7 +384,6 @@ Fusão, Nível 7, Fiend, Dark, 2400/1900.
 
 ## Notas do Arquétipo
 
-- “Não informado” indica um campo ausente na definição canônica; nenhum valor foi presumido.
 - O catálogo possui 27 cartas: 19 no Main Deck e 8 no Extra Deck.
 - O Main Deck contém 14 monstros, 4 Magias e 1 Armadilhas.
 - O Extra Deck contém 6 de Fusão, 2 de Ascensão.

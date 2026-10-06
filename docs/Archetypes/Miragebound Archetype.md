@@ -1,8 +1,5 @@
 # Miragebound — Catálogo do Arquétipo
 
-Dados declarativos da implementação: [miragebound.ts](../../src/data/cards/miragebound.ts) via [cards.ts](../../src/data/cards.ts).
-Nomes e textos PT-BR: [pt-br.json](../../public/locales/pt-br.json).
-
 ## Resumo
 
 Miragebound reúne 14 cartas com foco em mudanças de posição de batalha e retorno de cartas à mão.
@@ -16,41 +13,16 @@ Miragebound reúne 14 cartas com foco em mudanças de posição de batalha e ret
 
 ---
 
-## Regras canônicas aprovadas — 02/10/2026
+## Mecânicas do arquétipo
 
-As decisões abaixo são a fonte de verdade para a semântica do arquétipo. A aprovação destas regras é distinta do estado da implementação: este registro não afirma que o runtime já as cumpre.
-
-### Regras aprovadas
-
-- **D01 — Características ocultas:** um monstro Baixado não satisfaz condição, custo ou alvo que exija especificamente um monstro "Miragebound" ("Vinculados à Miragem"), pois essa característica oculta não pode ser verificada. Uma condição genérica de controlar um monstro inclui monstros Baixados.
-- **D02 — Declaração de alvos:** todos os alvos de um efeito são declarados na ativação, antes das respostas de Chain; a resolução não cria novos alvos. O Jackal (353) declara o alvo adversário antes da sua Invocação-Especial. Vanishing Step (361) e a opção de devolução do Oasis (354) declaram seus alvos antes de devolver o monstro à mão. A recuperação condicional do Heat Haze (362) permite uma escolha posterior no Cemitério, sem alvo, quando a condição da recuperação for satisfeita.
-- **D03 — Procedimento do False King (358):** a Invocação-Especial da mão é um procedimento que não inicia Chain. Devolver o monstro à mão faz parte desse procedimento; não é um efeito e não dispara o efeito do Glass Viper (356) que exige devolução por efeito de card.
-- **D04 — Redução do Desert Leviathan (363):** a perda de 300 ATK/DEF é contínua e imediata, sem iniciar Chain. Ela se aplica quando um efeito "Miragebound" muda a posição de batalha de um monstro adversário enquanto o Leviathan está com a face para cima naquele momento; a redução dura até o final do turno.
-- **D05 — Primeira ocorrência do Mirror Path (359):** a proteção só pode ser oferecida na primeira ocorrência de cada turno em que um monstro "Miragebound" que você controla seria destruído em batalha. Recusar a devolução perde essa oportunidade; uma ocorrência posterior no mesmo turno não oferece a proteção novamente.
-- **D06 — Limites do Rebel (364):** somente o efeito de Invocação-Especial da mão possui limite uma vez por turno compartilhado por nome (hard OPT). O dano perfurante é contínuo, sem OPT. O retorno à mão na Fase Final é obrigatório para cada cópia no campo e não possui limite compartilhado.
-- **D07 — Trigger do Glass Sovereign (355):** o efeito disparado pela Invocação-Ascensão é opcional. Ao ativá-lo, devem ser declarados de 1 a 2 alvos válidos; ativar com zero alvos é inválido.
-
-**Presença da fonte — decisão S02 de 03/10/2026:** Jackal (353) e Rebel (364)
-precisam manter a mesma presença na mão desde a ativação até o compromisso
-da própria Invocação. Se saírem e voltarem, a Invocação falha; Jackal também
-não muda o adversário. O HOPT de uso comprometido permanece consumido.
-Essa decisão não altera automaticamente a política das outras cartas.
-
-### Implementação atual e validação
-
-O lote P1 corrige a Invocação de Dancer, a contagem do trigger de Scout para Ascensão, a destruição de Mirror Path após o próprio custo e os modos/alvos, decisões e identidade por monstro de Oasis. A busca de Scout é opcional; EN/PT agora dizem "You can add / você pode adicionar". O modo de devolução de Oasis declara os dois alvos antes das respostas e seu texto foi alinhado a D02.
-
-O lote P2 implementa o procedimento de False King, as referências de Oasis e o debuff imediato de Leviathan, a primeira oportunidade e revalidação das substituições, os OPT por cópia, o retorno obrigatório de cada Rebel, a perfuração sob negação e a escolha resolutiva de False Horizon. A descrição aprovada do Rebel (364) foi preservada. As regressões P2 e P1 passaram; replay usa schema 2 / engine-rules-v10.
-
-**Complemento da validação P2 — 03/10/2026:** foi removido o `usagePolicy` residual do retorno obrigatório de Rebel, que não possui OPT e bloqueava a inicialização no validador do banco. O HOPT da Invocação da mão e o retorno de cada cópia foram preservados. A regressão inclui a validação da definição e o retorno de duas cópias nos dois assentos, com humano/IA e replay. Na validação desse complemento, a main integrada usava schema 2 / engine-rules-v14, com assinatura `db5833d7`.
-
-O lote **P3** alinhou os textos de Jackal/Vanishing Step aos alvos prévios, a recuperação de Heat Haze à escolha sem alvo e o trigger de Sovereign à opcionalidade aprovada. O PT do primeiro efeito de Oasis agora explicita "a cada turno". As definições dos efeitos foram preservadas nessa etapa; EN/PT e este catálogo estão sincronizados.
-
-Em **03/10/2026**, **S01** foi encerrada como sem divergência encontrada nos ingressos legais atuais: as ativações respeitam o limite de uma Mirror Path face-up. A API de movimento direto continua permitindo duplicatas artificiais, sem ampliação da engine. **S02** foi corrigida para Jackal/Rebel pelo contrato de presença acima, com validação de runtime, simulação e replay. Os textos EN/PT foram preservados; replay mantém schema 2 / engine-rules-v10. A [auditoria](../Auditoria%20cartas%20Miragebound%20351-364.md) registra os resultados, a correção da evidência histórica de Viper e os limites da validação.
-
-A integração posterior com as correções remotas mantém schema 2 e usa
-engine-rules-v14 após os follow-ups de Chain/IA/Fusão. O contrato de Miragebound e seus textos aprovados permanecem
-iguais; a correção upstream também resolveu o controle preexistente de DragonPeak.
+- **Monstros Baixados:** um monstro Baixado não satisfaz condição, custo ou alvo que exija especificamente um monstro "Miragebound" ("Vinculados à Miragem"), pois seu arquétipo está oculto. Uma condição genérica de controlar um monstro inclui monstros Baixados.
+- **Declaração de alvos:** todos os alvos de um efeito são declarados na ativação, antes das respostas de Chain. O Chacal (353) escolhe o alvo adversário antes da sua Invocação-Especial. Passo Evanescente (361) e a opção de devolução do Oásis (354) declaram seus alvos antes de devolver o monstro à mão. A recuperação de Névoa de Calor (362) permite escolher um monstro no Cemitério durante a resolução, sem declarar esse monstro como alvo na ativação.
+- **Invocação do Falso Rei (358):** a Invocação-Especial da mão não inicia Chain. Devolver o monstro à mão faz parte desse procedimento; não é um efeito e não dispara o efeito da Víbora de Vidro (356) que exige devolução por efeito de card.
+- **Redução do Leviatã do Deserto (363):** a perda de 300 ATK/DEF é contínua e imediata, sem iniciar Chain. Ela se aplica quando um efeito "Miragebound" muda a posição de batalha de um monstro adversário enquanto o Leviatã está com a face para cima naquele momento; a redução dura até o final do turno.
+- **Proteção do Caminho Espelhado (359):** você só pode devolver o monstro à mão na primeira ocorrência de cada turno em que um monstro "Miragebound" que você controla seria destruído em batalha. Recusar a devolução perde essa oportunidade; uma ocorrência posterior no mesmo turno não oferece a proteção novamente.
+- **Limites do Rebelde (364):** todas as cópias compartilham o limite de uma utilização por turno do efeito de Invocação-Especial da mão. O dano perfurante é contínuo, sem limite por turno. O retorno à mão na Fase Final é obrigatório para cada cópia no campo.
+- **Efeito de Ascensão do Soberano de Vidro (355):** o efeito é opcional. Ao ativá-lo, você deve escolher de 1 a 2 alvos válidos; não pode ativá-lo sem alvos.
+- **Chacal (353) e Rebelde (364) na mão:** essas cartas precisam permanecer na mão desde a ativação até a própria Invocação. Se saírem e voltarem, a Invocação falha; o Chacal também não muda a posição do monstro adversário. O uso do efeito permanece consumido naquele turno.
 
 ---
 
@@ -106,7 +78,7 @@ Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 
 > "Víbora de Vidro dos Vinculados à Miragem" + 1 monstro "Vinculados à Miragem".
 
-**Procedimento vigente na engine:** o Leviatã só pode ser Invocado por Invocação-Especial pelo procedimento `contact_fusion`, enviando os materiais do seu campo ao Cemitério. A definição usa `specialSummonOnlyBy: ["contact_fusion"]`, que também impede Invocá-lo por Fusão comum ou do Cemitério. Os textos EN/PT explicitam essa exclusividade.
+O Leviatã só pode ser Invocado por Fusão de contato, enviando os materiais do seu campo ao Cemitério. Não pode ser Invocado por Fusão comum nem revivido do Cemitério.
 
 ### Ascensões
 

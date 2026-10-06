@@ -1,8 +1,5 @@
 # Burning West — Catálogo do Arquétipo
 
-Fonte dos dados canônicos: `src/data/cards/burningWest.ts` via `src/data/cards.ts`.
-Nomes e textos PT-BR: `public/locales/pt-br.json`.
-
 ## Resumo
 
 Burning West reúne 16 cartas com foco em combate, declaração de Tipo e recuperação de recursos.
@@ -238,50 +235,5 @@ Ascensão, Nível 7, Pyro, Fire, 2500/2000.
 - O catálogo possui 16 cartas: 15 no Main Deck e 1 no Extra Deck.
 - O Main Deck contém 6 monstros, 6 Magias e 3 Armadilhas.
 - O Extra Deck contém 1 de Ascensão.
-
----
-
-## Deck Jogável Sugerido (20 + 1)
-
-Main Deck legal com todas as cartas do arquetipo incluidas pelo menos 1 vez.
-
-### Main Deck (20)
-
-| Qtde | ID | PT-BR | Canonico |
-| ---- | -- | ----- | -------- |
-| 2x | 451 | Pistoleiro do Oeste Ardente | Gunslinger of the Burning West |
-| 1x | 453 | Coveiro do Oeste Ardente | Undertaker of the Burning West |
-| 2x | 454 | Carniceiro do Oeste Ardente | Butcher of the Burning West |
-| 2x | 455 | Especialista do Oeste Ardente | Specialist of the Burning West |
-| 1x | 460 | Pregador do Oeste Ardente | Preacher of the Burning West |
-| 1x | 461 | Xerife do Oeste Ardente | Sheriff of the Burning West |
-| 2x | 452 | Procurado na Cidade Ardente | Wanted in the Burning West |
-| 2x | 456 | Peacemaker Ardente | Burning Peacemaker |
-| 1x | 457 | Saque Rápido no Oeste Ardente | Quick Draw in the Burning West |
-| 1x | 458 | Enterro ao Pôr do Sol | Funeral at Sunset |
-| 1x | 459 | Na Mira do Oeste Ardente | Deadeye of the Burning West |
-| 1x | 462 | Crash Town, a Cidade Ardente | Crash Town, the Burning City |
-| 1x | 463 | Emboscada em Crash Town | Ambush in Crash Town |
-| 1x | 464 | Recompensa Ardente | Burning Reward |
-| 1x | 465 | Lei da Cidade Ardente | Law in the Burning West |
-
-### Extra Deck (1)
-
-| Qtde | ID | PT-BR | Canonico |
-| ---- | -- | ----- | -------- |
-| 1x | 466 | Carrasco do Oeste Ardente | Executioner of the Burning West |
-
-### IDs para referencia rapida
-
-```js
-mainDeck: [
-  451, 451, 453, 454, 454,
-  455, 455, 460, 461,
-  452, 452, 456, 456, 457, 458, 459, 462,
-  463, 464, 465,
-]
-
-extraDeck: [466]
-```
 
 ---

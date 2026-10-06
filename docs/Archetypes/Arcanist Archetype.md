@@ -1,8 +1,5 @@
 # Arcanist — Catálogo do Arquétipo
 
-Fonte dos dados canônicos: `src/data/cards/arcanist.ts` via `src/data/cards.ts`.
-Nomes e textos PT-BR: `public/locales/pt-br.json`.
-
 ## Resumo
 
 Arcanist reúne 16 cartas com foco em Magias, Equipamentos e efeitos que recompensam monstros equipados.
@@ -62,7 +59,7 @@ Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 
 ## Materiais e procedimentos do Extra Deck
 
-O arquétipo não possui monstros de Extra Deck cadastrados.
+O arquétipo não possui monstros de Extra Deck.
 
 ---
 
