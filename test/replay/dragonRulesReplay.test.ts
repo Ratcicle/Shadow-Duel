@@ -7,7 +7,7 @@ import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
 import { required, unsafeFixture } from "../helpers/fixtures.js";
 import { completeTestSelections, createRuntimeGame, placeFieldCards, type RuntimeGame } from "../helpers/game.js";
 
-type Scenario = "crystal" | "bull" | "peak" | "abyssal" | "rainbow" | "protection" | "galaxy" | "armored" | "mist"
+type Scenario = "luminous" | "crystal" | "bull" | "peak" | "abyssal" | "rainbow" | "protection" | "galaxy" | "armored" | "mist"
   | "roar-empty" | "roar-zero" | "roar-one" | "mist-bounce-monster" | "mist-bounce-backrow" | "soft-opt"
   | "forest-standby-self" | "forest-standby-opponent" | "metal-own-summon" | "metal-opponent-summon"
   | "sanctuary-attack" | "sanctuary-effect";
@@ -58,6 +58,8 @@ function install(game: RuntimeGame, scenario: Scenario, seat: "player" | "bot", 
       const trap = take(268); trap.isFacedown = true; trap.turnSetOn = trap.setTurn = 1;
       placeFieldCards(owner.spellTrap, trap);
       owner.hand.push(take(251));
+    } else if (scenario === "luminous") {
+      owner.hand.push(take(251));
     } else if (scenario === "crystal") {
       owner.hand.push(take(264)); owner.graveyard.push(take(251), take(254), take(255));
     } else if (scenario === "bull") {
@@ -98,7 +100,7 @@ function install(game: RuntimeGame, scenario: Scenario, seat: "player" | "bot", 
 
 for (const seat of ["player", "bot"] as const) {
   for (const controller of ["human", "ai"] as const) {
-    for (const scenario of ["crystal", "bull", "peak", "abyssal", "rainbow", "protection", "galaxy", "armored", "mist",
+    for (const scenario of ["luminous", "crystal", "bull", "peak", "abyssal", "rainbow", "protection", "galaxy", "armored", "mist",
       "roar-empty", "roar-zero", "roar-one", "mist-bounce-monster", "mist-bounce-backrow", "soft-opt",
       "forest-standby-self", "forest-standby-opponent", "metal-own-summon", "metal-opponent-summon",
       "sanctuary-attack", "sanctuary-effect"] as const) {
@@ -153,7 +155,7 @@ for (const seat of ["player", "bot"] as const) {
         };
         const action = scenario.startsWith("forest-standby-") ? live.nextPhase()
           : scenario.startsWith("metal-") ? metalAction()
-          : scenario === "crystal" ? live.performHandSummonProcedure(required(owner.hand[0]), owner, { position: "defense" })
+          : scenario === "luminous" || scenario === "crystal" ? live.performHandSummonProcedure(required(owner.hand[0]), owner, { position: "defense" })
           : scenario === "bull" ? live.tryActivateMonsterEffect(required(owner.hand[0]), null, "hand", owner, { effectId: "bbd_special_summon_from_hand" })
           : scenario === "peak" ? live.activateFieldSpellEffect(required(owner.fieldSpell))
           : scenario === "rainbow" ? live.tryActivateMonsterEffect(required(owner.graveyard[0]), null, "graveyard", owner, { effectId: "rainbow_cosmic_dragon_gy_send_extremes" })
@@ -189,7 +191,14 @@ for (const seat of ["player", "bot"] as const) {
           assert.equal((await result).success, true);
           assert.equal(opponent.field[0]?.position, "attack", "each copy changed the target's position once");
         }
-        if (scenario === "crystal") { assert.equal(owner.banished.length, 3); assert.equal(owner.field[0]?.id, 264); }
+        if (scenario === "luminous") {
+          assert.equal(owner.field[0]?.id, 251);
+          assert.equal(live.materialDuelStats[seat].effectActivationsByMaterialId.get(251) || 0, 0);
+        }
+        if (scenario === "crystal") {
+          assert.equal(owner.banished.length, 3); assert.equal(owner.field[0]?.id, 264);
+          assert.equal(live.materialDuelStats[seat].effectActivationsByMaterialId.get(264) || 0, 0);
+        }
         if (scenario === "bull") { assert.equal(owner.graveyard.length, 2); assert.ok(owner.field.some(card => card.id === 259 && card.cannotAttackThisTurn)); assert.equal(opponent.lp, 8000); }
         if (scenario === "peak") { assert.equal(owner.fieldSpell, null); assert.equal(owner.field.length, 1); }
         if (scenario === "abyssal") assert.equal(live.delayedActions.length, 1);

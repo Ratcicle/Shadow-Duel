@@ -351,7 +351,54 @@ test("Albus summons its own hand presence without activating an effect or select
   assert.equal(albus.position, "defense");
   assert.equal(game.lastSummonTransaction?.summonOrigin, "procedure");
   assert.equal(game.canSummonFromHandByProcedure(second, owner).ok, false);
+  assert.equal(game.materialDuelStats.player.effectActivationsByMaterialId.get(307) ?? 0, 0);
+  assert.equal(game.canUseOncePerTurn(albus, owner,
+    required(albus.effects.find(effect => effect.id === "albus_arcanist_ice_recover"))).ok, true);
+  game.turnCounter++;
+  assert.equal(game.canSummonFromHandByProcedure(second, owner).ok, true);
 });
+
+for (const seat of ["player", "bot"] as const) {
+  test(`Albus consumes its procedure limit only after success and can retry after real summon negation (${seat})`, async t => {
+    const { game, make } = setup(t);
+    game.turn = seat;
+    const owner = game[seat], opponent = game.getOpponent(owner);
+    const first = make(307, owner), second = make(307, owner), third = make(307, owner);
+    const ally = make(306, owner), negator = make(275, opponent);
+    owner.hand.push(first, second, third);
+    placeFieldCards(owner.field, ally);
+    placeFieldCards(opponent.field, negator);
+    opponent.controllerType = "human";
+    let chosen = false, availableDuringAttempt: boolean | undefined;
+    let albusActivations = 0;
+    game.on("effect_activated", event => { if (event.card?.id === 307) albusActivations++; });
+    game.ui.showChainResponseModal = async (candidates, context) => {
+      const response = candidates.find(candidate => candidate.card === negator);
+      if (response && !chosen) {
+        assert.equal(context?.type, "summon_attempt");
+        availableDuringAttempt = game.canUseOncePerTurn(second, owner, required(second.handSummonProcedure)).ok;
+        chosen = true;
+        return response;
+      }
+      return null;
+    };
+    const denied = await game.performHandSummonProcedure(first, owner, { position: "attack" });
+    assert.equal(chosen, true, "the opponent must negate through a real summon-response Chain");
+    assert.equal(denied.summonNegated, true);
+    assert.equal(denied.success, false);
+    assert.equal(availableDuringAttempt, true, "the attempt must not consume the name limit");
+    assert.ok(owner.graveyard.includes(first));
+    assert.equal(game.canSummonFromHandByProcedure(second, owner).ok, true);
+    const retried = await game.performHandSummonProcedure(second, owner, { position: "defense" });
+    assert.equal(retried.success, true);
+    assert.ok(owner.field.includes(second));
+    assert.equal(game.canSummonFromHandByProcedure(third, owner).ok, false);
+    assert.equal(albusActivations, 0);
+    assert.equal(game.materialDuelStats[seat].effectActivationsByMaterialId.get(307) ?? 0, 0);
+    game.turnCounter++;
+    assert.equal(game.canSummonFromHandByProcedure(third, owner).ok, true);
+  });
+}
 
 test("Albus procedure requires a face-up controlled Arcanist and a free field slot", t => {
   const { game, owner, make } = setup(t);

@@ -3,12 +3,14 @@ import test, { type TestContext } from "node:test";
 import Bot from "../../src/core/Bot.js";
 import Card from "../../src/core/Card.js";
 import DragonStrategy from "../../src/core/ai/DragonStrategy.js";
+import { getGenericHandSummonProcedureActions } from "../../src/core/ai/common/actionGeneration.js";
 import { applyGenericSimulatedMainPhaseAction } from "../../src/core/ai/common/simulation.js";
 import { applySimulatedActions } from "../../src/core/ai/common/simulatedActions/index.js";
 import { captureSimulatedReferences } from "../../src/core/ai/common/simulatedActions/shared.js";
 import { cleanupExpiredSimulatedTurnEffects, processSimulatedDelayedActions } from "../../src/core/ai/common/simulatedActions/lifecycle.js";
 import { moveCardToZone } from "../../src/core/ai/common/zones.js";
 import type { BotCloneGamePort } from "../../src/core/bot/simulationBridge.js";
+import type { AIActionOf } from "../../src/core/contracts/ai.js";
 import type { AiLiveGamePort } from "../../src/core/contracts/aiState.js";
 import type { BotGamePort } from "../../src/core/contracts/bot.js";
 import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js";
@@ -64,6 +66,70 @@ test("Sanctuary simulation rejects a stale reference without returning or summon
     options: { sourceCard: trap, effect, referenceSnapshots } }), false);
   assert.deepEqual(state.bot.field.map(card => card.id), [254]);
   assert.deepEqual(state.bot.hand.map(card => card.id), [255]);
+});
+
+test("Dragon planner discovers Luminous's costless procedure without a hand effect", t => {
+  const { bot, botGame, make } = setup(t);
+  const strategy = new DragonStrategy(bot);
+  bot.hand.push(make(251), make(255));
+  const state = bot.cloneGameState(botGame);
+  const actions = strategy.generateMainPhaseActions(state);
+  const procedure = required(actions.find(action => action.type === "handSummonProcedure" && action.cardId === 251));
+  assert.equal(procedure.type, "handSummonProcedure");
+  if (procedure.type !== "handSummonProcedure") return;
+  assert.deepEqual(procedure.materials, []);
+  assert.equal(actions.some(action => action.type === "handIgnition" && action.cardId === 251), false);
+});
+
+for (const planner of ["common", "Dragon"] as const) {
+  test(`Luminous procedure simulation rejects an occupied own field (${planner})`, t => {
+    const { bot, botGame, make } = setup(t);
+    const strategy = new DragonStrategy(bot);
+    bot.hand.push(make(251));
+    const blocker = make(255);
+    blocker.isFacedown = true;
+    placeFieldCards(bot.field, blocker);
+    const state = bot.cloneGameState(botGame);
+    assert.equal(getGenericHandSummonProcedureActions(state).some(action => action.cardId === 251), false);
+    const action: AIActionOf<"handSummonProcedure"> = { type: "handSummonProcedure", cardId: 251, index: 0, materials: [] };
+    if (planner === "common") applyGenericSimulatedMainPhaseAction(state, action);
+    else strategy.simulateMainPhaseAction(state, action);
+    assert.deepEqual(state.bot.hand.map(card => card.id), [251]);
+    assert.deepEqual(state.bot.field.map(card => card.id), [255]);
+  });
+}
+
+test("Dragon planner simulates Luminous procedure with success-only usage and no effect activation", t => {
+  const { bot, game, botGame, make } = setup(t);
+  const strategy = new DragonStrategy(bot);
+  bot.hand.push(make(251), make(251));
+  placeFieldCards(game.player.field, new Card(cardDefinition(255), game.player.id));
+  const state = bot.cloneGameState(botGame);
+  const action: AIActionOf<"handSummonProcedure"> = { type: "handSummonProcedure", cardId: 251, index: 0, materials: [], position: "defense" };
+  strategy.simulateMainPhaseAction(state, action);
+  const summoned = required(state.bot.field[0]);
+  assert.equal(summoned.lastSummonProcedure, "luminous_dragon_empty_field_summon");
+  assert.equal(summoned.position, "defense");
+  assert.equal(state.bot._simMaterialEffectActivationsByMaterialId, undefined);
+  assert.equal(moveCardToZone(state.bot, summoned, "graveyard", state.bot, { state }), true);
+  strategy.simulateMainPhaseAction(state, action);
+  assert.equal(state.bot.field.length, 0, "the successful procedure spends its shared name limit");
+  assert.equal(state.bot.hand.length, 1);
+  state.turnCounter++;
+  strategy.simulateMainPhaseAction(state, action);
+  assert.equal(state.bot.field.length, 1);
+  assert.equal(state.bot.hand.length, 0);
+  assert.equal(state.bot._simMaterialEffectActivationsByMaterialId, undefined);
+});
+
+test("Dragon planner rejects the removed Luminous hand ignition", t => {
+  const { bot, botGame, make } = setup(t);
+  const strategy = new DragonStrategy(bot);
+  bot.hand.push(make(251));
+  const state = bot.cloneGameState(botGame);
+  strategy.simulateMainPhaseAction(state, { type: "handIgnition", cardId: 251, index: 0, effectId: "luminous_dragon_empty_field_summon" });
+  assert.equal(state.bot.field.length, 0);
+  assert.equal(state.bot.hand.length, 1);
 });
 
 test("common planner consumes the procedure name limit across Purified copies", t => {

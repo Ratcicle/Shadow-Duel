@@ -183,6 +183,67 @@ test("Abyssal consumes the scheduled return once when only one field has space",
   assert.ok(owner.graveyard.includes(source));
 });
 
+for (const seat of ["player", "bot"] as const) {
+  test(`Luminous hand procedure creates no effect activation or Chain Link (${seat})`, async t => {
+    const { game, owner, make } = setup(t, seat);
+    const source = make(251);
+    owner.hand.push(source);
+    const chainLinks = t.mock.method(game.chainSystem, "addToChain");
+    let activations = 0, resolutions = 0;
+    game.on("effect_activated", () => { activations++; });
+    game.on("chain_link_resolution", () => { resolutions++; });
+    assert.ok(source.handSummonProcedure);
+    assert.equal(source.effects.some(effect => effect.id === "luminous_dragon_empty_field_summon"), false);
+    assert.equal((await game.tryActivateMonsterEffect(source, null, "hand", owner,
+      { effectId: "luminous_dragon_empty_field_summon" })).success, false);
+    assert.equal(game.canSummonFromHandByProcedure(source, owner).ok, true);
+    const result = await game.performHandSummonProcedure(source, owner, { position: "attack" });
+    assert.equal(result.success, true, result.reason ?? undefined);
+    assert.equal(chainLinks.mock.callCount(), 0);
+    assert.equal(activations, 0);
+    assert.equal(resolutions, 0);
+    assert.equal(game.materialDuelStats[seat].effectActivationsByMaterialId.get(251) || 0, 0);
+    assert.equal(game.lastSummonTransaction?.summonOrigin, "procedure");
+    assert.equal(source.lastSummonProcedure, source.handSummonProcedure.id);
+    assert.equal(game.canUseOncePerTurn(source, owner,
+      required(source.effects.find(effect => effect.id === "luminous_dragon_discard_recover"))).ok, true);
+  });
+}
+
+test("Luminous hand procedure requires an empty own field without consuming a rejected summon", async t => {
+  const { game, owner, opponent, make } = setup(t);
+  const source = make(251), blocker = make(255);
+  blocker.isFacedown = true;
+  owner.hand.push(source);
+  placeFieldCards(owner.field, blocker);
+  assert.equal(game.canSummonFromHandByProcedure(source, owner).ok, false);
+  assert.equal((await game.performHandSummonProcedure(source, owner, { position: "attack" })).success, false);
+  assert.ok(owner.hand.includes(source));
+  assert.equal(game.canUseOncePerTurn(source, owner, required(source.handSummonProcedure)).ok, true);
+  await game.moveCard(blocker, owner, "graveyard", { fromZone: "field" });
+  placeFieldCards(opponent.field, make(255, opponent));
+  assert.equal(game.canSummonFromHandByProcedure(source, owner).ok, true);
+  assert.equal((await game.performHandSummonProcedure(source, owner, { position: "attack" })).success, true);
+});
+
+test("Luminous successful procedure shares its name limit across copies and renews next turn", async t => {
+  const { game, owner, opponent, make } = setup(t);
+  const first = make(251), second = make(251), foreign = make(251, opponent);
+  owner.hand.push(first, second);
+  opponent.hand.push(foreign);
+  assert.equal((await game.performHandSummonProcedure(first, owner, { position: "attack" })).success, true);
+  await game.moveCard(first, owner, "hand", { fromZone: "field" });
+  assert.equal(game.canSummonFromHandByProcedure(first, owner).ok, false);
+  assert.equal(game.canSummonFromHandByProcedure(second, owner).ok, false);
+  assert.equal((await game.performHandSummonProcedure(second, owner, { position: "attack" })).success, false);
+  game.turn = opponent.id;
+  assert.equal(game.canSummonFromHandByProcedure(foreign, opponent).ok, true);
+  game.turn = owner.id;
+  game.turnCounter++;
+  assert.equal(game.canSummonFromHandByProcedure(second, owner).ok, true);
+  assert.equal((await game.performHandSummonProcedure(second, owner, { position: "attack" })).success, true);
+});
+
 function purified(t: TestContext) {
   const fixture = setup(t);
   const first = fixture.make(264), second = fixture.make(264);
@@ -211,23 +272,40 @@ test("Purified summons by procedure with sequential costs and no material effect
   assert.equal(game.canSummonFromHandByProcedure(second, owner).ok, true);
 });
 
-test("Purified commits its name limit before costs and keeps it after summon negation", async t => {
-  const { game, owner, first, second, costs } = purified(t);
+test("Purified consumes its name limit only after success and can retry after real Chain summon negation", async t => {
+  const { game, owner, opponent, make, first, second, costs } = purified(t);
+  const negator = make(275, opponent);
+  placeFieldCards(opponent.field, negator);
+  opponent.controllerType = "human";
+  let chosen = false, activations = 0;
   let availableAfterFirstCost: boolean | undefined;
+  game.on("effect_activated", event => { if (event.card === first || event.card === second) activations++; });
   game.on("card_moved", event => {
     if (event.card === costs[0]) availableAfterFirstCost = game.canUseOncePerTurn(second, owner, required(second.handSummonProcedure)).ok;
   });
-  game.offerSummonAttempt = async (_card, _player, options) => {
-    assert.equal(owner.banished.length, 3);
-    const transaction = required(required(options).summonTransaction);
-    game.markSummonNegated(transaction.summonId, { destination: "graveyard", destroyed: false });
-    return { ok: false, summonNegated: true, transaction };
+  game.ui.showChainResponseModal = async (candidates, context) => {
+    const response = candidates.find(candidate => candidate.card === negator);
+    if (response && !chosen) {
+      assert.equal(context?.type, "summon_attempt");
+      assert.equal(owner.banished.length, 3);
+      chosen = true;
+      return response;
+    }
+    return null;
   };
   const result = await game.performHandSummonProcedure(first, owner, { materials: costs.slice(0, 3), position: "attack" });
+  assert.equal(chosen, true);
   assert.equal(result.summonNegated, true);
-  assert.equal(availableAfterFirstCost, false);
+  assert.equal(result.success, false);
+  assert.equal(availableAfterFirstCost, true);
   assert.ok(owner.graveyard.includes(first));
-  assert.equal(game.canSummonFromHandByProcedure(second, owner).ok, false);
+  assert.equal(game.canSummonFromHandByProcedure(second, owner).ok, true);
+  const retried = await game.performHandSummonProcedure(second, owner, { materials: costs.slice(3), position: "attack" });
+  assert.equal(retried.success, true);
+  assert.equal(owner.banished.length, 6);
+  assert.ok(owner.field.includes(second));
+  assert.equal(game.canUseOncePerTurn(first, owner, required(first.handSummonProcedure)).ok, false);
+  assert.equal(activations, 0);
   assert.equal(game.materialDuelStats.player.effectActivationsByMaterialId.get(264) || 0, 0);
 });
 

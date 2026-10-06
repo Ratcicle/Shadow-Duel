@@ -16,7 +16,8 @@ Dragon reúne 30 cartas com foco em sinergias entre monstros do tipo Dragão, co
 - **Pico Escarpado dos Dragões (262):** o efeito de Invocação envia a própria Magia de Campo ao Cemitério como custo, antes das respostas do oponente. A Invocação-Especial acontece na resolução da Chain.
 - **Dragão Extremo da Névoa (272):** a restrição de ataque considera somente monstros Invocados pelo oponente enquanto a Névoa permanece com a face para cima no campo e somente no turno da Invocação. Monstros que já estavam no campo quando ela entrou ficam fora da restrição. Uma troca de controle também encerra a restrição para o monstro.
 - **Dragão Cósmico Arco-Íris (267):** a proteção é um efeito opcional que você ativa durante sua Fase Principal, escolhendo o alvo.
-- **Dragão de Cristal Purificado (264):** a Invocação da mão ao banir 3 Dragões do Cemitério não ativa um efeito nem inicia Chain. Todas as cópias compartilham o limite de uma tentativa por turno desta forma, inclusive se a Invocação for negada. Confirmar a tentativa consome esse limite antes do pagamento; cancelar antes da confirmação preserva recursos e a tentativa. Cada efeito da carta possui seu próprio limite por turno, independente da tentativa de Invocação. Esse procedimento não conta para as três ativações exigidas pela Ascensão do Dragão Cósmico Arco-Íris (267).
+- **Dragão Luminoso (251):** se você não controlar monstros, pode Invocá-lo por Invocação-Especial da mão por um procedimento que não ativa efeito nem inicia Chain. Todas as cópias compartilham o limite de uma Invocação-Especial concluída desta forma por turno. Uma Invocação negada não consome esse limite. O efeito de recuperação possui um hard OPT separado.
+- **Dragão de Cristal Purificado (264):** a Invocação da mão ao banir 3 Dragões do Cemitério não ativa um efeito nem inicia Chain. Todas as cópias compartilham o limite de uma Invocação-Especial concluída desta forma por turno. Uma Invocação negada não consome esse limite; você pode tentar novamente se puder pagar o custo, mas os monstros já banidos não são devolvidos. Cancelar antes do compromisso preserva os recursos e o limite. Cada efeito da carta possui seu próprio limite por turno, independente do procedimento de Invocação. Esse procedimento não conta para as três ativações exigidas pela Ascensão do Dragão Cósmico Arco-Íris (267).
 - **Dragão Extremo da Galáxia (273):** a substituição da destruição é opcional, inclusive com campo adversário vazio. Após banir o próprio Dragão, se houver cards adversários, você deve escolher 1 para banir.
 - **Santuário do Espírito do Dragão (268):** a devolução e a Invocação acontecem na mesma resolução; o oponente pode responder à ativação da Armadilha. O substituto é escolhido depois da devolução e pode ser o próprio monstro devolvido. O limite de Nível considera o monstro devolvido já na mão.
 
@@ -88,25 +89,27 @@ Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 
 **265 — Tech-Void Dragon**
 
-> "Dragão Voltaico" + 1 monstro do tipo Dragão de Nível 5 ou maior
+> "Dragão Voltaico" + 1 monstro Dragão de Nível 5 ou maior
 
 **266 — Radiant Cosmic Dragon**
 
-> "Dragão Luminoso" + 2 monstros do Tipo Dragão
+> "Dragão Luminoso" + 2 monstros Dragão
 
 **275 — Supreme Bahamut Dragon**
 
-> Deve ser Invocado por Invocação-Fusão banindo 5 monstros "Dragão Extremo" do seu Cemitério, e não pode ser Invocado por Invocação-Especial de outras formas.
+> Deve ser Invocado por Invocação-Fusão ao banir 5 monstros "Dragão Extremo" do seu Cemitério e não pode ser Invocado por Invocação-Especial de outras formas.
 
 ### Ascensões
 
 **253 — Metal Armored Dragon**
 
-> Material de Ascensão: “Dragão Blindado”. Requisito: nenhum.
+> "Dragão Blindado"
 
 **267 — Rainbow Cosmic Dragon**
 
-> Material de Ascensão: "Dragão de Cristal Purificado". Requisito: o material deve ter ativado seus efeitos 3 vezes neste duelo.
+> "Dragão de Cristal Purificado"
+>
+> Os efeitos do material devem ter sido ativados pelo menos 3 vezes neste Duelo.
 
 ---
 
@@ -118,11 +121,11 @@ Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 
 Nível 5, Dragon, Light, 2000/1600.
 
-> Se você não controlar monstros, você pode Invocar este card por Invocação-Especial da sua mão.
+> Se você não controlar monstros, você pode Invocar este card por Invocação-Especial da sua mão. Você só pode Invocar "Dragão Luminoso" por Invocação-Especial uma vez por turno desta forma.
 >
-> Se um monstro do Tipo Dragão for descartado da sua mão para o Cemitério enquanto este card estiver com a face para cima no campo: você pode escolher 1 monstro do Tipo Dragão no seu Cemitério com nome diferente do monstro descartado; adicione-o à sua mão.
+> Se um monstro Dragão for descartado da sua mão para o Cemitério enquanto este card estiver com a face para cima no campo: você pode escolher 1 monstro Dragão no seu Cemitério com um nome diferente do monstro descartado; adicione-o à sua mão.
 >
-> Você só pode usar cada efeito de "Dragão Luminoso" uma vez por turno.
+> Você só pode usar este efeito de "Dragão Luminoso" uma vez por turno.
 
 **252 — Dragão Blindado / Armored Dragon**
 
@@ -130,15 +133,15 @@ Nível 4, Dragon, Earth, 1600/1500.
 
 > Se este card for Invocado por Invocação-Normal: você pode adicionar 1 monstro Dragão de Nível 4 ou menor do seu Deck à sua mão.
 >
-> Se este card for destruído em batalha: compre 1 card e, se ele for um monstro Dragão de Nível 4 ou menor, você pode Invocá-lo por Invocação-Especial.
+> Se este card for destruído em batalha: compre 1 card e, depois, se ele for um monstro Dragão de Nível 4 ou menor, você pode Invocá-lo por Invocação-Especial.
 
 **254 — Dragão Cinzento / Grey Dragon**
 
 Nível 4, Dragon, Earth, 1800/800.
 
-> Não pode atacar diretamente.
+> Este card não pode atacar diretamente.
 >
-> Se este card for Invocado por Invocação-Especial: você pode escolher 1 outro monstro Dragão que você controla; ele ganha 500 de ATK até o final deste turno.
+> Se este card for Invocado por Invocação-Especial: você pode escolher 1 outro monstro Dragão que você controla; ele ganha 500 ATK até o final deste turno.
 >
 > Se este card estiver no seu Cemitério: você pode descartar 1 monstro Dragão; adicione este card à sua mão.
 
@@ -148,7 +151,7 @@ Nível 3, Dragon, Light, 1200/800.
 
 > Se este card for descartado da sua mão para o Cemitério: cause 800 de dano ao seu oponente.
 >
-> Se você controlar um monstro Dragão: você pode Invocar por Invocação-Especial este card da sua mão.
+> Se você controlar um monstro Dragão: você pode Invocar este card por Invocação-Especial da sua mão.
 >
 > Você só pode usar cada efeito de "Dragão Voltaico" uma vez por turno.
 
@@ -158,13 +161,13 @@ Nível 4, Dragon, Light, 1500/900.
 
 > Se este card for Invocado por Invocação-Normal: você pode escolher 1 monstro Dragão de Nível 4 ou menor no seu Cemitério; Invoque-o por Invocação-Especial.
 >
-> Você pode banir este card do seu Cemitério e, depois, escolher 1 monstro que seu oponente controla; ele perde 600 de ATK/DEF até o final deste turno.
+> Você pode banir este card do seu Cemitério e, depois, escolher 1 monstro que seu oponente controla; ele perde 600 ATK/DEF até o final deste turno.
 
 **257 — Dragão de Prata Majestoso / Majestic Silver Dragon**
 
 Nível 7, Dragon, Light, 2400/2300.
 
-> Este card pode ser Invocado por Invocação-Tributo ao tributar 1 monstro do tipo Dragão.
+> Você pode Invocar este card por Invocação-Tributo ao Tributar 1 monstro Dragão.
 >
 > Uma vez por turno: você pode escolher 1 monstro com a face para cima que seu oponente controla; mude sua posição de batalha.
 
@@ -172,17 +175,17 @@ Nível 7, Dragon, Light, 2400/2300.
 
 Nível 5, Dragon, Dark, 2000/1700.
 
-> Se este card for Invocado por Invocação-Normal ou Especial: destrua todos os outros monstros Dragão que você controla e, se isso acontecer, este card ganha 300 de ATK para cada monstro destruído por este efeito.
+> Se este card for Invocado por Invocação-Normal ou Especial: destrua todos os outros monstros Dragão que você controla e, se isso acontecer, este card ganha 300 ATK para cada monstro destruído por este efeito.
 >
-> Uma vez por turno: você pode descartar 1 card e, depois, escolher 1 monstro que seu oponente controla; negue os efeitos dele até o final deste turno.
+> Uma vez por turno: você pode descartar 1 card e, depois, escolher 1 monstro que seu oponente controla; negue seus efeitos até o final deste turno.
 
 **259 — Dragão Touro Negro / Black Bull Dragon**
 
 Nível 8, Dragon, Wind, 2500/2000.
 
-> Você pode enviar 2 monstros Dragão da sua mão para o Cemitério; Invoque por Invocação-Especial este card da sua mão, mas ele não pode atacar no turno em que for Invocado por este efeito.
+> Você pode enviar 2 monstros Dragão da sua mão para o Cemitério; Invoque este card por Invocação-Especial da sua mão, mas ele não pode atacar no turno em que for Invocado por Invocação-Especial por este efeito.
 >
-> Este card pode realizar até 2 ataques em monstros do oponente durante cada Fase de Batalha.
+> Este card pode realizar até 2 ataques em monstros durante cada Fase de Batalha.
 >
 > Você pode banir este card do seu Cemitério; adicione 1 monstro Dragão de Nível 7 ou 8 do seu Deck à sua mão.
 
@@ -190,7 +193,7 @@ Nível 8, Dragon, Wind, 2500/2000.
 
 Nível 7, Dragon, Fire, 2200/1900.
 
-> Você pode enviar 1 monstro do tipo Dragão que você controla para o Cemitério; Invoque este card por Invocação-Especial da sua mão.
+> Você pode enviar 1 monstro Dragão que você controla para o Cemitério; Invoque este card por Invocação-Especial da sua mão.
 >
 > Uma vez por turno: você pode enviar este card com a face para cima para o Cemitério; Invoque por Invocação-Especial 1 monstro Dragão de Nível 7 ou menor do seu Cemitério, exceto "Dragão Infernal".
 
@@ -198,17 +201,17 @@ Nível 7, Dragon, Fire, 2200/1900.
 
 Nível 7, Dragon, Water, 2200/1400.
 
-> Durante sua Fase Principal: você pode escolher 1 monstro que seu oponente controla; envie este card e o alvo para o Cemitério e, durante a próxima Fase de Espera do seu oponente, Invoque-os por Invocação-Especial. Se você escolheu um Monstro de Fusão ou de Ascensão como alvo: este card ganha 800 de ATK até o final do seu próximo turno.
+> Durante sua Fase Principal: você pode escolher 1 monstro que seu oponente controla; envie este card e esse alvo para o Cemitério e, depois, durante a próxima Fase de Espera do seu oponente, Invoque ambos por Invocação-Especial. Se o monstro escolhido como alvo era um Monstro de Fusão ou de Ascensão, este card ganha 800 ATK até o final do seu próximo turno.
 >
-> Você pode usar cada efeito de "Dragão Serpente Abissal" uma vez por turno.
+> Você só pode usar este efeito de "Dragão Serpente Abissal" uma vez por turno.
 
 **264 — Dragão de Cristal Purificado / Purified Crystal Dragon**
 
 Nível 8, Dragon, Light, 2500/1700.
 
-> Você pode Invocar este card por Invocação-Especial da sua mão ao banir 3 monstros do tipo Dragão do seu Cemitério. Você só pode tentar Invocar "Dragão de Cristal Purificado" por Invocação-Especial desta forma uma vez por turno, mesmo que a Invocação seja negada.
+> Você pode Invocar este card por Invocação-Especial da sua mão ao banir 3 monstros Dragão do seu Cemitério. Você só pode Invocar por Invocação-Especial "Dragão de Cristal Purificado" uma vez por turno desta forma.
 >
-> Se este card destruir um monstro em batalha: ganhe LP igual ao Nível do monstro destruído x100.
+> Se este card destruir um monstro em batalha: ganhe PV iguais ao Nível do monstro destruído x100.
 >
 > Você pode escolher 1 outro monstro Dragão que você controla; ele não pode ser destruído por efeitos de card até o final do próximo turno.
 >
@@ -220,9 +223,9 @@ Nível 3, Dragon, Dark, 0/0.
 
 > Não pode ser Invocado por Invocação-Normal/Baixado.
 >
-> Uma vez por turno, se este card estiver no seu Cemitério: você pode enviar 1 monstro Dragão que você controla para o Cemitério; Invoque por Invocação-Especial este card.
+> Uma vez por turno, se este card estiver no seu Cemitério: você pode enviar 1 monstro Dragão que você controla para o Cemitério; Invoque este card por Invocação-Especial.
 >
-> Ganha 400 de ATK para cada monstro Dragão no seu Cemitério.
+> Este card ganha 400 ATK para cada monstro Dragão no seu Cemitério.
 
 **270 — Dragão Extremo de Fogo / Fire Extreme Dragon**
 
@@ -244,9 +247,9 @@ Nível 10, Dragon, Fire, 2600/3000.
 >
 > Enquanto este card for o único monstro que você controla, ele não pode ser destruído em batalha.
 >
-> Se este card batalhar um monstro do oponente: cause 600 de dano ao seu oponente.
+> Se este card batalhar com um monstro do oponente: cause 600 de dano ao seu oponente.
 >
-> Uma vez por duelo: você pode banir todos os cards em ambos os Cemitérios; cause 100 de dano ao seu oponente para cada card banido por este efeito.
+> Uma vez por Duelo: você pode banir todos os cards em ambos os Cemitérios; cause 100 de dano ao seu oponente para cada card banido por este efeito.
 
 **272 — Dragão Extremo da Névoa / Mist Extreme Dragon**
 
@@ -268,7 +271,7 @@ Nível 10, Dragon, Light, 2900/2900.
 >
 > Qualquer card enviado ao Cemitério do seu oponente é banido em vez disso.
 >
-> Uma vez por Duelo, se este card seria destruído em batalha ou por efeito de card: você pode bani-lo até o final do próximo turno em vez disso. Depois, se seu oponente controlar algum card, escolha 1 desses cards e bana-o.
+> Uma vez por Duelo, se este card estiver para ser destruído em batalha ou por um efeito de card: você pode bani-lo até o final do próximo turno em vez disso. Depois, se seu oponente controlar algum card, escolha 1 desses cards e bana-o.
 
 **274 — Dragão Extremo da Floresta / Forest Extreme Dragon**
 
@@ -276,11 +279,11 @@ Nível 10, Dragon, Earth, 2500/2700.
 
 > Só pode haver 1 monstro "Dragão Extremo" com a face para cima no campo.
 >
-> Durante cada Fase de Espera: ganhe 200 PV para cada card que seu oponente controla e para cada card na mão dele.
+> Durante cada Fase de Espera: ganhe 200 PV para cada card que seu oponente controla e para cada card na mão do seu oponente.
 >
 > Cada vez que seu oponente Invocar um monstro ou ativar um card ou efeito: ganhe 100 PV.
 >
-> Uma vez por turno (Efeito Rápido): este card ganha ATK igual ao total de PV que você ganhou neste turno, até o final deste turno.
+> Uma vez por turno (Efeito Rápido): você pode fazer este card ganhar ATK igual ao total de PV que você ganhou neste turno, até o final deste turno.
 
 **278 — Stelya, Domadora de Dragões / Stelya, Dragon Tamer**
 
@@ -306,7 +309,7 @@ Nível 4, Dragon, Light, 1700/1100.
 
 Nível 4, Dragon, Dark, 1100/1700.
 
-> Se este card for Invocado por Invocação-Normal ou Especial: você pode descartar 1 card; adicione 1 monstro Dragão de Nível 4 ou menor do seu Deck à sua mão. Depois, você pode Invocar por Invocação-Especial 1 "Dragão do Eclipse Solar" da sua mão ou Cemitério.
+> Se este card for Invocado por Invocação-Normal ou Especial: você pode descartar 1 card; adicione 1 monstro Dragão de Nível 4 ou menor do seu Deck à sua mão e, depois, você pode Invocar por Invocação-Especial 1 "Dragão do Eclipse Solar" da sua mão ou do seu Cemitério.
 >
 > Você pode banir este card do seu Cemitério; Invoque por Invocação-Especial 1 monstro Dragão de Nível 4 ou menor do seu Deck.
 >
@@ -318,7 +321,7 @@ Nível 4, Dragon, Dark, 1100/1700.
 
 Magia Normal.
 
-> Se você controlar um monstro Dragão de Nível 7 ou maior: destrua até 1 card de Magia/Armadilha que seu oponente controla.
+> Se você controlar um monstro Dragão de Nível 7 ou maior: destrua até 1 Magia/Armadilha que seu oponente controla.
 >
 > Você pode banir este card do seu Cemitério; adicione 1 "Pico Escarpado dos Dragões" do seu Deck à sua mão.
 
@@ -328,15 +331,15 @@ Magia de Campo.
 
 > Quando este card for ativado: você pode adicionar 1 monstro Dragão de Nível 4 ou menor do seu Cemitério à sua mão.
 >
-> Cada vez que um monstro Dragão destruir um monstro do oponente em batalha, coloque 1 Marcador de Pico Dracônico neste card.
+> Cada vez que um monstro Dragão que você controla destruir um monstro do oponente em batalha, coloque 1 Marcador de Pico Dracônico neste card.
 >
-> Uma vez por turno, se este card tiver 7 ou mais Marcadores de Pico Dracônico: você pode enviar este card para o Cemitério; Invoque por Invocação-Especial 1 monstro do tipo Dragão da sua mão, Deck ou Cemitério.
+> Uma vez por turno, se este card tiver 7 ou mais Marcadores de Pico Dracônico: você pode enviar este card para o Cemitério; Invoque por Invocação-Especial 1 monstro Dragão da sua mão, Deck ou Cemitério.
 
 **276 — Estrelas Convergentes / Converging Stars**
 
 Magia Normal.
 
-> Descarte 1 card; reduza o nível de todos os monstros na sua mão em 2 até o fim do turno.
+> Descarte 1 card; reduza o Nível de todos os monstros na sua mão em 2 até o final deste turno.
 
 **277 — Despertar do Dragão Extremo / Extreme Dragon Awakening**
 
@@ -344,7 +347,7 @@ Magia Contínua.
 
 > Você só pode controlar 1 "Despertar do Dragão Extremo".
 >
-> Uma vez por turno: você pode enviar 2 monstros do tipo Dragão que você controla para o Cemitério; Invoque por Invocação-Especial 1 monstro do tipo Dragão de Nível 8 ou maior da sua mão.
+> Uma vez por turno: você pode enviar 2 monstros Dragão que você controla para o Cemitério; Invoque por Invocação-Especial 1 monstro Dragão de Nível 8 ou maior da sua mão.
 >
 > Você pode banir este card do seu Cemitério; adicione 1 monstro "Dragão Extremo" do seu Deck à sua mão.
 >
@@ -356,7 +359,7 @@ Magia Contínua.
 
 Armadilha Normal.
 
-> Quando um monstro Dragão que você controla for alvo de um ataque ou efeito de card do oponente: devolva esse monstro para a mão, então Invoque por Invocação-Especial 1 monstro Dragão da sua mão com Nível menor ou igual ao Nível desse monstro na mão.
+> Quando um monstro Dragão que você controla for alvo de um ataque ou efeito de card do seu oponente: devolva esse monstro para a mão e, se isso acontecer, Invoque por Invocação-Especial 1 monstro Dragão da sua mão com Nível menor ou igual ao Nível do monstro devolvido.
 >
 > Você só pode ativar 1 "Santuário do Espírito do Dragão" por turno.
 
@@ -368,19 +371,17 @@ Ascensão, Nível 6, Dragon, Earth, 1600/2000.
 
 > "Dragão Blindado"
 >
-> Requisito: nenhum.
->
 > Enquanto estiver em Posição de Defesa, este card não pode ser destruído em batalha.
 >
-> Este card ganha 100 de ATK/DEF para cada monstro Dragão Invocado por Invocação-Especial enquanto este card estiver com a face para cima no campo.
+> Este card ganha 100 ATK/DEF para cada monstro Dragão Invocado por Invocação-Especial enquanto este card estiver com a face para cima no campo.
 
 **265 — Dragão Tecno-Vazio / Tech-Void Dragon**
 
 Fusão, Nível 8, Dragon, Dark, 2500/1000.
 
-> "Dragão Voltaico" + 1 monstro do tipo Dragão de Nível 5 ou maior
+> "Dragão Voltaico" + 1 monstro Dragão de Nível 5 ou maior
 >
-> Se este card for Invocado por Invocação-Fusão: você pode escolher 1 monstro do tipo Dragão de Nível 4 ou menor no seu Cemitério; bana-o e, se isso acontecer, este card ganha ATK igual à metade do ATK daquele monstro banido até o final deste turno.
+> Se este card for Invocado por Invocação-Fusão: você pode escolher 1 monstro Dragão de Nível 4 ou menor no seu Cemitério; bana-o e, se isso acontecer, este card ganha ATK igual à metade do ATK do monstro banido até o final deste turno.
 >
 > Se este card for destruído em batalha: você pode Invocar por Invocação-Especial 1 "Dragão Voltaico" do seu Cemitério.
 >
@@ -390,13 +391,13 @@ Fusão, Nível 8, Dragon, Dark, 2500/1000.
 
 Fusão, Nível 9, Dragon, Light, 3300/2700.
 
-> "Dragão Luminoso" + 2 monstros do Tipo Dragão
+> "Dragão Luminoso" + 2 monstros Dragão
 >
 > Se este card for Invocado por Invocação-Fusão: você pode escolher de 1 a 5 cards no seu Cemitério; embaralhe-os no Deck e, depois, compre 1 card.
 >
-> Você não sofre dano de batalha em batalhas envolvendo este card.
+> Você não sofre dano de batalha de batalhas envolvendo este card.
 >
-> Se este card for destruído em batalha ou por efeito de card: você pode Invocar por Invocação-Especial 1 monstro do Tipo Dragão do seu Cemitério, exceto "Dragão Cósmico Radiante".
+> Se este card for destruído em batalha ou por um efeito de card: você pode Invocar por Invocação-Especial 1 monstro Dragão do seu Cemitério, exceto "Dragão Cósmico Radiante".
 >
 > Você só pode usar cada efeito de "Dragão Cósmico Radiante" uma vez por turno.
 
@@ -406,11 +407,11 @@ Ascensão, Nível 10, Dragon, Light, 3500/3200.
 
 > "Dragão de Cristal Purificado"
 >
-> Requisito: o material deve ter ativado seus efeitos 3 vezes neste duelo.
+> Os efeitos do material devem ter sido ativados pelo menos 3 vezes neste Duelo.
 >
-> Uma vez por turno: você pode escolher 1 monstro do Tipo Dragão que você controla; ele não pode ser destruído em batalha ou por efeitos de card até o final do próximo turno.
+> Uma vez por turno: você pode escolher 1 monstro Dragão que você controla; ele não pode ser destruído em batalha ou por efeitos de card até o final do próximo turno.
 >
-> Se este card destruir um monstro em batalha: ganhe PV igual ao ATK original do monstro destruído.
+> Se este card destruir um monstro em batalha: ganhe PV iguais ao ATK original do monstro destruído.
 >
 > Você pode banir este card do seu Cemitério; envie de 1 a 3 monstros "Dragão Extremo" do seu Deck para o Cemitério.
 
@@ -420,13 +421,13 @@ Fusão, Nível 12, Dragon, Light, 5000/5000.
 
 > 5 monstros "Dragão Extremo"
 >
-> Deve ser Invocado por Invocação-Fusão banindo 5 monstros "Dragão Extremo" do seu Cemitério, e não pode ser Invocado por Invocação-Especial de outras formas.
+> Deve ser Invocado por Invocação-Fusão ao banir 5 monstros "Dragão Extremo" do seu Cemitério e não pode ser Invocado por Invocação-Especial de outras formas.
 >
 > Enquanto este card estiver com a face para cima no campo, você não pode controlar outros monstros.
 >
 > Não é afetado por outros efeitos de cards.
 >
-> Uma vez por turno, quando um monstro seria Invocado, ou quando um card ou efeito for ativado (Efeito Rápido): negue a Invocação ou ativação e, se isso acontecer, destrua esse card.
+> Uma vez por turno, quando um monstro estiver para ser Invocado, ou quando um card ou efeito for ativado (Efeito Rápido): você pode negar a Invocação ou ativação e, se isso acontecer, destrua esse card.
 
 ---
 

@@ -649,7 +649,7 @@ function getRetentionAdjustment(action: DragonPlanningAction = {}, context: Drag
     boost -= addRetention(reasons, 12, "out_of_plan_dragon_card");
   }
 
-  if (action.type === "handIgnition" && actionName === "Luminous Dragon") {
+  if (action.type === "handSummonProcedure" && actionName === "Luminous Dragon") {
     if (!field.some((fieldCard) => fieldCard?.cardKind === "monster")) {
       boost += addRetention(reasons, 8, "empty_field_luminous_starter");
       if (hasName(hand, "Voltaic Dragon") || hand.some((cardInHand) => PAYOFF_NAMES.has(cardInHand?.name!))) {
@@ -1405,7 +1405,7 @@ export function scoreDragonLineMilestones(context: DragonLineContext = {}) {
   }
 
   if (
-    hasAction(sequence, "Luminous Dragon", "handIgnition") &&
+    hasAction(sequence, "Luminous Dragon", "handSummonProcedure") &&
     initialDragonFieldCount === 0 &&
     finalDragonFieldCount > initialDragonFieldCount
   ) {
@@ -2135,7 +2135,7 @@ function inferDragonLineHeadline(context: DragonLineContext = {}) {
   }
 
   if (
-    hasUsed("Luminous Dragon", "handIgnition") &&
+    hasUsed("Luminous Dragon", "handSummonProcedure") &&
     hasUsed("Voltaic Dragon", "handIgnition")
   ) {
     return "Luminous starter into Voltaic extender";
@@ -2249,7 +2249,7 @@ function inferDragonLineHeadline(context: DragonLineContext = {}) {
   }
 
   if (
-    hasUsed("Luminous Dragon", "handIgnition") &&
+    hasUsed("Luminous Dragon", "handSummonProcedure") &&
     (getCards(initialBot, "field").length === 0 || getCards(finalBot, "field").length > getCards(initialBot, "field").length)
   ) {
     return "Luminous starter creates first Dragon";

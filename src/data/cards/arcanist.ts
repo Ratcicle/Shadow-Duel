@@ -8,7 +8,7 @@ export const arcanistCards = [
     subtype: "equip",
     archetype: "Arcanist",
     description:
-      "Equip only to an \"Arcanist\" monster you control. You can only control 1 \"Grimoire of the Apprentice Arcanist\".\n\nIf an \"Arcanist\" Spell you activated resolves: you can store that Spell's effect in this card (max. 1). If this card already has a stored effect, you can replace it with the new effect.\n\nOnce per turn: you can activate the effect stored in this card.",
+      "Equip only to an \"Arcanist\" monster you control.\n\nYou can only control 1 \"Grimoire of the Apprentice Arcanist\".\n\nAfter an \"Arcanist\" Normal Spell you activated resolves, you can store that Spell's effect in this card (max. 1). If this card already has an effect stored, you can replace it with the new effect.\n\nOnce per turn: You can activate the effect stored in this card.",
     image: "assets/Grimoire of the Apprentice Arcanist.png",
     blueprintStorage: {
       maxSlots: 1,
@@ -80,7 +80,7 @@ export const arcanistCards = [
     attribute: "Light",
     archetype: "Arcanist",
     description:
-      "If this card is Normal Summoned: You can add 1 \"Arcanist\" Spell from your Deck to your hand. You can only activate this effect of \"Arcanist Apprentice\" once per turn.\n\nWhile this face-up card is equipped with an \"Arcanist\" Equip Spell, all \"Arcanist\" monsters you control gain 300 ATK.",
+      "If this card is Normal Summoned: You can add 1 \"Arcanist\" Spell from your Deck to your hand.\n\nYou can only use this effect of \"Arcanist Apprentice\" once per turn.\n\nWhile this face-up card is equipped with an \"Arcanist\" Equip Spell, all \"Arcanist\" monsters you control gain 300 ATK.",
     image: "assets/Arcanist Apprentice.png",
     effects: [
       {
@@ -133,7 +133,7 @@ export const arcanistCards = [
     subtype: "normal",
     archetype: "Arcanist",
     description:
-      'Target 1 "Arcanist" monster you control and 1 monster your opponent controls; destroy those targets, and if you do, each player takes damage equal to half the ATK their destroyed monster had immediately before it was destroyed. If you control an "Arcanist" Equip Spell, you take no damage from this effect.',
+      "Target 1 \"Arcanist\" monster you control and 1 monster your opponent controls; destroy them, then, for each monster destroyed by this effect, inflict damage to its controller equal to half that monster's ATK on the field. If you control an \"Arcanist\" Equip Spell, you take no damage from this effect.",
     image: "assets/Arcanist Crimson Explosion.png",
     effects: [
       {
@@ -199,7 +199,7 @@ export const arcanistCards = [
     subtype: "normal",
     archetype: "Arcanist",
     description:
-      "Target 1 face-up monster on the field; apply the appropriate effect depending on who controls that target. If it is an \"Arcanist\" monster you control: it gains 500 ATK until the end of this turn, and if it battles a Defense Position monster this turn, inflict piercing battle damage to your opponent. If it is a monster your opponent controls: it cannot declare an attack until the end of your opponent's next turn.\n\nYou can only activate 1 \"Arcanist Lightning Lance\" per turn.",
+      "Target 1 face-up monster on the field; apply the appropriate effect depending on who controls that target. If it is an \"Arcanist\" monster you control: It gains 500 ATK until the end of this turn, and if it battles a Defense Position monster this turn, inflict piercing battle damage to your opponent. If it is a monster your opponent controls: It cannot declare an attack until the end of your opponent's next turn.\n\nYou can only activate 1 \"Arcanist Lightning Lance\" per turn.",
     image: "assets/Lightning Magic Lance.png",
     effects: [
       {
@@ -276,7 +276,7 @@ export const arcanistCards = [
     attribute: "Wind",
     archetype: "Arcanist",
     description:
-      "Once per turn: You can target 1 face-up Spell your opponent controls; return it to the hand, and if you do, gain 500 LP.\n\nIf this card becomes equipped with an \"Arcanist\" Equip Spell: You can target 1 Spell in your GY; add it to your hand.\n\nYou can only use each effect of \"Viridis, Arcanist of Life\" once per turn.",
+      "You can target 1 face-up Spell your opponent controls; return it to the hand, and if you do, gain 500 LP.\n\nIf this card becomes equipped with an \"Arcanist\" Equip Spell: You can target 1 Spell in your GY; add it to your hand.\n\nYou can only use each effect of \"Viridis, Arcanist of Life\" once per turn.",
     image: "assets/Viridis, Arcanist of Life.png",
     effects: [
       {
@@ -437,12 +437,13 @@ export const arcanistCards = [
     attribute: "Water",
     archetype: "Arcanist",
     description:
-      "If you control a face-up \"Arcanist\" monster, you can Special Summon this card from your hand. You can only Special Summon \"Albus, Arcanist of Ice\" once per turn this way.\n\nIf this card is equipped with an \"Arcanist\" Equip Spell: target 1 \"Arcanist\" monster in your GY; add it to your hand. You can only activate this effect of \"Albus, Arcanist of Ice\" once per turn.",
+      "If you control a face-up \"Arcanist\" monster, you can Special Summon this card from your hand. You can only Special Summon \"Albus, Arcanist of Ice\" once per turn this way.\n\nIf this card becomes equipped with an \"Arcanist\" Equip Spell: target 1 \"Arcanist\" monster in your GY; add it to your hand.\n\nYou can only activate this effect of \"Albus, Arcanist of Ice\" once per turn.",
     image: "assets/Albus, Arcanist of Ice.png",
     handSummonProcedure: {
       id: "albus_arcanist_ice_special_summon",
       oncePerTurn: true,
       oncePerTurnName: "albus_arcanist_ice_special_summon",
+      oncePerTurnConsumeOn: "success",
       conditions: [
         {
           type: "control_card_filters",
@@ -506,7 +507,7 @@ export const arcanistCards = [
     attribute: "Light",
     archetype: "Arcanist",
     description:
-      "If this card is Normal Summoned: You can target 1 to 3 \"Arcanist\" Spells in your GY; shuffle them into the Deck, then draw 1 card.\n\nIf this card is equipped with an \"Arcanist\" Equip Spell: You can target 1 Level 4 or lower \"Arcanist\" monster in your GY; Special Summon it.\n\nYou can only activate each effect of \"Master of Mirrors Arcanist\" once per turn.",
+      "If this card is Normal Summoned: You can target 1 to 3 \"Arcanist\" Spells in your GY; shuffle them into the Deck, then draw 1 card.\n\nIf this card becomes equipped with an \"Arcanist\" Equip Spell: You can target 1 Level 4 or lower \"Arcanist\" monster in your GY; Special Summon it.\n\nYou can only activate each effect of \"Master of Mirrors Arcanist\" once per turn.",
     image: "assets/Master of Mirrors Arcanist.png",
     effects: [
       {
@@ -596,7 +597,7 @@ export const arcanistCards = [
     subtype: "continuous",
     archetype: "Arcanist",
     description:
-      "The first time each turn an \"Arcanist\" Spell you control would be destroyed, it is not destroyed.\n\nOnce per turn: You can apply 1 of these effects;\n- Discard 2 \"Arcanist\" monsters; add 1 \"Arcanist\" Spell from your Deck to your hand.\n- Discard 2 \"Arcanist\" Spells; add 1 Level 4 or lower \"Arcanist\" monster from your Deck to your hand.",
+      "The first time each turn an \"Arcanist\" Spell you control would be destroyed, it is not destroyed.\n\nOnce per turn: You can apply 1 of these effects:\n● Discard 2 \"Arcanist\" monsters; add 1 \"Arcanist\" Spell from your Deck to your hand.\n● Discard 2 \"Arcanist\" Spells; add 1 Level 4 or lower \"Arcanist\" monster from your Deck to your hand.",
     image: "assets/Meeting of the Arcanists.png",
     effects: [
       {
@@ -741,7 +742,7 @@ export const arcanistCards = [
     subtype: "normal",
     archetype: "Arcanist",
     description:
-      "Target 1 \"Arcanist\" monster you control; until the end of the next turn, the first time that monster would be destroyed by battle or card effect, it is not destroyed.\n\nIf that monster is equipped with an \"Arcanist\" Equip Spell: draw 2 cards.\n\nYou can only activate 1 \"Arcanist Ice Barrier\" per turn.",
+      "Target 1 \"Arcanist\" monster you control; until the end of the next turn, the first time that monster would be destroyed by battle or a card effect, it is not destroyed, also, if that monster is equipped with an \"Arcanist\" Equip Spell, draw 2 cards.\n\nYou can only activate 1 \"Arcanist Ice Barrier\" per turn.",
     image: "assets/Arcanist Ice Barrier.png",
     effects: [
       {
@@ -815,7 +816,7 @@ export const arcanistCards = [
     subtype: "continuous",
     archetype: "Arcanist",
     description:
-      "Each time you activate the effect of an \"Arcanist\" Spell, except \"Arcanist Ink River\": place 1 Ink counter on this card.\n\nYou can remove 2 Ink counters from this card; add 1 \"Arcanist\" Spell from your GY to your hand.",
+      "Each time you activate an effect of an \"Arcanist\" Spell, except \"Arcanist Ink River\": place 1 Ink Counter on this card.\n\nYou can remove 2 Ink Counters from this card; add 1 \"Arcanist\" Spell from your GY to your hand.",
     image: "assets/Arcanist Ink River.png",
     effects: [
       {
@@ -923,7 +924,7 @@ export const arcanistCards = [
     subtype: "field",
     archetype: "Arcanist",
     description:
-      "The first time each turn an \"Arcanist\" monster you control destroys an opponent's monster by battle: draw 1 card.\n\nOnce per turn: You can activate 1 of these effects; If you control no monsters: pay 2000 LP; Special Summon 1 Level 4 or lower \"Arcanist\" monster from your Deck. If you control an \"Arcanist\" monster: add 1 \"Arcanist\" Equip Spell from your Deck to your hand.",
+      "The first time each turn an \"Arcanist\" monster you control destroys an opponent's monster by battle: draw 1 card.\n\nOnce per turn: You can activate 1 of these effects:\n● If you control no monsters: Pay 2000 LP; Special Summon 1 Level 4 or lower \"Arcanist\" monster from your Deck.\n● If you control an \"Arcanist\" monster: Add 1 \"Arcanist\" Equip Spell from your Deck to your hand.",
     image: "assets/Arcanist Grand Library.png",
     effects: [
       {
@@ -1049,7 +1050,7 @@ export const arcanistCards = [
     attribute: "Light",
     archetype: "Arcanist",
     description:
-      "Cannot be destroyed by card effects.\n\nThis card gains 100 ATK for each \"Arcanist\" Spell activated this turn.\n\nOnce per turn, if this card is equipped with an \"Arcanist\" Equip Spell: you can target 1 monster your opponent controls; destroy it.",
+      "Cannot be destroyed by card effects.\n\nThis card gains 100 ATK for each \"Arcanist\" Spell activated this turn.\n\nOnce per turn, if this card is equipped with an \"Arcanist\" Equip Spell: You can target 1 monster your opponent controls; destroy it.",
     image: "assets/Elementalist Master Arcanist.png",
     effects: [
       {
@@ -1126,7 +1127,7 @@ export const arcanistCards = [
     attribute: "Dark",
     archetype: "Arcanist",
     description:
-      "Each time you activate an \"Arcanist\" Spell while this card is face-up on the field: all monsters your opponent currently controls lose 100 ATK/DEF until the end of this turn.\n\nIf this card is equipped with an \"Arcanist\" Equip Spell: target 1 face-up monster your opponent controls; halve its ATK/DEF until the end of this turn.\n\nYou can only use this effect of \"Azrath, Corrupted Arcanist\" once per turn.",
+      "Each time you activate an \"Arcanist\" Spell while this card is face-up on the field: all monsters your opponent currently controls lose 100 ATK/DEF until the end of this turn.\n\nIf this card becomes equipped with an \"Arcanist\" Equip Spell: target 1 face-up monster your opponent controls; halve its ATK/DEF until the end of this turn.\n\nYou can only use this effect of \"Azrath, Corrupted Arcanist\" once per turn.",
     image: "assets/Azrath, Corrupted Arcanist.png",
     effects: [
       {
@@ -1250,7 +1251,7 @@ export const arcanistCards = [
     subtype: "normal",
     archetype: "Arcanist",
     description:
-      "If you control an \"Arcanist\" monster equipped with an \"Arcanist\" Equip Spell: send 1 \"Arcanist\" Equip Spell you control to the GY, then target 1 card your opponent controls; banish it.\n\nYou can only activate 1 \"Arcanist Seismic Impact\" per turn.",
+      "If you control an \"Arcanist\" monster equipped with an \"Arcanist\" Equip Spell: Send 1 \"Arcanist\" Equip Spell you control to the GY, then target 1 card your opponent controls; banish it.\n\nYou can only activate 1 \"Arcanist Seismic Impact\" per turn.",
     image: "assets/Arcanist Seismic Impact.png",
     effects: [
       {

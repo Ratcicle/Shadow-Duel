@@ -126,7 +126,7 @@ for (const seat of ["player", "bot"] as const) {
             assert.deepEqual(simulated._simUnsupportedActions || [], []);
             const saved = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "arcanist-final" }))));
             assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, "engine-rules-v22");
-            assert.equal(saved.cardDatabaseSignature, "d90a7477");
+            assert.equal(saved.cardDatabaseSignature, "4d85a5a8");
             assert.ok(saved.decisions.some(decision => decision.kind === "target"));
             assert.equal(saved.commands[0]?.type, wasSet ? "activate_effect" : "activate_card");
             const result = await replayCanonicalDuel(saved, { game: unsafeFixture<ReplayDriverGamePort>(playback,
@@ -463,6 +463,8 @@ for (const seat of ["player", "bot"] as const) {
     assert.equal(owner.hand.length, handBefore - 1);
     assert.equal(owner.graveyard.length, 0);
     assert.equal(owner.banished.length, 0);
+    assert.equal(live.canUseOncePerTurn(albus, owner, required(albus.handSummonProcedure)).ok, false);
+    assert.equal(live.materialDuelStats[seat].effectActivationsByMaterialId.get(307) ?? 0, 0);
     const saved = await replay();
     assert.deepEqual(saved.commands.map(command => command.type), ["hand_summon_procedure"]);
     assert.equal(saved.decisions.filter(decision => decision.kind === "cost").length, 0);
@@ -470,5 +472,7 @@ for (const seat of ["player", "bot"] as const) {
     const replayedAlbus = required(playback[seat].field.find(card => card.id === 307));
     assert.equal(replayedAlbus.fieldSlot, 4);
     assert.equal(replayedAlbus.lastSummonProcedure, albus.lastSummonProcedure);
+    assert.equal(playback.canUseOncePerTurn(replayedAlbus, playback[seat], required(replayedAlbus.handSummonProcedure)).ok, false);
+    assert.equal(playback.materialDuelStats[seat].effectActivationsByMaterialId.get(307) ?? 0, 0);
   });
 }

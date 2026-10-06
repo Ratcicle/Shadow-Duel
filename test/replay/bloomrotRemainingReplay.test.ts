@@ -92,7 +92,7 @@ for (const scenario of ["colony", "carrioncap", "harvest", "fusion"] as const) {
     }
     const saved = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "bloomrot-remaining" }))));
     assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, "engine-rules-v22");
-    assert.equal(saved.cardDatabaseSignature, "d90a7477");
+    assert.equal(saved.cardDatabaseSignature, "4d85a5a8");
     setLocale("pt-br");
     const result = await replayCanonicalDuel(saved, { game: unsafeFixture<ReplayDriverGamePort>(playback,
       "Concrete Game implements all replay driver ports.") });

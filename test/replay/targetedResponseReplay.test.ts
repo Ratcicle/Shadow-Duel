@@ -126,7 +126,7 @@ for (const seat of ["player", "bot"] as const) for (const scenario of ["first-li
     const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(game.finalizeReplay({ reason: "targeted-response-context" }))));
     assert.equal(replay.engineVersion, "engine-rules-v22");
     assert.equal(replay.schemaVersion, 2);
-    assert.equal(replay.cardDatabaseSignature, "d90a7477");
+    assert.equal(replay.cardDatabaseSignature, "4d85a5a8");
     const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback,
       "Concrete Game with identical deterministic setup provides canonical playback.") });
     assert.equal(result.ok, true); assert.equal(result.finalStateHash, replay.result?.finalStateHash);

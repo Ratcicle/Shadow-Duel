@@ -408,54 +408,9 @@ export function simulateMainPhaseAction<State extends DragonSimulationState>(
       if (!state._simUnsupportedActions.includes("synchro")) state._simUnsupportedActions.push("synchro");
       break;
     case "handSummonProcedure": {
-      const player = state.bot;
-      const direct = Number.isInteger(action.index) ? player.hand[action.index!] : undefined;
-      const matchesSource = (entry: DragonCard) =>
-        entry.id === action.cardId &&
-        (action.card?.instanceId === undefined || entry.instanceId === action.card.instanceId);
-      const card = direct && matchesSource(direct) ? direct : player.hand.find(matchesSource);
-      const procedure = card?.handSummonProcedure;
-      if (!card || !procedure || !procedure.cost || card.cardKind !== "monster") break;
-      if (!canUseSimulatedEffectUsage(state, procedure, card, player.id, true)) break;
-      if (!checkSpecialSummonEligibility(card, { summonProcedure: procedure.id, fromZone: "hand" }).ok) break;
-      if (player.specialSummonRestrictions?.some((restriction) =>
-        restriction.allowedFilters && !matchesTargetFilters(filterableDragonCard(card), restriction.allowedFilters))) break;
-      if (action.materials.length !== procedure.cost.count) break;
-      const materials: Array<{ card: DragonCard; zone: "field" | "graveyard" }> = [];
-      for (const hint of action.materials) {
-        if (!procedure.cost.zones.includes(hint.zone)) break;
-        const zone = player[hint.zone];
-        const matches = (entry: DragonCard) => entry.id === hint.cardId && entry.instanceId === hint.instanceId;
-        const atIndex = zone[hint.index];
-        const material = atIndex && matches(atIndex) ? atIndex : zone.find(matches);
-        if (!material || !matchesTargetFilters(filterableDragonCard(material), procedure.cost.filters) || materials.some((entry) => entry.card === material)) break;
-        materials.push({ card: material, zone: hint.zone });
-      }
-      if (materials.length !== procedure.cost.count) break;
-      const remaining = player.field.filter((entry) => !materials.some((material) => material.card === entry));
-      if (remaining.length >= 5) break;
-      const exclusive = (entry: DragonCard) =>
-        !entry.isFacedown && entry.fieldPresenceRestriction?.type === "only_monster_you_control_while_faceup";
-      if (remaining.some(exclusive) || (exclusive(card) && remaining.length > 0)) break;
-      const limit = card.fieldLimit;
-      if (limit && matchesTargetFilters(filterableDragonCard(card), limit.filters || {})) {
-        const fields = limit.scope === "global" ? [...remaining, ...(state.player?.field || [])] : remaining;
-        const matching = fields.filter((entry) =>
-          (!limit.requireFaceup || !entry.isFacedown) &&
-          matchesTargetFilters(filterableDragonCard(entry), limit.filters || {})).length;
-        const max = Number.isFinite(Number(limit.max)) ? Number(limit.max) : 1;
-        if (matching + 1 > max) break;
-      }
-      markSimulatedEffectUsage(state, procedure, card, player.id, true);
-      for (const material of materials) moveSimulatedCard(player, material.card, material.zone, procedure.cost.destination, state);
-      moveSimulatedCard(player, card, "hand", "field", state);
-      card.position = action.position === "defense" ? "defense" : "attack";
-      card.isFacedown = false;
-      card.lastSummonMethod = "special";
-      card.lastSummonedFromZone = "hand";
-      card.lastSummonProcedure = procedure.id;
-      establishProperSummon(card, { summonProcedure: procedure.id, fromZone: "hand" });
-      recordCompletedSimulatedSummon(state, { card, player, method: "special" });
+      const sharedState = sharedDragonSimulationState(state);
+      applyGenericSimulatedMainPhaseAction(sharedState, action);
+      Object.assign(state, sharedState);
       return state;
     }
     case "summon": {
@@ -1774,17 +1729,6 @@ function simulateDragonHandIgnition(
       reduceHandMonsterLevelsForTurn(player, 2);
       simulateDragonAfterSummonEffects(state, summoned, { method: "special" });
       recordSimulatedMaterialEffectActivation(state, player, card);
-    }
-    return;
-  }
-
-  if (card.name === "Luminous Dragon") {
-    if (player.field.length === 0 && player.field.length < 5) {
-      player.hand.splice(action.index!, 1);
-      const summoned = specialSummonToField(state, player, card, action, {
-        method: "special",
-      });
-      if (summoned) recordSimulatedMaterialEffectActivation(state, player, summoned);
     }
     return;
   }

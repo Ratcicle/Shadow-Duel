@@ -57,6 +57,7 @@ interface DragonStrategyGame extends Omit<DragonGame, "player" | "bot" | "oppone
 import {
   applyMacroAndSafety,
   buildPrioritizedAction,
+  getGenericCostlessHandSummonActions,
 } from "./common/actionGeneration.js";
 import { getGenericSetBackrowActions } from "./common/backrowPlanning.js";
 import { sequenceActionsByPriority } from "./common/actionSequencing.js";
@@ -1250,15 +1251,6 @@ export default class DragonStrategy extends BaseStrategy {
             ...(policyDecision.targetPreferences || {}),
           };
           log(`  ✅ Hand ignition: ${card.name} → ${policyDecision.reason}`);
-        } else if (card.name === "Luminous Dragon") {
-          if ((bot.field || []).some((fieldCard) => fieldCard?.cardKind === "monster")) {
-            log(`  ⏭️ Hand ignition: Luminous Dragon — field is not empty`);
-            continue;
-          }
-          const hasFollowUp = hasLuminousFollowUp(bot);
-          priority = hasFollowUp ? 10 : 6;
-          if ((opponent?.field || []).length > 0) priority += 1;
-          log(`  ✅ Hand ignition: Luminous Dragon → empty-field starter${hasFollowUp ? " with follow-up" : ""}`);
         } else if (card.name === "Hellkite Dragon") {
           // Only worthwhile if there's a field Dragon weaker than Hellkite (2300) to sacrifice
           const fieldDragons = (bot.field || []).filter(isFaceupDragon);
@@ -1325,6 +1317,12 @@ export default class DragonStrategy extends BaseStrategy {
         });
       }
     });
+
+    for (const action of getGenericCostlessHandSummonActions(gameInput)) {
+      if (action.cardName !== "Luminous Dragon") continue;
+      const priority = (hasLuminousFollowUp(bot) ? 10 : 6) + ((opponent?.field || []).length > 0 ? 1 : 0);
+      actions.push({ ...action, priority });
+    }
 
     // === FIELD MONSTER IGNITION ACTIONS ===
     (bot.field || []).forEach((card, fieldIndex) => {

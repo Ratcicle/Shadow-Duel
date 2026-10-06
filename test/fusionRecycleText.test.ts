@@ -8,9 +8,9 @@ import { cardDefinition, required } from "./helpers/fixtures.js";
 import { cardDatabaseByName } from "./helpers/fixtures.js";
 
 const EXPECTED_EN =
-  'Target 1 monster in your GY that was sent there as Fusion Material this turn; add it to your hand. If the added monster is Level 4 or lower, you can Special Summon it in Defense Position, but negate its effects until the end of this turn.\n\nYou can only activate 1 "Fusion Recycle" per turn.';
+  'Target 1 monster in your GY that was sent there as Fusion Material this turn; add it to your hand, then, if the added monster is Level 4 or lower, you can Special Summon it in Defense Position, but negate its effects until the end of this turn.\n\nYou can only activate 1 "Fusion Recycle" per turn.';
 const EXPECTED_PT_BR =
-  "Escolha 1 monstro no seu Cemitério que foi enviado para lá como Matéria de Fusão neste turno; adicione-o à sua mão. Se o monstro adicionado for de Nível 4 ou menor, você pode Invocá-lo por Invocação-Especial em Posição de Defesa, mas negue seus efeitos até o final deste turno.\n\nVocê só pode ativar 1 “Reciclar Fusão” por turno.";
+  'Escolha 1 monstro no seu Cemitério que foi enviado para lá como Matéria de Fusão neste turno; adicione-o à sua mão e, depois, se o monstro adicionado for de Nível 4 ou menor, você pode Invocá-lo por Invocação-Especial em Posição de Defesa, mas negue seus efeitos até o final deste turno.\n\nVocê só pode ativar 1 "Reciclar Fusão" por turno.';
 
 test("Fusion Recycle uses a compact paragraph break before its activation limit", async () => {
   const card = cardDatabaseByName.get("Fusion Recycle");

@@ -11,28 +11,16 @@ export const dragonCards = [
     type: "Dragon",
     attribute: "Light",
     description:
-      "If you control no monsters, you can Special Summon this card from your hand.\n\nIf a Dragon-Type monster is discarded from your hand to the Graveyard while this card is face-up on the field: You can target 1 Dragon-Type monster in your Graveyard with a different name from the discarded monster; add it to your hand.\n\nYou can only use each effect of \"Luminous Dragon\" once per turn.",
+      "If you control no monsters, you can Special Summon this card from your hand. You can only Special Summon \"Luminous Dragon\" once per turn this way.\n\nIf a Dragon monster is discarded from your hand to the GY while this card is face-up on the field: You can target 1 Dragon monster in your GY with a different name from the discarded monster; add it to your hand.\n\nYou can only use this effect of \"Luminous Dragon\" once per turn.",
     image: "assets/Luminous Dragon.png",
+    handSummonProcedure: {
+      id: "luminous_dragon_empty_field_summon",
+      conditions: [{ type: "playerFieldEmpty" }],
+      oncePerTurn: true,
+      oncePerTurnName: "luminous_dragon_empty_field_summon",
+      oncePerTurnConsumeOn: "success",
+    },
     effects: [
-      {
-
-        activationZones: ["hand"],
-
-        usagePolicy: "use",
-        id: "luminous_dragon_empty_field_summon",
-        timing: "ignition",
-        conditions: [{ type: "playerFieldEmpty" }],
-        oncePerTurn: true,
-        oncePerTurnName: "luminous_dragon_empty_field_summon",
-        actions: [
-          {
-            type: "conditional_summon_from_hand",
-            targetRef: "self",
-            position: "choice",
-            optional: false,
-          },
-        ],
-      },
       {
 
         usagePolicy: "use",
@@ -85,7 +73,7 @@ export const dragonCards = [
     atk: 1600,
     def: 1500,
     description:
-      "If this card is Normal Summoned: You can add 1 Level 4 or lower Dragon monster from your Deck to your hand.\n\nIf this card is destroyed by battle: draw 1 card, and if it is a Level 4 or lower Dragon monster, you can Special Summon it.",
+      "If this card is Normal Summoned: You can add 1 Level 4 or lower Dragon monster from your Deck to your hand.\n\nIf this card is destroyed by battle: Draw 1 card, then, if it is a Level 4 or lower Dragon monster, you can Special Summon it.",
     image: "assets/Armored Dragon.png",
     effects: [
       {
@@ -148,7 +136,7 @@ export const dragonCards = [
       position: "choice",
     },
     description:
-      "\"Armored Dragon\"\n\nRequirement: None.\n\nWhile in Defense Position, this card cannot be destroyed by battle.\n\nThis card gains 100 ATK/DEF for each Dragon-type monster Special Summoned while this card is face-up on the field.",
+      "\"Armored Dragon\"\n\nWhile in Defense Position, this card cannot be destroyed by battle.\n\nThis card gains 100 ATK/DEF for each Dragon monster Special Summoned while this card is face-up on the field.",
     image: "assets/Metal Armored Dragon.png",
     effects: [
       {
@@ -185,7 +173,7 @@ export const dragonCards = [
     def: 800,
     cannotAttackDirectly: true,
     description:
-      "Cannot attack directly.\n\nIf this card is Special Summoned: You can target 1 other Dragon monster you control; it gains 500 ATK until the end of this turn.\n\nIf this card is in your GY: You can discard 1 Dragon monster; add this card to your hand.",
+      "This card cannot attack directly.\n\nIf this card is Special Summoned: You can target 1 other Dragon monster you control; it gains 500 ATK until the end of this turn.\n\nIf this card is in your GY: You can discard 1 Dragon monster; add this card to your hand.",
     image: "assets/Grey Dragon.png",
     effects: [
       {
@@ -328,7 +316,7 @@ export const dragonCards = [
     atk: 1500,
     def: 900,
     description:
-      "If this card is Normal Summoned: You can target 1 Level 4 or lower Dragon-type monster in your GY; Special Summon it.\n\nYou can banish this card from your GY, then target 1 monster your opponent controls; it loses 600 ATK/DEF until the end of this turn.",
+      "If this card is Normal Summoned: You can target 1 Level 4 or lower Dragon monster in your GY; Special Summon it.\n\nYou can banish this card from your GY, then target 1 monster your opponent controls; it loses 600 ATK/DEF until the end of this turn.",
     image: "assets/Luminescent Dragon.png",
     effects: [
       {
@@ -409,7 +397,7 @@ export const dragonCards = [
     def: 2300,
     altTribute: { requiresType: "Dragon", tributes: 1 },
     description:
-      "This card can be Tribute Summoned by Tributing 1 Dragon-type monster.\n\nOnce per turn: You can target 1 face-up monster your opponent controls; change its battle position.",
+      "You can Tribute Summon this card by Tributing 1 Dragon monster.\n\nOnce per turn: You can target 1 face-up monster your opponent controls; change its battle position.",
     image: "assets/Majestic Silver Dragon.png",
     effects: [
       {
@@ -452,7 +440,7 @@ export const dragonCards = [
     atk: 2000,
     def: 1700,
     description:
-      "If this card is Normal or Special Summoned: Destroy all other Dragon-type monsters you control, and if you do, this card gains 300 ATK for each monster destroyed by this effect.\n\nOnce per turn: You can discard 1 card, then target 1 monster your opponent controls; negate its effects until the end of this turn.",
+      "If this card is Normal or Special Summoned: Destroy all other Dragon monsters you control, and if you do, this card gains 300 ATK for each monster destroyed by this effect.\n\nOnce per turn: You can discard 1 card, then target 1 monster your opponent controls; negate its effects until the end of this turn.",
     image: "assets/Darkness Dragon.png",
     effects: [
       {
@@ -533,7 +521,7 @@ export const dragonCards = [
     extraAttacks: 1,
     extraAttackTargetRestriction: "monster",
     description:
-      "You can send 2 Dragon-type monsters from your hand to the GY; Special Summon this card from your hand, but it cannot attack the turn it is Special Summoned by this effect.\n\nThis card can make up to 2 attacks on opponent's monsters during each Battle Phase.\n\nYou can banish this card from your GY; add 1 Level 7 or 8 Dragon monster from your Deck to your hand.",
+      "You can send 2 Dragon monsters from your hand to the GY; Special Summon this card from your hand, but it cannot attack the turn it is Special Summoned by this effect.\n\nThis card can make up to 2 attacks on monsters during each Battle Phase.\n\nYou can banish this card from your GY; add 1 Level 7 or 8 Dragon monster from your Deck to your hand.",
     image: "assets/Black Bull Dragon.png",
     effects: [
       {
@@ -614,7 +602,7 @@ export const dragonCards = [
     atk: 2200,
     def: 1900,
     description:
-      "You can send 1 Dragon you control to the GY; Special Summon this card from your hand.\n\nOnce per turn: You can send this face-up card to the GY; Special Summon 1 Level 7 or lower Dragon from your GY, except \"Hellkite Dragon\".",
+      "You can send 1 Dragon monster you control to the GY; Special Summon this card from your hand.\n\nOnce per turn: You can send this face-up card to the GY; Special Summon 1 Level 7 or lower Dragon monster from your GY, except \"Hellkite Dragon\".",
     image: "assets/Hellkite Dragon.png",
     effects: [
       {
@@ -701,7 +689,7 @@ export const dragonCards = [
     cardKind: "spell",
     subtype: "normal",
     description:
-      "If you control a Level 7 or higher Dragon: Destroy up to 1 Spell/Trap card your opponent controls.\n\nYou can banish this card from your GY; add 1 \"Jagged Peak of the Dragons\" from your Deck to your hand.",
+      "If you control a Level 7 or higher Dragon monster: Destroy up to 1 Spell/Trap your opponent controls.\n\nYou can banish this card from your GY; add 1 \"Jagged Peak of the Dragons\" from your Deck to your hand.",
     image: "assets/Hellkite Roar.png",
     effects: [
       {
@@ -754,7 +742,7 @@ export const dragonCards = [
     cardKind: "spell",
     subtype: "field",
     description:
-      "When this card is activated: You can add 1 Level 4 or lower Dragon from your GY to your hand.\n\nEach time a Dragon-type monster destroys an opponent's monster by battle, place 1 Dragon Peak counter on this card.\n\nOnce per turn, if this card has 7 or more Dragon Peak counters: You can send this card to the GY; Special Summon 1 Dragon-type monster from your hand, Deck, or GY.",
+      "When this card is activated: You can add 1 Level 4 or lower Dragon monster from your GY to your hand.\n\nEach time a Dragon monster you control destroys an opponent's monster by battle, place 1 Dragon Peak Counter on this card.\n\nOnce per turn, if this card has 7 or more Dragon Peak Counters: You can send this card to the GY; Special Summon 1 Dragon monster from your hand, Deck, or GY.",
     image: "assets/Jagged Peak of Dragons.png",
     effects: [
       {
@@ -841,7 +829,7 @@ export const dragonCards = [
     atk: 2200,
     def: 1400,
     description:
-      "During your Main Phase: you can select 1 monster your opponent controls; send this card and the target to the GY, and during your opponent's next Standby Phase, Special Summon them. If you selected a Fusion or Ascension Monster as a target: this card gains 800 ATK until the end of your next turn.\n\nYou can use each effect of \"Abyssal Serpent Dragon\" once per turn.",
+      "During your Main Phase: You can target 1 monster your opponent controls; send this card and that target to the GY, then, during your opponent's next Standby Phase, Special Summon both of them. If the targeted monster was a Fusion or Ascension Monster, this card gains 800 ATK until the end of your next turn.\n\nYou can only use this effect of \"Abyssal Serpent Dragon\" once per turn.",
     image: "assets/Abyssal Serpent Dragon.png",
     effects: [
       {
@@ -883,12 +871,13 @@ export const dragonCards = [
     atk: 2500,
     def: 1700,
     description:
-      "You can Special Summon this card from your hand by banishing 3 Dragon monsters from your GY. You can only attempt to Special Summon \"Purified Crystal Dragon\" once per turn this way, even if the Summon is negated.\n\nIf this card destroys a monster by battle: Gain LP equal to the destroyed monster's Level x100.\n\nYou can target 1 other Dragon monster you control; it cannot be destroyed by card effects until the end of the next turn.\n\nYou can only use each effect of \"Purified Crystal Dragon\" once per turn.",
+      "You can Special Summon this card from your hand by banishing 3 Dragon monsters from your GY. You can only Special Summon \"Purified Crystal Dragon\" once per turn this way.\n\nIf this card destroys a monster by battle: Gain LP equal to the destroyed monster's Level x100.\n\nYou can target 1 other Dragon monster you control; it cannot be destroyed by card effects until the end of the next turn.\n\nYou can only use each effect of \"Purified Crystal Dragon\" once per turn.",
     image: "assets/Purified Crystal Dragon.png",
     handSummonProcedure: {
       id: "purified_crystal_special_summon",
       oncePerTurn: true,
       oncePerTurnName: "purified_crystal_special_summon",
+      oncePerTurnConsumeOn: "success",
       cost: {
         count: 3,
         zones: ["graveyard"],
@@ -960,7 +949,7 @@ export const dragonCards = [
     type: "Dragon",
     attribute: "Dark",
     description:
-      "\"Voltaic Dragon\" + 1 Level 5+ Dragon monster\n\nIf this card is Fusion Summoned: You can target 1 Level 4 or lower Dragon monster in your GY; banish it, and if you do, this card gains ATK equal to half the banished monster's ATK until the end of this turn.\n\nIf this card is destroyed by battle: You can Special Summon 1 \"Voltaic Dragon\" from your GY.\n\nYou can only use each effect of \"Tech-Void Dragon\" once per turn.",
+      "\"Voltaic Dragon\" + 1 Level 5 or higher Dragon monster\n\nIf this card is Fusion Summoned: You can target 1 Level 4 or lower Dragon monster in your GY; banish it, and if you do, this card gains ATK equal to half the banished monster's ATK until the end of this turn.\n\nIf this card is destroyed by battle: You can Special Summon 1 \"Voltaic Dragon\" from your GY.\n\nYou can only use each effect of \"Tech-Void Dragon\" once per turn.",
     image: "assets/Tech-Void Dragon.png",
     fusionMaterials: [
       { name: "Voltaic Dragon", count: 1 },
@@ -1039,7 +1028,7 @@ export const dragonCards = [
     attribute: "Light",
     preventsBattleDamageToController: true,
     description:
-      "\"Luminous Dragon\" + 2 Dragon-type monsters\n\nIf this card is Fusion Summoned: You can target 1 to 5 cards in your GY; shuffle them into the Deck, then draw 1 card.\n\nYou take no battle damage from battles involving this card.\n\nIf this card is destroyed by battle or card effect: You can Special Summon 1 Dragon-type monster from your GY, except \"Radiant Cosmic Dragon\".\n\nYou can only use each effect of \"Radiant Cosmic Dragon\" once per turn.",
+      "\"Luminous Dragon\" + 2 Dragon monsters\n\nIf this card is Fusion Summoned: You can target 1 to 5 cards in your GY; shuffle them into the Deck, then draw 1 card.\n\nYou take no battle damage from battles involving this card.\n\nIf this card is destroyed by battle or a card effect: You can Special Summon 1 Dragon monster from your GY, except \"Radiant Cosmic Dragon\".\n\nYou can only use each effect of \"Radiant Cosmic Dragon\" once per turn.",
     image: "assets/Radiant Cosmic Dragon.png",
     fusionMaterials: [
       { name: "Luminous Dragon", count: 1 },
@@ -1134,7 +1123,7 @@ export const dragonCards = [
       position: "choice",
     },
     description:
-      "\"Purified Crystal Dragon\"\n\nRequirement: the material must have activated its effects 3 times this Duel.\n\nOnce per turn: You can target 1 Dragon-type monster you control; it cannot be destroyed by battle or card effects until the end of the next turn.\n\nIf this card destroys a monster by battle: gain LP equal to the destroyed monster's original ATK.\n\nYou can banish this card from your GY; send 1 to 3 \"Extreme Dragons\" monsters from your Deck to the GY.",
+      "\"Purified Crystal Dragon\"\n\nThe material's effects must have been activated at least 3 times this Duel.\n\nOnce per turn: You can target 1 Dragon monster you control; it cannot be destroyed by battle or card effects until the end of the next turn.\n\nIf this card destroys a monster by battle: Gain LP equal to the destroyed monster's original ATK.\n\nYou can banish this card from your GY; send 1 to 3 \"Extreme Dragon\" monsters from your Deck to the GY.",
     image: "assets/Rainbow Cosmic Dragon.png",
     effects: [
       {
@@ -1238,7 +1227,7 @@ export const dragonCards = [
     subtype: "normal",
     speed: 2,
     description:
-      "When a Dragon monster you control is targeted by an opponent's attack or card effect: return that monster to the hand, then Special Summon 1 Dragon monster from your hand with a Level less than or equal to that monster's Level in the hand.\n\nYou can only activate 1 \"Dragon Spirit Sanctuary\" per turn.",
+      "When a Dragon monster you control is targeted by an opponent's attack or card effect: Return that monster to the hand, and if you do, Special Summon 1 Dragon monster from your hand with a Level less than or equal to the Level of the returned monster.\n\nYou can only activate 1 \"Dragon Spirit Sanctuary\" per turn.",
     image: "assets/Dragon Spirit Sanctuary.png",
     effects: [
       {
@@ -1338,7 +1327,7 @@ export const dragonCards = [
     def: 0,
     cannotBeNormalSummonedOrSet: true,
     description:
-      "Cannot be Normal Summoned/Set.\n\nOnce per turn, if this card is in your Graveyard: You can send 1 Dragon monster you control to the Graveyard; Special Summon this card.\n\nGains 400 ATK for each Dragon monster in your Graveyard.",
+      "Cannot be Normal Summoned/Set.\n\nOnce per turn, if this card is in your GY: You can send 1 Dragon monster you control to the GY; Special Summon this card.\n\nThis card gains 400 ATK for each Dragon monster in your GY.",
     image: "assets/Boneflame Dragon.png",
     effects: [
       {
@@ -1418,7 +1407,7 @@ export const dragonCards = [
       },
     },
     description:
-      "There can only be 1 face-up \"Extreme Dragon\" monster on the field.\n\nWhile this card is the only monster you control, it cannot be destroyed by card effects.\n\nIf this card destroys an opponent's monster by battle: inflict damage to your opponent equal to half the destroyed monster's original ATK.\n\nEach time your opponent activates a card or effect: inflict 300 damage to your opponent.",
+      "There can only be 1 face-up \"Extreme Dragon\" monster on the field.\n\nWhile this card is the only monster you control, it cannot be destroyed by card effects.\n\nIf this card destroys an opponent's monster by battle: Inflict damage to your opponent equal to half the destroyed monster's original ATK.\n\nEach time your opponent activates a card or effect: Inflict 300 damage to your opponent.",
     image: "assets/Fire Extreme Dragon.png",
     effects: [
       {
@@ -1502,7 +1491,7 @@ export const dragonCards = [
       },
     },
     description:
-      "There can only be 1 face-up \"Extreme Dragon\" monster on the field.\n\nWhile this card is the only monster you control, it cannot be destroyed by battle.\n\nIf this card battles an opponent's monster: inflict 600 damage to your opponent.\n\nOnce per Duel: you can banish all cards in both Graveyards; inflict 100 damage to your opponent for each card banished by this effect.",
+      "There can only be 1 face-up \"Extreme Dragon\" monster on the field.\n\nWhile this card is the only monster you control, it cannot be destroyed by battle.\n\nIf this card battles an opponent's monster: Inflict 600 damage to your opponent.\n\nOnce per Duel: You can banish all cards in both GYs; inflict 100 damage to your opponent for each card banished by this effect.",
     image: "assets/Volcanic Extreme Dragon.png",
     effects: [
       {
@@ -1608,7 +1597,7 @@ export const dragonCards = [
       },
     },
     description:
-      "There can only be 1 face-up \"Extreme Dragon\" monster on the field.\n\nWhile this card remains face-up on the field, monsters your opponent Summons cannot declare attacks during the turn they are Summoned. This restriction does not apply to monsters already on the field when this card entered the field or to monsters that change control.\n\nOnce per turn: you can target 1 card your opponent controls; return it to the hand.\n\nIf this card is destroyed by battle: shuffle all cards your opponent controls into the Deck.",
+      "There can only be 1 face-up \"Extreme Dragon\" monster on the field.\n\nWhile this card remains face-up on the field, monsters your opponent Summons cannot declare attacks during the turn they are Summoned. This restriction does not apply to monsters already on the field when this card entered the field or to monsters that change control.\n\nOnce per turn: You can target 1 card your opponent controls; return it to the hand.\n\nIf this card is destroyed by battle: Shuffle all cards your opponent controls into the Deck.",
     image: "assets/Mist Extreme Dragon.png",
     effects: [
       {
@@ -1672,7 +1661,7 @@ export const dragonCards = [
       },
     },
     description:
-      "There can only be 1 face-up \"Extreme Dragon\" monster on the field.\n\nAny card sent to your opponent's Graveyard is banished instead.\n\nOnce per Duel, if this card would be destroyed by battle or by card effect: you can banish it until the end of the next turn instead. Then, if your opponent controls any cards, choose 1 of them and banish it.",
+      "There can only be 1 face-up \"Extreme Dragon\" monster on the field.\n\nAny card sent to your opponent's GY is banished instead.\n\nOnce per Duel, if this card would be destroyed by battle or a card effect: You can banish it until the end of the next turn instead. Then, if your opponent controls any cards, choose 1 of them and banish it.",
     image: "assets/Galaxy Extreme Dragon.png",
     effects: [
       {
@@ -1751,7 +1740,7 @@ export const dragonCards = [
       },
     },
     description:
-      "There can only be 1 face-up \"Extreme Dragon\" monster on the field.\n\nDuring each Standby Phase: gain 200 LP for each card your opponent controls and each card in their hand.\n\nEach time your opponent Summons a monster or activates a card or effect: gain 100 LP.\n\nOnce per turn (Quick Effect): this card gains ATK equal to the total LP you gained this turn, until the end of this turn.",
+      "There can only be 1 face-up \"Extreme Dragon\" monster on the field.\n\nDuring each Standby Phase: Gain 200 LP for each card your opponent controls and each card in your opponent's hand.\n\nEach time your opponent Summons a monster or activates a card or effect: Gain 100 LP.\n\nOnce per turn (Quick Effect): You can make this card gain ATK equal to the total LP you gained this turn, until the end of this turn.",
     image: "assets/Forest Extreme Dragon.png",
     effects: [
       {
@@ -1844,7 +1833,7 @@ export const dragonCards = [
       ],
     },
     description:
-      "5 \"Extreme Dragons\" monsters\n\nMust be Fusion Summoned by banishing 5 \"Extreme Dragons\" monsters from your Graveyard, and cannot be Special Summoned by other ways.\n\nWhile this card is face-up on the field, you cannot control other monsters.\n\nUnaffected by other card effects.\n\nOnce per turn, when a monster would be Summoned, or when a card or effect is activated (Quick Effect): negate the Summon or activation, and if you do, destroy that card.",
+      "5 \"Extreme Dragon\" monsters\n\nMust be Fusion Summoned by banishing 5 \"Extreme Dragon\" monsters from your GY, and cannot be Special Summoned by other ways.\n\nWhile this card is face-up on the field, you cannot control other monsters.\n\nUnaffected by other card effects.\n\nOnce per turn, when a monster would be Summoned, or when a card or effect is activated (Quick Effect): You can negate the Summon or activation, and if you do, destroy that card.",
     image: "assets/Supreme Bahamut Dragon.jpg",
     effects: [
       {
@@ -1918,7 +1907,7 @@ export const dragonCards = [
     cardKind: "spell",
     subtype: "continuous",
     description:
-      "You can only control 1 \"Extreme Dragon Awakening\".\n\nOnce per turn: You can send 2 Dragon-type monsters you control to the GY; Special Summon 1 Level 8 or higher Dragon-type monster from your hand.\n\nYou can banish this card from your GY; add 1 \"Extreme Dragons\" monster from your Deck to your hand.\n\nYou can only use each effect of \"Extreme Dragon Awakening\" once per turn.",
+      "You can only control 1 \"Extreme Dragon Awakening\".\n\nOnce per turn: You can send 2 Dragon monsters you control to the GY; Special Summon 1 Level 8 or higher Dragon monster from your hand.\n\nYou can banish this card from your GY; add 1 \"Extreme Dragon\" monster from your Deck to your hand.\n\nYou can only use each effect of \"Extreme Dragon Awakening\" once per turn.",
     image: "assets/Extreme Dragon Awakening.png",
     effects: [
       {
@@ -2298,7 +2287,7 @@ export const dragonCards = [
     atk: 1100,
     def: 1700,
     description:
-      "If this card is Normal or Special Summoned: You can discard 1 card; add 1 Level 4 or lower Dragon monster from your Deck to your hand. Then, you can Special Summon 1 \"Solar Eclipse Dragon\" from your hand or GY.\n\nYou can banish this card from your GY; Special Summon 1 Level 4 or lower Dragon monster from your Deck.\n\nYou can only use each effect of \"Lunar Eclipse Dragon\" once per turn.",
+      "If this card is Normal or Special Summoned: You can discard 1 card; add 1 Level 4 or lower Dragon monster from your Deck to your hand, then, you can Special Summon 1 \"Solar Eclipse Dragon\" from your hand or GY.\n\nYou can banish this card from your GY; Special Summon 1 Level 4 or lower Dragon monster from your Deck.\n\nYou can only use each effect of \"Lunar Eclipse Dragon\" once per turn.",
     image: "assets/Lunar Eclipse Dragon.png",
     effects: [
       {

@@ -453,7 +453,7 @@ export function detectAvailableCombos(analysis: DragonAnalysis, logFn: ((message
     handNames.includes("Voltaic Dragon") &&
     (analysis.field || []).length === 0
   ) {
-    available.push(availableCombo("Luminous + Voltaic Starter", { type: "handIgnition", cardName: "Luminous Dragon" }));
+    available.push(availableCombo("Luminous + Voltaic Starter", { type: "handSummonProcedure", cardName: "Luminous Dragon" }));
     log("Combo: Luminous starter into Voltaic extender");
   }
 
@@ -463,7 +463,7 @@ export function detectAvailableCombos(analysis: DragonAnalysis, logFn: ((message
     handNames.includes("Armored Dragon") &&
     (analysis.field || []).length === 0
   ) {
-    available.push(availableCombo("Luminous + Voltaic + Armored", { type: "handIgnition", cardName: "Luminous Dragon" }));
+    available.push(availableCombo("Luminous + Voltaic + Armored", { type: "handSummonProcedure", cardName: "Luminous Dragon" }));
     log("Combo: Luminous + Voltaic keeps Armored normal summon");
   }
 
@@ -472,7 +472,7 @@ export function detectAvailableCombos(analysis: DragonAnalysis, logFn: ((message
     handNames.includes("Voltaic Dragon") &&
     handNames.includes("Extreme Dragon Awakening")
   ) {
-    available.push(availableCombo("Luminous + Voltaic + Awakening", { type: "handIgnition", cardName: "Luminous Dragon" }));
+    available.push(availableCombo("Luminous + Voltaic + Awakening", { type: "handSummonProcedure", cardName: "Luminous Dragon" }));
     log("Combo: Luminous + Voltaic sets up Awakening fodder");
   }
 
@@ -504,7 +504,7 @@ export function detectAvailableCombos(analysis: DragonAnalysis, logFn: ((message
       (!currentListMode && handNames.includes("Converging Stars"))
     )
   ) {
-    available.push(availableCombo("Luminous + Grey Loop", { type: "handIgnition", cardName: "Luminous Dragon" }));
+    available.push(availableCombo("Luminous + Grey Loop", { type: "handSummonProcedure", cardName: "Luminous Dragon" }));
     log("Combo: Luminous + Grey value loop");
   }
 

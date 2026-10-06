@@ -10,7 +10,7 @@ export const genericCards = [
     level: 4,
     type: "Beast",
     attribute: "Dark",
-    description: "A demonic horse with flaming mane.",
+    description: "A demonic horse with a flaming mane.",
     image: "assets/Nightmare Steed.png",
   },
   {
@@ -75,7 +75,7 @@ export const genericCards = [
     type: "Beast",
     attribute: "Dark",
     description:
-      'You can Tribute 1 "Nightmare Steed" you control; Special Summon this card from your hand.\n\nIf this card destroys an opponent\'s monster by battle: inflict 300 damage to your opponent.',
+      'You can Tribute 1 "Nightmare Steed" you control; Special Summon this card from your hand.\n\nIf this card destroys an opponent\'s monster by battle: Inflict 300 damage to your opponent.',
     image: "assets/Midnight Nightmare Steed.png",
     effects: [
       {
@@ -140,7 +140,7 @@ export const genericCards = [
     cardKind: "spell",
     subtype: "normal",
     description:
-      'Send 1 face-up monster you control to the GY, then target 1 monster in your GY with the same original Level it had, but a different name; Special Summon it.\n\nYou can only activate 1 "Transmutate" per turn.',
+      'Send 1 face-up monster you control to the GY, then target 1 monster in your GY with the same original Level as that monster, but with a different name; Special Summon it.\n\nYou can only activate 1 "Transmutate" per turn.',
     image: "assets/Transmutate.png",
     effects: [
       {
@@ -215,7 +215,7 @@ export const genericCards = [
     cardKind: "spell",
     subtype: "normal",
     description:
-      "Target 1 monster in any Graveyard; Special Summon it to your field.",
+      "Target 1 monster in either GY; Special Summon it to your field.",
     image: "assets/Monster Reborn.png",
     effects: [
       {
@@ -254,7 +254,7 @@ export const genericCards = [
     level: 4,
     type: "Spellcaster",
     attribute: "Dark",
-    description: "When this card is Normal Summoned: draw 1 card.",
+    description: "When this card is Normal Summoned: Draw 1 card.",
     image: "assets/Arcane Scholar.png",
     effects: [
       {
@@ -281,7 +281,7 @@ export const genericCards = [
     cardKind: "spell",
     subtype: "equip",
     description:
-      "Equip only to a monster you control.\n\nIf the equipped monster destroys an opponent's monster by battle: gain 500 LP.\n\nIf this card is sent to the Graveyard: target 1 Spell/Trap your opponent controls; destroy that target.",
+      "Equip only to a monster you control.\n\nIf the equipped monster destroys an opponent's monster by battle: Gain 500 LP.\n\nIf this card is sent to the GY: Target 1 Spell/Trap your opponent controls; destroy that target.",
     image: "assets/Light-Dividing Sword.png",
     effects: [
       {
@@ -350,7 +350,7 @@ export const genericCards = [
     cardKind: "spell",
     subtype: "equip",
     description:
-      'Equip only to a monster you control.\n\nThe equipped monster can make 1 additional attack during each Battle Phase.\n\nIf this card is sent to the Graveyard: target 1 Spell/Trap your opponent controls; destroy that target.\n\nYou can only control 1 "Sword of Two Darks".',
+      'Equip only to a monster you control.\n\nThe equipped monster can make 1 additional attack during each Battle Phase.\n\nIf this card is sent to the GY: Target 1 Spell/Trap your opponent controls; destroy that target.\n\nYou can only control 1 "Sword of Two Darks".',
     image: "assets/Sword of Two Darks.png",
     effects: [
       {
@@ -416,7 +416,7 @@ export const genericCards = [
     cardKind: "spell",
     subtype: "normal",
     description:
-      "Fusion Summon 1 Fusion Monster from your Extra Deck, using monsters from your hand or field as Fusion Material.",
+      "Fusion Summon 1 Fusion Monster from your Extra Deck, using monsters from your hand or field.",
     image: "assets/Polymerization.png",
     effects: [
       {
@@ -463,7 +463,7 @@ export const genericCards = [
     subtype: "normal",
     speed: 2,
     description:
-      "When an opponent's monster declares an attack: target the attacking monster; negate the attack, then end the Battle Phase.",
+      "When an opponent's monster declares an attack: Target the attacking monster; negate the attack, then end the Battle Phase.",
     image: "assets/Power Force Field.png",
     effects: [
       {
@@ -499,7 +499,7 @@ export const genericCards = [
     subtype: "normal",
     speed: 2,
     description:
-      "When your opponent Normal Summons a monster with 1600 or more ATK: target that monster; destroy that target.",
+      "When your opponent Normal Summons a monster with 1600 or more ATK: Target that monster; destroy that target.",
     image: "assets/Down of the Fool.png",
     effects: [
       {
@@ -536,7 +536,7 @@ export const genericCards = [
     subtype: "continuous",
     speed: 2,
     description:
-      "Special Summon this card in Defense Position as an Effect Monster (Spirit/DARK/Level 4/ATK 1700/DEF 1900). This card is still treated as a Trap.\n\nIf this card Special Summoned this way is destroyed by battle: inflict 500 damage to your opponent.",
+      "Special Summon this card in Defense Position as an Effect Monster (Spirit/DARK/Level 4/ATK 1700/DEF 1900). This card is still treated as a Trap.\n\nIf this card is destroyed by battle after being Special Summoned this way: Inflict 500 damage to your opponent.",
     image: "assets/Ancient Tree Spirit.png",
     effects: [
       {
@@ -584,7 +584,7 @@ export const genericCards = [
     subtype: "continuous",
     speed: 2,
     description:
-      "Each time a monster is sent to either Graveyard: place 1 Funeral Counter on this card.\n\nOnce per turn: You can remove 8 Funeral Counters from this card, then target 1 monster in either Graveyard; Special Summon it to your field.",
+      "Each time a monster is sent to either GY: Place 1 Funeral Counter on this card.\n\nOnce per turn: You can remove 8 Funeral Counters from this card, then target 1 monster in either GY; Special Summon it to your field.",
     image: "assets/Court of the Dead.png",
     effects: [
       {
@@ -694,7 +694,7 @@ export const genericCards = [
     cardKind: "spell",
     subtype: "normal",
     description:
-      "Target 1 Synchro Monster on the field; return it to the Extra Deck, then, if all the Synchro Material Monsters used for its Synchro Summon are in your GY, you can Special Summon them.\n\nYou can only activate 1 \"De-Synchro\" per turn.",
+      "Target 1 Synchro Monster on the field; return it to the Extra Deck, then, if all the Synchro Materials used for its Synchro Summon are in your GY, you can Special Summon them.\n\nYou can only activate 1 \"De-Synchro\" per turn.",
     image: "assets/De-Synchro.png",
     effects: [
       {
@@ -738,7 +738,7 @@ export const genericCards = [
     cardKind: "spell",
     subtype: "normal",
     description:
-      "Target 1 monster in your GY that was sent there as Fusion Material this turn; add it to your hand. If the added monster is Level 4 or lower, you can Special Summon it in Defense Position, but negate its effects until the end of this turn.\n\nYou can only activate 1 \"Fusion Recycle\" per turn.",
+      "Target 1 monster in your GY that was sent there as Fusion Material this turn; add it to your hand, then, if the added monster is Level 4 or lower, you can Special Summon it in Defense Position, but negate its effects until the end of this turn.\n\nYou can only activate 1 \"Fusion Recycle\" per turn.",
     image: "assets/Fusion Recycle.png",
     effects: [
       {
@@ -925,7 +925,7 @@ export const genericCards = [
     type: "Fairy",
     attribute: "Light",
     description:
-      'When your opponent activates a card or effect that would banish one or more cards from your field and/or GY (Quick Effect): you can Special Summon this card from your hand, and if you do, negate that effect.\n\nYou can only use this effect of "Guardian Deity Visas" once per turn.',
+      'When your opponent activates a card or effect that would banish 1 or more cards from your field and/or GY (Quick Effect): You can Special Summon this card from your hand, and if you do, negate that effect.\n\nYou can only use this effect of "Guardian Deity Visas" once per turn.',
     image: "assets/Guardian Deity Visas.png",
     effects: [
       {
@@ -971,7 +971,7 @@ export const genericCards = [
     type: "Warrior",
     attribute: "Light",
     description:
-      "You can Special Summon this card from your hand by banishing 5 LIGHT monsters from your field and/or GY. If Summoned this way, this card cannot be destroyed by your opponent's card effects.\n\nDuring damage calculation, if this card battles an opponent's DARK monster: it gains 1000 ATK/DEF during that damage calculation only.",
+      "You can Special Summon this card (from your hand) by banishing 5 LIGHT monsters from your field and/or GY.\n\nIf this card is Special Summoned this way, it cannot be destroyed by your opponent's card effects.\n\nDuring damage calculation, if this card battles an opponent's DARK monster: This card gains 1000 ATK/DEF during that damage calculation only.",
     image: "assets/Luminous God Hyperion.png",
     handSummonProcedure: {
       id: "luminous_god_hyperion_special_summon",
@@ -1123,7 +1123,7 @@ export const genericCards = [
     type: "Zombie",
     attribute: "Water",
     description:
-      'If this card is Normal Summoned: You can send 1 Tuner monster from your Deck to the Graveyard.\n\nYou can banish this card from your Graveyard, then target 1 Level 4 or lower Tuner monster in your Graveyard; Special Summon it.\n\nYou can only use each effect of "Misty Katana Ghost Samurai" once per turn.',
+      'If this card is Normal Summoned: You can send 1 Tuner monster from your Deck to the GY.\n\nYou can banish this card from your GY, then target 1 Level 4 or lower Tuner monster in your GY; Special Summon it.\n\nYou can only use each effect of "Misty Katana Ghost Samurai" once per turn.',
     image: "assets/Misty Katana Ghost Samurai.png",
     effects: [
       {
@@ -1222,7 +1222,7 @@ export const genericCards = [
       },
     },
     description:
-      '1 EARTH Tuner + 1+ non-Tuner monsters\n\nYou can discard 1 card, then target 1 face-up monster your opponent controls (Quick Effect); change it to face-down Defense Position. Monsters changed to face-down Defense Position by this effect cannot change their battle positions.\n\nIf this card on the field is destroyed by battle or card effect and sent to the GY: You can target up to 2 Level 3 or lower EARTH monsters in your GY; Special Summon them.\n\nYou can only use each effect of "Magmatic Obsidian Leviathan" once per turn.',
+      '1 EARTH Tuner + 1+ non-Tuner monsters\n\n(Quick Effect): You can discard 1 card, then target 1 face-up monster your opponent controls; change it to face-down Defense Position. Monsters changed to face-down Defense Position by this effect cannot change their battle positions.\n\nIf this card on the field is destroyed by battle or card effect and sent to the GY: You can target up to 2 Level 3 or lower EARTH monsters in your GY; Special Summon them.\n\nYou can only use each effect of "Magmatic Obsidian Leviathan" once per turn.',
     image: "assets/Magmatic Obsidian Leviathan.png",
     effects: [
       {
@@ -1436,7 +1436,7 @@ export const genericCards = [
       },
     },
     description:
-      '1 EARTH Tuner + 1+ non-Tuner monsters\n\nYou can target 1 face-up monster your opponent controls; this card gains ATK equal to its original DEF until the end of this turn.\n\nIf this card is destroyed by battle: You can target the monster that destroyed it; take control of it until the End Phase of this turn. After this effect resolves, if that monster leaves the field: Special Summon this card from your GY, but banish it when it leaves the field.\n\nYou can only use each effect of "Cursed Rock Behemoth" once per turn.',
+      '1 EARTH Tuner + 1+ non-Tuner monsters\n\nYou can target 1 face-up monster your opponent controls; this card gains ATK equal to its original DEF until the end of this turn.\n\nIf this card is destroyed by battle: You can target the monster that destroyed it; take control of it until the End Phase of this turn, also, if that monster leaves the field after this effect resolves, Special Summon this card from your GY, but banish it when it leaves the field.\n\nYou can only use each effect of "Cursed Rock Behemoth" once per turn.',
     image: "assets/Cursed Rock Behemoth.png",
     effects: [
       {
@@ -1541,7 +1541,7 @@ export const genericCards = [
       nonTunerMin: 1,
     },
     description:
-      "1 Tuner + 1+ non-Tuner monsters\n\nOnce per turn, if your opponent Special Summons a monster: You can target 1 monster in their GY; banish it, and if you do, this card gains 300 ATK.",
+      "1 Tuner + 1+ non-Tuner monsters\n\nOnce per turn, if your opponent Special Summons a monster: You can target 1 monster in your opponent's GY; banish it, and if you do, this card gains 300 ATK.",
     image: "assets/Red Fury Horror.png",
     effects: [
       {
@@ -1604,7 +1604,7 @@ export const genericCards = [
       nonTunerMin: 1,
     },
     description:
-      "1 Tuner + 1+ non-Tuner monsters\n\nWhile you control another EARTH monster, this card cannot be destroyed by card effects.\n\nOnce per turn, when your opponent activates a card or effect that would destroy 1 or more cards you control (Quick Effect): You can target 1 face-down card they control; destroy it.",
+      "1 Tuner + 1+ non-Tuner monsters\n\nWhile you control another EARTH monster, this card cannot be destroyed by card effects.\n\nOnce per turn, when your opponent activates a card or effect that would destroy 1 or more cards you control (Quick Effect): You can target 1 face-down card your opponent controls; destroy it.",
     image: "assets/Iron Smasher.png",
     effects: [
       {
@@ -1693,7 +1693,7 @@ export const genericCards = [
       },
     },
     description:
-      "1 Tuner + 1+ non-Tuner EARTH Synchro Monsters\n\nMust first be Synchro Summoned.\n\nIf this card is Synchro Summoned: You can target 1 face-up card your opponent controls; negate its effects while it remains face-up on the field.\n\nYour opponent must target this card for attacks, if able.\n\nOnce per turn: You can target 1 monster your opponent controls that was Summoned from the Extra Deck; destroy it, and if you activate this effect, this card cannot attack this turn.",
+      "1 Tuner + 1+ non-Tuner EARTH Synchro Monsters\n\nMust first be Synchro Summoned.\n\nIf this card is Synchro Summoned: You can target 1 face-up card your opponent controls; negate its effects while it remains face-up on the field.\n\nYour opponent cannot target other monsters you control for attacks.\n\nOnce per turn: You can target 1 monster your opponent controls that was Summoned from the Extra Deck; destroy it. You cannot attack with this card during the turn you activate this effect.",
     image: "assets/Orathus, The Fallen Angel.png",
     effects: [
       {
@@ -1776,7 +1776,7 @@ export const genericCards = [
     cardKind: "spell",
     subtype: "normal",
     description:
-      'Pay 1000 LP; for the rest of this Duel, inflict 300 damage to your opponent during each Standby Phase.\n\nYou can only activate 1 "The Black Flame" per turn.',
+      'Pay 1000 LP; inflict 300 damage to your opponent during each Standby Phase for the rest of this Duel.\n\nYou can only activate 1 "The Black Flame" per turn.',
     image: "assets/The Black Flame.png",
     effects: [
       {

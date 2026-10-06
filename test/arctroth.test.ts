@@ -40,10 +40,10 @@ test("Arctroth declares damage-calculation triggers and synchronized timing text
     assert.deepEqual(effect.actions, [{ type: "remove_stat_increases", targetRef: "battle_opponent", stats: ["atk", "def"] }]);
   }
   assert.equal(definition.description,
-    "If this card is Tribute Summoned: You can target 1 card on your opponent's field; destroy it.\n\nDuring damage calculation, if this card battles an opponent's monster: remove all ATK/DEF increases applied to that monster.");
+    "If this card is Tribute Summoned: You can target 1 card your opponent controls; destroy it.\n\nDuring damage calculation, if this card battles an opponent's monster: Remove all increases to that monster's ATK/DEF.");
   const locale = JSON.parse(readFileSync(new URL("../public/locales/pt-br.json", import.meta.url), "utf8"));
   assert.equal(locale.cards["104"].description,
-    "Se este card for Invocado por Invocação-Tributo: você pode escolher 1 card no campo do oponente; destrua-o.\n\nDurante o cálculo de dano, se este card batalhar contra um monstro do oponente: remova todos os aumentos de ATK/DEF aplicados a esse monstro.");
+    "Se este card for Invocado por Invocação-Tributo: você pode escolher 1 card que seu oponente controla; destrua-o.\n\nDurante o cálculo de dano, se este card batalhar contra um monstro do oponente: remova todos os aumentos no ATK/DEF desse monstro.");
 });
 
 for (const arctrothOwnerId of ["player", "bot"] as const) {

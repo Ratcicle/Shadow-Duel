@@ -88,6 +88,7 @@ presença do card afetado, e Final Singularity não mantém uma aura de negaçã
 - Mantenha no mesmo parágrafo as etapas, consequências e restrições que pertencem à mesma resolução.
 - Coloque a restrição de hard OPT em um parágrafo próprio, incluindo limites de ativação de Magias/Armadilhas.
 - Nos monstros do Extra Deck, use o primeiro parágrafo para os materiais, sem prefixos como “Materiais:”, “Fusion Materials:” ou “Material de Ascensão:”. Coloque nomes específicos entre aspas duplas, por exemplo: `"Luminarch Sanctum Protector" + 1 Level 5 or higher "Luminarch" monster`.
+- Nas cartas de Ascensão, o primeiro parágrafo contém o material nominal entre aspas duplas. Quando houver uma condição adicional de Ascensão, coloque-a no parágrafo seguinte, sem os rótulos `Requirement:` ou `Requisito:`, usando uma referência explícita ao material, como `the material` em EN e `o material` em PT. Os efeitos vêm depois. Não acrescente um parágrafo para informar a ausência de requisitos.
 - Preserve os requisitos e procedimentos especiais de Invocação nos parágrafos seguintes. Use quebras simples dentro de listas de opções de um mesmo efeito.
 
 ## Estrutura da carta
@@ -980,6 +981,13 @@ consome o limite somente após uma Invocação bem-sucedida; uma Invocação neg
 ou um pagamento interrompido não o consome, mas custos já pagos não são
 devolvidos. Cancelar antes do compromisso preserva recursos e uso. Sem os
 campos de limite, o procedimento continua sem limite próprio.
+
+Luminous Dragon (251) e Purified Crystal Dragon (264) usam
+`oncePerTurnConsumeOn: "success"`: todas as cópias compartilham o limite de uma
+Invocação-Especial concluída pelo respectivo procedimento por turno. Uma
+Invocação negada permite outra tentativa se as condições e os custos puderem
+ser cumpridos novamente; custos já pagos não são devolvidos. Esse limite é
+independente dos hard OPT dos efeitos ativos de cada carta.
 
 Procedimentos não são ativações de efeito, não criam links de Chain e não
 incrementam contadores de ativações do material. As janelas normais de tentativa

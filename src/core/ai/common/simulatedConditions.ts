@@ -1277,7 +1277,7 @@ export function evaluateSimulatedConditions(
       const sourceCard = ctx.sourceCard || options.sourceCard;
       return getStoredBlueprints(sourceCard).length > 0;
     }
-    if (condition.type === "empty_field" || condition.empty_field) {
+    if (condition.type === "empty_field" || condition.type === "playerFieldEmpty" || condition.empty_field) {
       return (owner?.field || []).filter((card) => card?.cardKind === "monster")
         .length === 0;
     }

@@ -487,23 +487,23 @@
     },
     "3": {
       "name": "Mosquito Chupa-Sangue",
-      "description": "Restaure 1000 PV."
+      "description": "Ganhe 1000 PV."
     },
     "4": {
       "name": "Necromancia Barata",
-      "description": "Invoque por Invocação-Especial 1 “Ficha de Esqueleto Invocado” (Zumbi/TREVAS/Nível 1/ATK 500/DEF 500)."
+      "description": "Invoque por Invocação-Especial 1 \"Ficha de Esqueleto Invocado\" (Zumbi/TREVAS/Nível 1/ATK 500/DEF 500)."
     },
     "5": {
       "name": "Corcel Pesadelo da Meia-Noite",
-      "description": "Você pode oferecer como Tributo 1 “Corcel Pesadelo” que você controla; Invoque este card por Invocação-Especial da sua mão.\n\nSe este card destruir um monstro do oponente em batalha: cause 300 de dano ao seu oponente."
+      "description": "Você pode oferecer como Tributo 1 \"Corcel Pesadelo\" que você controla; Invoque este card por Invocação-Especial da sua mão.\n\nSe este card destruir um monstro do oponente em batalha: cause 300 de dano ao seu oponente."
     },
     "7": {
       "name": "Transmutar",
-      "description": "Envie 1 monstro com a face para cima que você controla para o Cemitério e, depois, escolha 1 monstro no seu Cemitério com o mesmo Nível original que ele, mas com um nome diferente; Invoque o alvo por Invocação-Especial.\n\nVocê só pode ativar 1 “Transmutar” por turno."
+      "description": "Envie 1 monstro com a face para cima que você controla para o Cemitério e, depois, escolha 1 monstro no seu Cemitério com o mesmo Nível original que esse monstro, mas com um nome diferente; Invoque-o por Invocação-Especial.\n\nVocê só pode ativar 1 \"Transmutar\" por turno."
     },
     "8": {
       "name": "O Monstro que Renasce",
-      "description": "Escolha 1 monstro em qualquer Cemitério; Invoque-o por Invocação-Especial no seu campo."
+      "description": "Escolha 1 monstro em qualquer um dos Cemitérios; Invoque-o por Invocação-Especial no seu campo."
     },
     "9": {
       "name": "Estudioso Arcano",
@@ -515,15 +515,15 @@
     },
     "11": {
       "name": "Espada das Duas Trevas",
-      "description": "Equipe apenas a um monstro que você controla.\n\nO monstro equipado pode realizar 1 ataque adicional durante cada Fase de Batalha.\n\nSe este card for enviado para o Cemitério: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a.\n\nVocê só pode controlar 1 “Espada das Duas Trevas”."
+      "description": "Equipe apenas a um monstro que você controla.\n\nO monstro equipado pode realizar 1 ataque adicional durante cada Fase de Batalha.\n\nSe este card for enviado para o Cemitério: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a.\n\nVocê só pode controlar 1 \"Espada das Duas Trevas\"."
     },
     "12": {
       "name": "Polimerização",
-      "description": "Invoque por Invocação-Fusão 1 Monstro Fusão do seu Extra Deck, usando monstros da sua mão ou do seu campo como Matéria de Fusão."
+      "description": "Invoque por Invocação-Fusão 1 Monstro de Fusão do seu Deck Adicional, usando monstros da sua mão ou do seu campo."
     },
     "13": {
       "name": "Força Espelho",
-      "description": "Quando um monstro do oponente declarar um ataque: destrua todos os monstros em Posição de Ataque do seu oponente."
+      "description": "Quando um monstro do oponente declarar um ataque: destrua todos os monstros em Posição de Ataque que seu oponente controla."
     },
     "14": {
       "name": "Campo de Força de Potência",
@@ -535,11 +535,11 @@
     },
     "16": {
       "name": "Espírito da Árvore Ancestral",
-      "description": "Invoque este card por Invocação-Especial em Posição de Defesa como um Monstro de Efeito (Espírito/TREVAS/Nível 4/ATK 1700/DEF 1900). Este card ainda é considerado uma Armadilha.\n\nSe este card Invocado desta forma for destruído em batalha: cause 500 de dano ao seu oponente."
+      "description": "Invoque este card por Invocação-Especial em Posição de Defesa como um Monstro de Efeito (Espírito/TREVAS/Nível 4/ATK 1700/DEF 1900). Este card ainda é considerado uma Armadilha.\n\nSe este card for destruído em batalha depois de ter sido Invocado por Invocação-Especial desta forma: cause 500 de dano ao seu oponente."
     },
     "17": {
       "name": "Corte dos Mortos",
-      "description": "Cada vez que um monstro for enviado para qualquer Cemitério: coloque 1 Marcador Fúnebre neste card.\n\nUma vez por turno: você pode remover 8 Marcadores Fúnebres deste card e, depois, escolher 1 monstro em qualquer Cemitério; Invoque-o por Invocação-Especial no seu campo."
+      "description": "Cada vez que um monstro for enviado para qualquer um dos Cemitérios: coloque 1 Marcador Fúnebre neste card.\n\nUma vez por turno: você pode remover 8 Marcadores Fúnebres deste card e, depois, escolher 1 monstro em qualquer um dos Cemitérios; Invoque-o por Invocação-Especial no seu campo."
     },
     "18": {
       "name": "Chamado dos Assombrados",
@@ -547,71 +547,71 @@
     },
     "19": {
       "name": "De-Sincro",
-      "description": "Escolha 1 Monstro Sincro no campo; devolva-o ao Deck Adicional e, depois, se todos os Monstros de Matéria Sincro usados para sua Invocação-Sincro estiverem no seu Cemitério, você pode Invocá-los por Invocação-Especial.\n\nVocê só pode ativar 1 “De-Sincro” por turno."
+      "description": "Escolha 1 Monstro Sincro no campo; devolva-o ao Deck Adicional e, depois, se todas as Matérias Sincro usadas para sua Invocação-Sincro estiverem no seu Cemitério, você pode Invocá-las por Invocação-Especial.\n\nVocê só pode ativar 1 \"De-Sincro\" por turno."
     },
     "20": {
       "name": "Reciclar Fusão",
-      "description": "Escolha 1 monstro no seu Cemitério que foi enviado para lá como Matéria de Fusão neste turno; adicione-o à sua mão. Se o monstro adicionado for de Nível 4 ou menor, você pode Invocá-lo por Invocação-Especial em Posição de Defesa, mas negue seus efeitos até o final deste turno.\n\nVocê só pode ativar 1 “Reciclar Fusão” por turno."
+      "description": "Escolha 1 monstro no seu Cemitério que foi enviado para lá como Matéria de Fusão neste turno; adicione-o à sua mão e, depois, se o monstro adicionado for de Nível 4 ou menor, você pode Invocá-lo por Invocação-Especial em Posição de Defesa, mas negue seus efeitos até o final deste turno.\n\nVocê só pode ativar 1 \"Reciclar Fusão\" por turno."
     },
     "21": {
       "name": "Seleção Natural",
-      "description": "Descarte 1 card e, depois, escolha 1 card com a face para cima que seu oponente controla; destrua-o.\n\nVocê só pode ativar 1 “Seleção Natural” por turno."
+      "description": "Descarte 1 card e, depois, escolha 1 card com a face para cima que seu oponente controla; destrua-o.\n\nVocê só pode ativar 1 \"Seleção Natural\" por turno."
     },
     "22": {
       "name": "Aposta Desesperada",
-      "description": "Pague metade dos seus PV; compre 2 cards. Pelo resto deste turno, você não pode ativar efeitos de cards com o mesmo nome dos cards comprados por este efeito.\n\nVocê só pode ativar 1 “Aposta Desesperada” por turno."
+      "description": "Pague metade dos seus PV; compre 2 cards. Pelo resto deste turno, você não pode ativar efeitos de cards com o mesmo nome dos cards comprados por este efeito.\n\nVocê só pode ativar 1 \"Aposta Desesperada\" por turno."
     },
     "23": {
       "name": "Divindade Guardiã Visas",
-      "description": "Quando seu oponente ativar um card ou efeito que baniria um ou mais cards do seu campo e/ou Cemitério (Efeito Rápido): você pode Invocar este card por Invocação-Especial da sua mão e, se isso acontecer, negue esse efeito.\n\nVocê só pode usar este efeito de “Divindade Guardiã Visas” uma vez por turno."
+      "description": "Quando seu oponente ativar um card ou efeito que baniria 1 ou mais cards do seu campo e/ou Cemitério (Efeito Rápido): você pode Invocar este card por Invocação-Especial da sua mão e, se isso acontecer, negue esse efeito.\n\nVocê só pode usar este efeito de \"Divindade Guardiã Visas\" uma vez por turno."
     },
     "24": {
       "name": "Deus Luminoso Hiperion",
-      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao banir 5 monstros de LUZ do seu campo e/ou Cemitério. Se Invocado desta forma, este card não pode ser destruído por efeitos de cards do oponente.\n\nDurante o cálculo de dano, se este card batalhar contra um monstro de TREVAS do oponente: ele ganha 1000 ATK/DEF apenas durante esse cálculo de dano."
+      "description": "Você pode Invocar este card por Invocação-Especial (da sua mão) ao banir 5 monstros de LUZ do seu campo e/ou Cemitério.\n\nSe este card for Invocado por Invocação-Especial desta forma, ele não pode ser destruído por efeitos de cards do seu oponente.\n\nDurante o cálculo de dano, se este card batalhar contra um monstro de TREVAS do oponente: este card ganha 1000 ATK/DEF apenas durante esse cálculo de dano."
     },
     "25": {
       "name": "Batalha Entre o Bem e o Mal",
-      "description": "Invoque por Invocação-Especial 1 monstro de LUZ ou de TREVAS de Nível 4 ou menor do seu Deck, mas negue seus efeitos. Pelo resto deste turno depois que este efeito resolver, você não pode ativar efeitos de monstros, exceto efeitos de monstros com o mesmo Atributo que o monstro Invocado por este efeito.\n\nVocê só pode ativar 1 “Batalha Entre o Bem e o Mal” por turno."
+      "description": "Invoque por Invocação-Especial 1 monstro de LUZ ou de TREVAS de Nível 4 ou menor do seu Deck, mas negue seus efeitos. Pelo resto deste turno depois que este efeito resolver, você não pode ativar efeitos de monstros, exceto efeitos de monstros com o mesmo Atributo que o monstro Invocado por este efeito.\n\nVocê só pode ativar 1 \"Batalha Entre o Bem e o Mal\" por turno."
     },
     "26": {
       "name": "Samurai Fantasma da Katana Nebulosa",
-      "description": "Se este card for Invocado por Invocação-Normal: você pode enviar 1 monstro Regulador do seu Deck para o Cemitério.\n\nVocê pode banir este card do seu Cemitério e, depois, escolher 1 monstro Regulador de Nível 4 ou menor no seu Cemitério; Invoque-o por Invocação-Especial.\n\nVocê só pode usar cada efeito de “Samurai Fantasma da Katana Nebulosa” uma vez por turno."
+      "description": "Se este card for Invocado por Invocação-Normal: você pode enviar 1 monstro Regulador do seu Deck para o Cemitério.\n\nVocê pode banir este card do seu Cemitério e, depois, escolher 1 monstro Regulador de Nível 4 ou menor no seu Cemitério; Invoque-o por Invocação-Especial.\n\nVocê só pode usar cada efeito de \"Samurai Fantasma da Katana Nebulosa\" uma vez por turno."
     },
     "27": {
       "name": "Leviatã de Obsidiana Magmática",
-      "description": "1 Regulador de TERRA + 1+ monstros não-Reguladores\n\nVocê pode descartar 1 card e, depois, escolher 1 monstro com a face para cima que seu oponente controla (Efeito Rápido); coloque-o com a face para baixo em Posição de Defesa. Monstros colocados com a face para baixo por este efeito não podem mudar suas posições de batalha.\n\nSe este card no campo for destruído em batalha ou por efeito de card e enviado para o Cemitério: você pode escolher até 2 monstros de TERRA de Nível 3 ou menor no seu Cemitério; Invoque-os por Invocação-Especial.\n\nVocê só pode usar cada efeito de “Leviatã de Obsidiana Magmática” uma vez por turno."
+      "description": "1 Regulador de TERRA + 1+ monstros não-Reguladores\n\n(Efeito Rápido): você pode descartar 1 card e, depois, escolher 1 monstro com a face para cima que seu oponente controla; coloque-o com a face para baixo em Posição de Defesa. Monstros colocados com a face para baixo em Posição de Defesa por este efeito não podem mudar suas posições de batalha.\n\nSe este card no campo for destruído em batalha ou por efeito de card e enviado para o Cemitério: você pode escolher até 2 monstros de TERRA de Nível 3 ou menor no seu Cemitério; Invoque-os por Invocação-Especial.\n\nVocê só pode usar cada efeito de \"Leviatã de Obsidiana Magmática\" uma vez por turno."
     },
     "28": {
       "name": "Dragão Floral de Pétalas de Rosa",
-      "description": "1 Regulador Planta + 1+ monstros não-Reguladores\n\nSe seu oponente controlar mais cards que você: você pode banir de 1 a 3 monstros Planta do seu Cemitério e, depois, escolher o mesmo número de cards que seu oponente controla; destrua-os.\n\nSe este card com a face para cima deixar o campo: você pode escolher 1 monstro Planta no seu Cemitério; adicione-o à sua mão.\n\nVocê só pode usar cada efeito de “Dragão Floral de Pétalas de Rosa” uma vez por turno."
+      "description": "1 Regulador Planta + 1+ monstros não-Reguladores\n\nSe seu oponente controlar mais cards que você: você pode banir de 1 a 3 monstros Planta do seu Cemitério e, depois, escolher o mesmo número de cards que seu oponente controla; destrua-os.\n\nSe este card com a face para cima deixar o campo: você pode escolher 1 monstro Planta no seu Cemitério; adicione-o à sua mão.\n\nVocê só pode usar cada efeito de \"Dragão Floral de Pétalas de Rosa\" uma vez por turno."
     },
     "29": {
       "name": "Behemoth de Rocha Amaldiçoado",
-      "description": "1 Regulador de TERRA + 1+ monstros não-Reguladores\n\nVocê pode escolher 1 monstro com a face para cima que seu oponente controla; este card ganha ATK igual à DEF original dele até o final deste turno.\n\nSe este card for destruído em batalha: você pode escolher o monstro que o destruiu; tome o controle dele até a Fase Final deste turno. Depois que este efeito resolver, se esse monstro deixar o campo: Invoque este card por Invocação-Especial do seu Cemitério e, se isso acontecer, bana este card quando ele deixar o campo.\n\nVocê só pode usar cada efeito de \"Behemoth de Rocha Amaldiçoado\" uma vez por turno."
+      "description": "1 Regulador de TERRA + 1+ monstros não-Reguladores\n\nVocê pode escolher 1 monstro com a face para cima que seu oponente controla; este card ganha ATK igual à DEF original dele até o final deste turno.\n\nSe este card for destruído em batalha: você pode escolher o monstro que o destruiu; tome o controle dele até a Fase Final deste turno e, além disso, se esse monstro deixar o campo depois que este efeito resolver, Invoque este card por Invocação-Especial do seu Cemitério, mas bana-o quando ele deixar o campo.\n\nVocê só pode usar cada efeito de \"Behemoth de Rocha Amaldiçoado\" uma vez por turno."
     },
     "30": {
       "name": "Terror Fúria Vermelha",
-      "description": "1 Regulador + 1+ monstros não-Reguladores\n\nUma vez por turno, se seu oponente Invocar um monstro por Invocação-Especial: você pode escolher 1 monstro no Cemitério dele; bana-o e, se isso acontecer, este card ganha 300 ATK."
+      "description": "1 Regulador + 1+ monstros não-Reguladores\n\nUma vez por turno, se seu oponente Invocar um monstro por Invocação-Especial: você pode escolher 1 monstro no Cemitério do seu oponente; bana-o e, se isso acontecer, este card ganha 300 ATK."
     },
     "31": {
       "name": "Esmagador de Ferro",
-      "description": "1 Regulador + 1+ monstros não-Reguladores\n\nEnquanto você controlar outro monstro de TERRA, este card não pode ser destruído por efeitos de card.\n\nUma vez por turno, quando seu oponente ativar um card ou efeito que destruiria um ou mais cards que você controla (Efeito Rápido): você pode escolher 1 card com a face para baixo que ele controla; destrua-o."
+      "description": "1 Regulador + 1+ monstros não-Reguladores\n\nEnquanto você controlar outro monstro de TERRA, este card não pode ser destruído por efeitos de card.\n\nUma vez por turno, quando seu oponente ativar um card ou efeito que destruiria 1 ou mais cards que você controla (Efeito Rápido): você pode escolher 1 card com a face para baixo que seu oponente controla; destrua-o."
     },
     "32": {
       "name": "Orathus, o Anjo Caído",
-      "description": "1 Regulador + 1+ Sincros de TERRA não-Reguladores\n\nDeve primeiro ser Invocado por Invocação-Sincro.\n\nSe este card for Invocado por Invocação-Sincro: você pode escolher 1 card com a face para cima que seu oponente controla; negue seus efeitos enquanto ele permanecer com a face para cima no campo.\n\nSeu oponente deve escolher este card como alvo de ataques, se possível.\n\nUma vez por turno: você pode escolher 1 monstro Invocado do Deck Adicional que seu oponente controla; destrua-o e, se você ativar este efeito, este card não pode atacar neste turno."
+      "description": "1 Regulador + 1+ Monstros Sincro de TERRA não-Reguladores\n\nDeve primeiro ser Invocado por Invocação-Sincro.\n\nSe este card for Invocado por Invocação-Sincro: você pode escolher 1 card com a face para cima que seu oponente controla; negue seus efeitos enquanto ele permanecer com a face para cima no campo.\n\nSeu oponente não pode escolher outros monstros que você controla como alvo de ataques.\n\nUma vez por turno: você pode escolher 1 monstro que seu oponente controla que foi Invocado do Deck Adicional; destrua-o. Você não pode atacar com este card no turno em que ativar este efeito."
     },
     "33": {
       "name": "A Chama Negra",
-      "description": "Pague 1000 PV; pelo restante deste Duelo, cause 300 de dano ao seu oponente durante cada Fase de Apoio.\n\nVocê só pode ativar 1 \"A Chama Negra\" por turno."
+      "description": "Pague 1000 PV; cause 300 de dano ao seu oponente durante cada Fase de Apoio pelo resto deste Duelo.\n\nVocê só pode ativar 1 \"A Chama Negra\" por turno."
     },
     "101": {
       "name": "Enguia Abissal do Coração Sombrio",
-      "description": "Se este card for atacado em Posição de Defesa: cause 600 de dano ao seu oponente.\n\nSe este card for destruído em batalha: você pode escolher 1 Magia/Armadilha “Coração Sombrio” no seu Cemitério; adicione-a à sua mão."
+      "description": "Se este card for atacado em Posição de Defesa: cause 600 de dano ao seu oponente.\n\nSe este card for destruído em batalha: você pode escolher 1 Magia/Armadilha \"Coração Sombrio\" no seu Cemitério; adicione-a à sua mão."
     },
     "102": {
       "name": "Espectro do Coração Sombrio",
-      "description": "Se este card for enviado para o Cemitério: você pode escolher 1 monstro “Coração Sombrio” no seu Cemitério, exceto “Espectro do Coração Sombrio”; adicione-o à sua mão.\n\nVocê só pode usar este efeito de “Espectro do Coração Sombrio” uma vez por turno."
+      "description": "Se este card for enviado para o Cemitério: você pode escolher 1 monstro \"Coração Sombrio\" no seu Cemitério, exceto \"Espectro do Coração Sombrio\"; adicione-o à sua mão.\n\nVocê só pode usar este efeito de \"Espectro do Coração Sombrio\" uma vez por turno."
     },
     "103": {
       "name": "Purificação do Coração Sombrio",
@@ -619,43 +619,43 @@
     },
     "104": {
       "name": "Demônio Arctroth do Coração Sombrio",
-      "description": "Se este card for Invocado por Invocação-Tributo: você pode escolher 1 card no campo do oponente; destrua-o.\n\nDurante o cálculo de dano, se este card batalhar contra um monstro do oponente: remova todos os aumentos de ATK/DEF aplicados a esse monstro."
+      "description": "Se este card for Invocado por Invocação-Tributo: você pode escolher 1 card que seu oponente controla; destrua-o.\n\nDurante o cálculo de dano, se este card batalhar contra um monstro do oponente: remova todos os aumentos no ATK/DEF desse monstro."
     },
     "105": {
       "name": "Hino de Batalha do Coração Sombrio",
-      "description": "Todos os monstros \"Coração Sombrio\" que você controla ganham 500 de ATK até o final do turno."
+      "description": "Todos os monstros \"Coração Sombrio\" que você controla ganham 500 ATK até o final deste turno."
     },
     "106": {
       "name": "Pacto do Coração Sombrio",
-      "description": "Pague 800 PV; adicione 1 card \"Coração Sombrio\" do seu Deck à sua mão. Você não pode controlar outros cards para ativar este efeito.\n\nVocê só pode ativar 1 \"Pacto do Coração Sombrio\" por turno."
+      "description": "Se você não controlar outros cards: pague 800 PV; adicione 1 card \"Coração Sombrio\" do seu Deck à sua mão.\n\nVocê só pode ativar 1 \"Pacto do Coração Sombrio\" por turno."
     },
     "107": {
       "name": "Imp do Coração Sombrio",
-      "description": "Quando esse card for invocado por invocação-Normal: você pode invocar por invocação-Especial 1 monstro \"Coração Sombrio\" de nível 4 ou menor da sua mão.\n\nVocê só pode usar esse efeito de \"Imp do Coração Sombrio\" uma vez por turno."
+      "description": "Quando este card for Invocado por Invocação-Normal: você pode Invocar por Invocação-Especial 1 monstro de Nível 4 ou menor \"Coração Sombrio\" da sua mão.\n\nVocê só pode usar este efeito de \"Imp do Coração Sombrio\" uma vez por turno."
     },
     "108": {
       "name": "Lagartixa do Coração Sombrio",
-      "description": "Se esse card for invocado por invocação-Especial: você pode adicionar 1 monstro \"Coração Sombrio\" de nível 8 do seu Deck à sua mão.\n\nSe esse card for destruído em batalha: compre 1 card.\n\nVocê só pode usar cada efeito de \"Lagartixa do Coração Sombrio\" uma vez por turno."
+      "description": "Se este card for Invocado por Invocação-Especial: você pode adicionar 1 monstro de Nível 8 \"Coração Sombrio\" do seu Deck à sua mão.\n\nSe este card for destruído em batalha: compre 1 card.\n\nVocê só pode usar cada efeito de \"Lagartixa do Coração Sombrio\" uma vez por turno."
     },
     "109": {
       "name": "Covarde do Coração Sombrio",
-      "description": "Se este card for enviado da sua mão para o Cemitério: escolha 1 monstro que seu oponente controla; o ATK/DEF são reduzidos pela metade até o final do turno."
+      "description": "Se este card for enviado da sua mão para o Cemitério: escolha 1 monstro que seu oponente controla; reduza o ATK/DEF dele pela metade até o final deste turno."
     },
     "110": {
       "name": "Infusão do Coração Sombrio",
-      "description": "Descarte 2 cards da sua mão, e então invoque por invocação-Especial 1 monstro \"Coração Sombrio\" do seu cemitério, mas ele não pode declarar um ataque nesse turno.\n\nVocê só pode ativar 1 \"Infusão do Coração Sombrio\" por turno."
+      "description": "Descarte 2 cards da sua mão e, depois, Invoque por Invocação-Especial 1 monstro \"Coração Sombrio\" do seu Cemitério, mas ele não pode declarar um ataque neste turno.\n\nVocê só pode ativar 1 \"Infusão do Coração Sombrio\" por turno."
     },
     "111": {
       "name": "Dragão de Escamas do Coração Sombrio",
-      "description": "Se este card foi Invocado por Invocação-Tributo, ele ganha os seguintes efeitos:\n● Se este card destruir um monstro do oponente em batalha: você pode escolher 1 card \"Coração Sombrio\" no seu Cemitério; adicione-o à sua mão.\n● Se este card for destruído em batalha ou por efeito de card do oponente: você pode Invocar por Invocação-Especial até 3 monstros \"Coração Sombrio\" com 1600 ou menos de ATK do seu Cemitério.\n\nVocê só pode usar cada efeito de \"Dragão de Escamas do Coração Sombrio\" uma vez por turno."
+      "description": "Se este card tiver sido Invocado por Invocação-Tributo, ele ganha os seguintes efeitos:\n\n● Se este card destruir um monstro do oponente em batalha: você pode escolher 1 card \"Coração Sombrio\" no seu Cemitério; adicione-o à sua mão.\n\n● Se este card for destruído em batalha ou por efeito de card do oponente: você pode Invocar por Invocação-Especial até 3 monstros \"Coração Sombrio\" com 1600 ou menos de ATK do seu Cemitério.\n\nVocê só pode usar cada efeito de \"Dragão de Escamas do Coração Sombrio\" uma vez por turno."
     },
     "112": {
       "name": "Fúria do Coração Sombrio",
-      "description": "Você pode ativar este card ao escolher 1 monstro \"Coração Sombrio\" do tipo Dragão que você controla: ele ganha 700 de ATK/DEF até o final do turno e pode realizar um segundo ataque durante essa fase de batalha. Você não pode atacar diretamente no turno em que ativar esse efeito."
+      "description": "Escolha 1 monstro Dragão \"Coração Sombrio\" que você controla; ele ganha 700 ATK/DEF até o final deste turno e, além disso, pode realizar um segundo ataque durante a Fase de Batalha neste turno. Você não pode declarar um ataque direto no turno em que ativar este card."
     },
     "113": {
       "name": "Escudo do Coração Sombrio",
-      "description": "Só pode ser equipado a um monstro que você controla.\n\nO monstro equipado ganha 500 de ATK/DEF e não pode ser destruído em batalha.\n\nDurante cada uma das suas Fases de Apoio: pague 800 PV ou envie este card para o Cemitério."
+      "description": "Equipe apenas a um monstro que você controla.\n\nO monstro equipado ganha 500 ATK/DEF e não pode ser destruído em batalha.\n\nDurante cada uma das suas Fases de Apoio: pague 800 PV ou envie este card para o Cemitério."
     },
     "114": {
       "name": "Grifo do Coração Sombrio",
@@ -663,7 +663,7 @@
     },
     "115": {
       "name": "Vale das Trevas",
-      "description": "Todos os monstros \"Coração Sombrio\" que você controla ganham 300 de ATK.\n\nUma vez por turno, se um monstro \"Coração Sombrio\" de nível 8 ou maior que você controla for destruído em batalha: destrua o monstro atacante."
+      "description": "Todos os monstros \"Coração Sombrio\" que você controla ganham 300 ATK.\n\nUma vez por turno, se um monstro de Nível 8 ou maior \"Coração Sombrio\" que você controla for destruído em batalha: destrua o monstro atacante."
     },
     "116": {
       "name": "Verme da Morte do Coração Sombrio",
@@ -671,35 +671,35 @@
     },
     "117": {
       "name": "Leviatã do Coração Sombrio",
-      "description": "Você pode enviar 1 \"Enguia Abissal do Coração Sombrio\" que você controla para o Cemitério; Invoque este card por Invocação-Especial da sua mão.\n\nSe esse card destruir um monstro em batalha: cause 500 de dano ao oponente.\n\nSe esse card for destruído em batalha: cause 800 de dano ao oponente."
+      "description": "Você pode enviar 1 \"Enguia Abissal do Coração Sombrio\" que você controla para o Cemitério; Invoque este card por Invocação-Especial da sua mão.\n\nSe este card destruir um monstro em batalha: cause 500 de dano ao seu oponente.\n\nSe este card for destruído em batalha: cause 800 de dano ao seu oponente."
     },
     "118": {
       "name": "Mago do Vazio do Coração Sombrio",
-      "description": "Se esse card for invocado por invocação-Normal: Você pode adicionar 1 Magia/Armadilha \"Coração Sombrio\" do seu Deck à sua mão.\n\nSe o oponente perder PV enquanto este card estiver no campo: compre 1 card.\n\nVocê só pode usar este efeito de \"Mago do Vazio do Coração Sombrio\" uma vez por turno."
+      "description": "Se este card for Invocado por Invocação-Normal: você pode adicionar 1 Magia/Armadilha \"Coração Sombrio\" do seu Deck à sua mão.\n\nSe seu oponente perder PV enquanto este card estiver no campo: compre 1 card.\n\nVocê só pode usar este efeito de \"Mago do Vazio do Coração Sombrio\" uma vez por turno."
     },
     "119": {
       "name": "Catedral do Coração Sombrio",
-      "description": "Cada vez que seu oponente sofrer 500 ou mais de dano: coloque 1 Marcador do Julgamento neste card.\n\nDurante sua Fase Principal: você pode enviar este card com a face para cima para o Cemitério; Invoque por Invocação-Especial 1 monstro \"Coração Sombrio\" do seu Deck com ATK menor ou igual a 500 x o número de Marcadores do Julgamento que este card possuía no campo.\n\nVocê só pode usar este efeito de \"Catedral do Coração Sombrio\" uma vez por turno."
+      "description": "Cada vez que seu oponente sofrer 500 ou mais de dano de uma só vez: coloque 1 Marcador do Julgamento neste card.\n\nDurante sua Fase Principal: você pode enviar este card com a face para cima para o Cemitério; Invoque por Invocação-Especial 1 monstro \"Coração Sombrio\" do seu Deck com ATK menor ou igual a 500 x o número de Marcadores do Julgamento que este card possuía no campo.\n\nVocê só pode usar este efeito de \"Catedral do Coração Sombrio\" uma vez por turno."
     },
     "120": {
       "name": "O Coração Sombrio",
-      "description": "Você não pode controlar monstros para ativar este efeito. Escolha 1 monstro \"Coração Sombrio\" no seu cemitério: invoque-o por invocação-Especial e equipe este card a ele.\n\nSe esse card deixar o campo, destrua o monstro equipado."
+      "description": "Se você não controlar monstros: escolha 1 monstro \"Coração Sombrio\" no seu Cemitério; Invoque-o por Invocação-Especial e, se isso acontecer, equipe este card a ele.\n\nSe este card deixar o campo, destrua o monstro equipado."
     },
     "121": {
       "name": "Dragão Demônio do Coração Sombrio",
-      "description": "\"Dragão de Escamas do Coração Sombrio\" + Um monstro \"Coração Sombrio\" de nível 8 ou superior\n\nSe esse card for invocado por invocação-Fusão: Escolha 1 card no campo do oponente; destrua-o.\n\nSe esse card for destruído em batalha ou por efeitos de card: Você pode Invocar por Invocação-Especial um \"Dragão de Escamas do Coração Sombrio\" do seu cemitério."
+      "description": "\"Dragão de Escamas do Coração Sombrio\" + 1 monstro de Nível 8 ou maior \"Coração Sombrio\"\n\nSe este card for Invocado por Invocação-Fusão: escolha 1 card que seu oponente controla; destrua-o.\n\nSe este card for destruído em batalha ou por efeito de card: você pode Invocar por Invocação-Especial 1 \"Dragão de Escamas do Coração Sombrio\" do seu Cemitério."
     },
     "122": {
       "name": "Senhor da Guerra do Coração Sombrio",
-      "description": "2 monstros \"Coração Sombrio\"\n\nSe este card seria destruído em batalha, você pode enviar 1 monstro \"Coração Sombrio\" que você controla para o Cemitério em vez disso.\n\nSe este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 monstro \"Coração Sombrio\" de Nível 4 ou menor do seu Cemitério, mas ele não pode atacar neste turno.\n\nVocê só pode usar cada efeito de \"Senhor da Guerra do Coração Sombrio\" uma vez por turno."
+      "description": "2 monstros \"Coração Sombrio\"\n\nSe este card seria destruído em batalha, você pode enviar 1 monstro \"Coração Sombrio\" que você controla para o Cemitério em vez disso.\n\nSe este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 monstro de Nível 4 ou menor \"Coração Sombrio\" do seu Cemitério, mas ele não pode atacar neste turno.\n\nVocê só pode usar cada efeito de \"Senhor da Guerra do Coração Sombrio\" uma vez por turno."
     },
     "123": {
       "name": "Perseguidor Arctroth do Coração Sombrio",
-      "description": "\"Demônio Arctroth do Coração Sombrio\"\n\nSe este card for Invocado por Invocação-Ascensão: escolha 1 monstro com a face para cima Invocado por Invocação-Especial que seu oponente controla; reduza o ATK/DEF dele pela metade e, se isso acontecer, este card ganha ATK/DEF iguais aos valores perdidos por aquele monstro.\n\nSe este card destruir um monstro do oponente em batalha: você pode escolher 1 monstro no Cemitério do seu oponente, exceto o monstro destruído por esta batalha; Invoque-o por Invocação-Especial no campo do seu oponente e, se isso acontecer, este card pode realizar 1 ataque adicional contra monstros durante esta Fase de Batalha.\n\nVocê só pode usar cada efeito de \"Perseguidor Arctroth do Coração Sombrio\" uma vez por turno."
+      "description": "\"Demônio Arctroth do Coração Sombrio\"\n\nSe este card for Invocado por Invocação-Ascensão: escolha 1 monstro com a face para cima Invocado por Invocação-Especial que seu oponente controla; reduza o ATK/DEF dele pela metade e, se isso acontecer, este card ganha ATK/DEF iguais aos valores perdidos por aquele monstro.\n\nSe este card destruir um monstro do oponente em batalha: você pode escolher 1 monstro no Cemitério do seu oponente, exceto o monstro destruído por esta batalha; Invoque-o por Invocação-Especial no campo do seu oponente e, se isso acontecer, este card pode realizar um segundo ataque contra um monstro durante esta Fase de Batalha.\n\nVocê só pode usar cada efeito de \"Perseguidor Arctroth do Coração Sombrio\" uma vez por turno."
     },
     "124": {
       "name": "Dragão da Devastação do Coração Sombrio",
-      "description": "\"Dragão de Escamas do Coração Sombrio\"\n\nRequisito: o material deve ter ficado com a face para cima no campo por 3 turnos.\n\nSe este card for Invocado por Ascensão: ele ganha 700 de ATK até o final deste turno.\n\nEnquanto este card estiver com a face para cima no campo, negue os efeitos de cards do oponente que impeçam monstros de serem destruídos em batalha.\n\nSe este card destruir um monstro em Posição de Defesa em batalha: destrua todos os monstros em Posição de Defesa que seu oponente controla."
+      "description": "\"Dragão de Escamas do Coração Sombrio\"\n\nRequisito: o material deve ter ficado com a face para cima no campo por 3 turnos.\n\nSe este card for Invocado por Invocação-Ascensão: este card ganha 700 ATK até o final deste turno.\n\nEnquanto este card estiver com a face para cima no campo, negue os efeitos de cards do seu oponente que impeçam monstros de serem destruídos em batalha.\n\nSe este card destruir um monstro em Posição de Defesa em batalha: destrua todos os monstros em Posição de Defesa que seu oponente controla."
     },
     "125": {
       "name": "Portador do Coração Sombrio",
@@ -707,95 +707,95 @@
     },
     "151": {
       "name": "Luminarca Valente - Cavaleiro da Aurora",
-      "description": "Se esse card for invocado por invocação-Normal ou Especial: você pode adicionar 1 monstro \"Luminarca\" de nível 4 ou menor do seu Deck à sua mão.\n\nSe esse card atacar um monstro em posição de defesa, cause dano perfurante."
+      "description": "Se este card for Invocado por Invocação-Normal ou Especial: você pode adicionar 1 monstro de Nível 4 ou menor \"Luminarca\" do seu Deck à sua mão.\n\nSe este card batalhar com um monstro em Posição de Defesa, cause dano de batalha perfurante ao seu oponente."
     },
     "152": {
       "name": "Escudo Sagrado Luminarca",
-      "description": "Escolha até 3 monstros \"Luminarca\" que você controla; até o final do turno, eles não podem ser destruídos em batalha, e qualquer dano de batalha que você sofreria envolvendo esses monstros é transformado em cura."
+      "description": "Escolha até 3 monstros \"Luminarca\" que você controla; até o final deste turno, eles não podem ser destruídos em batalha e, além disso, qualquer dano de batalha que você sofreria de batalhas envolvendo esses monstros é ganho como PV em vez disso."
     },
     "153": {
       "name": "Portador da Égide Luminarca",
-      "description": "Se este card for Invocado por Invocação-Especial: aumente sua DEF em 500.\n\nEnquanto este card estiver com a face para cima no campo, seu oponente deve priorizar este card como alvo de ataques, se possível."
+      "description": "Se este card for Invocado por Invocação-Especial: este card ganha 500 DEF.\n\nSeu oponente não pode escolher outros monstros que você controla como alvo de ataques."
     },
     "154": {
       "name": "Capitão da Lâmina Lunar Luminarca",
-      "description": "Se esse card for invocado por invocação-Normal: você pode escolher 1 monstro \"Luminarca\" de nível 4 ou menor no seu cemitério; invoque-o por invocação-Especial.\n\nUma vez por turno, se esse card destruir um monstro do oponente em batalha: ele pode realizar um segundo ataque."
+      "description": "Se este card for Invocado por Invocação-Normal: você pode escolher 1 monstro de Nível 4 ou menor \"Luminarca\" no seu Cemitério; Invoque-o por Invocação-Especial.\n\nUma vez por turno, se este card destruir um monstro do oponente em batalha: ele pode realizar um segundo ataque durante esta Fase de Batalha."
     },
     "155": {
       "name": "Marechal Celestial Luminarca",
-      "description": "Você pode pagar 2000 PV; Invoque este card por Invocação-Especial da sua mão.\n\nUma vez por turno, se este card seria destruído em batalha: negue essa destruição.\n\nSe este card for destruído em batalha: ganhe 1000 PV."
+      "description": "Você pode pagar 2000 PV; Invoque este card por Invocação-Especial da sua mão.\n\nUma vez por turno, se este card estiver para ser destruído em batalha, ele não é destruído.\n\nSe este card for destruído em batalha: ganhe 1000 PV."
     },
     "156": {
       "name": "Foice Mágica Luminarca",
-      "description": "Durante a Etapa de Dano, quando um monstro \"Luminarca\" que você controla batalhar com um monstro ou atacar diretamente (Efeito Rápido): você pode enviar este card da sua mão para o Cemitério; até o final deste turno, esse monstro ganha 1200 de ATK e 1700 de DEF.\n\nVocê pode banir este card do seu Cemitério; adicione 1 Magia \"Luminarca\" do seu Cemitério à sua mão.\n\nVocê só pode usar cada efeito de \"Foice Mágica Luminarca\" uma vez por turno."
+      "description": "Durante a Etapa de Dano, quando um monstro \"Luminarca\" que você controla batalhar com um monstro ou atacar diretamente (Efeito Rápido): você pode enviar este card da sua mão para o Cemitério; esse monstro ganha 1200 ATK e 1700 DEF até o final deste turno.\n\nVocê pode banir este card do seu Cemitério; adicione 1 Magia \"Luminarca\" do seu Cemitério à sua mão.\n\nVocê só pode usar cada efeito de \"Foice Mágica Luminarca\" uma vez por turno."
     },
     "157": {
       "name": "Protetor do Santuário Luminarca",
-      "description": "Se você controlar um \"Portador da Égide Luminarca\" com a face para cima, você pode enviá-lo para o Cemitério; Invoque este card por Invocação-Especial da sua mão.\n\nUma vez por turno, quando um monstro do oponente declarar um ataque (efeito rápido): negue o ataque."
+      "description": "Se você controlar um \"Portador da Égide Luminarca\" com a face para cima, você pode enviá-lo para o Cemitério; Invoque este card por Invocação-Especial da sua mão.\n\nUma vez por turno, quando um monstro do oponente declarar um ataque (Efeito Rápido): você pode negar esse ataque."
     },
     "158": {
       "name": "Lanceiro Radiante Luminarca",
-      "description": "Se esse card destruir um monstro do oponente em batalha: ele ganha 100 de ATK enquanto estiver com a face para cima no campo.\n\nSe esse card for destruído em batalha: escolha uma Magia/Armadilha que seu oponente controla; destrua-a."
+      "description": "Se este card destruir um monstro do oponente em batalha: este card ganha 100 ATK enquanto permanecer com a face para cima no campo.\n\nSe este card for destruído em batalha: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a."
     },
     "159": {
       "name": "Aurora Serafim Luminarca",
-      "description": "Se este card destruir um monstro do oponente em batalha: ganhe PV igual a metade do ATK do monstro destruído.\n\nUma vez por turno, se esse card seria destruído por batalha ou efeitos de card: você pode enviar 1 outro monstro \"Luminarca\" que você controla para o Cemitério em vez disso."
+      "description": "Se este card destruir um monstro do oponente em batalha: ganhe PV iguais à metade do ATK desse monstro.\n\nUma vez por turno, se este card estiver para ser destruído em batalha ou por um efeito de card: você pode enviar 1 outro monstro \"Luminarca\" que você controla para o Cemitério em vez disso."
     },
     "160": {
       "name": "Árbitro Santificado Luminarca",
-      "description": "Se esse card for invocado por invocação-Normal: você pode adicionar uma Magia/Armadilha \"Luminarca\" do seu Deck à sua mão.\n\nVocê só pode usar esse efeito de \"Árbitro Santificado Luminarca\" uma vez por turno."
+      "description": "Se este card for Invocado por Invocação-Normal: você pode adicionar 1 Magia/Armadilha \"Luminarca\" do seu Deck à sua mão.\n\nVocê só pode usar este efeito de \"Árbitro Santificado Luminarca\" uma vez por turno."
     },
     "161": {
       "name": "Convocação dos Cavaleiros Luminarca",
-      "description": "Uma vez por turno: você pode descartar 1 monstro \"Luminarca\" de Nível 5 ou maior; adicione 1 monstro \"Luminarca\" de Nível 4 ou menor do seu Deck à sua mão.\n\nA primeira vez por turno que um monstro \"Luminarca\" que você controla seria destruído em batalha ou por efeito de card: negue essa destruição."
+      "description": "Uma vez por turno: você pode descartar 1 monstro de Nível 5 ou maior \"Luminarca\"; adicione 1 monstro de Nível 4 ou menor \"Luminarca\" do seu Deck à sua mão.\n\nA primeira vez a cada turno que um monstro \"Luminarca\" que você controla estiver para ser destruído em batalha ou por efeito de card, ele não é destruído."
     },
     "162": {
       "name": "Santuário da Cidadela Luminarca",
-      "description": "Quando um monstro do oponente declarar um ataque: ganhe 500 PV.\n\nUma vez por turno, você pode pagar 1000 PV e escolher 1 monstro \"Luminarca\" que você controla: ele ganha de 500 ATK/DEF até o final do turno."
+      "description": "Quando um monstro do oponente declarar um ataque: ganhe 500 PV.\n\nUma vez por turno: você pode pagar 1000 PV e, depois, escolher 1 monstro \"Luminarca\" que você controla; ele ganha 500 ATK/DEF até o final deste turno."
     },
     "163": {
       "name": "Ascensão Sagrada Luminarca",
-      "description": "Pague 1000 PV, escolha um monstro \"Luminarca\" que você controla; ele ganha 800 de ATK até o final do turno."
+      "description": "Pague 1000 PV e, depois, escolha 1 monstro \"Luminarca\" que você controla; ele ganha 800 ATK até o final deste turno."
     },
     "164": {
       "name": "Onda Radiante Luminarca",
-      "description": "Se você controlar um monstro \"Luminarca\", ou se houver um monstro \"Luminarca\" no seu Cemitério: pague 2000 PV e escolha 1 card que seu oponente controla; destrua-o.\n\nVocê só pode ativar 1 \"Onda Radiante Luminarca\" por turno."
+      "description": "Se você controlar um monstro \"Luminarca\", ou se houver um monstro \"Luminarca\" no seu Cemitério: pague 2000 PV e, depois, escolha 1 card que seu oponente controla; destrua-o.\n\nVocê só pode ativar 1 \"Onda Radiante Luminarca\" por turno."
     },
     "165": {
       "name": "Escudo Crescente Luminarca",
-      "description": "Só pode ser equipado a um monstro \"Luminarca\" que você controla.\n\nO monstro equipado ganha 500 de DEF.\n\nSe o monstro equipado seria destruído em batalha, envie esse card para o cemitério em vez disso."
+      "description": "Equipe apenas a um monstro \"Luminarca\" que você controla.\n\nO monstro equipado ganha 500 DEF.\n\nSe o monstro equipado estiver para ser destruído em batalha, envie este card para o Cemitério em vez disso."
     },
     "166": {
       "name": "Lâmina Solarforjada Luminarca",
-      "description": "Só pode ser equipada a um monstro \"Luminarca\" que você controla.\n\nCada vez que você ganhar PV, coloque 1 Marcador Solar neste card.\n\nO monstro equipado ganha 200 ATK/DEF para cada Marcador Solar neste card.\n\nUma vez por turno, se o monstro equipado seria destruído em batalha: você pode pagar 1000 PV; ele não é destruído.\n\nVocê só pode controlar 1 \"Lâmina Solarforjada Luminarca\"."
+      "description": "Equipe apenas a um monstro \"Luminarca\" que você controla.\n\nCada vez que você ganhar PV, coloque 1 Marcador Solar neste card.\n\nO monstro equipado ganha 200 ATK/DEF para cada Marcador Solar neste card.\n\nUma vez por turno, se o monstro equipado estiver para ser destruído em batalha: você pode pagar 1000 PV; ele não é destruído.\n\nVocê só pode controlar 1 \"Lâmina Solarforjada Luminarca\"."
     },
     "167": {
       "name": "Lança da Alvorada Luminarca",
-      "description": "Se você controlar 1 monstro \"Luminarca\": escolha 1 monstro que seu oponente controla; o ATK/DEF do alvo se tornam 0 até o final do turno.\n\nVocê só pode ativar 1 \"Lança da Alvorada Luminarca\" por turno."
+      "description": "Se você controlar um monstro \"Luminarca\": escolha 1 monstro com a face para cima que seu oponente controla; seu ATK/DEF se tornam 0 até o final deste turno.\n\nVocê só pode ativar 1 \"Lança da Alvorada Luminarca\" por turno."
     },
     "168": {
       "name": "Alabarda Encantada Luminarca",
-      "description": "Uma vez por turno, se um monstro \"Luminarca\" for Invocado por Invocação-Especial no seu campo: você pode Invocar este card por Invocação-Especial da sua mão, mas ele não pode declarar ataque neste turno."
+      "description": "Uma vez por turno, se um monstro \"Luminarca\" for Invocado por Invocação-Especial no seu campo: você pode Invocar este card por Invocação-Especial da sua mão, mas ele não pode declarar um ataque neste turno."
     },
     "169": {
       "name": "Bênção do Brilho da Lua Luminarca",
-      "description": "Escolha 1 monstro \"Luminarca\" no seu cemitério; adicione o alvo à sua mão, então se você controlar \"Santuário da Cidadela Luminarca\", você pode invocar o alvo por invocação-Especial.\n\nVocê só pode ativar 1 \"Bênção do Brilho da Lua Luminarca\" por turno."
+      "description": "Escolha 1 monstro \"Luminarca\" no seu Cemitério; adicione-o à sua mão e, depois, se você controlar \"Santuário da Cidadela Luminarca\", você pode Invocar esse monstro por Invocação-Especial.\n\nVocê só pode ativar 1 \"Bênção do Brilho da Lua Luminarca\" por turno."
     },
     "170": {
       "name": "Julgamento Sagrado Luminarca",
-      "description": "Se seu oponente controlar 2 ou mais monstros: pague 2000 PV; Invoque por Invocação-Especial monstros \"Luminarca\" do seu Cemitério, até o número de monstros que seu oponente controla, então ganhe 500 PV por monstro Invocado.\n\nVocê só pode ativar 1 \"Julgamento Sagrado Luminarca\" por turno."
+      "description": "Se seu oponente controlar 2 ou mais monstros: pague 2000 PV; Invoque por Invocação-Especial monstros \"Luminarca\" do seu Cemitério, até o número de monstros que seu oponente controla e, depois, ganhe 500 PV para cada monstro Invocado por Invocação-Especial por este efeito.\n\nVocê só pode ativar 1 \"Julgamento Sagrado Luminarca\" por turno."
     },
     "171": {
       "name": "Megaescudo Barbarias Luminarca",
-      "description": "\"Protetor do Santuário Luminarca\" + 1 monstro \"Luminarca\" de nível 5 ou maior\n\nTodo o PV ganho é dobrado.\n\nUma vez por turno, você pode escolher 1 monstro que você controla; troque sua posição de batalha, e se isso acontecer, ele ganha 800 de ATK até o final do turno."
+      "description": "\"Protetor do Santuário Luminarca\" + 1 monstro de Nível 5 ou maior \"Luminarca\"\n\nSe você fosse ganhar PV, ganhe o dobro dessa quantidade em vez disso.\n\nUma vez por turno: você pode escolher 1 monstro que você controla; mude sua posição de batalha e, se isso acontecer, ele ganha 800 ATK até o final deste turno."
     },
     "172": {
       "name": "Fortaleza Égide Luminarca",
-      "description": "\"Portador da Égide Luminarca\"\n\nRequisito: o material deve ter ficado com a face para cima no campo por 2 turnos.\n\nSeu oponente deve priorizar este card como alvo de ataques, se possível.\n\nSe este card for Invocado por Ascensão: ganhe 500 PV para cada monstro \"Luminarca\" que você controla.\n\nUma vez por turno: você pode pagar 1000 PV e, depois, escolher 1 monstro \"Luminarca\" com 2000 ou menos de DEF no seu Cemitério; Invoque-o por Invocação-Especial."
+      "description": "\"Portador da Égide Luminarca\"\n\nRequisito: o material deve ter ficado com a face para cima no campo por 2 turnos.\n\nSeu oponente não pode escolher outros monstros que você controla como alvo de ataques.\n\nSe este card for Invocado por Invocação-Ascensão: ganhe 500 PV para cada monstro \"Luminarca\" que você controla.\n\nUma vez por turno: você pode pagar 1000 PV e, depois, escolher 1 monstro \"Luminarca\" com 2000 ou menos de DEF no seu Cemitério; Invoque-o por Invocação-Especial."
     },
     "173": {
       "name": "Cavaleiro Puro Luminarca",
-      "description": "2 monstros \"Luminarca\"\n\nSe este card for Invocado por Invocação-Fusão: você pode adicionar 1 \"Santuário da Cidadela Luminarca\" do seu Deck à sua mão.\n\nDuas vezes por turno, quando você ativar o efeito de uma Magia/Armadilha \"Luminarca\" que exija pagar PV: reduza esse custo em 1000.\n\nVocê só pode usar o efeito de Invocação-Fusão de \"Cavaleiro Puro Luminarca\" uma vez por turno."
+      "description": "2 monstros \"Luminarca\"\n\nSe este card for Invocado por Invocação-Fusão: você pode adicionar 1 \"Santuário da Cidadela Luminarca\" do seu Deck à sua mão.\n\nDuas vezes por turno, quando você fosse pagar PV por um efeito de Magia/Armadilha \"Luminarca\", reduza em 1000 a quantidade de PV que você paga.\n\nVocê só pode usar o efeito de Invocação-Fusão de \"Cavaleiro Puro Luminarca\" uma vez por turno."
     },
     "174": {
       "name": "Lanceiro Etéreo Luminarca",
@@ -803,15 +803,15 @@
     },
     "201": {
       "name": "Conjurador do Vazio",
-      "description": "Invoque por Invocação-Especial 1 monstro \"Vazio\" de Nível 4 ou menor do seu Deck, exceto \"Conjurador do Vazio\", mas ele não pode atacar neste turno e é destruído na End Phase.\n\nSe este card estiver no seu Cemitério: você pode enviar 1 monstro \"Vazio\" que você controla para o Cemitério; Invoque este card por Invocação-Especial, mas negue seus efeitos até o final do turno.\n\nVocê só pode usar cada efeito de \"Conjurador do Vazio\" uma vez por turno."
+      "description": "Você pode Invocar por Invocação-Especial 1 monstro \"Vazio\" de Nível 4 ou menor do seu Deck, exceto \"Conjurador do Vazio\", mas ele não pode atacar neste turno e, além disso, destrua-o durante a Fase Final.\n\nSe este card estiver no seu Cemitério: você pode enviar 1 monstro \"Vazio\" que você controla para o Cemitério; Invoque este card por Invocação-Especial, mas negue seus efeitos até o final deste turno.\n\nVocê só pode usar cada efeito de \"Conjurador do Vazio\" uma vez por turno."
     },
     "202": {
       "name": "Andarilho do Vazio",
-      "description": "Não pode atacar no turno em que é Invocado por Invocação-Especial.\n\nUma vez por turno: você pode devolver este card à sua mão; Invoque por Invocação-Especial 1 monstro \"Vazio\" de Nível 4 ou menor da sua mão, exceto \"Andarilho do Vazio\"."
+      "description": "Este card não pode atacar no turno em que for Invocado por Invocação-Especial.\n\nUma vez por turno: você pode devolver este card à sua mão; Invoque por Invocação-Especial 1 monstro \"Vazio\" de Nível 4 ou menor da sua mão, exceto \"Andarilho do Vazio\"."
     },
     "203": {
       "name": "Fera do Vazio",
-      "description": "Se este card for Invocado por Invocação-Normal: você pode adicionar 1 monstro \"Vazio\" que mencione \"Oco do Vazio\" em seu texto, exceto \"Fera do Vazio\", do seu Deck à sua mão.\n\nSe este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 \"Oco do Vazio\" da sua mão ou Deck.\n\nVocê só pode usar cada efeito de \"Fera do Vazio\" uma vez por turno."
+      "description": "Se este card for Invocado por Invocação-Normal: você pode adicionar à sua mão 1 monstro \"Vazio\" do seu Deck que mencione \"Oco do Vazio\" em seu texto, exceto \"Fera do Vazio\".\n\nSe este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 \"Oco do Vazio\" da sua mão ou Deck.\n\nVocê só pode usar cada efeito de \"Fera do Vazio\" uma vez por turno."
     },
     "204": {
       "name": "Oco do Vazio",
@@ -819,7 +819,7 @@
     },
     "205": {
       "name": "Assombração do Vazio",
-      "description": "Você pode enviar 1 monstro \"Vazio\" que você controla para o Cemitério; Invoque por Invocação-Especial este card da sua mão.\n\nVocê pode banir este card do seu Cemitério e, depois, escolher até 3 \"Oco do Vazio\" no seu Cemitério; Invoque por Invocação-Especial esses alvos, mas o ATK/DEF deles se tornam 0.\n\nVocê só pode usar cada efeito de \"Assombração do Vazio\" uma vez por turno."
+      "description": "Você pode enviar 1 monstro \"Vazio\" que você controla para o Cemitério; Invoque este card por Invocação-Especial da sua mão.\n\nVocê pode banir este card do seu Cemitério e, depois, escolher até 3 \"Oco do Vazio\" no seu Cemitério; Invoque esses alvos por Invocação-Especial, mas o ATK/DEF deles se tornam 0.\n\nVocê só pode usar cada efeito de \"Assombração do Vazio\" uma vez por turno."
     },
     "206": {
       "name": "Lobo Fantasma do Vazio",
@@ -827,27 +827,27 @@
     },
     "207": {
       "name": "Rei Oco do Vazio",
-      "description": "3 monstros \"Oco do Vazio\"\n\nSe este card for destruído em batalha ou por efeito de card: você pode Invocar por Invocação-Especial até 3 \"Oco do Vazio\" do seu Cemitério.\n\nSe este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 \"Oco do Vazio\" do seu Cemitério.\n\n(Efeito Rápido) Você pode enviar 1 \"Oco do Vazio\" com a face para cima que você controla para o Cemitério; este card ganha 1000 ATK até o final deste turno."
+      "description": "3 monstros \"Oco do Vazio\"\n\nSe este card for destruído em batalha ou por um efeito de card: você pode Invocar por Invocação-Especial até 3 \"Oco do Vazio\" do seu Cemitério.\n\nSe este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 \"Oco do Vazio\" do seu Cemitério.\n\n(Efeito Rápido): você pode enviar 1 \"Oco do Vazio\" com a face para cima que você controla para o Cemitério; este card ganha 1000 ATK até o final deste turno."
     },
     "208": {
       "name": "Aranha Óssea do Vazio",
-      "description": "Escolha 1 monstro com a face para cima que seu oponente controla; envie 1 \"Oco do Vazio\" da sua mão ou campo para o Cemitério e, se isso acontecer, esse monstro não pode declarar ataque até o final do próximo turno.\n\nSe este card for enviado do campo para o Cemitério: Invoque por Invocação-Especial 1 \"Oco do Vazio\" do seu Cemitério."
+      "description": "Escolha 1 monstro com a face para cima que seu oponente controla; envie 1 \"Oco do Vazio\" da sua mão ou campo para o Cemitério e, se isso acontecer, esse monstro não pode declarar um ataque até o final do próximo turno.\n\nSe este card for enviado do campo para o Cemitério: Invoque por Invocação-Especial 1 \"Oco do Vazio\" do seu Cemitério."
     },
     "209": {
       "name": "Cavaleiro Esquecido do Vazio",
-      "description": "Você pode enviar 1 monstro \"Vazio\" com a face para cima que você controla para o Cemitério; Invoque por Invocação-Especial este card da sua mão.\n\nEste card ganha 100 de ATK para cada \"Oco do Vazio\" no seu Cemitério.\n\nVocê pode banir este card do seu Cemitério; escolha 1 Magia/Armadilha com a face para cima que seu oponente controla; destrua-a.\n\nVocê só pode usar cada efeito de \"Cavaleiro Esquecido do Vazio\" uma vez por turno."
+      "description": "Você pode enviar 1 monstro \"Vazio\" com a face para cima que você controla para o Cemitério; Invoque este card por Invocação-Especial da sua mão.\n\nEste card ganha 100 ATK para cada \"Oco do Vazio\" no seu Cemitério.\n\nVocê pode banir este card do seu Cemitério e, depois, escolher 1 Magia/Armadilha com a face para cima que seu oponente controla; destrua-a.\n\nVocê só pode usar cada efeito de \"Cavaleiro Esquecido do Vazio\" uma vez por turno."
     },
     "210": {
       "name": "Corvo do Vazio",
-      "description": "Se você Invocar por Invocação-Fusão um Monstro de Fusão \"Vazio\": você pode descartar este card da sua mão; esse monstro fica imune aos efeitos de cards do oponente até o final do próximo turno.\n\nVocê só pode usar este efeito de \"Corvo do Vazio\" uma vez por turno."
+      "description": "Se você Invocar por Invocação-Fusão um Monstro de Fusão \"Vazio\": você pode descartar este card; esse monstro não é afetado pelos efeitos de cards do seu oponente até o final do próximo turno.\n\nVocê só pode usar este efeito de \"Corvo do Vazio\" uma vez por turno."
     },
     "211": {
       "name": "Chifre Tenebris do Vazio",
-      "description": "Ganha 100 de ATK/DEF para cada monstro \"Vazio\" no seu campo e no seu Cemitério.\n\nSe este card estiver no seu Cemitério e houver 2 ou mais \"Oco do Vazio\" no seu campo e/ou Cemitério: você pode Invocá-lo por Invocação-Especial.\n\nVocê só pode ativar este efeito de \"Chifre Tenebris do Vazio\" uma vez por turno e apenas 3 vezes por Duelo."
+      "description": "Este card ganha 100 ATK/DEF para cada monstro \"Vazio\" no seu campo e no seu Cemitério.\n\nSe este card estiver no seu Cemitério e houver 2 ou mais \"Oco do Vazio\" no seu campo e/ou no seu Cemitério: você pode Invocar este card por Invocação-Especial.\n\nVocê só pode ativar este efeito de \"Chifre Tenebris do Vazio\" uma vez por turno e apenas 3 vezes por Duelo."
     },
     "212": {
       "name": "Brutamontes Matador do Vazio",
-      "description": "Uma vez por turno: você pode Invocar por Invocação-Especial este card da sua mão ao enviar 2 monstros \"Vazio\" que você controla para o Cemitério. Se \"Oco do Vazio\" foi enviado ao Cemitério para ativar este efeito, este card ganha o seguinte efeito: se este card destruir um monstro do oponente em batalha: bana esse monstro."
+      "description": "Uma vez por turno: você pode enviar 2 monstros \"Vazio\" que você controla para o Cemitério; Invoque este card por Invocação-Especial da sua mão. Se você enviou \"Oco do Vazio\" para o Cemitério para ativar este efeito, este card ganha o seguinte efeito:\n● Se este card destruir um monstro do oponente em batalha: bana esse monstro."
     },
     "213": {
       "name": "Berserker do Vazio",
@@ -855,15 +855,15 @@
     },
     "214": {
       "name": "Draco Serpente do Vazio",
-      "description": "Uma vez por turno: você pode Invocar este card por Invocação-Especial da sua mão ao enviar 1 \"Oco do Vazio\" que você controla para o Cemitério.\n\nEste card não pode ser destruído em batalha enquanto você controlar \"Oco do Vazio\".\n\nMonstros \"Vazio\" no seu campo e no seu Cemitério não podem ser banidos por efeitos de cards do oponente."
+      "description": "Uma vez por turno: você pode enviar 1 \"Oco do Vazio\" que você controla para o Cemitério; Invoque este card por Invocação-Especial da sua mão.\n\nEste card não pode ser destruído em batalha enquanto você controlar \"Oco do Vazio\".\n\nMonstros \"Vazio\" no seu campo e no seu Cemitério não podem ser banidos pelos efeitos de cards do seu oponente."
     },
     "215": {
       "name": "Titã Hidra do Vazio",
-      "description": "6 monstros \"Vazio\"\n\nSe este card for Invocado por Invocação-Fusão: destrua todos os cards de Magia e Armadilha que seu oponente controla e, se isso acontecer, compre 1 card para cada card destruído.\n\nUma vez por turno: se este card seria destruído em batalha ou por efeitos de card: você pode reduzir o ATK dele em 700; negue a destruição deste card."
+      "description": "6 monstros \"Vazio\"\n\nSe este card for Invocado por Invocação-Fusão: destrua todas as Magias e Armadilhas que seu oponente controla e, se isso acontecer, compre 1 card para cada card destruído.\n\nUma vez por turno, se este card estiver para ser destruído em batalha ou por um efeito de card: você pode fazer este card perder 700 ATK; ele não é destruído."
     },
     "216": {
       "name": "Selando o Vazio",
-      "description": "Escolha 1 monstro \"Vazio\" com a face para cima que você controla; até o final deste turno, o ATK/DEF desse monstro se tornam 0 e seus efeitos são negados. Se este efeito resolver, você pode realizar 1 Invocação-Normal adicional neste turno.\n\nVocê só pode ativar 1 \"Selando o Vazio\" por turno."
+      "description": "Escolha 1 monstro \"Vazio\" com a face para cima que você controla; até o final deste turno, o ATK/DEF desse monstro se tornam 0 e seus efeitos são negados e, depois, você pode realizar 1 Invocação-Normal/Baixar neste turno em adição à sua Invocação-Normal/Baixar.\n\nVocê só pode ativar 1 \"Selando o Vazio\" por turno."
     },
     "217": {
       "name": "O Vazio",
@@ -875,7 +875,7 @@
     },
     "219": {
       "name": "Trono Perdido do Vazio",
-      "description": "Adicione 1 monstro \"Vazio\" com 1600 ou menos de ATK do seu Deck à sua mão. Depois, se você não controlar monstros, você pode Invocar esse monstro por Invocação-Especial da sua mão.\n\nVocê só pode ativar 1 \"Trono Perdido do Vazio\" por turno."
+      "description": "Adicione 1 monstro \"Vazio\" com 1600 ou menos de ATK do seu Deck à sua mão e, depois, se você não controlar monstros, você pode Invocar esse monstro por Invocação-Especial.\n\nVocê só pode ativar 1 \"Trono Perdido do Vazio\" por turno."
     },
     "220": {
       "name": "Dimensão Espelho do Vazio",
@@ -883,23 +883,23 @@
     },
     "221": {
       "name": "Mil-Braços do Vazio",
-      "description": "Uma vez por turno: você pode Invocar por Invocação-Especial este card da sua mão ao enviar 1 monstro \"Vazio\" que você controla para o Cemitério.\n\nUma vez por turno: você pode devolver este card com a face para cima que você controla para a mão; Invoque por Invocação-Especial até 2 \"Oco do Vazio\" do seu Cemitério."
+      "description": "Uma vez por turno: você pode enviar 1 monstro \"Vazio\" que você controla para o Cemitério; Invoque este card por Invocação-Especial da sua mão.\n\nUma vez por turno: você pode devolver este card com a face para cima que você controla para a mão; Invoque por Invocação-Especial até 2 \"Oco do Vazio\" do seu Cemitério."
     },
     "222": {
       "name": "Andarilho Cósmico do Vazio",
-      "description": "\"Andarilho do Vazio\"\n\nRequisito: o efeito do material foi ativado duas vezes neste duelo.\n\nVocê pode Invocar por Invocação-Especial 1 \"Oco do Vazio\" da sua mão ou do seu Cemitério.\n\nSe este card for destruído em batalha ou por efeito de card do oponente: você pode Invocar por Invocação-Especial até 3 \"Oco do Vazio\" da sua mão, Deck ou Cemitério.\n\nVocê só pode usar cada efeito de \"Andarilho Cósmico do Vazio\" uma vez por turno."
+      "description": "\"Andarilho do Vazio\"\n\nO efeito do material deve ter sido ativado pelo menos duas vezes neste Duelo.\n\nVocê pode Invocar por Invocação-Especial 1 \"Oco do Vazio\" da sua mão ou do seu Cemitério.\n\nSe este card for destruído em batalha ou por um efeito de card do seu oponente: você pode Invocar por Invocação-Especial até 3 \"Oco do Vazio\" da sua mão, Deck ou Cemitério.\n\nVocê só pode usar cada efeito de \"Andarilho Cósmico do Vazio\" uma vez por turno."
     },
     "223": {
       "name": "Demônio Malicioso do Vazio",
-      "description": "\"Mil-Braços do Vazio\"\n\nRequisito: ambos os efeitos do material foram ativados neste Duelo.\n\nO número de ataques que este card pode declarar por Fase de Batalha é igual ao número de \"Oco do Vazio\" no seu Cemitério.\n\nSe este card no campo for enviado para o Cemitério: você pode Invocar por Invocação-Especial até 3 \"Oco do Vazio\" do seu Cemitério e, se isso acontecer, adicione 1 \"Polimerização\" do seu Deck à sua mão."
+      "description": "\"Mil-Braços do Vazio\"\n\nAmbos os efeitos do material devem ter sido ativados neste Duelo.\n\nO número de ataques que este card pode declarar por Fase de Batalha é igual ao número de \"Oco do Vazio\" no seu Cemitério.\n\nSe este card for enviado do campo para o Cemitério: você pode Invocar por Invocação-Especial até 3 \"Oco do Vazio\" do seu Cemitério e, se isso acontecer, adicione 1 \"Polimerização\" do seu Deck à sua mão."
     },
     "224": {
       "name": "Arcturus, Senhor do Vazio",
-      "description": "Enquanto este card for o único monstro com a face para cima que você controla, ele ganha 100 de ATK para cada monstro \"Vazio\" no seu Cemitério.\n\nSeu oponente não pode ativar cards ou efeitos durante a Fase de Batalha.\n\nSe este card seria destruído por um efeito de card: você pode banir 2 monstros \"Vazio\" do seu Cemitério em vez disso."
+      "description": "Enquanto este card for o único monstro com a face para cima que você controla, ele ganha 100 ATK para cada monstro \"Vazio\" no seu Cemitério.\n\nSeu oponente não pode ativar cards ou efeitos durante a Fase de Batalha.\n\nSe este card estiver para ser destruído por um efeito de card: você pode banir 2 monstros \"Vazio\" do seu Cemitério em vez disso."
     },
     "225": {
       "name": "Arcturus, o Lorde Caído",
-      "description": "1 \"Arcturus, Senhor do Vazio\"\n\nDeve ser Invocado por Invocação-Fusão do seu Deck Adicional ao banir 1 \"Arcturus, Senhor do Vazio\" do seu Cemitério.\n\nSe este card for destruído em batalha: destrua o monstro que batalhou este card.\n\nVocê pode banir este card do seu Cemitério; Invoque por Invocação-Especial de 1 a 3 monstros \"Vazio\" com nomes diferentes do seu Cemitério, exceto \"Arcturus, o Lorde Caído\" e \"Arcturus, Senhor do Vazio\", mas negue seus efeitos."
+      "description": "1 \"Arcturus, Senhor do Vazio\"\n\nDeve ser Invocado por Invocação-Fusão do seu Deck Adicional ao banir 1 \"Arcturus, Senhor do Vazio\" do seu Cemitério.\n\nSe este card for destruído em batalha: destrua o monstro que batalhou com este card.\n\nVocê pode banir este card do seu Cemitério; Invoque por Invocação-Especial de 1 a 3 monstros \"Vazio\" com nomes diferentes do seu Cemitério, exceto \"Arcturus, o Lorde Caído\" e \"Arcturus, Senhor do Vazio\", mas negue seus efeitos."
     },
     "226": {
       "name": "Rastejador Sombrio do Vazio",
@@ -907,83 +907,83 @@
     },
     "227": {
       "name": "Aberração do Vazio",
-      "description": "\"Chifre Tenebris do Vazio\" + 1 monstro \"Vazio\"\n\nEste card ganha 100 de ATK/DEF até o final do turno cada vez que um monstro \"Vazio\" é enviado ao Cemitério.\n\nSe este card for enviado do campo para o Cemitério: você pode escolher 1 card com a face para cima que seu oponente controla; destrua o alvo."
+      "description": "\"Chifre Tenebris do Vazio\" + 1 monstro \"Vazio\"\n\nCada vez que um monstro \"Vazio\" for enviado para o Cemitério: este card ganha 100 ATK/DEF até o final deste turno.\n\nSe este card for enviado do campo para o Cemitério: você pode escolher 1 card com a face para cima que seu oponente controla; destrua-o."
     },
     "251": {
       "name": "Dragão Luminoso",
-      "description": "Se você não controlar monstros, você pode Invocar este card por Invocação-Especial da sua mão.\n\nSe um monstro do Tipo Dragão for descartado da sua mão para o Cemitério enquanto este card estiver com a face para cima no campo: você pode escolher 1 monstro do Tipo Dragão no seu Cemitério com nome diferente do monstro descartado; adicione-o à sua mão.\n\nVocê só pode usar cada efeito de \"Dragão Luminoso\" uma vez por turno."
+      "description": "Se você não controlar monstros, você pode Invocar este card por Invocação-Especial da sua mão. Você só pode Invocar \"Dragão Luminoso\" por Invocação-Especial uma vez por turno desta forma.\n\nSe um monstro Dragão for descartado da sua mão para o Cemitério enquanto este card estiver com a face para cima no campo: você pode escolher 1 monstro Dragão no seu Cemitério com um nome diferente do monstro descartado; adicione-o à sua mão.\n\nVocê só pode usar este efeito de \"Dragão Luminoso\" uma vez por turno."
     },
     "252": {
       "name": "Dragão Blindado",
-      "description": "Se este card for Invocado por Invocação-Normal: você pode adicionar 1 monstro Dragão de Nível 4 ou menor do seu Deck à sua mão.\n\nSe este card for destruído em batalha: compre 1 card e, se ele for um monstro Dragão de Nível 4 ou menor, você pode Invocá-lo por Invocação-Especial."
+      "description": "Se este card for Invocado por Invocação-Normal: você pode adicionar 1 monstro Dragão de Nível 4 ou menor do seu Deck à sua mão.\n\nSe este card for destruído em batalha: compre 1 card e, depois, se ele for um monstro Dragão de Nível 4 ou menor, você pode Invocá-lo por Invocação-Especial."
     },
     "253": {
       "name": "Dragão Blindado Metálico",
-      "description": "\"Dragão Blindado\"\n\nRequisito: nenhum.\n\nEnquanto estiver em Posição de Defesa, este card não pode ser destruído em batalha.\n\nEste card ganha 100 de ATK/DEF para cada monstro Dragão Invocado por Invocação-Especial enquanto este card estiver com a face para cima no campo."
+      "description": "\"Dragão Blindado\"\n\nEnquanto estiver em Posição de Defesa, este card não pode ser destruído em batalha.\n\nEste card ganha 100 ATK/DEF para cada monstro Dragão Invocado por Invocação-Especial enquanto este card estiver com a face para cima no campo."
     },
     "254": {
       "name": "Dragão Cinzento",
-      "description": "Não pode atacar diretamente.\n\nSe este card for Invocado por Invocação-Especial: você pode escolher 1 outro monstro Dragão que você controla; ele ganha 500 de ATK até o final deste turno.\n\nSe este card estiver no seu Cemitério: você pode descartar 1 monstro Dragão; adicione este card à sua mão."
+      "description": "Este card não pode atacar diretamente.\n\nSe este card for Invocado por Invocação-Especial: você pode escolher 1 outro monstro Dragão que você controla; ele ganha 500 ATK até o final deste turno.\n\nSe este card estiver no seu Cemitério: você pode descartar 1 monstro Dragão; adicione este card à sua mão."
     },
     "255": {
       "name": "Dragão Voltaico",
-      "description": "Se este card for descartado da sua mão para o Cemitério: cause 800 de dano ao seu oponente.\n\nSe você controlar um monstro Dragão: você pode Invocar por Invocação-Especial este card da sua mão.\n\nVocê só pode usar cada efeito de \"Dragão Voltaico\" uma vez por turno."
+      "description": "Se este card for descartado da sua mão para o Cemitério: cause 800 de dano ao seu oponente.\n\nSe você controlar um monstro Dragão: você pode Invocar este card por Invocação-Especial da sua mão.\n\nVocê só pode usar cada efeito de \"Dragão Voltaico\" uma vez por turno."
     },
     "256": {
       "name": "Dragão Luminescente",
-      "description": "Se este card for Invocado por Invocação-Normal: você pode escolher 1 monstro Dragão de Nível 4 ou menor no seu Cemitério; Invoque-o por Invocação-Especial.\n\nVocê pode banir este card do seu Cemitério e, depois, escolher 1 monstro que seu oponente controla; ele perde 600 de ATK/DEF até o final deste turno."
+      "description": "Se este card for Invocado por Invocação-Normal: você pode escolher 1 monstro Dragão de Nível 4 ou menor no seu Cemitério; Invoque-o por Invocação-Especial.\n\nVocê pode banir este card do seu Cemitério e, depois, escolher 1 monstro que seu oponente controla; ele perde 600 ATK/DEF até o final deste turno."
     },
     "257": {
       "name": "Dragão de Prata Majestoso",
-      "description": "Este card pode ser Invocado por Invocação-Tributo ao tributar 1 monstro do tipo Dragão.\n\nUma vez por turno: você pode escolher 1 monstro com a face para cima que seu oponente controla; mude sua posição de batalha."
+      "description": "Você pode Invocar este card por Invocação-Tributo ao Tributar 1 monstro Dragão.\n\nUma vez por turno: você pode escolher 1 monstro com a face para cima que seu oponente controla; mude sua posição de batalha."
     },
     "258": {
       "name": "Dragão das Trevas",
-      "description": "Se este card for Invocado por Invocação-Normal ou Especial: destrua todos os outros monstros Dragão que você controla e, se isso acontecer, este card ganha 300 de ATK para cada monstro destruído por este efeito.\n\nUma vez por turno: você pode descartar 1 card e, depois, escolher 1 monstro que seu oponente controla; negue os efeitos dele até o final deste turno."
+      "description": "Se este card for Invocado por Invocação-Normal ou Especial: destrua todos os outros monstros Dragão que você controla e, se isso acontecer, este card ganha 300 ATK para cada monstro destruído por este efeito.\n\nUma vez por turno: você pode descartar 1 card e, depois, escolher 1 monstro que seu oponente controla; negue seus efeitos até o final deste turno."
     },
     "259": {
       "name": "Dragão Touro Negro",
-      "description": "Você pode enviar 2 monstros Dragão da sua mão para o Cemitério; Invoque por Invocação-Especial este card da sua mão, mas ele não pode atacar no turno em que for Invocado por este efeito.\n\nEste card pode realizar até 2 ataques em monstros do oponente durante cada Fase de Batalha.\n\nVocê pode banir este card do seu Cemitério; adicione 1 monstro Dragão de Nível 7 ou 8 do seu Deck à sua mão."
+      "description": "Você pode enviar 2 monstros Dragão da sua mão para o Cemitério; Invoque este card por Invocação-Especial da sua mão, mas ele não pode atacar no turno em que for Invocado por Invocação-Especial por este efeito.\n\nEste card pode realizar até 2 ataques em monstros durante cada Fase de Batalha.\n\nVocê pode banir este card do seu Cemitério; adicione 1 monstro Dragão de Nível 7 ou 8 do seu Deck à sua mão."
     },
     "260": {
       "name": "Dragão Infernal",
-      "description": "Você pode enviar 1 monstro do tipo Dragão que você controla para o Cemitério; Invoque este card por Invocação-Especial da sua mão.\n\nUma vez por turno: você pode enviar este card com a face para cima para o Cemitério; Invoque por Invocação-Especial 1 monstro Dragão de Nível 7 ou menor do seu Cemitério, exceto \"Dragão Infernal\"."
+      "description": "Você pode enviar 1 monstro Dragão que você controla para o Cemitério; Invoque este card por Invocação-Especial da sua mão.\n\nUma vez por turno: você pode enviar este card com a face para cima para o Cemitério; Invoque por Invocação-Especial 1 monstro Dragão de Nível 7 ou menor do seu Cemitério, exceto \"Dragão Infernal\"."
     },
     "261": {
       "name": "Rugido Infernal",
-      "description": "Se você controlar um monstro Dragão de Nível 7 ou maior: destrua até 1 card de Magia/Armadilha que seu oponente controla.\n\nVocê pode banir este card do seu Cemitério; adicione 1 \"Pico Escarpado dos Dragões\" do seu Deck à sua mão."
+      "description": "Se você controlar um monstro Dragão de Nível 7 ou maior: destrua até 1 Magia/Armadilha que seu oponente controla.\n\nVocê pode banir este card do seu Cemitério; adicione 1 \"Pico Escarpado dos Dragões\" do seu Deck à sua mão."
     },
     "262": {
       "name": "Pico Escarpado dos Dragões",
-      "description": "Quando este card for ativado: você pode adicionar 1 monstro Dragão de Nível 4 ou menor do seu Cemitério à sua mão.\n\nCada vez que um monstro Dragão destruir um monstro do oponente em batalha, coloque 1 Marcador de Pico Dracônico neste card.\n\nUma vez por turno, se este card tiver 7 ou mais Marcadores de Pico Dracônico: você pode enviar este card para o Cemitério; Invoque por Invocação-Especial 1 monstro do tipo Dragão da sua mão, Deck ou Cemitério."
+      "description": "Quando este card for ativado: você pode adicionar 1 monstro Dragão de Nível 4 ou menor do seu Cemitério à sua mão.\n\nCada vez que um monstro Dragão que você controla destruir um monstro do oponente em batalha, coloque 1 Marcador de Pico Dracônico neste card.\n\nUma vez por turno, se este card tiver 7 ou mais Marcadores de Pico Dracônico: você pode enviar este card para o Cemitério; Invoque por Invocação-Especial 1 monstro Dragão da sua mão, Deck ou Cemitério."
     },
     "263": {
       "name": "Dragão Serpente Abissal",
-      "description": "Durante sua Fase Principal: você pode escolher 1 monstro que seu oponente controla; envie este card e o alvo para o Cemitério e, durante a próxima Fase de Espera do seu oponente, Invoque-os por Invocação-Especial. Se você escolheu um Monstro de Fusão ou de Ascensão como alvo: este card ganha 800 de ATK até o final do seu próximo turno.\n\nVocê pode usar cada efeito de \"Dragão Serpente Abissal\" uma vez por turno."
+      "description": "Durante sua Fase Principal: você pode escolher 1 monstro que seu oponente controla; envie este card e esse alvo para o Cemitério e, depois, durante a próxima Fase de Espera do seu oponente, Invoque ambos por Invocação-Especial. Se o monstro escolhido como alvo era um Monstro de Fusão ou de Ascensão, este card ganha 800 ATK até o final do seu próximo turno.\n\nVocê só pode usar este efeito de \"Dragão Serpente Abissal\" uma vez por turno."
     },
     "264": {
       "name": "Dragão de Cristal Purificado",
-      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao banir 3 monstros do tipo Dragão do seu Cemitério. Você só pode tentar Invocar \"Dragão de Cristal Purificado\" por Invocação-Especial desta forma uma vez por turno, mesmo que a Invocação seja negada.\n\nSe este card destruir um monstro em batalha: ganhe LP igual ao Nível do monstro destruído x100.\n\nVocê pode escolher 1 outro monstro Dragão que você controla; ele não pode ser destruído por efeitos de card até o final do próximo turno.\n\nVocê só pode usar cada efeito de \"Dragão de Cristal Purificado\" uma vez por turno."
+      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao banir 3 monstros Dragão do seu Cemitério. Você só pode Invocar por Invocação-Especial \"Dragão de Cristal Purificado\" uma vez por turno desta forma.\n\nSe este card destruir um monstro em batalha: ganhe PV iguais ao Nível do monstro destruído x100.\n\nVocê pode escolher 1 outro monstro Dragão que você controla; ele não pode ser destruído por efeitos de card até o final do próximo turno.\n\nVocê só pode usar cada efeito de \"Dragão de Cristal Purificado\" uma vez por turno."
     },
     "265": {
       "name": "Dragão Tecno-Vazio",
-      "description": "\"Dragão Voltaico\" + 1 monstro do tipo Dragão de Nível 5 ou maior\n\nSe este card for Invocado por Invocação-Fusão: você pode escolher 1 monstro do tipo Dragão de Nível 4 ou menor no seu Cemitério; bana-o e, se isso acontecer, este card ganha ATK igual à metade do ATK daquele monstro banido até o final deste turno.\n\nSe este card for destruído em batalha: você pode Invocar por Invocação-Especial 1 \"Dragão Voltaico\" do seu Cemitério.\n\nVocê só pode usar cada efeito de \"Dragão Tecno-Vazio\" uma vez por turno."
+      "description": "\"Dragão Voltaico\" + 1 monstro Dragão de Nível 5 ou maior\n\nSe este card for Invocado por Invocação-Fusão: você pode escolher 1 monstro Dragão de Nível 4 ou menor no seu Cemitério; bana-o e, se isso acontecer, este card ganha ATK igual à metade do ATK do monstro banido até o final deste turno.\n\nSe este card for destruído em batalha: você pode Invocar por Invocação-Especial 1 \"Dragão Voltaico\" do seu Cemitério.\n\nVocê só pode usar cada efeito de \"Dragão Tecno-Vazio\" uma vez por turno."
     },
     "266": {
       "name": "Dragão Cósmico Radiante",
-      "description": "\"Dragão Luminoso\" + 2 monstros do Tipo Dragão\n\nSe este card for Invocado por Invocação-Fusão: você pode escolher de 1 a 5 cards no seu Cemitério; embaralhe-os no Deck e, depois, compre 1 card.\n\nVocê não sofre dano de batalha em batalhas envolvendo este card.\n\nSe este card for destruído em batalha ou por efeito de card: você pode Invocar por Invocação-Especial 1 monstro do Tipo Dragão do seu Cemitério, exceto \"Dragão Cósmico Radiante\".\n\nVocê só pode usar cada efeito de \"Dragão Cósmico Radiante\" uma vez por turno."
+      "description": "\"Dragão Luminoso\" + 2 monstros Dragão\n\nSe este card for Invocado por Invocação-Fusão: você pode escolher de 1 a 5 cards no seu Cemitério; embaralhe-os no Deck e, depois, compre 1 card.\n\nVocê não sofre dano de batalha de batalhas envolvendo este card.\n\nSe este card for destruído em batalha ou por um efeito de card: você pode Invocar por Invocação-Especial 1 monstro Dragão do seu Cemitério, exceto \"Dragão Cósmico Radiante\".\n\nVocê só pode usar cada efeito de \"Dragão Cósmico Radiante\" uma vez por turno."
     },
     "267": {
       "name": "Dragão Cósmico Arco-Íris",
-      "description": "\"Dragão de Cristal Purificado\"\n\nRequisito: o material deve ter ativado seus efeitos 3 vezes neste duelo.\n\nUma vez por turno: você pode escolher 1 monstro do Tipo Dragão que você controla; ele não pode ser destruído em batalha ou por efeitos de card até o final do próximo turno.\n\nSe este card destruir um monstro em batalha: ganhe PV igual ao ATK original do monstro destruído.\n\nVocê pode banir este card do seu Cemitério; envie de 1 a 3 monstros \"Dragão Extremo\" do seu Deck para o Cemitério."
+      "description": "\"Dragão de Cristal Purificado\"\n\nOs efeitos do material devem ter sido ativados pelo menos 3 vezes neste Duelo.\n\nUma vez por turno: você pode escolher 1 monstro Dragão que você controla; ele não pode ser destruído em batalha ou por efeitos de card até o final do próximo turno.\n\nSe este card destruir um monstro em batalha: ganhe PV iguais ao ATK original do monstro destruído.\n\nVocê pode banir este card do seu Cemitério; envie de 1 a 3 monstros \"Dragão Extremo\" do seu Deck para o Cemitério."
     },
     "268": {
       "name": "Santuário do Espírito do Dragão",
-      "description": "Quando um monstro Dragão que você controla for alvo de um ataque ou efeito de card do oponente: devolva esse monstro para a mão, então Invoque por Invocação-Especial 1 monstro Dragão da sua mão com Nível menor ou igual ao Nível desse monstro na mão.\n\nVocê só pode ativar 1 \"Santuário do Espírito do Dragão\" por turno."
+      "description": "Quando um monstro Dragão que você controla for alvo de um ataque ou efeito de card do seu oponente: devolva esse monstro para a mão e, se isso acontecer, Invoque por Invocação-Especial 1 monstro Dragão da sua mão com Nível menor ou igual ao Nível do monstro devolvido.\n\nVocê só pode ativar 1 \"Santuário do Espírito do Dragão\" por turno."
     },
     "269": {
       "name": "Dragão da Chama Óssea",
-      "description": "Não pode ser Invocado por Invocação-Normal/Baixado.\n\nUma vez por turno, se este card estiver no seu Cemitério: você pode enviar 1 monstro Dragão que você controla para o Cemitério; Invoque por Invocação-Especial este card.\n\nGanha 400 de ATK para cada monstro Dragão no seu Cemitério."
+      "description": "Não pode ser Invocado por Invocação-Normal/Baixado.\n\nUma vez por turno, se este card estiver no seu Cemitério: você pode enviar 1 monstro Dragão que você controla para o Cemitério; Invoque este card por Invocação-Especial.\n\nEste card ganha 400 ATK para cada monstro Dragão no seu Cemitério."
     },
     "270": {
       "name": "Dragão Extremo de Fogo",
@@ -991,7 +991,7 @@
     },
     "271": {
       "name": "Dragão Extremo Vulcânico",
-      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo.\n\nEnquanto este card for o único monstro que você controla, ele não pode ser destruído em batalha.\n\nSe este card batalhar um monstro do oponente: cause 600 de dano ao seu oponente.\n\nUma vez por duelo: você pode banir todos os cards em ambos os Cemitérios; cause 100 de dano ao seu oponente para cada card banido por este efeito."
+      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo.\n\nEnquanto este card for o único monstro que você controla, ele não pode ser destruído em batalha.\n\nSe este card batalhar com um monstro do oponente: cause 600 de dano ao seu oponente.\n\nUma vez por Duelo: você pode banir todos os cards em ambos os Cemitérios; cause 100 de dano ao seu oponente para cada card banido por este efeito."
     },
     "272": {
       "name": "Dragão Extremo da Névoa",
@@ -999,23 +999,23 @@
     },
     "273": {
       "name": "Dragão Extremo da Galáxia",
-      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo.\n\nQualquer card enviado ao Cemitério do seu oponente é banido em vez disso.\n\nUma vez por Duelo, se este card seria destruído em batalha ou por efeito de card: você pode bani-lo até o final do próximo turno em vez disso. Depois, se seu oponente controlar algum card, escolha 1 desses cards e bana-o."
+      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo.\n\nQualquer card enviado ao Cemitério do seu oponente é banido em vez disso.\n\nUma vez por Duelo, se este card estiver para ser destruído em batalha ou por um efeito de card: você pode bani-lo até o final do próximo turno em vez disso. Depois, se seu oponente controlar algum card, escolha 1 desses cards e bana-o."
     },
     "274": {
       "name": "Dragão Extremo da Floresta",
-      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo.\n\nDurante cada Fase de Espera: ganhe 200 PV para cada card que seu oponente controla e para cada card na mão dele.\n\nCada vez que seu oponente Invocar um monstro ou ativar um card ou efeito: ganhe 100 PV.\n\nUma vez por turno (Efeito Rápido): este card ganha ATK igual ao total de PV que você ganhou neste turno, até o final deste turno."
+      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo.\n\nDurante cada Fase de Espera: ganhe 200 PV para cada card que seu oponente controla e para cada card na mão do seu oponente.\n\nCada vez que seu oponente Invocar um monstro ou ativar um card ou efeito: ganhe 100 PV.\n\nUma vez por turno (Efeito Rápido): você pode fazer este card ganhar ATK igual ao total de PV que você ganhou neste turno, até o final deste turno."
     },
     "275": {
       "name": "Dragão Bahamut Supremo",
-      "description": "5 monstros \"Dragão Extremo\"\n\nDeve ser Invocado por Invocação-Fusão banindo 5 monstros \"Dragão Extremo\" do seu Cemitério, e não pode ser Invocado por Invocação-Especial de outras formas.\n\nEnquanto este card estiver com a face para cima no campo, você não pode controlar outros monstros.\n\nNão é afetado por outros efeitos de cards.\n\nUma vez por turno, quando um monstro seria Invocado, ou quando um card ou efeito for ativado (Efeito Rápido): negue a Invocação ou ativação e, se isso acontecer, destrua esse card."
+      "description": "5 monstros \"Dragão Extremo\"\n\nDeve ser Invocado por Invocação-Fusão ao banir 5 monstros \"Dragão Extremo\" do seu Cemitério e não pode ser Invocado por Invocação-Especial de outras formas.\n\nEnquanto este card estiver com a face para cima no campo, você não pode controlar outros monstros.\n\nNão é afetado por outros efeitos de cards.\n\nUma vez por turno, quando um monstro estiver para ser Invocado, ou quando um card ou efeito for ativado (Efeito Rápido): você pode negar a Invocação ou ativação e, se isso acontecer, destrua esse card."
     },
     "276": {
       "name": "Estrelas Convergentes",
-      "description": "Descarte 1 card; reduza o nível de todos os monstros na sua mão em 2 até o fim do turno."
+      "description": "Descarte 1 card; reduza o Nível de todos os monstros na sua mão em 2 até o final deste turno."
     },
     "277": {
       "name": "Despertar do Dragão Extremo",
-      "description": "Você só pode controlar 1 \"Despertar do Dragão Extremo\".\n\nUma vez por turno: você pode enviar 2 monstros do tipo Dragão que você controla para o Cemitério; Invoque por Invocação-Especial 1 monstro do tipo Dragão de Nível 8 ou maior da sua mão.\n\nVocê pode banir este card do seu Cemitério; adicione 1 monstro \"Dragão Extremo\" do seu Deck à sua mão.\n\nVocê só pode usar cada efeito de \"Despertar do Dragão Extremo\" uma vez por turno."
+      "description": "Você só pode controlar 1 \"Despertar do Dragão Extremo\".\n\nUma vez por turno: você pode enviar 2 monstros Dragão que você controla para o Cemitério; Invoque por Invocação-Especial 1 monstro Dragão de Nível 8 ou maior da sua mão.\n\nVocê pode banir este card do seu Cemitério; adicione 1 monstro \"Dragão Extremo\" do seu Deck à sua mão.\n\nVocê só pode usar cada efeito de \"Despertar do Dragão Extremo\" uma vez por turno."
     },
     "278": {
       "name": "Stelya, Domadora de Dragões",
@@ -1027,35 +1027,35 @@
     },
     "280": {
       "name": "Drag\u00e3o do Eclipse Lunar",
-      "description": "Se este card for Invocado por Invocação-Normal ou Especial: você pode descartar 1 card; adicione 1 monstro Dragão de Nível 4 ou menor do seu Deck à sua mão. Depois, você pode Invocar por Invocação-Especial 1 \"Dragão do Eclipse Solar\" da sua mão ou Cemitério.\n\nVocê pode banir este card do seu Cemitério; Invoque por Invocação-Especial 1 monstro Dragão de Nível 4 ou menor do seu Deck.\n\nVocê só pode usar cada efeito de \"Dragão do Eclipse Lunar\" uma vez por turno."
+      "description": "Se este card for Invocado por Invocação-Normal ou Especial: você pode descartar 1 card; adicione 1 monstro Dragão de Nível 4 ou menor do seu Deck à sua mão e, depois, você pode Invocar por Invocação-Especial 1 \"Dragão do Eclipse Solar\" da sua mão ou do seu Cemitério.\n\nVocê pode banir este card do seu Cemitério; Invoque por Invocação-Especial 1 monstro Dragão de Nível 4 ou menor do seu Deck.\n\nVocê só pode usar cada efeito de \"Dragão do Eclipse Lunar\" uma vez por turno."
     },
     "301": {
       "name": "Grimório do Arcanista Aprendiz",
-      "description": "Equipe apenas a um monstro \"Arcanista\" que você controla. Você só pode controlar 1 \"Grimório do Arcanista Aprendiz\".\n\nSe uma Magia \"Arcanista\" que você ativou resolver: você pode armazenar o efeito dessa Magia neste card (máximo 1). Se este card já tiver um efeito armazenado, você pode substituí-lo pelo novo efeito.\n\nUma vez por turno: você pode ativar o efeito armazenado neste card."
+      "description": "Equipe apenas a um monstro \"Arcanista\" que você controla.\n\nVocê só pode controlar 1 \"Grimório do Arcanista Aprendiz\".\n\nDepois que uma Magia Normal \"Arcanista\" que você ativou resolver, você pode armazenar o efeito dessa Magia neste card (máx. 1). Se este card já tiver um efeito armazenado, você pode substituí-lo pelo novo efeito.\n\nUma vez por turno: você pode ativar o efeito armazenado neste card."
     },
     "302": {
       "name": "Aprendiz Arcanista",
-      "description": "Se este card for Invocado por Invocação-Normal: você pode adicionar 1 Magia \"Arcanista\" do seu Deck à sua mão. Você só pode ativar este efeito de \"Aprendiz Arcanista\" uma vez por turno.\n\nEnquanto este card com a face para cima estiver equipado com uma Magia de Equipamento \"Arcanista\", todos os monstros \"Arcanista\" que você controla ganham 300 de ATK."
+      "description": "Se este card for Invocado por Invocação-Normal: você pode adicionar 1 Magia \"Arcanista\" do seu Deck à sua mão.\n\nVocê só pode usar este efeito de \"Aprendiz Arcanista\" uma vez por turno.\n\nEnquanto este card com a face para cima estiver equipado com uma Magia de Equipamento \"Arcanista\", todos os monstros \"Arcanista\" que você controla ganham 300 ATK."
     },
     "303": {
       "name": "Explosão Carmesim Arcanista",
-      "description": "Escolha 1 monstro \"Arcanista\" que você controla e 1 monstro que seu oponente controla; destrua os alvos e, se isso acontecer, cada jogador sofre dano igual à metade do ATK que seu monstro destruído tinha imediatamente antes de ser destruído. Se você controlar uma Magia de Equipamento \"Arcanista\", você não sofre dano desse efeito."
+      "description": "Escolha 1 monstro \"Arcanista\" que você controla e 1 monstro que seu oponente controla; destrua-os e, depois, para cada monstro destruído por este efeito, cause dano ao seu controlador igual à metade do ATK que esse monstro tinha no campo. Se você controlar uma Magia de Equipamento \"Arcanista\", você não sofre dano deste efeito."
     },
     "304": {
       "name": "Lança Relâmpago Arcanista",
-      "description": "Escolha 1 monstro com a face para cima no campo; aplique o efeito apropriado, dependendo de quem controla esse alvo. Se for um monstro \"Arcanista\" que você controla: ele ganha 500 de ATK até o final deste turno e, se ele batalhar um monstro em Posição de Defesa neste turno, cause dano perfurante ao seu oponente. Se for um monstro que seu oponente controla: ele não pode declarar um ataque até o final do próximo turno do seu oponente.\n\nVocê só pode ativar 1 \"Lança Relâmpago Arcanista\" por turno."
+      "description": "Escolha 1 monstro com a face para cima no campo; aplique o efeito apropriado, dependendo de quem controla esse alvo. Se for um monstro \"Arcanista\" que você controla: ele ganha 500 ATK até o final deste turno e, se ele batalhar com um monstro em Posição de Defesa neste turno, cause dano de batalha perfurante ao seu oponente. Se for um monstro que seu oponente controla: ele não pode declarar um ataque até o final do próximo turno do seu oponente.\n\nVocê só pode ativar 1 \"Lança Relâmpago Arcanista\" por turno."
     },
     "305": {
       "name": "Viridis, Arcanista da Vida",
-      "description": "Uma vez por turno: você pode escolher 1 Magia com a face para cima que seu oponente controla; devolva-a para a mão e, se isso acontecer, ganhe 500 PV.\n\nSe este card for equipado com uma Magia de Equipamento \"Arcanista\": você pode escolher 1 Magia no seu Cemitério; adicione-a à sua mão.\n\nVocê só pode usar cada efeito de \"Viridis, Arcanista da Vida\" uma vez por turno."
+      "description": "Você pode escolher 1 Magia com a face para cima que seu oponente controla; devolva-a para a mão e, se isso acontecer, ganhe 500 PV.\n\nSe este card for equipado com uma Magia de Equipamento \"Arcanista\": você pode escolher 1 Magia no seu Cemitério; adicione-a à sua mão.\n\nVocê só pode usar cada efeito de \"Viridis, Arcanista da Vida\" uma vez por turno."
     },
     "306": {
       "name": "Tera, Arcanista da Terra",
-      "description": "Você pode escolher 1 monstro que seu oponente controla; mude a posição de batalha dele. Se este card estiver equipado com uma Magia de Equipamento \"Arcanista\", este efeito pode ser ativado como um Efeito Rápido.\n\nVocê só pode usar este efeito de \"Tera, Arcanista da Terra\" uma vez por turno."
+      "description": "Você pode escolher 1 monstro que seu oponente controla; mude sua posição de batalha. Se este card estiver equipado com uma Magia de Equipamento \"Arcanista\", este efeito pode ser ativado como um Efeito Rápido.\n\nVocê só pode usar este efeito de \"Tera, Arcanista da Terra\" uma vez por turno."
     },
     "307": {
       "name": "Albus, Arcanista do Gelo",
-      "description": "Se você controlar um monstro \"Arcanista\" com a face para cima, você pode Invocar este card por Invocação-Especial da sua mão. Você só pode Invocar \"Albus, Arcanista do Gelo\" por Invocação-Especial uma vez por turno desta forma.\n\nSe este card for equipado com uma Magia de Equipamento \"Arcanista\": escolha 1 monstro \"Arcanista\" no seu Cemitério; adicione-o à sua mão. Você só pode ativar este efeito de \"Albus, Arcanista do Gelo\" uma vez por turno."
+      "description": "Se você controlar um monstro \"Arcanista\" com a face para cima, você pode Invocar este card por Invocação-Especial da sua mão. Você só pode Invocar \"Albus, Arcanista do Gelo\" por Invocação-Especial uma vez por turno desta forma.\n\nSe este card for equipado com uma Magia de Equipamento \"Arcanista\": escolha 1 monstro \"Arcanista\" no seu Cemitério; adicione-o à sua mão.\n\nVocê só pode ativar este efeito de \"Albus, Arcanista do Gelo\" uma vez por turno."
     },
     "308": {
       "name": "Mestre dos Espelhos Arcanista",
@@ -1063,31 +1063,31 @@
     },
     "309": {
       "name": "Reunião dos Arcanistas",
-      "description": "A primeira vez em cada turno que uma Magia \"Arcanista\" que você controla seria destruída, ela não é destruída.\n\nUma vez por turno: você pode aplicar 1 destes efeitos;\n- Descarte 2 monstros \"Arcanista\"; adicione 1 Magia \"Arcanista\" do seu Deck à sua mão.\n- Descarte 2 Magias \"Arcanista\"; adicione 1 monstro \"Arcanista\" de Nível 4 ou menor do seu Deck à sua mão."
+      "description": "A primeira vez a cada turno que uma Magia \"Arcanista\" que você controla estiver para ser destruída, ela não é destruída.\n\nUma vez por turno: você pode aplicar 1 destes efeitos:\n● Descarte 2 monstros \"Arcanista\"; adicione 1 Magia \"Arcanista\" do seu Deck à sua mão.\n● Descarte 2 Magias \"Arcanista\"; adicione 1 monstro \"Arcanista\" de Nível 4 ou menor do seu Deck à sua mão."
     },
     "310": {
       "name": "Barreira de Gelo Arcanista",
-      "description": "Escolha 1 monstro \"Arcanista\" que você controla; até o final do próximo turno, a primeira vez que esse monstro seria destruído em batalha ou por efeito de card, ele não é destruído.\n\nSe esse monstro estiver equipado com uma Magia de Equipamento \"Arcanista\": compre 2 cards.\n\nVocê só pode ativar 1 \"Barreira de Gelo Arcanista\" por turno."
+      "description": "Escolha 1 monstro \"Arcanista\" que você controla; até o final do próximo turno, a primeira vez que esse monstro estiver para ser destruído em batalha ou por um efeito de card, ele não é destruído e, além disso, se esse monstro estiver equipado com uma Magia de Equipamento \"Arcanista\", compre 2 cards.\n\nVocê só pode ativar 1 \"Barreira de Gelo Arcanista\" por turno."
     },
     "311": {
       "name": "Rio de Tinta Arcanista",
-      "description": "Cada vez que você ativar o efeito de uma Magia \"Arcanista\", exceto \"Rio de Tinta Arcanista\": adicione 1 marcador de Tinta a este card.\n\nVocê pode remover 2 marcadores de Tinta deste card; adicione 1 Magia \"Arcanista\" do seu Cemitério à sua mão."
+      "description": "Cada vez que você ativar um efeito de uma Magia \"Arcanista\", exceto \"Rio de Tinta Arcanista\": coloque 1 Marcador de Tinta neste card.\n\nVocê pode remover 2 Marcadores de Tinta deste card; adicione 1 Magia \"Arcanista\" do seu Cemitério à sua mão."
     },
     "312": {
       "name": "Grande Biblioteca Arcanista",
-      "description": "A primeira vez a cada turno que um monstro \"Arcanista\" seu destruir um monstro do oponente em batalha: compre 1 carta.\n\nUma vez por turno: você pode ativar 1 destes efeitos;\n● Se você não controlar monstros: pague 2000 PV; Invoque por Invocação-Especial 1 monstro \"Arcanista\" de Nível 4 ou menor do seu Deck.\n● Se você controlar um monstro \"Arcanista\": adicione 1 Magia de Equipamento \"Arcanista\" do seu Deck à sua mão."
+      "description": "A primeira vez a cada turno que um monstro \"Arcanista\" que você controla destruir um monstro do oponente em batalha: compre 1 card.\n\nUma vez por turno: você pode ativar 1 destes efeitos:\n● Se você não controlar monstros: pague 2000 PV; Invoque por Invocação-Especial 1 monstro \"Arcanista\" de Nível 4 ou menor do seu Deck.\n● Se você controlar um monstro \"Arcanista\": adicione 1 Magia de Equipamento \"Arcanista\" do seu Deck à sua mão."
     },
     "313": {
       "name": "Mestre Elementalista Arcanista",
-      "description": "Não pode ser destruído por efeitos de card.\n\nEste card ganha 100 de ATK para cada Magia \"Arcanista\" ativada neste turno.\n\nUma vez por turno, se este card estiver equipado com uma Magia de Equipamento \"Arcanista\": você pode escolher 1 monstro que seu oponente controla; destrua-o."
+      "description": "Não pode ser destruído por efeitos de card.\n\nEste card ganha 100 ATK para cada Magia \"Arcanista\" ativada neste turno.\n\nUma vez por turno, se este card estiver equipado com uma Magia de Equipamento \"Arcanista\": você pode escolher 1 monstro que seu oponente controla; destrua-o."
     },
     "314": {
       "name": "Azrath, Arcanista Corrompido",
-      "description": "Cada vez que você ativar uma Magia \"Arcanista\" enquanto este card estiver com a face para cima no campo: todos os monstros que seu oponente controla nesse momento perdem 100 de ATK/DEF até o final deste turno.\n\nSe este card for equipado com uma Magia de Equipamento \"Arcanista\": escolha 1 monstro com a face para cima que seu oponente controla; reduza o ATK/DEF dele pela metade até o final do turno.\n\nVocê só pode usar este efeito de \"Azrath, Arcanista Corrompido\" uma vez por turno."
+      "description": "Cada vez que você ativar uma Magia \"Arcanista\" enquanto este card estiver com a face para cima no campo: todos os monstros que seu oponente controla nesse momento perdem 100 ATK/DEF até o final deste turno.\n\nSe este card for equipado com uma Magia de Equipamento \"Arcanista\": escolha 1 monstro com a face para cima que seu oponente controla; reduza seu ATK/DEF pela metade até o final deste turno.\n\nVocê só pode usar este efeito de \"Azrath, Arcanista Corrompido\" uma vez por turno."
     },
     "315": {
       "name": "Tornado Destruidor de Glifos",
-      "description": "Se você controlar um monstro \"Arcanista\" equipado com uma Magia de Equipamento \"Arcanista\": escolha 1 Magia/Armadilha que seu oponente controla; destrua o alvo."
+      "description": "Se você controlar um monstro \"Arcanista\" equipado com uma Magia de Equipamento \"Arcanista\": escolha 1 Magia/Armadilha que seu oponente controla; destrua-a."
     },
     "316": {
       "name": "Impacto Sísmico Arcanista",

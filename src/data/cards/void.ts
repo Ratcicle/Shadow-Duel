@@ -12,7 +12,7 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      "Special Summon 1 Level 4 or lower \"Void\" monster from your Deck, except \"Void Conjurer\", but it cannot attack this turn and is destroyed during the End Phase.\n\nIf this card is in your GY: You can send 1 \"Void\" monster you control to the GY; Special Summon this card, but negate its effects until the end of this turn.\n\nYou can only use each effect of \"Void Conjurer\" once per turn.",
+      "You can Special Summon 1 Level 4 or lower \"Void\" monster from your Deck, except \"Void Conjurer\", but it cannot attack this turn, also destroy it during the End Phase.\n\nIf this card is in your GY: You can send 1 \"Void\" monster you control to the GY; Special Summon this card, but negate its effects until the end of this turn.\n\nYou can only use each effect of \"Void Conjurer\" once per turn.",
     image: "assets/Void Conjurer.png",
     effects: [
       {
@@ -94,7 +94,7 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      "Cannot attack the turn it is Special Summoned.\n\nOnce per turn: You can return this card to your hand; Special Summon 1 Level 4 or lower \"Void\" monster from your hand, except \"Void Walker\".",
+      "This card cannot attack the turn it is Special Summoned.\n\nOnce per turn: You can return this card to your hand; Special Summon 1 Level 4 or lower \"Void\" monster from your hand, except \"Void Walker\".",
     image: "assets/Void Walker.png",
     effects: [
       {
@@ -157,7 +157,7 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      "If this card is Normal Summoned: You can add 1 \"Void\" monster that mentions \"Void Hollow\" from your Deck to your hand, except \"Void Beast\".\n\nIf this card destroys an opponent's monster by battle: You can Special Summon 1 \"Void Hollow\" from your hand or Deck.\n\nYou can only use each effect of \"Void Beast\" once per turn.",
+      "If this card is Normal Summoned: You can add 1 \"Void\" monster that mentions \"Void Hollow\" in its text from your Deck to your hand, except \"Void Beast\".\n\nIf this card destroys an opponent's monster by battle: You can Special Summon 1 \"Void Hollow\" from your hand or Deck.\n\nYou can only use each effect of \"Void Beast\" once per turn.",
     image: "assets/Void Beast.png",
     effects: [
       {
@@ -425,7 +425,7 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      "3 \"Void Hollow\" monsters\n\nIf this card is destroyed by battle or card effect: You can Special Summon up to 3 \"Void Hollow\" from your GY.\n\nIf this card destroys an opponent's monster by battle: You can Special Summon 1 \"Void Hollow\" from your GY.\n\n(Quick Effect) You can send 1 face-up \"Void Hollow\" you control to the GY; this card gains 1000 ATK until the end of this turn.",
+      "3 \"Void Hollow\" monsters\n\nIf this card is destroyed by battle or a card effect: You can Special Summon up to 3 \"Void Hollow\" from your GY.\n\nIf this card destroys an opponent's monster by battle: You can Special Summon 1 \"Void Hollow\" from your GY.\n\n(Quick Effect): You can send 1 face-up \"Void Hollow\" you control to the GY; this card gains 1000 ATK until the end of this turn.",
     image: "assets/Void Hollow King.png",
     monsterType: "fusion",
     fusionMaterials: [{ name: "Void Hollow", count: 3 }],
@@ -607,7 +607,7 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      "You can send a face-up \"Void\" monster you control to the GY; Special Summon this card from your hand.\n\nThis card gains 100 ATK for each \"Void Hollow\" in your GY.\n\nYou can banish this card from your GY; target 1 face-up Spell/Trap your opponent controls; destroy it.\n\nYou can only use each effect of \"Void Forgotten Knight\" once per turn.",
+      "You can send 1 face-up \"Void\" monster you control to the GY; Special Summon this card from your hand.\n\nThis card gains 100 ATK for each \"Void Hollow\" in your GY.\n\nYou can banish this card from your GY, then target 1 face-up Spell/Trap your opponent controls; destroy it.\n\nYou can only use each effect of \"Void Forgotten Knight\" once per turn.",
     image: "assets/Void Forgotten Knight.png",
     effects: [
       {
@@ -711,7 +711,7 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      "If you Fusion Summon a \"Void\" Fusion Monster: You can discard this card; that monster becomes immune to your opponent's card effects until the end of the next turn.\n\nYou can only use this effect of \"Void Raven\" once per turn.",
+      "If you Fusion Summon a \"Void\" Fusion Monster: You can discard this card; that monster is unaffected by your opponent's card effects until the end of the next turn.\n\nYou can only use this effect of \"Void Raven\" once per turn.",
     image: "assets/Void Raven.png",
     effects: [
       {
@@ -763,7 +763,7 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      "Gains 100 ATK/DEF for each \"Void\" monster on your field and in your GY.\n\nIf this card is in your GY and you have 2 or more \"Void Hollow\" on your field and/or in your GY: You can Special Summon it.\n\nYou can only activate this effect of \"Void Tenebris Horn\" once per turn, and only 3 times per Duel.",
+      "This card gains 100 ATK/DEF for each \"Void\" monster on your field and in your GY.\n\nIf this card is in your GY and there are 2 or more \"Void Hollow\" on your field and/or in your GY: You can Special Summon this card.\n\nYou can only activate this effect of \"Void Tenebris Horn\" once per turn, and only 3 times per Duel.",
     image: "assets/Void Tenebris Horn.png",
     effects: [
       {
@@ -852,7 +852,7 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      "Once per turn: You can Special Summon this card from your hand by sending 2 \"Void\" monsters you control to the GY. If \"Void Hollow\" was sent to the GY to activate this effect, this card gains the following effect: If this card destroys an opponent's monster by battle: banish that monster.",
+      "Once per turn: You can send 2 \"Void\" monsters you control to the GY; Special Summon this card from your hand. If you sent \"Void Hollow\" to the GY to activate this effect, this card gains the following effect:\n● If this card destroys an opponent's monster by battle: Banish that monster.",
     image: "assets/Void Slayer Brute.png",
     effects: [
       {
@@ -994,7 +994,7 @@ export const voidCards = [
     attribute: "Wind",
     archetype: "Void",
     description:
-      "Once per turn: You can Special Summon this card from your hand by sending 1 \"Void Hollow\" you control to the GY.\n\nThis card cannot be destroyed by battle while you control \"Void Hollow\".\n\n\"Void\" monsters on your field and in your GY cannot be banished by your opponent's card effects.",
+      "Once per turn: You can send 1 \"Void Hollow\" you control to the GY; Special Summon this card from your hand.\n\nThis card cannot be destroyed by battle while you control \"Void Hollow\".\n\n\"Void\" monsters on your field and in your GY cannot be banished by your opponent's card effects.",
     image: "assets/Void Serpent Drake.png",
     effects: [
       {
@@ -1089,7 +1089,7 @@ export const voidCards = [
     archetype: "Void",
     archetypes: ["Void"],
     description:
-      "6 \"Void\" monsters\n\nIf this card is Fusion Summoned: destroy all Spell and Trap Cards your opponent controls, and if you do, draw 1 card for each card destroyed.\n\nOnce per turn: If this card would be destroyed by battle or card effects: You can reduce its ATK by 700; negate the destruction of this card.",
+      "6 \"Void\" monsters\n\nIf this card is Fusion Summoned: Destroy all Spells and Traps your opponent controls, and if you do, draw 1 card for each card destroyed.\n\nOnce per turn, if this card would be destroyed by battle or a card effect: You can make this card lose 700 ATK; it is not destroyed.",
     image: "assets/Void Hydra Titan.png",
     fusionMaterials: [
       {
@@ -1152,7 +1152,7 @@ export const voidCards = [
     subtype: "normal",
     archetype: "Void",
     description:
-      "Target 1 face-up \"Void\" monster you control; until the end of this turn, that monster's ATK/DEF become 0, and its effects are negated. If this effect resolves, you can conduct 1 additional Normal Summon this turn.\n\nYou can only activate 1 \"Sealing the Void\" per turn.",
+      "Target 1 face-up \"Void\" monster you control; until the end of this turn, that monster's ATK/DEF become 0, and its effects are negated, then you can conduct 1 Normal Summon/Set this turn in addition to your Normal Summon/Set.\n\nYou can only activate 1 \"Sealing the Void\" per turn.",
     image: "assets/Sealing the Void.png",
     effects: [
       {
@@ -1197,7 +1197,7 @@ export const voidCards = [
     subtype: "field",
     archetype: "Void",
     description:
-      "During your Main Phase, if you control no monsters: You can Special Summon 1 Level 4 or lower \"Void\" monster from your Graveyard, but its effects are negated.\n\nYou can only use this effect of \"The Void\" once per turn.",
+      "During your Main Phase, if you control no monsters: You can Special Summon 1 Level 4 or lower \"Void\" monster from your GY, but its effects are negated.\n\nYou can only use this effect of \"The Void\" once per turn.",
     image: "assets/The Void.png",
     effects: [
       {
@@ -1287,7 +1287,7 @@ export const voidCards = [
     subtype: "normal",
     archetype: "Void",
     description:
-      "Add 1 \"Void\" monster with 1600 or less ATK from your Deck to your hand. Then, if you control no monsters, you can Special Summon that monster from your hand.\n\nYou can only activate 1 \"Void Lost Throne\" per turn.",
+      "Add 1 \"Void\" monster with 1600 or less ATK from your Deck to your hand, then, if you control no monsters, you can Special Summon that monster.\n\nYou can only activate 1 \"Void Lost Throne\" per turn.",
     image: "assets/Void Lost Throne.png",
     effects: [
       {
@@ -1362,7 +1362,7 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      "Once per turn: You can Special Summon this card from your hand by sending 1 \"Void\" monster you control to the GY.\n\nOnce per turn: You can return this face-up card you control to the hand; Special Summon up to 2 \"Void Hollow\" from your GY.",
+      "Once per turn: You can send 1 \"Void\" monster you control to the GY; Special Summon this card from your hand.\n\nOnce per turn: You can return this face-up card you control to the hand; Special Summon up to 2 \"Void Hollow\" from your GY.",
     image: "assets/Thousand-Arms of the Void.png",
     effects: [
       {
@@ -1461,7 +1461,7 @@ export const voidCards = [
       position: "choice",
     },
     description:
-      "\"Void Walker\"\n\nRequirement: The effect of the material being activated twice in this duel.\n\nYou can Special Summon 1 \"Void Hollow\" from your hand or Graveyard.\n\nIf this card is destroyed by battle or by an opponent's card effect: You can Special Summon up to 3 \"Void Hollow\" from your hand, Deck, or Graveyard.\n\nYou can only use each effect of \"Void Cosmic Walker\" once per turn.",
+      "\"Void Walker\"\n\nThe material's effect must have been activated at least twice this Duel.\n\nYou can Special Summon 1 \"Void Hollow\" from your hand or GY.\n\nIf this card is destroyed by battle or by an opponent's card effect: You can Special Summon up to 3 \"Void Hollow\" from your hand, Deck, or GY.\n\nYou can only use each effect of \"Void Cosmic Walker\" once per turn.",
     image: "assets/Void Cosmic Walker.png",
     effects: [
       {
@@ -1538,7 +1538,7 @@ export const voidCards = [
     },
     dynamicExtraAttacks: { source: "graveyard_count", name: "Void Hollow" },
     description:
-      "\"Thousand-Arms of the Void\"\n\nRequirement: Both effects of the material activated in this Duel.\n\nThe number of attacks this card can declare per Battle Phase equals the number of \"Void Hollow\" in your Graveyard.\n\nIf this card on the field is sent to the Graveyard: You can Special Summon up to 3 \"Void Hollow\" from your Graveyard, and if you do, add 1 \"Polymerization\" from your Deck to your hand.",
+      "\"Thousand-Arms of the Void\"\n\nBoth effects of the material must have been activated this Duel.\n\nThe number of attacks this card can declare per Battle Phase equals the number of \"Void Hollow\" in your GY.\n\nIf this card is sent from the field to the GY: You can Special Summon up to 3 \"Void Hollow\" from your GY, and if you do, add 1 \"Polymerization\" from your Deck to your hand.",
     image: "assets/Malicious Demon of the Void.png",
     effects: [
       {
@@ -1603,7 +1603,7 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      "While this card is the only face-up monster you control, it gains 100 ATK for each \"Void\" monster in your GY.\n\nYour opponent cannot activate cards or effects during the Battle Phase.\n\nIf this card would be destroyed by a card effect: you can banish 2 \"Void\" monsters from your GY instead.",
+      "While this card is the only face-up monster you control, it gains 100 ATK for each \"Void\" monster in your GY.\n\nYour opponent cannot activate cards or effects during the Battle Phase.\n\nIf this card would be destroyed by a card effect: You can banish 2 \"Void\" monsters from your GY instead.",
     image: "assets/Arcturus, Lord of the Void.png",
     effects: [
       {
@@ -1680,7 +1680,7 @@ export const voidCards = [
       ],
     },
     description:
-      "1 \"Arcturus, Lord of the Void\"\n\nMust be Fusion Summoned from your Extra Deck by banishing 1 \"Arcturus, Lord of the Void\" from your Graveyard.\n\nIf this card is destroyed by battle: destroy the monster that battled this card.\n\nYou can banish this card from your Graveyard; Special Summon 1 to 3 \"Void\" monsters with different names from your Graveyard, except \"Arcturus, the Fallen Lord\" and \"Arcturus, Lord of the Void\", but negate their effects.",
+      "1 \"Arcturus, Lord of the Void\"\n\nMust be Fusion Summoned from your Extra Deck by banishing 1 \"Arcturus, Lord of the Void\" from your GY.\n\nIf this card is destroyed by battle: Destroy the monster that battled this card.\n\nYou can banish this card from your GY; Special Summon 1 to 3 \"Void\" monsters with different names from your GY, except \"Arcturus, the Fallen Lord\" and \"Arcturus, Lord of the Void\", but negate their effects.",
     image: "assets/Arcturus, the Fallen Lord.png",
     effects: [
       {
@@ -1851,7 +1851,7 @@ export const voidCards = [
     attribute: "Dark",
     archetype: "Void",
     description:
-      "\"Void Tenebris Horn\" + 1 \"Void\" monster\n\nThis card gains 100 ATK/DEF until the end of the turn each time a \"Void\" monster is sent to the GY.\n\nIf this card is sent from the field to the GY: You can target 1 face-up card your opponent controls; destroy that target.",
+      "\"Void Tenebris Horn\" + 1 \"Void\" monster\n\nEach time a \"Void\" monster is sent to the GY: This card gains 100 ATK/DEF until the end of this turn.\n\nIf this card is sent from the field to the GY: You can target 1 face-up card your opponent controls; destroy it.",
     image: "assets/Void Aberration.png",
     fusionMaterials: [
       { name: "Void Tenebris Horn", count: 1 },
