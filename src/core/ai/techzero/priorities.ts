@@ -418,13 +418,19 @@ export function buildTechZeroActivationContext(
       }
     }
   }
-  if ((source.id === TZ.PRISM && effectId === "tech_zero_prism_activator_synchro_summon") || source.id === TZ.SCRAPYARD) {
+  if ((source.id === TZ.ELECTROCATAPULT && effectId === "tech_zero_electrocatapult_normal_summon") ||
+      (source.id === TZ.PRISM && effectId === "tech_zero_prism_activator_synchro_summon") || source.id === TZ.SCRAPYARD) {
     const action = effect.actions?.find(entry => entry.type === "special_summon_from_zone" && !entry.targetRef);
     if (action?.type === "special_summon_from_zone") {
       const candidates = targetCandidates({ id: `${effectId}_resolution`, owner: "self",
-        zone: source.id === TZ.PRISM ? "hand" : "graveyard", excludeCannotBeSpecialSummoned: true }, source, ctx, selections)
+        ...(source.id === TZ.ELECTROCATAPULT ? { zones: ["hand", "graveyard"] as const } :
+          { zone: source.id === TZ.PRISM ? "hand" as const : "graveyard" as const }),
+        excludeCannotBeSpecialSummoned: true }, source, ctx, selections)
         .filter(card => matchesTargetFilters(card, action.filters || {}, source, "self"));
-      if (source.id === TZ.PRISM) {
+      if (source.id === TZ.ELECTROCATAPULT) {
+        const selected = chooseTechZeroRevival(source, candidates, ctx);
+        specialSummons[effectId] = selected ? instanceIds([selected]) : [];
+      } else if (source.id === TZ.PRISM) {
         const selected = rank(candidates, card => scoreTechZeroSummon({ ...card, effectsNegated: true }, ctx, "special"))[0];
         specialSummons[effectId] = selected ? instanceIds([selected]) : [];
       } else {

@@ -29,7 +29,7 @@ Dragon reúne 30 cartas com foco em sinergias entre monstros do tipo Dragão, co
 
 #### Monstros (20)
 
-| ID | PT-BR | Canônico | Nível | Tipo | Atributo | ATK | DEF |
+| ID | PT-BR | EN | Nível | Tipo | Atributo | ATK | DEF |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 251 | Dragão Luminoso | Luminous Dragon | 5 | Dragon | Light | 2000 | 1600 |
 | 252 | Dragão Blindado | Armored Dragon | 4 | Dragon | Earth | 1600 | 1500 |
@@ -54,7 +54,7 @@ Dragon reúne 30 cartas com foco em sinergias entre monstros do tipo Dragão, co
 
 #### Magias (4)
 
-| ID | PT-BR | Canônico | Subtipo |
+| ID | PT-BR | EN | Subtipo |
 | --- | --- | --- | --- |
 | 261 | Rugido Infernal | Hellkite Roar | Normal |
 | 262 | Pico Escarpado dos Dragões | Jagged Peak of the Dragons | Campo |
@@ -63,13 +63,13 @@ Dragon reúne 30 cartas com foco em sinergias entre monstros do tipo Dragão, co
 
 #### Armadilhas (1)
 
-| ID | PT-BR | Canônico | Subtipo |
+| ID | PT-BR | EN | Subtipo |
 | --- | --- | --- | --- |
 | 268 | Santuário do Espírito do Dragão | Dragon Spirit Sanctuary | Normal |
 
 ### Extra Deck (5)
 
-| ID | PT-BR | Canônico | Tipo | Nível | Tipo de monstro | Atributo | ATK | DEF |
+| ID | PT-BR | EN | Tipo | Nível | Tipo de monstro | Atributo | ATK | DEF |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 253 | Dragão Blindado Metálico | Metal Armored Dragon | Ascensão | 6 | Dragon | Earth | 1600 | 2000 |
 | 265 | Dragão Tecno-Vazio | Tech-Void Dragon | Fusão | 8 | Dragon | Dark | 2500 | 1000 |

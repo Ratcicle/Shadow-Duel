@@ -1,14 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { CANONICAL_REPLAY_ENGINE_VERSION, type ReplayDriverGamePort, type SerializableValue } from "../../src/core/contracts/replay.js";
-import { createCanonicalStateSnapshot, hashCanonicalGameState, isReplayEvent, serializeReplayEventPayload, validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
+import { createCanonicalStateSnapshot, getCardDatabaseSignature, hashCanonicalGameState, isReplayEvent, serializeReplayEventPayload, validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
 import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
 import { setLocale } from "../../src/core/i18n.js";
 import { required, unsafeFixture } from "../helpers/fixtures.js";
 import { completeTestSelections, createRuntimeGame, placeFieldCards, type RuntimeGame } from "../helpers/game.js";
 
 type Seat = "player" | "bot";
-type Scenario = "core" | "machine" | "raptor" | "prism" | "scrapyard" | "scrapyard-negated" | "scrapyard-cl2" | "mage-full" | "lab" | "copies";
+type Scenario = "core" | "machine" | "raptor" | "prism" | "scrapyard" | "scrapyard-negated" | "scrapyard-cl2" | "mage-full" | "lab" | "copies" |
+  "glider" | "pulse" | "glider-negated" | "pulse-negated" | "glider-cancel" | "pulse-cancel";
 
 function install(game: RuntimeGame, seat: Seat, controller: "human" | "ai", scenario: Scenario) {
   let ready = false;
@@ -35,7 +36,19 @@ function install(game: RuntimeGame, seat: Seat, controller: "human" | "ai", scen
       if (card.monsterType === "synchro") { card.properSummonEstablished = true; card.properSummonProcedure = "synchro"; }
       return card;
     };
-    if (scenario === "core") {
+    if (scenario.startsWith("glider") || scenario.startsWith("pulse")) {
+      const id = scenario.startsWith("glider") ? 504 : 508;
+      owner.hand.push(take(id), take(id), take(id));
+      if (id === 504) placeFieldCards(owner.field, take(501));
+      if (scenario.endsWith("negated")) {
+        const opponent = game.getOpponent(owner);
+        const negator = required(opponent.extraDeck.find(card => card.id === 275));
+        opponent.extraDeck.splice(opponent.extraDeck.indexOf(negator), 1);
+        negator.isFacedown = false; negator.position = "attack";
+        negator.properSummonEstablished = true; negator.properSummonProcedure = "graveyard_banish_fusion";
+        placeFieldCards(opponent.field, negator);
+      }
+    } else if (scenario === "core") {
       placeFieldCards(owner.field, take(504)); owner.hand.push(take(502), take(501));
     } else if (scenario === "machine") {
       placeFieldCards(owner.field, take(502), take(503));
@@ -112,8 +125,26 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
   });
 }
 
-test("P2 has exactly one semantic version advance with schema 2 retained", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v22");
+test("Tech-Zero hand procedures use the current engine version with schema 2 retained", () => {
+  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v23");
+});
+
+test("v23 rejects the previous rules and declaration signature independently before playback mutation", async t => {
+  const live = createRuntimeGame({ captureReplay: true, laboratoryMode: true });
+  const playback = createRuntimeGame({ replayMode: "playback", laboratoryMode: true });
+  t.after(() => { live.dispose(); playback.dispose(); });
+  const valid = required(live.finalizeReplay({ reason: "techzero-procedure-compatibility" }));
+  assert.equal(valid.schemaVersion, 2); assert.equal(valid.cardDatabaseSignature, getCardDatabaseSignature());
+  const before = createCanonicalStateSnapshot(playback);
+  for (const [invalid, message] of [
+    [{ ...valid, engineVersion: "engine-rules-v22" }, /engineVersion/],
+    [{ ...valid, cardDatabaseSignature: "f60cba87" }, /card database signature/],
+  ] as const) {
+    assert.throws(() => validateCanonicalReplay(invalid), message);
+    await assert.rejects(() => replayCanonicalDuel(invalid, { game: unsafeFixture<ReplayDriverGamePort>(playback,
+      "Concrete Game supplies canonical replay ports; compatibility rejection must precede bootstrap mutations.") }), message);
+    assert.deepEqual(createCanonicalStateSnapshot(playback), before);
+  }
 });
 
 for (const seat of ["player", "bot"] as const) for (const controller of ["human", "ai"] as const) {
@@ -142,7 +173,21 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
       let usedResponse = false;
       let scrapCompleted = 0;
       const completedEffects: string[] = [];
+      let coreResolving = false;
+      const coreChoicesDuringResolution: boolean[] = [], coreTargets: number[] = [];
+      live.on("effect_targeted", event => {
+        if (event.effectId === "tech_zero_electrocatapult_normal_summon" || event.effect?.id === "tech_zero_electrocatapult_normal_summon") {
+          if (event.target?.duelCardId) coreTargets.push(event.target.duelCardId);
+        }
+      });
+      live.on("decision_made", event => {
+        const selections = Reflect.get(event.value, "selections");
+        if (selections && typeof selections === "object" && Object.keys(selections).some(key => key.startsWith("tech_zero_electrocatapult_"))) {
+          coreChoicesDuringResolution.push(coreResolving);
+        }
+      });
       live.on("chain_link_resolution", event => {
+        if (event.effectId === "tech_zero_electrocatapult_normal_summon" && event.stage === "resolving") coreResolving = true;
         if (event.stage !== "completed") return;
         completedEffects.push(event.effectId || "");
         if (event.effectId === "tech_zero_scrapyard_activation") scrapCompleted++;
@@ -170,7 +215,12 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
         live.chainSystem.botChooseChainResponse = (_player, candidates, context) => chooseResponse(candidates, context);
       }
       const finish = async (action: Promise<unknown>) => { await completeTestSelections(live, action); return action; };
-      if (scenario === "core") await finish(live.performNormalSummon(owner, 0));
+      if (scenario === "core") {
+        await finish(live.performNormalSummon(owner, 0));
+        assert.deepEqual(coreTargets, [], "Electrocatapult does not declare activation targets for its Normal Summon trigger");
+        assert.deepEqual(coreChoicesDuringResolution, [true], "the physical summon candidate is chosen only while the Chain link resolves");
+        assert.ok(owner.field.some(card => card.id === 501));
+      }
       else if (scenario === "machine") await finish(live.tryActivateMonsterEffect(required(owner.field.find(card => card.id === 503)), null,
         "field", owner, { effectId: "tech_zero_multimodal_machine_level_mod" }));
       else if (scenario === "raptor" || scenario === "prism") {
@@ -214,7 +264,7 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
         if (scenario === "mage-full") assert.equal(owner.field.filter(card => card.id === 502).length, 1);
       }
       const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: `p2_${scenario}` }))));
-      assert.equal(replay.schemaVersion, 2); assert.equal(replay.engineVersion, "engine-rules-v22");
+      assert.equal(replay.schemaVersion, 2); assert.equal(replay.engineVersion, "engine-rules-v23");
       assert.ok(replay.commands.length > 0); assert.ok(replay.decisions.length > 0);
       playback.ui.showTargetSelection = () => assert.fail("Playback must consume recorded target/choice decisions");
       playback.ui.showConfirmPrompt = playback.ui.showTrapActivationModal = async () => assert.fail("Playback must consume recorded consent");
@@ -235,4 +285,84 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
       assert.deepEqual(playback.getRandomState(), live.getRandomState());
     });
   }
+}
+
+for (const id of [504, 508] as const) for (const seat of ["player", "bot"] as const)
+for (const controller of ["human", "ai"] as const) for (const outcome of ["success", "negated", "cancel"] as const) {
+  test(`Tech-Zero ${id} hand procedure replays ${outcome} with a named success limit (${seat}/${outcome === "cancel" ? `human to ${controller}` : controller})`, async t => {
+    setLocale("en");
+    const name = id === 504 ? "glider" : "pulse";
+    const scenario: Scenario = outcome === "success" ? name : `${name}-${outcome}`;
+    const live = createRuntimeGame({ captureReplay: true, laboratoryMode: true, laboratoryUseBot: false,
+      randomSeed: 504508, chainResponseTimeoutMs: 0, getFieldPlacementMode: () => "manual",
+      fieldPlacementProvider: async () => outcome === "cancel" ? { outcome: "cancelled" } : { outcome: "chosen", slot: 4 } });
+    const playback = createRuntimeGame({ captureReplay: false, replayMode: "playback", laboratoryMode: true,
+      laboratoryUseBot: false, chainResponseTimeoutMs: 0,
+      getFieldPlacementMode: () => assert.fail("Playback must not read placement preferences"),
+      fieldPlacementProvider: async () => assert.fail("Playback must consume recorded placement") });
+    t.after(() => { live.dispose(); playback.dispose(); setLocale("en"); });
+    const captured = install(live, seat, outcome === "cancel" ? "human" : controller, scenario), reproduced = install(playback, seat, controller, scenario);
+    live.ui.showConfirmPrompt = async () => true;
+    live.ui.showTriggerOrderModal = async options => (options?.candidates ?? []).map(candidate => candidate.candidateId);
+    live.ui.showSpecialSummonPositionModal = (_card, choose) => choose("attack");
+    let usedNegator = false;
+    const chooseResponse = async <Candidate extends { readonly card?: { readonly id?: number | string | null | undefined } | undefined }>(
+      candidates: readonly Candidate[], context: { type?: string | null | undefined } | null | undefined,
+    ): Promise<Candidate | null> => {
+      const candidate = outcome === "negated" && !usedNegator && context?.type === "summon_attempt"
+        ? candidates.find(entry => entry.card?.id === 275) : undefined;
+      if (candidate) usedNegator = true;
+      return candidate ?? null;
+    };
+    live.ui.showChainResponseModal = chooseResponse;
+    live.chainSystem.botChooseChainResponse = (_player, candidates, context) => chooseResponse(candidates, context);
+    const deck = [501, 504, 504, 504, 508, 508, 508, ...Array<number>(13).fill(3)];
+    await live.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true, startAtDrawPhase: true,
+      startingPlayer: seat, announceStartingPlayer: false, playerDeck: deck, botDeck: deck,
+      playerExtraDeck: [275], botExtraDeck: [275] });
+    const owner = live[seat], first = required(owner.hand[0]), second = required(owner.hand[1]), third = required(owner.hand[2]);
+    const activations: number[] = [];
+    live.on("effect_activated", event => { if (typeof event.card.id === "number") activations.push(event.card.id); });
+    const run = async (source: typeof first) => {
+      const pending = live.performHandSummonProcedure(source, owner);
+      await completeTestSelections(live, pending);
+      return pending;
+    };
+    const firstResult = await run(first);
+    if (outcome === "cancel") {
+      assert.equal(firstResult.cancelled, true);
+      assert.ok(owner.hand.includes(first));
+      assert.equal(live.canSummonFromHandByProcedure(second, owner).ok, true);
+    } else {
+      if (outcome === "negated") {
+        assert.equal(firstResult.summonNegated, true); assert.equal(usedNegator, true);
+        assert.ok(owner.graveyard.includes(first));
+        assert.equal(live.canSummonFromHandByProcedure(second, owner).ok, true, "negation preserves the name-shared limit");
+        assert.equal((await run(second)).success, true);
+      } else assert.equal(firstResult.success, true);
+      const summoned = outcome === "negated" ? second : first;
+      assert.ok(owner.field.includes(summoned));
+      assert.equal(summoned.lastSummonProcedure, id === 504 ? "tech_zero_glider_wyvern_special_summon" : "tech_zero_pulse_soldier_empty_field_summon");
+      assert.equal(live.canSummonFromHandByProcedure(third, owner).reason, "hand_procedure_used_this_turn", "success blocks all copies by the procedure limit");
+    }
+    assert.deepEqual(activations, outcome === "negated" ? [275] : [], "the procedure creates no effect activation");
+    const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: `procedure_${id}_${outcome}` }))));
+    assert.deepEqual(replay.commands.map(command => command.type), outcome === "negated"
+      ? ["hand_summon_procedure", "hand_summon_procedure"] : ["hand_summon_procedure"]);
+    assert.equal(replay.decisions.some(decision => decision.kind === "cost"), false, "both procedures are costless");
+    for (const method of ["showTargetSelection", "showChainResponseModal", "showConfirmPrompt", "showSpecialSummonPositionModal", "showTriggerOrderModal"] as const) {
+      playback.ui[method] = () => assert.fail(`Playback must consume ${method} decisions`);
+    }
+    playback.autoSelector.select = () => assert.fail("Playback must consume recorded AI choices");
+    setLocale("pt-br");
+    const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback,
+      "Separate real Games bootstrap identical fixtures and execute the public hand procedure with recorded decisions.") });
+    assert.equal(result.ok, true); assert.equal(result.finalStateHash, replay.result?.finalStateHash);
+    assert.equal(playback.decisionBroker.replayCursor, replay.decisions.length);
+    assert.deepEqual(createCanonicalStateSnapshot(playback), createCanonicalStateSnapshot(live));
+    const portable = (events: typeof captured) => JSON.stringify(events, (key, value: unknown) =>
+      ["instanceId", "cardInstanceId", "sourceInstanceId"].includes(key) ? undefined : value);
+    assert.equal(portable(reproduced), portable(captured));
+    assert.deepEqual(playback.getRandomState(), live.getRandomState());
+  });
 }

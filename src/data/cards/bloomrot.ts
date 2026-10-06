@@ -168,7 +168,7 @@ export const bloomrotCards = [
     attribute: "Earth",
     archetype: "Bloomrot",
     description:
-      "If this card is Normal or Special Summoned: Special Summon 1 \"Bloomrot Token\" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position.\n\nOnce per turn: You can send 1 \"Bloomrot\" monster you control to the Graveyard; target 1 face-up card your opponent controls; place 3 Spore Counters on it.",
+      "If this card is Normal or Special Summoned: Special Summon 1 \"Bloomrot Token\" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position.\n\nOnce per turn: You can send 1 \"Bloomrot\" monster you control to the GY; target 1 face-up card your opponent controls; place 3 Spore Counters on it.",
     image: "assets/Bloomrot Myco-Weaver.png",
     effects: [
       {
@@ -392,7 +392,7 @@ export const bloomrotCards = [
     attribute: "Earth",
     archetype: "Bloomrot",
     description:
-      "Once per turn: You can target 1 face-up monster your opponent controls; place 1 Spore Counter on it, then that monster loses 300 ATK/DEF for each Spore Counter on it until the end of this turn.\n\nIf this card destroys a monster with a Spore Counter by battle: place 1 Spore Counter on 1 face-up card your opponent controls.\n\nYou can only use each effect of \"Bloomrot Carrioncap\" once per turn.",
+      "You can target 1 face-up monster your opponent controls; place 1 Spore Counter on it, then that monster loses 300 ATK/DEF for each Spore Counter on it until the end of this turn.\n\nIf this card destroys a monster with a Spore Counter by battle: place 1 Spore Counter on 1 face-up card your opponent controls.\n\nYou can only use each effect of \"Bloomrot Carrioncap\" once per turn.",
     image: "assets/Bloomrot Carrioncap.png",
     effects: [
       {
@@ -493,7 +493,7 @@ export const bloomrotCards = [
     attribute: "Earth",
     archetype: "Bloomrot",
     description:
-      "Before damage calculation, if this card is being attacked by an opponent's monster: place 2 Spore Counters on the attacking monster.\n\nIf this card is destroyed by battle: You can Special Summon 1 \"Bloomrot\" monster from your hand or Deck with Level less than or equal to the total number of Spore Counters on the field.",
+      "Before damage calculation, if this card is being attacked by an opponent's monster: place 2 Spore Counters on the attacking monster.\n\nIf this card is destroyed by battle: You can Special Summon 1 \"Bloomrot\" monster from your hand or Deck whose Level is less than or equal to the total number of Spore Counters on the field.",
     image: "assets/Bloomrot Moldmender.png",
     effects: [
       {
@@ -578,7 +578,7 @@ export const bloomrotCards = [
     attribute: "Earth",
     archetype: "Bloomrot",
     description:
-      "You can Special Summon this card from your hand by removing 3 Spore Counters from the field. You can only Special Summon \"Bloomrot Gravecap Widow\" once per turn this way.\n\nIf this card is Summoned: target 1 monster with a Spore Counter your opponent controls; destroy it.\n\nOnce per turn, if a monster with a Spore Counter your opponent controls is destroyed: place 1 Spore Counter on 1 face-up card your opponent controls.\n\nYou can only use each effect of \"Bloomrot Gravecap Widow\" once per turn.",
+      "You can Special Summon this card from your hand by removing 3 Spore Counters from the field. You can only Special Summon \"Bloomrot Gravecap Widow\" once per turn this way.\n\nIf this card is Summoned: target 1 monster your opponent controls with a Spore Counter; destroy it.\n\nIf a monster your opponent controls with a Spore Counter is destroyed: place 1 Spore Counter on 1 face-up card your opponent controls.\n\nYou can only use each effect of \"Bloomrot Gravecap Widow\" once per turn.",
     image: "assets/Bloomrot Gravecap Widow.png",
     handSummonProcedure: {
       id: "bloomrot_gravecap_widow_special_summon_hand",
@@ -687,7 +687,7 @@ export const bloomrotCards = [
     attribute: "Earth",
     archetype: "Bloomrot",
     description:
-      "You can Special Summon this card from your hand by removing 4 Spore Counters from the field. You can only Special Summon \"Bloomrot Ancient Husk\" once per turn this way.\n\nOnce per turn: place 1 Spore Counter on up to 2 face-up monsters your opponent controls.\n\nIf a monster with a Spore Counter is destroyed: place 1 Spore Counter on up to 2 face-up monsters your opponent controls.\n\nYou can only use each effect of \"Bloomrot Ancient Husk\" once per turn.",
+      "You can Special Summon this card from your hand by removing 4 Spore Counters from the field. You can only Special Summon \"Bloomrot Ancient Husk\" once per turn this way.\n\nYou can place 1 Spore Counter on up to 2 face-up monsters your opponent controls.\n\nIf a monster with a Spore Counter is destroyed: place 1 Spore Counter on up to 2 face-up monsters your opponent controls.\n\nYou can only use each effect of \"Bloomrot Ancient Husk\" once per turn.",
     image: "assets/Bloomrot Ancient Husk.png",
     handSummonProcedure: {
       id: "bloomrot_ancient_husk_special_summon_hand",
@@ -800,7 +800,7 @@ export const bloomrotCards = [
     subtype: "normal",
     archetype: "Bloomrot",
     description:
-      "Target up to 2 face-up monsters your opponent controls; place 2 Spore Counters on each of them. Then, those monsters lose 500 ATK/DEF until the end of this turn.\n\nYou can only activate 1 \"Bloomrot Spore Cloud\" per turn.",
+      "Target up to 2 face-up monsters your opponent controls; place 2 Spore Counters on each of them, then those monsters lose 500 ATK/DEF until the end of this turn.\n\nYou can only activate 1 \"Bloomrot Spore Cloud\" per turn.",
     image: "assets/Bloomrot Spore Cloud.png",
     effects: [
       {
@@ -845,7 +845,7 @@ export const bloomrotCards = [
     subtype: "field",
     archetype: "Bloomrot",
     description:
-      "Once per turn: target 1 face-up card your opponent controls; place 1 Spore Counter on it.\n\nMonsters your opponent controls lose 100 ATK/DEF for each Spore Counter on them.\n\nEach time one or more Spore Counters are removed from the field: Special Summon 1 \"Bloomrot Token\" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position.\n\nIf a \"Bloomrot Token\" you control is destroyed: place 1 Spore Counter on each face-up card your opponent controls.",
+      "Once per turn: You can target 1 face-up card your opponent controls; place 1 Spore Counter on it.\n\nMonsters your opponent controls lose 100 ATK/DEF for each Spore Counter on them.\n\nEach time one or more Spore Counters are removed from the field: Special Summon 1 \"Bloomrot Token\" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position.\n\nIf a \"Bloomrot Token\" you control is destroyed: place 1 Spore Counter on each face-up card your opponent controls.",
     image: "assets/Bloomrot Living Colony.png",
     effects: [
       {
@@ -964,7 +964,7 @@ export const bloomrotCards = [
     subtype: "normal",
     archetype: "Bloomrot",
     description:
-      "Target 1 face-up card your opponent controls; place 1 Spore Counter on it, then place 1 additional Spore Counter on it for each \"Bloomrot\" monster you control. Then, gain 300 LP for each Spore Counter placed by this effect.\n\nYou can only activate 1 \"Bloomrot Compost Ritual\" per turn.",
+      "Target 1 face-up card your opponent controls; place 1 Spore Counter on it, then place 1 additional Spore Counter on it for each \"Bloomrot\" monster you control, then gain 300 LP for each Spore Counter placed by this effect.\n\nYou can only activate 1 \"Bloomrot Compost Ritual\" per turn.",
     image: "assets/Bloomrot Compost Ritual.png",
     effects: [
       {
@@ -1019,7 +1019,7 @@ export const bloomrotCards = [
     subtype: "continuous",
     archetype: "Bloomrot",
     description:
-      "Monsters your opponent controls with 5 or more Spore Counters cannot declare attacks.\n\nOnce per turn: You can activate 1 of these effects; remove 2 Spore Counters from the field; add 1 Level 4 or lower \"Bloomrot\" monster from your Deck to your hand; or remove 3 Spore Counters from the field; add 1 \"Bloomrot\" card from your Graveyard to your hand.",
+      "Monsters your opponent controls with 5 or more Spore Counters cannot declare attacks.\n\nOnce per turn: You can activate 1 of these effects:\n● Remove 2 Spore Counters from the field; add 1 Level 4 or lower \"Bloomrot\" monster from your Deck to your hand.\n● Remove 3 Spore Counters from the field; add 1 \"Bloomrot\" card from your GY to your hand.",
     image: "assets/Bloomrot Root Network.png",
     effects: [
       {
@@ -1090,7 +1090,7 @@ export const bloomrotCards = [
             {
               id: "recover_graveyard_card",
               label: 'Remove 3 Spore Counters; add 1 "Bloomrot" card from your Graveyard',
-              description: 'Remove 3 Spore Counters from the field; add 1 "Bloomrot" card from your Graveyard to your hand.',
+              description: 'Remove 3 Spore Counters from the field; add 1 "Bloomrot" card from your GY to your hand.',
               conditions: [
                 {
                   type: "field_counters_at_least",
@@ -1130,7 +1130,7 @@ export const bloomrotCards = [
     subtype: "equip",
     archetype: "Bloomrot",
     description:
-      "Equip only to a \"Bloomrot\" monster you control.\n\nThe equipped monster gains 500 DEF and 100 ATK for each Spore Counter on the field.\n\nOnce per turn, if the equipped monster would be destroyed by battle or card effect, you can remove 1 Spore Counter from the field instead.\n\nIf this card is sent from the field to the Graveyard: place 1 Spore Counter on 1 face-up monster on the field.",
+      "Equip only to a \"Bloomrot\" monster you control.\n\nThe equipped monster gains 500 DEF and 100 ATK for each Spore Counter on the field.\n\nOnce per turn, if the equipped monster would be destroyed by battle or a card effect, you can remove 1 Spore Counter from the field instead.\n\nIf this card is sent from the field to the GY: place 1 Spore Counter on 1 face-up monster on the field.",
     image: "assets/Bloomrot Fungal Armor.png",
     effects: [
       {
@@ -1539,7 +1539,7 @@ export const bloomrotCards = [
     speed: 2,
     archetype: "Bloomrot",
     description:
-      "Each time your opponent Summons a monster: place 1 Spore Counter on that monster.\n\nMonsters your opponent controls with a Spore Counter are unaffected by other card effects, except \"Bloomrot\" cards.\n\nOnce per turn: target 1 monster your opponent controls with 4 or more Spore Counters; negate its effects until the end of this turn.",
+      "Each time your opponent Summons a monster: place 1 Spore Counter on that monster.\n\nMonsters your opponent controls with a Spore Counter are unaffected by card effects, except \"Bloomrot\" card effects.\n\nOnce per turn: You can target 1 monster your opponent controls with 4 or more Spore Counters; negate its effects until the end of this turn.",
     image: "assets/Bloomrot Rotting Ground.png",
     effects: [
       {
@@ -1647,7 +1647,7 @@ export const bloomrotCards = [
       position: "choice",
     },
     description:
-      "1 \"Bloomrot\" monster\n\nRequirement: The material must have activated its effect 2 times this Duel.\n\nIf this card is Ascension Summoned: place 1 Spore Counter on all face-up monsters your opponent controls.\n\nOnce per turn: You can remove 2 Spore Counters from the field; target 1 Defense Position monster your opponent controls; destroy that target.",
+      "1 \"Bloomrot\" monster\n\nThe material's effects must have been activated a total of at least 2 times this Duel.\n\nIf this card is Ascension Summoned: place 1 Spore Counter on all face-up monsters your opponent controls.\n\nOnce per turn: You can remove 2 Spore Counters from the field; target 1 Defense Position monster your opponent controls; destroy it.",
     image: "assets/Bloomrot Ancient Mycelium.png",
     effects: [
       {
@@ -1742,7 +1742,7 @@ export const bloomrotCards = [
       position: "choice",
     },
     description:
-      "1 Level 5 or higher \"Bloomrot\" monster\n\nRequirement: There must be at least 8 Spore Counters on the field.\n\nIf this card is Ascension Summoned: monsters your opponent controls lose 100 ATK/DEF for each Spore Counter on the field.\n\nYou can remove up to 3 Spore Counters from the field; gain 500 LP for each counter removed.\n\nIf this card leaves the field: place 1 Spore Counter on each face-up card your opponent controls.\n\nYou can only use each effect of \"Bloomrot Queen of the Hollow Grove\" once per turn.",
+      "1 Level 5 or higher \"Bloomrot\" monster\n\nThere must be at least 8 Spore Counters on the field.\n\nIf this card is Ascension Summoned: face-up monsters your opponent controls lose 100 ATK/DEF for each Spore Counter on the field.\n\nYou can remove up to 3 Spore Counters from the field; gain 500 LP for each counter removed.\n\nIf this card leaves the field: place 1 Spore Counter on each face-up card your opponent controls.\n\nYou can only use each effect of \"Bloomrot Queen of the Hollow Grove\" once per turn.",
     image: "assets/Bloomrot Queen of the Hollow Grove.png",
     effects: [
       {
@@ -1912,7 +1912,7 @@ export const bloomrotCards = [
       },
     ],
     description:
-      "4 \"Bloomrot\" monsters, including 1 Token\n\nIf this card is Fusion Summoned: this card's original ATK becomes the number of Spore Counters on the field x500.\n\nOnce per turn: You can destroy all monsters with Spore Counters your opponent controls.\n\nIf this card is destroyed by battle or card effect: Special Summon up to 2 \"Bloomrot\" monsters from your Graveyard, except \"Bloomrot Devourer of Dead Roots\".",
+      "4 \"Bloomrot\" monsters, including 1 Token\n\nIf this card is Fusion Summoned: this card's original ATK becomes the number of Spore Counters on the field x500.\n\nOnce per turn: You can destroy all monsters your opponent controls with Spore Counters.\n\nIf this card is destroyed by battle or a card effect: Special Summon up to 2 \"Bloomrot\" monsters from your GY, except \"Bloomrot Devourer of Dead Roots\".",
     image: "assets/Bloomrot Devourer of Dead Roots.png",
     effects: [
       {

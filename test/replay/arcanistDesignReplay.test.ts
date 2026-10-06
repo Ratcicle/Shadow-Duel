@@ -4,6 +4,7 @@ import type { ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
 import type { PlayerId } from "../../src/core/contracts/primitives.js";
 import {
   createCanonicalStateSnapshot,
+  getCardDatabaseSignature,
   hashCanonicalGameState,
   validateCanonicalReplay,
 } from "../../src/core/game/replay/canonical.js";
@@ -125,8 +126,8 @@ for (const seat of ["player", "bot"] as const) {
             }
             assert.deepEqual(simulated._simUnsupportedActions || [], []);
             const saved = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "arcanist-final" }))));
-            assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, "engine-rules-v22");
-            assert.equal(saved.cardDatabaseSignature, "4d85a5a8");
+            assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, "engine-rules-v23");
+            assert.equal(saved.cardDatabaseSignature, getCardDatabaseSignature());
             assert.ok(saved.decisions.some(decision => decision.kind === "target"));
             assert.equal(saved.commands[0]?.type, wasSet ? "activate_effect" : "activate_card");
             const result = await replayCanonicalDuel(saved, { game: unsafeFixture<ReplayDriverGamePort>(playback,
@@ -214,7 +215,7 @@ for (const seat of ["player", "bot"] as const) {
         if (id === 314) assert.equal(opponent.field[0]?.atk, Math.floor((required(opponent.field[0]).baseAtk - 100) / 2));
         const saved = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "arcanist-history" }))));
         assert.equal(saved.schemaVersion, 2);
-        assert.equal(saved.engineVersion, "engine-rules-v22");
+        assert.equal(saved.engineVersion, "engine-rules-v23");
         assert.equal(saved.decisions.some(decision => decision.kind === "choice"), false);
         assert.ok(saved.decisions.some(decision => decision.kind === "target"));
         assert.deepEqual(saved.commands.map(command => command.type), id === 313
@@ -369,7 +370,7 @@ for (const seat of ["player", "bot"] as const) {
         assert.ok(opponent.graveyard.includes(enemy));
         const saved = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "arcanist-facedown" }))));
         assert.equal(saved.schemaVersion, 2);
-        assert.equal(saved.engineVersion, "engine-rules-v22");
+        assert.equal(saved.engineVersion, "engine-rules-v23");
         assert.equal(saved.commands.length, 1);
         assert.equal(saved.commands[0]?.type, id === 303 ? "activate_card" : "activate_effect");
         assert.ok(saved.decisions.some(decision => decision.kind === "target" && "selections" in decision.value &&

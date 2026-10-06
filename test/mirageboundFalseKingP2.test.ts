@@ -5,6 +5,7 @@ import Bot from "../src/core/Bot.js";
 import MirageboundStrategy from "../src/core/ai/MirageboundStrategy.js";
 import { getGenericCostlessHandSummonActions, getGenericHandSummonProcedureActions } from "../src/core/ai/common/actionGeneration.js";
 import { applyGenericSimulatedMainPhaseAction } from "../src/core/ai/common/simulation.js";
+import { canUseSimulatedEffectUsage } from "../src/core/ai/common/simStateUtils.js";
 import { cardDefinition, required, unsafeFixture } from "./helpers/fixtures.js";
 import { completeTestSelections, createRuntimeGame, placeFieldCards } from "./helpers/game.js";
 import type { AiLiveGamePort } from "../src/core/contracts/aiState.js";
@@ -33,6 +34,7 @@ function setup(t: TestContext, seat: "player" | "bot" = "player") {
 for (const seat of ["player", "bot"] as const) {
   test(`False King procedure returns a face-up cost without activating Viper (${seat})`, async t => {
     const { game, owner, king, cost } = setup(t, seat);
+    const chainLinks = t.mock.method(game.chainSystem, "addToChain");
     const events: string[] = [];
     game.on("effect_activated", event => { events.push(`activated:${event.card?.id}`); });
     game.on("card_moved", event => {
@@ -41,6 +43,7 @@ for (const seat of ["player", "bot"] as const) {
     });
     const result = await game.performHandSummonProcedure(king, owner, { materials: [cost], position: "attack" });
     assert.equal(result.success, true, result.reason || undefined);
+    assert.equal(chainLinks.mock.callCount(), 0);
     assert.deepEqual(events, ["cost", "king"]);
     assert.ok(owner.hand.includes(cost));
     assert.notEqual(cost.banishWhenLeavesField, true);
@@ -62,6 +65,21 @@ for (const seat of ["player", "bot"] as const) {
     assert.equal(jackalActivations, 1);
     assert.ok(owner.field.includes(jackal)); assert.ok(owner.field.includes(king));
     assert.ok(owner.hand.includes(cost)); assert.equal(foe.position, "defense");
+  });
+
+  test(`False King's procedure cost still permits Sand Priestess's own-return trigger (${seat})`, async t => {
+    const { game, owner, king } = setup(t, seat);
+    const priestess = new Card(cardDefinition(357), owner.id);
+    owner.field = []; placeFieldCards(owner.field, priestess);
+    const recovery = new Card(cardDefinition(351), owner.id); owner.graveyard.push(recovery);
+    game.ui.showConfirmPrompt = async () => true;
+    let activations = 0;
+    game.on("effect_activated", event => { if (event.effectId === "miragebound_sand_priestess_recover") activations++; });
+    await completeTestSelections(game, game.performHandSummonProcedure(king, owner, { materials: [priestess], position: "attack" }));
+    assert.equal(activations, 1);
+    assert.ok(owner.field.includes(king));
+    assert.ok(owner.hand.includes(priestess)); assert.ok(owner.hand.includes(recovery));
+    assert.equal(owner.graveyard.includes(recovery), false);
   });
 
   test(`False King returns its controlled opponent-owned cost to the physical original owner in runtime and projection (${seat})`, async t => {
@@ -101,21 +119,28 @@ for (const seat of ["player", "bot"] as const) {
   });
 }
 
-test("False King accepts a full field freed by its return cost, rejecting facedown or foreign costs", async t => {
+test("False King accepts a full field freed by its return cost, rejecting facedown, foreign or non-Miragebound costs", async t => {
   const { game, owner, king, cost } = setup(t);
   placeFieldCards(owner.field, ...Array.from({ length: 4 }, () => new Card(cardDefinition(101), owner.id)));
   cost.isFacedown = true;
   assert.equal(game.canSummonFromHandByProcedure(king, owner).ok, false);
+  assert.equal((await game.performHandSummonProcedure(king, owner, { materials: [cost], position: "attack" })).success, false);
+  assert.ok(owner.field.includes(cost)); assert.ok(owner.hand.includes(king));
   cost.isFacedown = false;
   const foreign = new Card(cardDefinition(356), game.bot.id); placeFieldCards(game.bot.field, foreign);
-  assert.equal((await game.performHandSummonProcedure(king, owner, { materials: [foreign], position: "attack" })).success, false);
+  const nonMiragebound = required(owner.field.find(card => card.id === 101));
+  for (const invalid of [foreign, nonMiragebound]) {
+    assert.equal((await game.performHandSummonProcedure(king, owner, { materials: [invalid], position: "attack" })).success, false);
+    assert.ok(owner.field.includes(cost)); assert.ok(owner.hand.includes(king));
+    assert.equal(game.canUseOncePerTurn(king, owner, required(king.handSummonProcedure)).ok, true);
+  }
   const slot = cost.fieldSlot;
   assert.equal((await game.performHandSummonProcedure(king, owner, { materials: [cost], position: "defense" })).success, true);
   assert.equal(king.fieldSlot, slot);
   assert.equal(owner.field.length, 5);
 });
 
-test("cancelling False King's manual slot decision retains its cost and hard OPT", async t => {
+test("cancelling False King's manual slot decision pays no return cost or named summon limit", async t => {
   const { game, owner, king, cost } = setup(t);
   owner.controllerType = "human"; game.getFieldPlacementMode = () => "manual";
   let decisions = 0;
@@ -131,6 +156,23 @@ test("cancelling False King's manual slot decision retains its cost and hard OPT
   assert.equal(result.cancelled, true);
   assert.ok(owner.field.includes(cost)); assert.ok(owner.hand.includes(king));
   assert.equal(game.canUseOncePerTurn(king, owner, required(king.handSummonProcedure)).ok, true);
+});
+
+test("cancelling False King's human cost selection pays nothing and leaves another copy available", async t => {
+  const { game, owner, king, cost } = setup(t);
+  const second = new Card(cardDefinition(358), owner.id); owner.hand.push(second);
+  owner.controllerType = "human";
+  game.autoSelector.select = () => assert.fail("human procedure cost must remain a manual selection");
+  let moves = 0;
+  game.on("card_moved", () => { moves++; });
+  const result = await game.performHandSummonProcedure(king, owner, { position: "attack" });
+  assert.equal(result.needsSelection, true);
+  assert.ok(game.targetSelection);
+  game.cancelTargetSelection();
+  assert.equal(game.targetSelection, null);
+  assert.equal(moves, 0);
+  assert.ok(owner.field.includes(cost)); assert.ok(owner.hand.includes(king));
+  assert.equal(game.canSummonFromHandByProcedure(second, owner).ok, true);
 });
 
 for (const changed of ["source", "cost"] as const) test(`False King revalidates ${changed} presence after manual placement`, async t => {
@@ -150,18 +192,53 @@ for (const changed of ["source", "cost"] as const) test(`False King revalidates 
   assert.equal(game.canUseOncePerTurn(king, owner, required(king.handSummonProcedure)).ok, true);
 });
 
-test("False King's negated summon retains the return cost and named attempt limit", async t => {
-  const { game, owner, king, cost } = setup(t);
-  game.offerSummonAttempt = async (_card, _owner, options) => {
+for (const seat of ["player", "bot"] as const) test(`False King's negated summon retains its cost and permits a second copy until a successful summon (${seat})`, async t => {
+  const { game, owner, king, cost, bot, port } = setup(t, seat);
+  const second = new Card(cardDefinition(358), owner.id); owner.hand.push(second);
+  const spareCost = new Card(cardDefinition(351), owner.id); placeFieldCards(owner.field, spareCost);
+  const offer = game.offerSummonAttempt.bind(game);
+  game.offerSummonAttempt = async (card, actor, options) => {
+    if (card !== king) return offer(card, actor, options);
     const transaction = required(options?.summonTransaction);
     assert.ok(owner.hand.includes(cost), "return cost precedes summon responses");
     game.markSummonNegated(transaction.summonId, { destroyed: true });
     return { ok: false, summonNegated: true, reason: "summon_negated", transaction, ownsTransaction: false };
   };
   const result = await game.performHandSummonProcedure(king, owner, { materials: [cost], position: "attack" });
+  assert.equal(result.success, false);
   assert.equal(result.summonNegated, true);
   assert.ok(owner.hand.includes(cost)); assert.equal(owner.field.includes(king), false);
-  const second = new Card(cardDefinition(358), owner.id); owner.hand.push(second); placeFieldCards(owner.field, new Card(cardDefinition(351), owner.id));
+  assert.equal(result.transaction?.costs.length, 1);
+  assert.ok(result.transaction?.costs.every(payment => payment.paid));
+  assert.equal(game.canUseOncePerTurn(second, owner, required(second.handSummonProcedure)).ok, true);
+  assert.equal(game.canSummonFromHandByProcedure(second, owner).ok, true);
+  const state = bot.cloneGameState(port);
+  if (seat === "player") [state.bot, state.player] = [state.player, state.bot];
+  const retry = required(getGenericHandSummonProcedureActions(state).find(action => action.cardId === second.id));
+  applyGenericSimulatedMainPhaseAction(state, retry);
+  assert.ok(state.bot.field.some(card => card.instanceId === second.instanceId));
+  assert.equal(getGenericHandSummonProcedureActions(state).some(action => action.cardId === 358), false);
+  assert.equal((await game.performHandSummonProcedure(second, owner, { materials: [spareCost], position: "attack" })).success, true);
+  assert.ok(owner.hand.includes(spareCost)); assert.ok(owner.field.includes(second));
+  const third = new Card(cardDefinition(358), owner.id); owner.hand.push(third);
+  assert.equal(game.canSummonFromHandByProcedure(third, owner).ok, false);
+});
+
+for (const seat of ["player", "bot"] as const) test(`False King's named summon limit is available at the paid attempt and consumed on success (${seat})`, async t => {
+  const { game, owner, king, cost } = setup(t, seat);
+  const second = new Card(cardDefinition(358), owner.id); owner.hand.push(second);
+  const offer = game.offerSummonAttempt.bind(game);
+  let attempts = 0;
+  game.offerSummonAttempt = async (card, actor, options) => {
+    attempts++;
+    assert.ok(owner.hand.includes(cost)); assert.equal(owner.field.includes(king), false);
+    assert.equal(game.canUseOncePerTurn(second, owner, required(second.handSummonProcedure)).ok, true);
+    assert.equal(game.canSummonFromHandByProcedure(second, owner).ok, false, "the active transaction reserves the action without consuming the limit");
+    return offer(card, actor, options);
+  };
+  assert.equal((await game.performHandSummonProcedure(king, owner, { materials: [cost], position: "attack" })).success, true);
+  assert.equal(attempts, 1);
+  assert.equal(game.canUseOncePerTurn(second, owner, required(second.handSummonProcedure)).ok, false);
   assert.equal(game.canSummonFromHandByProcedure(second, owner).ok, false);
 });
 
@@ -177,7 +254,15 @@ test("projected Miragebound discovery and simulation preserve return-cost materi
   assert.deepEqual(action.materials, [{ zone: "field", index: 0, cardId: 356, instanceId: cost.instanceId }]);
   assert.equal(strategy.generateMainPhaseActions(state).some(action => action.type === "handIgnition" && action.cardId === king.id), false);
   assert.equal(bot.generateMainPhaseActions(port).filter(action => action.type === "handSummonProcedure").length, 1);
-  applyGenericSimulatedMainPhaseAction(state, action);
+  const projectedKing = required(state.bot.hand[0]);
+  const procedure = required(projectedKing.handSummonProcedure);
+  const usageDuringEvents: boolean[] = [];
+  applyGenericSimulatedMainPhaseAction(state, action, { onSimulatedEvent: event => {
+    if (event === "card_moved" || event === "after_summon") {
+      usageDuringEvents.push(canUseSimulatedEffectUsage(state, procedure, projectedKing, state.bot.id, true));
+    }
+  } });
+  assert.deepEqual(usageDuringEvents, [true, false], "the return cost precedes success-only usage consumption");
   assert.equal(state.bot.field.length, 5);
   assert.equal(state.bot.summonCount, 1);
   assert.equal(state.bot.field.some(card => card.id === 356), false);

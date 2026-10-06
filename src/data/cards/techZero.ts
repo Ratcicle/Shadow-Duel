@@ -13,7 +13,7 @@ export const techZeroCards = [
     archetype: "Tech-Zero",
     isTuner: true,
     description:
-      "If this card is Special Summoned: You can target 1 \"Tech-Zero\" monster you control; increase or decrease its Level by 1.\n\nIf this card is sent to the Graveyard as Synchro Material: draw 1 card.\n\nYou can only use each effect of \"Tech-Zero Energy Core\" once per turn.",
+      "If this card is Special Summoned: You can target 1 \"Tech-Zero\" monster you control; increase or decrease its Level by 1.\n\nIf this card is sent to the GY as Synchro Material: draw 1 card.\n\nYou can only use each effect of \"Tech-Zero Energy Core\" once per turn.",
     image: "assets/Tech-Zero Energy Core.png",
     effects: [
       {
@@ -111,7 +111,7 @@ export const techZeroCards = [
     attribute: "Light",
     archetype: "Tech-Zero",
     description:
-      "If this card is Normal Summoned: You can target 1 Level 2 or lower \"Tech-Zero\" monster in your hand or Graveyard; Special Summon it.\n\nIf this card is sent to the Graveyard as Synchro Material: You can target 1 Tuner in your Graveyard; Special Summon it, but negate its effects.",
+      "If this card is Normal Summoned: You can Special Summon 1 Level 2 or lower \"Tech-Zero\" monster from your hand or GY.\n\nIf this card is sent to the GY as Synchro Material: You can target 1 Tuner in your GY; Special Summon it, but negate its effects.",
     image: "assets/Tech-Zero Electrocatapult.png",
     effects: [
       {
@@ -127,23 +127,17 @@ export const techZeroCards = [
         promptUser: true,
         promptMessage:
           'Activate "Tech-Zero Electrocatapult" to Special Summon a Level 2 or lower "Tech-Zero" monster?',
-        targets: [
-          {
-            id: "tech_zero_electrocatapult_summon_target",
-            owner: "self",
-            zones: ["hand", "graveyard"],
-            cardKind: "monster",
-            archetype: "Tech-Zero",
-            maxLevel: 2,
-            excludeCannotBeSpecialSummoned: true,
-            count: { min: 1, max: 1 },
-          },
-        ],
         actions: [
           {
             type: "special_summon_from_zone",
             zone: ["hand", "graveyard"],
-            targetRef: "tech_zero_electrocatapult_summon_target",
+            filters: {
+              cardKind: "monster",
+              archetype: "Tech-Zero",
+              maxLevel: 2,
+            },
+            count: { min: 1, max: 1 },
+            selectionId: "tech_zero_electrocatapult_summon_choice",
             position: "choice",
             promptPlayer: true,
           },
@@ -209,7 +203,7 @@ export const techZeroCards = [
       nonTunerFor: [{ archetype: "Tech-Zero", monsterType: "synchro" }],
     },
     description:
-      "1 \"Tech-Zero\" Tuner + 1+ non-Tuner monsters\n\nThis card can be treated as a non-Tuner for the Synchro Summon of a \"Tech-Zero\" Synchro Monster.\n\nYou can target 1 monster you control; increase or decrease its Level by up to 2.\n\nIf this card is sent to the Graveyard as Synchro Material: draw 1 card.\n\nYou can only use each effect of \"Tech-Zero Multimodal Machine\" once per turn.",
+      "1 \"Tech-Zero\" Tuner + 1+ non-Tuner monsters\n\nThis card can be treated as a non-Tuner for the Synchro Summon of a \"Tech-Zero\" Synchro Monster.\n\nYou can target 1 monster you control; increase or decrease its Level by up to 2.\n\nIf this card is sent to the GY as Synchro Material: draw 1 card.\n\nYou can only use each effect of \"Tech-Zero Multimodal Machine\" once per turn.",
     image: "assets/Tech-Zero Multimodal Machine.png",
     effects: [
       {
@@ -332,50 +326,29 @@ export const techZeroCards = [
     attribute: "Light",
     archetype: "Tech-Zero",
     description:
-      "If you control a \"Tech-Zero\" Tuner: You can Special Summon this card from your hand.\n\nIf this card is sent to the Graveyard as Synchro Material: You can target 1 Spell/Trap card your opponent controls; destroy it.\n\nYou can only use each effect of \"Tech-Zero Glider Wyvern\" once per turn.",
+      "If you control a \"Tech-Zero\" Tuner, you can Special Summon this card from your hand. You can only Special Summon \"Tech-Zero Glider Wyvern\" once per turn this way.\n\nIf this card is sent to the GY as Synchro Material: You can target 1 Spell/Trap your opponent controls; destroy it.\n\nYou can only use this effect of \"Tech-Zero Glider Wyvern\" once per turn.",
     image: "assets/Tech-Zero Glider Wyvern.png",
+    handSummonProcedure: {
+      id: "tech_zero_glider_wyvern_special_summon",
+      oncePerTurn: true,
+      oncePerTurnName: "tech_zero_glider_wyvern_special_summon",
+      oncePerTurnConsumeOn: "success",
+      conditions: [
+        {
+          type: "field_card_count",
+          owner: "self",
+          zone: "field",
+          filters: {
+            cardKind: "monster",
+            archetype: "Tech-Zero",
+            isTuner: true,
+          },
+          requireFaceup: true,
+          min: 1,
+        },
+      ],
+    },
     effects: [
-      {
-
-        activationZones: ["hand"],
-
-        usagePolicy: "use",
-        id: "tech_zero_glider_wyvern_special_summon",
-        timing: "ignition",
-        requirePhase: ["main1", "main2"],
-        oncePerTurn: true,
-        oncePerTurnName: "tech_zero_glider_wyvern_special_summon",
-        conditions: [
-          {
-            type: "field_card_count",
-            owner: "self",
-            zone: "field",
-            filters: {
-              cardKind: "monster",
-              archetype: "Tech-Zero",
-              isTuner: true,
-            },
-            requireFaceup: true,
-            min: 1,
-          },
-          {
-            type: "field_card_count",
-            owner: "self",
-            zone: "field",
-            max: 4,
-            reason: "You need an open Monster Zone to Special Summon this card.",
-          },
-        ],
-        actions: [
-          {
-            type: "special_summon_from_zone",
-            zone: "hand",
-            requireSource: true,
-            position: "choice",
-            promptPlayer: true,
-          },
-        ],
-      },
       {
 
         usagePolicy: "use",
@@ -423,7 +396,7 @@ export const techZeroCards = [
     archetype: "Tech-Zero",
     isTuner: true,
     description:
-      "If a \"Tech-Zero\" monster is Special Summoned from your Graveyard: You can Special Summon this card from your hand.\n\nIf this card is sent to the Graveyard as Synchro Material: You can Special Summon 2 \"Raptor Tokens\" (Machine/Light/Level 1/ATK 500/DEF 500).\n\nYou can only use each effect of \"Tech-Zero Iron Raptor\" once per turn.",
+      "If a \"Tech-Zero\" monster is Special Summoned from your GY: You can Special Summon this card from your hand.\n\nIf this card is sent to the GY as Synchro Material: You can Special Summon 2 \"Raptor Tokens\" (Machine/LIGHT/Level 1/ATK 500/DEF 500).\n\nYou can only use each effect of \"Tech-Zero Iron Raptor\" once per turn.",
     image: "assets/Tech-Zero Iron Raptor.png",
     effects: [
       {
@@ -542,7 +515,7 @@ export const techZeroCards = [
     attribute: "Light",
     archetype: "Tech-Zero",
     description:
-      "You can discard this card and 1 \"Tech-Zero\" Tuner; add 1 \"Tech-Zero\" monster from your Deck to your hand.\n\nIf this card is sent to the Graveyard as Synchro Material: You can Special Summon 1 \"Tech-Zero\" monster from your hand, but negate its effects until the end of this turn.\n\nYou can only use each effect of \"Tech-Zero Prism Activator\" once per turn.",
+      "You can discard this card and 1 \"Tech-Zero\" Tuner; add 1 \"Tech-Zero\" monster from your Deck to your hand.\n\nIf this card is sent to the GY as Synchro Material: You can Special Summon 1 \"Tech-Zero\" monster from your hand, but negate its effects until the end of this turn.\n\nYou can only use each effect of \"Tech-Zero Prism Activator\" once per turn.",
     image: "assets/Tech-Zero Prism Activator.png",
     effects: [
       {
@@ -643,7 +616,7 @@ export const techZeroCards = [
     attribute: "Light",
     archetype: "Tech-Zero",
     description:
-      "If this card is face-up on the field: You can conduct 1 Normal Summon/Set of a \"Tech-Zero\" monster in addition to your Normal Summon/Set.\n\nIf this card is sent to the Graveyard as Synchro Material: You can target 1 \"Tech-Zero\" Spell/Trap in your Graveyard; add it to your hand.\n\nYou can only use each effect of \"Tech-Zero Connector Dragon\" once per turn.",
+      "While this card is face-up on the field, you can conduct 1 Normal Summon/Set of a \"Tech-Zero\" monster in addition to your Normal Summon/Set.\n\nIf this card is sent to the GY as Synchro Material: You can target 1 \"Tech-Zero\" Spell/Trap in your GY; add it to your hand.\n\nYou can only use each effect of \"Tech-Zero Connector Dragon\" once per turn.",
     image: "assets/Tech-Zero Connector Dragon.png",
     effects: [
       {
@@ -715,30 +688,24 @@ export const techZeroCards = [
     archetype: "Tech-Zero",
     isTuner: true,
     description:
-      "If you control no monsters: You can Special Summon this card from your hand.\n\nIf you Synchro Summon a \"Tech-Zero\" Synchro Monster while this card is face-up on the field: draw 1 card, and if it is a Level 4 or lower \"Tech-Zero\" monster, you can Special Summon it.\n\nYou can only use each effect of \"Tech-Zero Pulse Soldier\" once per turn.",
+      "If you control no monsters, you can Special Summon this card from your hand. You can only Special Summon \"Tech-Zero Pulse Soldier\" once per turn this way.\n\nIf you Synchro Summon a \"Tech-Zero\" Synchro Monster while this card is face-up on the field: draw 1 card, and if it is a Level 4 or lower \"Tech-Zero\" monster, you can Special Summon it.\n\nYou can only use this effect of \"Tech-Zero Pulse Soldier\" once per turn.",
     image: "assets/Tech-Zero Pulse Soldier.png",
+    handSummonProcedure: {
+      id: "tech_zero_pulse_soldier_empty_field_summon",
+      oncePerTurn: true,
+      oncePerTurnName: "tech_zero_pulse_soldier_empty_field_summon",
+      oncePerTurnConsumeOn: "success",
+      conditions: [
+        {
+          type: "field_card_count",
+          owner: "self",
+          zone: "field",
+          filters: { cardKind: "monster" },
+          max: 0,
+        },
+      ],
+    },
     effects: [
-      {
-
-        activationZones: ["hand"],
-
-        usagePolicy: "use",
-        id: "tech_zero_pulse_soldier_empty_field_summon",
-        timing: "ignition",
-        requirePhase: ["main1", "main2"],
-        requireEmptyField: true,
-        oncePerTurn: true,
-        oncePerTurnName: "tech_zero_pulse_soldier_empty_field_summon",
-        actions: [
-          {
-            type: "special_summon_from_zone",
-            zone: "hand",
-            requireSource: true,
-            position: "choice",
-            promptPlayer: true,
-          },
-        ],
-      },
       {
 
         usagePolicy: "use",
@@ -803,7 +770,7 @@ export const techZeroCards = [
       },
     },
     description:
-      "1 \"Tech-Zero\" Tuner + 1+ non-Tuner monsters\n\nIf this card is Synchro Summoned: You can Special Summon up to 3 Level 4 or lower \"Tech-Zero\" monsters with different names from your Graveyard. For the rest of this turn after this effect resolves, you cannot Special Summon monsters, except \"Tech-Zero\" monsters.\n\nYou can only use this effect of \"Tech-Zero Summoning Portal\" once per turn.",
+      "1 \"Tech-Zero\" Tuner + 1+ non-Tuner monsters\n\nIf this card is Synchro Summoned: You can Special Summon up to 3 Level 4 or lower \"Tech-Zero\" monsters with different names from your GY. For the rest of this turn after this effect resolves, you cannot Special Summon monsters, except \"Tech-Zero\" monsters.\n\nYou can only use this effect of \"Tech-Zero Summoning Portal\" once per turn.",
     image: "assets/Tech-Zero Summoning Portal.png",
     effects: [
       {
@@ -968,7 +935,7 @@ export const techZeroCards = [
       nonTunerMin: 1,
     },
     description:
-      "1 Tuner + 1+ non-Tuner monsters\n\nIf this card is Synchro Summoned: You can target 1 \"Tech-Zero\" Tuner in your Graveyard; add it to your hand.\n\nIf this card battles an opponent's Special Summoned monster, it gains 500 ATK during the Damage Step.\n\nIf this card attacks a Defense Position monster, inflict piercing battle damage.",
+      "1 Tuner + 1+ non-Tuner monsters\n\nIf this card is Synchro Summoned: You can target 1 \"Tech-Zero\" Tuner in your GY; add it to your hand.\n\nIf this card battles an opponent's Special Summoned monster, it gains 500 ATK during the Damage Step.\n\nIf this card attacks a Defense Position monster, inflict piercing battle damage.",
     image: "assets/Tech-Zero Ghost Samurai.png",
     effects: [
       {
@@ -1092,7 +1059,7 @@ export const techZeroCards = [
       nonTunerMin: 1,
     },
     description:
-      "1 Tuner + 1+ non-Tuner monsters\n\nWhile this card is face-up on the field, each time you Synchro Summon a monster: draw 1 card.\n\nOnce per turn: You can send 1 Level 4 or lower \"Tech-Zero\" monster you control to the Graveyard; Special Summon 1 \"Tech-Zero\" monster from your Graveyard with the same Level and a different name from the sent monster.",
+      "1 Tuner + 1+ non-Tuner monsters\n\nWhile this card is face-up on the field, each time you Synchro Summon another monster: draw 1 card.\n\nOnce per turn: You can send 1 Level 4 or lower \"Tech-Zero\" monster you control to the GY; Special Summon 1 \"Tech-Zero\" monster from your GY with the same Level and a different name from the sent monster.",
     image: "assets/Tech-Zero Battle Mage.png",
     effects: [
       {
@@ -1241,7 +1208,7 @@ export const techZeroCards = [
       nonTunerMin: 1,
     },
     description:
-      "1 Tuner + 1+ non-Tuner monsters\n\nIf this card is Synchro Summoned: You can target up to 3 \"Tech-Zero\" monsters in your Graveyard; shuffle them into the Deck, and if you do, this card gains ATK equal to the total Levels of those shuffled monsters x100 until the end of this turn.\n\nOnce per turn, if this card destroys an opponent's monster by battle: You can target 1 Tuner in your Graveyard; Special Summon it.",
+      "1 Tuner + 1+ non-Tuner monsters\n\nIf this card is Synchro Summoned: You can target up to 3 \"Tech-Zero\" monsters in your GY; shuffle them into the Deck, and if you do, this card gains ATK equal to their total Levels x100 until the end of this turn.\n\nOnce per turn, if this card destroys an opponent's monster by battle: You can target 1 Tuner in your GY; Special Summon it.",
     image: "assets/Tech-Zero Turbocharge Kaiser.png",
     effects: [
       {
@@ -1357,7 +1324,7 @@ export const techZeroCards = [
       nonTunerMin: 1,
     },
     description:
-      "1 Tuner + 1+ non-Tuner monsters\n\n\"Tech-Zero\" monsters you control cannot be banished, except this card.\n\nDuring the End Phase, if you took damage this turn: gain LP equal to the damage you took this turn.\n\nIf this card is destroyed by battle or card effect: You can Special Summon this card from the Graveyard during the End Phase, but banish it when it leaves the field.",
+      "1 Tuner + 1+ non-Tuner monsters\n\n\"Tech-Zero\" monsters you control cannot be banished, except this card.\n\nDuring the End Phase, if you took damage this turn: gain LP equal to the damage you took this turn.\n\nIf this card is destroyed by battle or a card effect: You can Special Summon this card from the GY during the End Phase, but banish it when it leaves the field.",
     image: "assets/Tech-Zero Plasma Phoenix.png",
     effects: [
       {
@@ -1453,7 +1420,7 @@ export const techZeroCards = [
       },
     },
     description:
-      "1 Tuner + 1+ non-Tuner Synchro Monsters\n\nCannot be destroyed by card effects.\n\nIf this card is Synchro Summoned: target 1 face-up monster your opponent controls; negate its effects.\n\nOnce per turn, except the turn this card was Summoned: You can send this card to the Graveyard; Special Summon up to 2 Level 7 or lower Synchro Monsters from your Graveyard.",
+      "1 Tuner + 1+ non-Tuner Synchro Monsters\n\nCannot be destroyed by card effects.\n\nIf this card is Synchro Summoned: target 1 face-up monster your opponent controls; negate its effects.\n\nOnce per turn, except the turn this card was Summoned: You can send this card to the GY; Special Summon up to 2 Level 7 or lower Synchro Monsters from your GY.",
     image: "assets/Tech-Zero Reactor Dragon.png",
     effects: [
       {
@@ -1580,7 +1547,7 @@ export const techZeroCards = [
       },
     },
     description:
-      "1 Synchro Tuner Monster + 1+ non-Tuner Synchro Monsters\n\nIf this card is Synchro Summoned: You can activate this effect; this turn, this card can declare attacks up to the number of \"Tech-Zero\" Tuner monsters in your Graveyard.\n\nOnce per turn, when your opponent activates a card or effect that would destroy 1 or more cards on the field (Quick Effect): negate the activation, and if you do, destroy that card.",
+      "1 Synchro Tuner Monster + 1+ non-Tuner Synchro Monsters\n\nIf this card is Synchro Summoned: You can activate this effect; this turn, this card can declare attacks up to the number of \"Tech-Zero\" Tuner monsters in your GY.\n\nOnce per turn, when your opponent activates a card or effect that would destroy 1 or more cards on the field (Quick Effect): You can negate the activation, and if you do, destroy that card.",
     image: "assets/Tech Zero Explosive Lancer.png",
     effects: [
       {
@@ -1659,7 +1626,7 @@ export const techZeroCards = [
       },
     },
     description:
-      "1 Synchro Tuner Monster + 2+ non-Tuner Synchro Monsters\n\nMust be Synchro Summoned and cannot be Special Summoned by other ways.\n\nIf this card is Synchro Summoned: negate the effects of all face-up cards your opponent controls.\n\nIf this card battles a Defense Position monster, inflict piercing battle damage.\n\nOnce per turn, when your opponent activates a card or effect that would make this card leave the field (Quick Effect): negate that effect, and if you control no other cards, banish that card.",
+      "1 Synchro Tuner Monster + 2+ non-Tuner Synchro Monsters\n\nMust be Synchro Summoned and cannot be Special Summoned by other ways.\n\nIf this card is Synchro Summoned: negate the effects of all face-up cards your opponent controls.\n\nIf this card battles a Defense Position monster, inflict piercing battle damage.\n\nOnce per turn, when your opponent activates a card or effect that would make this card leave the field (Quick Effect): You can negate that effect, and if you control no other cards, banish that card.",
     image: "assets/Tech-Zero Final Singularity.png",
     effects: [
       {
@@ -1741,7 +1708,7 @@ export const techZeroCards = [
     subtype: "field",
     archetype: "Tech-Zero",
     description:
-      'Once per turn: You can target 1 "Tech-Zero" Synchro Monster in your Graveyard; return it to the Extra Deck, and if you do, choose 1 monster in your Graveyard and shuffle it into the Deck.',
+      "Once per turn: You can target 1 \"Tech-Zero\" Synchro Monster in your GY; return it to the Extra Deck, and if you do, choose 1 monster in your GY and shuffle it into the Deck.",
     image: "assets/Tech-Zero Development Lab.png",
     effects: [
       {
@@ -1836,7 +1803,7 @@ export const techZeroCards = [
     subtype: "normal",
     archetype: "Tech-Zero",
     description:
-      "Banish 2 \"Tech-Zero\" monsters from your Graveyard; Special Summon 1 \"Tech-Zero\" monster from your Deck, but banish it when it leaves the field. You cannot attack directly during the turn you activate this card.\n\nYou can only activate 1 \"Tech-Zero Assembly Line\" per turn.",
+      "Banish 2 \"Tech-Zero\" monsters from your GY; Special Summon 1 \"Tech-Zero\" monster from your Deck, but banish it when it leaves the field. You cannot attack directly during the turn you activate this card.\n\nYou can only activate 1 \"Tech-Zero Assembly Line\" per turn.",
     image: "assets/Tech-Zero Assembly Line.png",
     effects: [
       {
@@ -1916,7 +1883,7 @@ export const techZeroCards = [
     speed: 2,
     archetype: "Tech-Zero",
     description:
-      "Special Summon 1 \"Tech-Zero\" Tuner from your Graveyard, and if you do, immediately after this effect resolves, Synchro Summon 1 Synchro Monster from your Extra Deck using materials you control.\n\nYou can only activate 1 \"Tech-Zero Scrapyard\" per turn.",
+      "Special Summon 1 \"Tech-Zero\" Tuner from your GY, and if you do, immediately after this effect resolves, Synchro Summon 1 Synchro Monster from your Extra Deck using materials you control.\n\nYou can only activate 1 \"Tech-Zero Scrapyard\" per turn.",
     image: "assets/Tech-Zero Scrapyard.png",
     effects: [
       {

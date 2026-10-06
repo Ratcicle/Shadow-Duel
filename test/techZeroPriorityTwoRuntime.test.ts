@@ -9,6 +9,8 @@ const CORE_REF = "tech_zero_energy_core_level_target";
 const MACHINE_REF = "tech_zero_multimodal_machine_level_target";
 const MAGE_EFFECT = "tech_zero_battle_mage_recycle_revive";
 const LAB_EFFECT = "tech_zero_development_lab_recycle";
+const CATAPULT_SUMMON_EFFECT = "tech_zero_electrocatapult_normal_summon";
+const CATAPULT_SUMMON_CHOICE = "tech_zero_electrocatapult_summon_choice";
 
 function setup(t: TestContext, seat: "player" | "bot" = "player") {
   const game = createRuntimeGame({ laboratoryMode: true, laboratoryUseBot: false,
@@ -347,3 +349,92 @@ test("level-case previews bind an explicit reference and never replace it with a
     decisions: { selections: { [MACHINE_REF]: [low.instanceId] } } } }).ok, false);
   assert.equal(game.effectEngine.evaluateConditions(condition, { ...base, activationContext: { preview: false } }).ok, false);
 });
+
+for (const seat of ["player", "bot"] as const) {
+  for (const zone of ["hand", "graveyard"] as const) {
+    test(`Electrocatapult chooses the current ${zone} monster after a real Chain response without targeting (${seat})`, async t => {
+      const { game, owner, make } = setup(t, seat);
+      const source = make(502), old = make(506), current = make(508);
+      owner.hand.push(source);
+      owner.graveyard.push(old);
+      owner[zone].push(current);
+      const definition = cardDefinition("Call of the Haunted");
+      const response = new Card({ ...definition, effects: required(definition.effects).map(effect => ({ ...effect,
+        ...(effect.targets ? { targets: effect.targets.map(target => ({ ...target, name: old.name })) } : {}),
+      })) }, owner.id);
+      response.isFacedown = true; response.setTurn = response.turnSetOn = 2;
+      placeFieldCards(owner.spellTrap, response);
+      let offered = false, targeted = 0, declaredCount: number | undefined;
+      let resolutionCandidates: unknown[] | undefined;
+      const choices: Card[] = [];
+      game.on("effect_targeted", event => { if (event.effect?.id === CATAPULT_SUMMON_EFFECT) targeted++; });
+      game.ui.showChainResponseModal = async candidates => {
+        const link = game.chainSystem.getLastChainLink();
+        if (offered || link?.effect.id !== CATAPULT_SUMMON_EFFECT) return null;
+        declaredCount = link.declaredTargets.length;
+        const candidate = candidates.find(entry => entry.card === response);
+        if (candidate) offered = true;
+        return candidate ?? null;
+      };
+      game.ui.showSpecialSummonPositionModal = (card, choose) => {
+        if (card === current) choices.push(current);
+        choose(card === current ? "defense" : "attack");
+      };
+      const finish = game.finishTargetSelection.bind(game);
+      game.finishTargetSelection = async (...args) => {
+        const session = game.targetSelection;
+        for (const requirement of session?.requirements || []) {
+          if (requirement.id === "tech_zero_electrocatapult_summon_target") {
+            const previous = required(requirement.candidates.find(candidate => candidate.cardRef === old));
+            session!.selections[requirement.id] = [previous.key];
+          } else if (requirement.id === CATAPULT_SUMMON_CHOICE) {
+            resolutionCandidates = requirement.candidates.map(candidate => candidate.cardRef);
+            assert.ok(owner.field.includes(old), "the real CL2 revival must finish before CL1's choice");
+            const selected = required(requirement.candidates.find(candidate => candidate.cardRef === current));
+            session!.selections[requirement.id] = [selected.key];
+          }
+        }
+        return finish(...args);
+      };
+      const summon = game.performNormalSummon(owner, 0);
+      await completeTestSelections(game, summon);
+      assert.equal(required(await summon).success, true);
+      assert.equal(offered, true, "Call of the Haunted must be a real second Chain Link");
+      assert.equal(declaredCount, 0, "CL1 must declare no hand or Graveyard target before responses");
+      assert.equal(targeted, 0, "the resolution choice must publish no effect_targeted event");
+      assert.deepEqual(resolutionCandidates, [current], "CL2's revived card is no longer a candidate for CL1");
+      assert.ok(owner.field.includes(current));
+      assert.equal(current.position, "defense");
+      assert.deepEqual(choices, [current], "the chosen monster retains its manual summon-position choice");
+    });
+  }
+
+  test(`Electrocatapult's resolution choice filters summon restrictions and keeps position choice (${seat})`, async t => {
+    const { game, owner, make } = setup(t, seat);
+    const source = make(502), legal = make(506), restricted = make(508), prohibited = make(501);
+    const otherArchetype = new Card({ ...cardDefinition(501), archetype: "Void" }, owner.id), highLevel = make(504);
+    prohibited.cannotBeSpecialSummoned = true;
+    owner.specialSummonRestrictions.push({ allowedFilters: { type: "Machine" }, duration: "until_end_turn", expiresOnTurn: 4,
+      reason: null, sourceName: null, sourceId: null, effectId: null });
+    owner.hand.push(source, restricted, prohibited, otherArchetype, highLevel, legal);
+    let candidates: unknown[] | undefined, chosePosition = false;
+    const finish = game.finishTargetSelection.bind(game);
+    game.finishTargetSelection = async (...args) => {
+      const requirement = game.targetSelection?.requirements.find(entry => entry.id === CATAPULT_SUMMON_CHOICE);
+      if (requirement) candidates = requirement.candidates.map(candidate => candidate.cardRef);
+      return finish(...args);
+    };
+    game.ui.showSpecialSummonPositionModal = (card, choose) => {
+      if (card === legal) chosePosition = true;
+      choose("defense");
+    };
+    const summon = game.performNormalSummon(owner, 0);
+    await completeTestSelections(game, summon);
+    assert.equal(required(await summon).success, true);
+    assert.deepEqual(candidates, [legal]);
+    assert.ok(owner.field.includes(legal));
+    assert.ok(owner.hand.includes(restricted)); assert.ok(owner.hand.includes(prohibited));
+    assert.ok(owner.hand.includes(otherArchetype)); assert.ok(owner.hand.includes(highLevel));
+    assert.equal(chosePosition, true); assert.equal(legal.position, "defense");
+  });
+}

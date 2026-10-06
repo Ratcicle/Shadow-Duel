@@ -355,9 +355,11 @@ Os detalhes estão em “Pontos a definir antes de implementar” e “Pontos de
 
 **Nível 7 | Ascensão | Fada | TREVAS**  
 **ATK 2400 / DEF 2000**  
-**Material:** Duque Arvid do Carmim Real  
-**Requisito:** o material deve estar com a face para cima no campo por 3 turnos.
 
+> "Duque Arvid do Carmim Real"
+>
+> O material deve estar com a face para cima no campo por 3 turnos.
+>
 > Você pode pagar 1000 PV e escolher 1 monstro com a face para cima no campo; devolva o alvo para a mão e, se for um monstro “Carmim Real”, este card ganha 1000 ATK até o final do turno.  
 > Se este card seria destruído em batalha, você pode enviar 1 outro monstro “Carmim Real” que você controla para o Cemitério em vez disso.  
 > Você só pode ativar cada efeito de “Arquiduque Arvid do Carmim Real” uma vez por turno.

@@ -348,8 +348,12 @@ Eventos aceitos pelo validador:
 | `effect_activated` | Depois que uma ativação de efeito é publicada. | Fonte, efeito, jogador e Chain Link ativado. |
 | `position_change` | Depois que a posição de batalha muda. | Card, posição anterior/atual, jogador e origem da mudança. |
 
-Se um efeito declara `event` com timing diferente de `on_event`, o validador pode
-aceitar o evento, mas registra warning. Use `event` apenas em `on_event`.
+Use `event` em `on_event` para triggers coletados pelo evento. Em `on_activate`,
+o campo pode restringir a janela em que o jogador ativa a carta; isso não cria
+um trigger automático. A forma `passive` com `passive.type: "event_actions"`
+usa `event` para uma aplicação imediata, sem ativação nem Chain, dentro dos
+limites dessa capacidade. Nos demais timings, um evento válido gera warning;
+eventos desconhecidos continuam inválidos.
 
 Para efeitos que so devem disparar por um motivo especifico, use
 `contextLabel`. Exemplo: triggers de material Sincro usam
@@ -1117,7 +1121,15 @@ Ignition com target e custo:
     }
   ],
   activationCosts: [
-    { type: "move", targetRef: "discard_cost", player: "self", to: "graveyard" }
+    {
+      type: "move",
+      targetRef: "discard_cost",
+      player: "self",
+      fromZone: "hand",
+      to: "graveyard",
+      contextLabel: "discard",
+      requireDestination: true
+    }
   ],
   actions: [
     { type: "destroy", targetRef: "destroy_target" }
@@ -1127,9 +1139,16 @@ Ignition com target e custo:
 
 ## Tradução da carta
 
-O inglês em `src/data/cards/<grupo>.ts` é o texto canônico. Para cada carta
-nova, adicione nome e descrição em português na seção `cards` de
-`public/locales/pt-br.json`, usando o ID numérico como chave de string:
+Os nomes e descrições em PT-BR são a fonte editorial canônica, na seção
+`cards` de `public/locales/pt-br.json`, usando o ID numérico como chave de
+string. Mantenha a versão EN sincronizada em `src/data/cards/<grupo>.ts`:
+as definições continuam armazenando inglês, usado pela interface em EN e
+pela assinatura das definições no replay. A interface em português resolve
+os textos pela locale.
+
+Textos EN/PT são definidos pelo usuário. Qualquer alteração exige sua
+autorização explícita; corrigir a execução não autoriza reescrevê-los.
+Para cada carta nova, inclua as duas versões nos respectivos arquivos:
 
 ```json
 {
@@ -1150,8 +1169,9 @@ usar.
 
 1. ID esta livre e dentro da faixa oficial do modulo.
 2. Imagem existe em `public/assets/` e a carta a referencia como `assets/...`.
-3. Nome e descrição canônicos estão em inglês, com tradução por ID em
-   `public/locales/pt-br.json`.
+3. Nome e descrição em PT-BR estão na locale por ID como fonte editorial
+   canônica, com a versão EN sincronizada nas definições e alterações de texto
+   explicitamente autorizadas pelo usuário.
 4. `timing` e `event` existem nos contratos aceitos pelo validador.
 5. Cada `action.type` existe em `ActionByType`, `ACTION_BINDINGS`, catálogo e registry.
 6. `targetRef` bate exatamente com um `targets[].id`, salvo contexto explícito

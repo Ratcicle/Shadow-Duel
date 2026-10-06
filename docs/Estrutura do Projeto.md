@@ -125,7 +125,7 @@ Módulos de cartas por grupo e governança de IDs:
 
 ### `public/locales/`
 
-Traduções visíveis no jogo. Hoje há [pt-br.json](../public/locales/pt-br.json), com nomes, descrições, textos de UI e labels de escolhas. O inglês canônico vem dos dados das cartas quando não existe tradução explícita.
+Textos visíveis no jogo. Hoje há [pt-br.json](../public/locales/pt-br.json), com nomes, descrições, textos de UI e labels de escolhas. Os nomes e descrições em PT-BR são a fonte editorial das cartas. As definições em [src/data/cards/](../src/data/cards/) mantêm a versão sincronizada em inglês, usada como fallback quando não existe texto para o idioma selecionado e nas assinaturas do banco de cartas dos replays.
 
 ---
 
@@ -387,7 +387,7 @@ preservar a resolução ESM e o output runtime:
 
 Na raiz de `src/core/game/`, `random.ts` fornece o RNG determinístico e
 `attachments.ts` mantém o manifest canônico dos 222 métodos em 61 grupos.
-O preflight valida o manifest antes de qualquer escrita no prototype, e os 15
+O preflight valida o manifest antes de qualquer escrita no prototype, e os 16
 wrappers de captura de replay são instalados separadamente por
 `replay/capture.ts`, depois dos attachments.
 
@@ -478,7 +478,7 @@ pelos efeitos visuais do duelo.
 - [Estrutura do Projeto.md](Estrutura%20do%20Projeto.md)
 - [Regras para Invocação-Ascensão.md](Regras%20para%20Invoca%C3%A7%C3%A3o-Ascens%C3%A3o.md)
 - [Replay canônico.md](Replay%20can%C3%B4nico.md)
-- Catálogos em [Archetypes/](Archetypes/): [Arcanist](Archetypes/Arcanist%20Archetype.md), [Bloomrot](Archetypes/Bloomrot%20Archetype.md), [Burning West](Archetypes/Burning%20West%20Archetype.md), [Dragon](Archetypes/Dragon%20Archetype.md), [Luminarch](Archetypes/Luminarch%20Archetype.md), [Miragebound](Archetypes/Miragebound%20Archetype.md), [Shadow-Heart](Archetypes/Shadow-Heart%20Archetype.md), [Tech-Zero](Archetypes/Tech-Zero%20Archetype.md), [Void](Archetypes/Void%20Archetype.md).
+- Catálogos em [Archetypes/](Archetypes/): [Arcanist](Archetypes/Arcanist%20Archetype.md), [Bloomrot](Archetypes/Bloomrot%20Archetype.md), [Burning West](Archetypes/Burning%20West%20Archetype.md), [Dragon](Archetypes/Dragon%20Archetype.md), [Luminarch](Archetypes/Luminarch%20Archetype.md), [Miragebound](Archetypes/Miragebound%20Archetype.md), [Shadow-Heart](Archetypes/Shadow-Heart%20Archetype.md), [Tech-Zero](Archetypes/Tech-Zero%20Archetype.md), [Void](Archetypes/Void%20Archetype.md), [Vulcanomaton](Archetypes/Vulcanomaton%20Archetype.md).
 
 ---
 

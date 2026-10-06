@@ -304,9 +304,9 @@ async function executeHandProcedure(
     isFacedown: false, summonMethod: "special", excludeCards: materials,
   });
   if (!finalPlacement.ok || player.field.filter((fieldCard) => !materials.includes(fieldCard)).length >= 5) return { success: false, reason: "field_unavailable" };
-  const fieldPlacement = cost || counterCost ? await this.prepareFieldPlacement(card, player, "field", {
+  const fieldPlacement = await this.prepareFieldPlacement(card, player, "field", {
     actor: player, allowCancel: true, excludeCards: materials,
-  }) : null;
+  });
   if (fieldPlacement && fieldPlacement.outcome !== "chosen") {
     return { success: false, cancelled: fieldPlacement.outcome === "cancelled", reason: fieldPlacement.outcome === "cancelled" ? "placement_cancelled" : "field_full" };
   }

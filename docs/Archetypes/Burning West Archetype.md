@@ -19,7 +19,7 @@ Burning West reúne 16 cartas com foco em combate, declaração de Tipo e recupe
 
 #### Monstros (6)
 
-| ID | PT-BR | Canônico | Nível | Tipo | Atributo | ATK | DEF |
+| ID | PT-BR | EN | Nível | Tipo | Atributo | ATK | DEF |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 451 | Pistoleiro do Oeste Ardente | Gunslinger of the Burning West | 4 | Pyro | Fire | 1700 | 1200 |
 | 453 | Coveiro do Oeste Ardente | Undertaker of the Burning West | 5 | Pyro | Fire | 1900 | 2000 |
@@ -30,7 +30,7 @@ Burning West reúne 16 cartas com foco em combate, declaração de Tipo e recupe
 
 #### Magias (6)
 
-| ID | PT-BR | Canônico | Subtipo |
+| ID | PT-BR | EN | Subtipo |
 | --- | --- | --- | --- |
 | 452 | Procurado na Cidade Ardente | Wanted in the Burning West | Contínua |
 | 456 | Peacemaker Ardente | Burning Peacemaker | Equipamento |
@@ -41,7 +41,7 @@ Burning West reúne 16 cartas com foco em combate, declaração de Tipo e recupe
 
 #### Armadilhas (3)
 
-| ID | PT-BR | Canônico | Subtipo |
+| ID | PT-BR | EN | Subtipo |
 | --- | --- | --- | --- |
 | 463 | Emboscada em Crash Town | Ambush in Crash Town | Normal |
 | 464 | Recompensa Ardente | Burning Reward | Normal |
@@ -49,7 +49,7 @@ Burning West reúne 16 cartas com foco em combate, declaração de Tipo e recupe
 
 ### Extra Deck (1)
 
-| ID | PT-BR | Canônico | Tipo | Nível | Tipo de monstro | Atributo | ATK | DEF |
+| ID | PT-BR | EN | Tipo | Nível | Tipo de monstro | Atributo | ATK | DEF |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 466 | Carrasco do Oeste Ardente | Executioner of the Burning West | Ascensão | 7 | Pyro | Fire | 2500 | 2000 |
 

@@ -12,7 +12,7 @@ export const mirageboundCards = [
     type: "Spellcaster",
     archetype: "Miragebound",
     description:
-      "If this card is Normal Summoned: You can add 1 \"Miragebound\" Spell/Trap from your Deck to your hand.\n\nOnce per turn: You can target 1 face-up monster your opponent controls; change its battle position.\n\nYou can only use each effect of \"Miragebound Scout\" once per turn.",
+      "If this card is Normal Summoned: You can add 1 \"Miragebound\" Spell/Trap from your Deck to your hand.\n\nYou can target 1 face-up monster your opponent controls; change its battle position.\n\nYou can only use each effect of \"Miragebound Scout\" once per turn.",
     image: "assets/Miragebound Scout.png",
     effects: [
       {
@@ -79,7 +79,7 @@ export const mirageboundCards = [
     type: "Spellcaster",
     archetype: "Miragebound",
     description:
-      "If you control a \"Miragebound\" monster: You can Special Summon this card from your hand.\n\nOnce per turn: You can target 1 other \"Miragebound\" monster you control; return it to the hand, and if you do, this card gains 600 ATK until the end of this turn.\n\nYou can only use each effect of \"Miragebound Dancer\" once per turn.",
+      "If you control a \"Miragebound\" monster: You can Special Summon this card from your hand.\n\nYou can target 1 other \"Miragebound\" monster you control; return it to the hand, and if you do, this card gains 600 ATK until the end of this turn.\n\nYou can only use each effect of \"Miragebound Dancer\" once per turn.",
     image: "assets/Miragebound Dancer.png",
     effects: [
       {
@@ -221,7 +221,7 @@ export const mirageboundCards = [
     subtype: "field",
     archetype: "Miragebound",
     description:
-      "The first time each face-up monster your opponent controls changes its battle position each turn: it loses 400 ATK/DEF until the end of the next turn.\n\nOnce per turn: You can choose 1 of these effects.\n- Target 1 \"Miragebound\" monster you control and 1 monster your opponent controls; return the first target to the hand, and if you do, the second target loses 400 ATK/DEF until the end of this turn.\n- Target 1 face-up monster your opponent controls; change its battle position.",
+      "The first time each turn each face-up monster your opponent controls changes its battle position, it loses 400 ATK/DEF until the end of the next turn.\n\nOnce per turn: You can choose 1 of these effects:\n● Target 1 \"Miragebound\" monster you control and 1 monster your opponent controls; return the first target to the hand, and if you do, the second target loses 400 ATK/DEF until the end of this turn.\n● Target 1 face-up monster your opponent controls; change its battle position.",
     image: "assets/Miragebound Oasis.png",
     effects: [
       {
@@ -359,7 +359,7 @@ export const mirageboundCards = [
       position: "choice",
     },
     description:
-      "\"Miragebound Scout\"\n\nRequirement: The material must have activated its effects 2 times this Duel.\n\nIf this card is Ascension Summoned: You can target up to 2 face-up monsters your opponent controls; change their battle positions.\n\nOnce per turn: Target 1 other \"Miragebound\" monster you control and 1 card your opponent controls; return those targets to the hand.\n\nIf this card attacks a Defense Position monster, inflict piercing battle damage.",
+      "\"Miragebound Scout\"\n\nThe material's effects must have been activated a total of at least 2 times this Duel.\n\nIf this card is Ascension Summoned: You can target up to 2 face-up monsters your opponent controls; change their battle positions.\n\nOnce per turn: You can target 1 other \"Miragebound\" monster you control and 1 card your opponent controls; return them to the hand.\n\nIf this card attacks a Defense Position monster, inflict piercing battle damage.",
     image: "assets/Miragebound Glass Sovereign.png",
     effects: [
       {
@@ -521,7 +521,7 @@ export const mirageboundCards = [
     type: "Spellcaster",
     archetype: "Miragebound",
     description:
-      "If this card is returned from the field to the hand: You can target 1 \"Miragebound\" monster in your Graveyard; add it to your hand.\n\nOnce per turn: You can target 1 monster your opponent controls; change its battle position, and if you do, that monster loses 500 ATK/DEF until the end of the next turn.\n\nYou can only use each effect of \"Miragebound Sand Priestess\" once per turn.",
+      "If this card is returned from the field to the hand: You can target 1 \"Miragebound\" monster in your GY; add it to your hand.\n\nYou can target 1 monster your opponent controls; change its battle position, and if you do, that monster loses 500 ATK/DEF until the end of the next turn.\n\nYou can only use each effect of \"Miragebound Sand Priestess\" once per turn.",
     image: "assets/Miragebound Sand Priestess.png",
     effects: [
       {
@@ -615,6 +615,7 @@ export const mirageboundCards = [
       id: "miragebound_false_king_special_summon",
       oncePerTurn: true,
       oncePerTurnName: "miragebound_false_king_special_summon",
+      oncePerTurnConsumeOn: "success",
       cost: {
         count: 1,
         zones: ["field"],
@@ -662,7 +663,7 @@ export const mirageboundCards = [
     subtype: "continuous",
     archetype: "Miragebound",
     description:
-      "The first time each turn a \"Miragebound\" monster you control would be destroyed by battle, you can return it to the hand instead.\n\nOnce per turn: You can send this face-up card from the field to the GY; target 1 Spell/Trap your opponent controls; destroy it.\n\nYou can only control 1 \"Miragebound Mirror Path\".",
+      "The first time each turn a \"Miragebound\" monster you control would be destroyed by battle, you can return it to the hand instead.\n\nOnce per turn: You can send this face-up card from the field to the GY, then target 1 Spell/Trap your opponent controls; destroy it.\n\nYou can only control 1 \"Miragebound Mirror Path\".",
     image: "assets/Miragebound Mirror Path.png",
     effects: [
       {
@@ -763,7 +764,7 @@ export const mirageboundCards = [
     speed: 2,
     archetype: "Miragebound",
     description:
-      "When an opponent's monster declares an attack: Target 1 monster your opponent controls; change its battle position. Then, you can return 1 \"Miragebound\" monster you control to the hand.\n\nYou can only activate 1 \"Miragebound False Horizon\" per turn.",
+      "When an opponent's monster declares an attack: Target 1 monster your opponent controls; change its battle position, then you can return 1 \"Miragebound\" monster you control to the hand.\n\nYou can only activate 1 \"Miragebound False Horizon\" per turn.",
     image: "assets/Miragebound False Horizon.png",
     effects: [
       {
@@ -878,7 +879,7 @@ export const mirageboundCards = [
     subtype: "normal",
     archetype: "Miragebound",
     description:
-      "If you control a \"Miragebound\" monster: Target 1 monster your opponent controls; change its battle position. Then, if that monster is in Defense Position, you can add 1 \"Miragebound\" monster from your Graveyard to your hand.\n\nYou can only activate 1 \"Miragebound Heat Haze\" per turn.",
+      "If you control a \"Miragebound\" monster: Target 1 monster your opponent controls; change its battle position. Then, if that monster is in Defense Position, you can add 1 \"Miragebound\" monster from your GY to your hand.\n\nYou can only activate 1 \"Miragebound Heat Haze\" per turn.",
     image: "assets/Miragebound Heat Haze.png",
     effects: [
       {
@@ -973,7 +974,7 @@ export const mirageboundCards = [
       },
     ],
     description:
-      "\"Miragebound Glass Viper\" + 1 \"Miragebound\" monster\n\nMust be Fusion Summoned from your Extra Deck by sending the above materials you control to the GY, and cannot be Special Summoned by other ways.\n\nIf this card is Fusion Summoned: change the battle positions of all monsters your opponent controls.\n\nWhile this card is face-up on the field, each time a monster your opponent controls changes its battle position by a \"Miragebound\" card effect, it loses 300 ATK/DEF until the end of this turn.\n\nIf this card would be destroyed by battle: you can return it to the Extra Deck instead.",
+      "\"Miragebound Glass Viper\" + 1 \"Miragebound\" monster\n\nMust be Fusion Summoned from your Extra Deck by sending the above materials you control to the GY, and cannot be Special Summoned by other ways.\n\nIf this card is Fusion Summoned: change the battle positions of all monsters your opponent controls.\n\nWhile this card is face-up on the field, each time a monster your opponent controls changes its battle position by a \"Miragebound\" card effect, it loses 300 ATK/DEF until the end of this turn.\n\nIf this card would be destroyed by battle: You can return it to the Extra Deck instead.",
     image: "assets/Miragebound Desert Leviathan.png",
     effects: [
       {

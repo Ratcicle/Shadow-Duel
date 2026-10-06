@@ -9,7 +9,7 @@ import { required, unsafeFixture } from "../helpers/fixtures.js";
 import { createRuntimeGame, placeFieldCards, type RuntimeGame } from "../helpers/game.js";
 
 type Controller = "human" | "ai";
-type Scenario = "king" | "king_cancel" | "mirror_accept" | "mirror_decline" |
+type Scenario = "king" | "king_cancel" | "king_negated" | "mirror_accept" | "mirror_decline" |
   "horizon_accept" | "horizon_decline" | "position" | "rebel" | "copy_opt" | "piercing";
 const horizonReturn = "miragebound_false_horizon_return_target";
 const sovereignOwn = "miragebound_glass_sovereign_return_self_target";
@@ -45,10 +45,18 @@ function installFixture(game: RuntimeGame, seat: PlayerId, controller: Controlle
       player.deck.splice(player.deck.indexOf(card), 1);
       return card;
     };
-    if (scenario === "king" || scenario === "king_cancel") {
+    if (scenario === "king" || scenario === "king_cancel" || scenario === "king_negated") {
       owner.hand.push(take(owner, 358), take(owner, 358));
       placeFieldCards(owner.field, take(owner, 356));
-      placeFieldCards(opponent.field, take(opponent, 351));
+      if (scenario === "king_negated") {
+        owner.hand.push(take(owner, 358));
+        placeFieldCards(owner.field, take(owner, 351));
+        const negator = required(opponent.extraDeck.find(card => card.id === 275));
+        opponent.extraDeck.splice(opponent.extraDeck.indexOf(negator), 1);
+        negator.isFacedown = false; negator.position = "attack";
+        negator.properSummonEstablished = true; negator.properSummonProcedure = "graveyard_banish_fusion";
+        placeFieldCards(opponent.field, negator);
+      } else placeFieldCards(opponent.field, take(opponent, 351));
     } else if (scenario.startsWith("mirror")) {
       game.turn = opponent.id; game.phase = "battle";
       placeFieldCards(owner.spellTrap, take(owner, 359));
@@ -127,8 +135,9 @@ async function setup(t: TestContext, seat: PlayerId, controller: Controller, sce
   playback.ui.showTriggerOrderModal = async () => assert.fail("Playback must not ask for trigger ordering");
   playback.autoSelector.select = () => assert.fail("Playback must not recompute AI selections");
   playback.autoSelector.orderTriggerCandidates = () => assert.fail("Playback must not recompute AI trigger ordering");
-  const deck = [351, 351, 354, 356, 358, 358, 359, 360, 364, 364, 302, 304, ...Array<number>(8).fill(3)];
-  const extra = scenario === "copy_opt" ? [355, 355] : [363];
+  const deck = [351, 351, 354, 356, 358, 358, 359, 360, 364, 364, 302, 304,
+    ...(scenario === "king_negated" ? [358] : []), ...Array<number>(8).fill(3)];
+  const extra = scenario === "copy_opt" ? [355, 355] : scenario === "king_negated" ? [363, 275] : [363];
   await live.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true, startAtDrawPhase: true,
     startingPlayer: seat, announceStartingPlayer: false, playerDeck: deck, botDeck: deck, playerExtraDeck: extra, botExtraDeck: extra });
   const initialSnapshot = createCanonicalStateSnapshot(live), initialHash = hashCanonicalGameState(live);
@@ -157,7 +166,7 @@ async function setup(t: TestContext, seat: PlayerId, controller: Controller, sce
   };
   const replay = async () => {
     const saved = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "miragebound-p2" }))));
-    assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, "engine-rules-v22");
+    assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, "engine-rules-v23");
     const result = await replayCanonicalDuel(saved, { game: unsafeFixture<ReplayDriverGamePort>(playback,
       "Both real Game instances bootstrap the same deterministic fixture before canonical commands execute") });
     assert.equal(result.finalStateHash, saved.result?.finalStateHash);
@@ -170,7 +179,7 @@ async function setup(t: TestContext, seat: PlayerId, controller: Controller, sce
 }
 
 for (const seat of ["player", "bot"] as const) for (const controller of ["human", "ai"] as const) {
-  test(`Miragebound P2 False King procedure replays its return cost and attempt limit (${seat}, ${controller})`, async t => {
+  test(`Miragebound P2 False King procedure replays its return cost and named success limit (${seat}, ${controller})`, async t => {
     const { live, owner, replay } = await setup(t, seat, controller, "king");
     const king = required(owner.hand.find(card => card.id === 358)), cost = required(owner.field[0]);
     const movements: string[] = [], activated: number[] = [];
@@ -190,6 +199,41 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
     const saved = await replay(); assert.deepEqual(saved.commands.map(command => command.type), ["hand_summon_procedure"]);
     assert.ok(saved.decisions.some(decision => decision.kind === "cost"));
     assert.ok(saved.decisions.some(decision => decision.kind === "choice" && "candidateKey" in decision.value && decision.value.candidateKey === "defense"));
+  });
+
+  test(`False King's negated procedure replays a paid return cost and another copy's successful summon (${seat}, ${controller})`, async t => {
+    const { live, playback, owner, replay } = await setup(t, seat, controller, "king_negated");
+    const first = required(owner.hand[0]), second = required(owner.hand[1]), third = required(owner.hand[2]);
+    const firstCost = required(owner.field[0]), secondCost = required(owner.field[1]);
+    const activations: number[] = [];
+    live.on("effect_activated", event => { if (typeof event.card?.id === "number") activations.push(event.card.id); });
+    let negated = false;
+    const chooseResponse = async <Candidate extends { readonly card?: { readonly id?: number | string | null | undefined } | undefined }>(
+      candidates: readonly Candidate[], context: { type?: string | null | undefined } | null | undefined,
+    ): Promise<Candidate | null> => {
+      const candidate = !negated && context?.type === "summon_attempt" ? candidates.find(entry => entry.card?.id === 275) : undefined;
+      if (!candidate) return null;
+      assert.ok(owner.hand.includes(firstCost), "the cost is paid before the summon response");
+      negated = true;
+      return candidate;
+    };
+    live.ui.showChainResponseModal = chooseResponse;
+    live.chainSystem.botChooseChainResponse = (_player, candidates, context) => chooseResponse(candidates, context);
+    await finishChoices(live, live.performHandSummonProcedure(first, owner));
+    assert.equal(negated, true);
+    assert.ok(owner.graveyard.includes(first)); assert.ok(owner.hand.includes(firstCost));
+    assert.equal(live.canSummonFromHandByProcedure(second, owner).ok, true,
+      "a negated summon leaves the name-shared procedure limit available");
+    await finishChoices(live, live.performHandSummonProcedure(second, owner));
+    assert.ok(owner.field.includes(second)); assert.ok(owner.hand.includes(secondCost));
+    assert.equal(live.canSummonFromHandByProcedure(third, owner).ok, false,
+      "the successful second copy consumes the limit for all copies");
+    assert.deepEqual(activations, [275], "only the negator activates an effect; the King procedure and Viper cost do not");
+    const saved = await replay();
+    assert.deepEqual(saved.commands.map(command => command.type), ["hand_summon_procedure", "hand_summon_procedure"]);
+    assert.ok(saved.decisions.some(decision => decision.kind === "chain_response" && "candidateKey" in decision.value));
+    const replayOwner = playback[seat], replayThird = required(replayOwner.hand.find(card => card.id === 358));
+    assert.equal(playback.canSummonFromHandByProcedure(replayThird, replayOwner).ok, false);
   });
 
   for (const accept of [true, false]) test(`Miragebound P2 Mirror ${accept ? "accepts" : "refuses"} its first battle opportunity (${seat}, ${controller})`, async t => {

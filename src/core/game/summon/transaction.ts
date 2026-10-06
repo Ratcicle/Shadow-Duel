@@ -620,7 +620,7 @@ export async function executeSummonTransaction(
       transaction: serializeSummonTransaction(prepared),
     };
   }
-  if (!prepared.cancelled && prepared.summonOrigin === "procedure" && prepared.summonMethod !== "flip" && prepared.costPayments.length === 0 && prepared.card && prepared.controller) {
+  if (!prepared.cancelled && !prepared.fieldPlacement && prepared.summonOrigin === "procedure" && prepared.summonMethod !== "flip" && prepared.costPayments.length === 0 && prepared.card && prepared.controller) {
     const placement = await this.prepareFieldPlacement(prepared.card, prepared.controller, "field", { actor: prepared.controller, allowCancel: true });
     if (placement.outcome !== "chosen") {
       return { success: false, cancelled: placement.outcome === "cancelled", reason: placement.outcome === "cancelled" ? "placement_cancelled" : "field_full", summonId: null };

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { setLocale } from "../../src/core/i18n.js";
 import type { ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
-import { createCanonicalStateSnapshot, validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
+import { createCanonicalStateSnapshot, getCardDatabaseSignature, validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
 import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
 import { required, unsafeFixture } from "../helpers/fixtures.js";
 import { completeTestSelections, createRuntimeGame, placeFieldCards, type RuntimeGame } from "../helpers/game.js";
@@ -91,8 +91,8 @@ for (const scenario of ["colony", "carrioncap", "harvest", "fusion"] as const) {
       assert.equal(actor.graveyard.filter(card => card.cardKind === "monster").length, 3);
     }
     const saved = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "bloomrot-remaining" }))));
-    assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, "engine-rules-v22");
-    assert.equal(saved.cardDatabaseSignature, "4d85a5a8");
+    assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, "engine-rules-v23");
+    assert.equal(saved.cardDatabaseSignature, getCardDatabaseSignature());
     setLocale("pt-br");
     const result = await replayCanonicalDuel(saved, { game: unsafeFixture<ReplayDriverGamePort>(playback,
       "Concrete Game implements all replay driver ports.") });

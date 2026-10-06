@@ -19,7 +19,7 @@ Vulcanomaton reúne 4 cartas com foco em monstros de TERRA, Reguladores e reapro
 
 #### Monstros (3)
 
-| ID | PT-BR | Canônico | Nível | Tipo | Atributo | ATK | DEF |
+| ID | PT-BR | EN | Nível | Tipo | Atributo | ATK | DEF |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 551 | Vulcanômato Topógrafo | Vulcanomaton Surveyor | 3 | Regulador / Machine | Earth | 1300 | 1500 |
 | 552 | Vulcanômato Escavador | Vulcanomaton Excavator | 4 | Regulador / Machine | Earth | 1600 | 1800 |
@@ -27,7 +27,7 @@ Vulcanomaton reúne 4 cartas com foco em monstros de TERRA, Reguladores e reapro
 
 #### Magias (1)
 
-| ID | PT-BR | Canônico | Subtipo |
+| ID | PT-BR | EN | Subtipo |
 | --- | --- | --- | --- |
 | 554 | Escavação Vulcanômata | Vulcanomaton Excavation | Normal |
 

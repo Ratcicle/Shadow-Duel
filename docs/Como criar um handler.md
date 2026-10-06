@@ -95,9 +95,14 @@ O dispatcher combina resultados: se qualquer action retorna `needsSelection`,
 3. Busca o handler em `engine.actionHandlers.get(action.type)`.
 4. Chama `handler(action, ctx, filteredTargets, engine)`.
 5. Se o handler pedir seleção, a resolução é pausada e o contrato é propagado.
-6. Se retornar `false` ou `{ success: false }`, a sequência termina com falha;
-   actions com `optional: true` ou `count.min <= 0` podem ser ignoradas. Nos
-   demais casos, a próxima action roda.
+6. Se retornar `false` ou `{ success: false }`, a continuação depende da action.
+   Nos contratos que aceitam `haltOnFailure`/`stopOnFailure`, qualquer desses
+   campos com `true` interrompe a sequência, mesmo em uma action opcional.
+   Se nenhum for `true`, um valor explícito `false` permite continuar. Sem
+   esses valores explícitos, `optional: true` ou `count.min <= 0` permite
+   ignorar a falha; nos demais casos, a sequência termina com falha.
+   Uma seleção pendente pausa a sequência, e um aborto de seleção interrompe-a;
+   os controles de continuação não convertem esses resultados em recusa comum.
 
 Imunidade:
 

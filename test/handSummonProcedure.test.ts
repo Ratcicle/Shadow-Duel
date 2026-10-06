@@ -173,3 +173,28 @@ test("a normally summoned copy has no procedure destruction protection", async (
   const destroyed = await game.destroyCard(card, { cause: "effect", sourceCard: source, sourcePlayer: game.bot });
   assert.ok("destroyed" in destroyed && destroyed.destroyed === true);
 });
+
+test("a costless hand procedure revalidates its condition after manual placement without committing the source", async t => {
+  const game = createRuntimeGame({ laboratoryMode: true, chainResponseTimeoutMs: 0 });
+  t.after(() => game.dispose());
+  game.turn = "player"; game.phase = "main1";
+  game.player.controllerType = "human"; game.bot.controllerType = "ai";
+  game.disablePresentationDelays = true;
+  game.ui.showChainResponseModal = async () => null;
+  game.getFieldPlacementMode = () => "manual";
+  const source = new Card(required(cardDatabaseByName.get("Bloomrot Rootling")), game.player.id);
+  const token = new Card({ name: "Bloomrot Token", cardKind: "monster", archetype: "Bloomrot" }, game.player.id);
+  token.isToken = true;
+  game.player.hand.push(source); placeFieldCards(game.player.field, token);
+  assert.equal(game.canSummonFromHandByProcedure(source, game.player).ok, true);
+  game.fieldPlacementProvider = async () => {
+    await game.moveCard(token, game.player, "graveyard", { fromZone: "field" });
+    return { outcome: "chosen", slot: 4 };
+  };
+  const result = await game.performHandSummonProcedure(source, game.player, { position: "attack" });
+  assert.equal(result.success, false);
+  assert.ok(game.player.hand.includes(source));
+  assert.equal(game.player.field.includes(source), false);
+  assert.equal(game.player.graveyard.includes(source), false);
+  assert.equal(game.lastSummonTransaction, null);
+});

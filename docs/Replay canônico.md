@@ -1,7 +1,7 @@
 # Replay canônico
 
 O replay executável usa o formato `shadow-duel-canonical-replay`, schema `2` e
-`engineVersion: "engine-rules-v22"`. Ele é independente do relatório
+`engineVersion: "engine-rules-v23"`. Ele é independente do relatório
 estratégico. O importador aceita somente o schema `2`: relatórios v4 e replays
 de schemas anteriores não são partidas executáveis nesta versão.
 
@@ -115,8 +115,11 @@ para identidades canônicas antes do hash, sem objetos vivos ou `instanceId`.
 Na execução, o retorno exige a mesma carta, zona, dono e versão, inclusive após
 a escolha de posição. A saída e reentrada no Cemitério invalidam o retorno.
 
-O procedimento limitado da mão consome seu uso no compromisso da tentativa,
-inclusive se ela for negada. Ativações de efeitos de Magias de Campo já no
+Por padrão, o procedimento limitado da mão consome seu uso no compromisso da
+tentativa, inclusive se ela for negada. Procedimentos configurados com
+`oncePerTurnConsumeOn: "success"`, como False King (358), consomem o limite
+somente após a Invocação bem-sucedida; uma negação mantém o custo pago e o
+limite disponível. Ativações de efeitos de Magias de Campo já no
 campo são capturadas como `activate_effect` com origem `fieldSpell`. O driver
 usa a mesma rota pública para reproduzi-las. As decisões do Blindado e da
 Galáxia e as escolhas locais de resolução passam pelo broker. As regressões em
@@ -182,7 +185,7 @@ caracteres do replay, usado para detectar divergências na reprodução.
 `validateCanonicalReplay(input)` recebe `unknown`, não muta a entrada e retorna
 a mesma referência somente depois de validar o documento. `setup`, `commands` e
 `decisions` e `engineVersion` são obrigatórios. A versão da engine deve ser
-`"engine-rules-v22"`; gravações sem essa versão são rejeitadas antes da validação
+`"engine-rules-v23"`; gravações sem essa versão são rejeitadas antes da validação
 profunda e da reprodução. `events`, `result` e `finalized` continuam opcionais
 na importação de arquivos do schema `2`; quando presentes, são validados
 profundamente. Os comandos e kinds de decisão permanecem os mesmos.
@@ -213,7 +216,7 @@ replay canônico; o relatório estratégico continua sendo um artefato separado.
 
 O `Game` expõe as APIs `startReplayRecording`, `recordReplayCommand`,
 `recordReplayDecision`, `recordReplayEvent`, `finalizeReplay` e `exportReplay`.
-`capture.ts` instala 15 wrappers nos métodos de ações externas para registrar
+`capture.ts` instala 16 wrappers nos métodos de ações externas para registrar
 o comando após sua resolução. A gravação exige `captureReplay: true` ou uma
 chamada explícita a `startReplayRecording`; a reprodução desabilita a captura.
 
@@ -683,10 +686,10 @@ goldens históricos acima e verificam que a atualização não remove estado do 
 
 ### Bloomrot P2 — referências, Equip e OPT por cópia — 03/10/2026
 
-O formato atual é **schema `2` / `engine-rules-v16`**, com assinatura
+Na entrega P2, o formato era **schema `2` / `engine-rules-v16`**, com assinatura
 declarativa **`e1469707`**. A rejeição de v15 acontece antes de aplicar qualquer
 setup, comando ou decisão. A assinatura v15 `0f2a7a85` é rejeitada separadamente
-com a versão atual, sem migração silenciosa.
+com a versão daquela etapa, sem migração silenciosa.
 
 As referências de evento são congeladas antes do primeiro `await`, conservadas
 pela ocorrência e encaminhadas à preparação/SEGOC sem recaptura de uma presença
@@ -705,7 +708,7 @@ histórica da Overgrowth. Todas as decisões são consumidas, com snapshots e
 hashes iguais. A matriz completa de causas/destinos e fontes perdidas é testada
 separadamente no runtime e na simulação.
 
-O golden completo atual é **`e161e690`**, com estados **`5a03f26c`/`c2ec633c`**
+O golden completo daquela etapa era **`e161e690`**, com estados **`5a03f26c`/`c2ec633c`**
 e **12100 caracteres** preservados. Restaurar o envelope v15/`0f2a7a85`
 reproduz `a4af185c`. Testes próprios verificam incompatibilidade e a ausência
 de mutação de filtros durante a serialização de eventos.
@@ -893,3 +896,78 @@ com gravações da base c21 nos dois assentos manteve o envelope, hashes e decis
 idênticos; a reprodução reconstrói o papel corrigido. A impressão digital usada
 pela busca da IA inclui os metadados e muda conforme o estado corrigido; playback
 consome as decisões gravadas sem recalcular a busca.
+
+### Miragebound: alinhamento editorial e limite de Invocação do False King — 06/10/2026
+
+O alinhamento autorizado das descrições EN de 351, 352, 354, 355, 357, 359,
+360, 362 e 363 e a configuração de False King atualizam a assinatura do banco
+de `4d85a5a8` para **`c1fecb57`**. O texto EN de 358 permanece igual. O conteúdo
+PT-BR e a redação do catálogo não integram essa assinatura.
+
+False King mantém o procedimento sem ativação de efeito ou Chain. Sua
+devolução continua sendo custo: não ativa Viper, que exige retorno por efeito,
+mas preserva o trigger de Jackal, que aceita qualquer retorno. Cancelar a
+escolha do espaço no campo antes do compromisso não paga o custo nem consome
+o limite. Com `oncePerTurnConsumeOn: "success"`, o limite compartilhado por
+nome só é consumido após uma Invocação bem-sucedida; uma Invocação negada mantém
+o custo pago e permite tentar outra cópia no mesmo turno.
+
+O schema `2`, `engine-rules-v22`, os comandos e os kinds de decisão permanecem.
+Gravações com a assinatura anterior são rejeitadas sem migração. A regressão em
+[`mirageboundPriorityTwoReplay.test.ts`](../test/replay/mirageboundPriorityTwoReplay.test.ts)
+grava uma negação real, reproduz o custo pago e o sucesso da segunda cópia, e
+confere o bloqueio da terceira cópia para humanos e IA nos dois assentos.
+O golden completo passa de `49c80dfc` para **`2a2e3f30`**; os hashes de estado
+`adfa2802`/`9f6adbc6` e os 12784 caracteres permanecem iguais. Restaurar apenas
+a assinatura anterior no envelope reproduz o golden `49c80dfc`.
+
+### Bloomrot: alinhamento editorial — 06/10/2026
+
+As descrições EN autorizadas e a descrição de escolha de Root Network mudam
+a assinatura de `c1fecb57` para **`f60cba87`**, sem alterar regras, schema `2`
+ou `engine-rules-v22`. A redação PT-BR continua fora da assinatura. Gravações
+com a assinatura anterior são rejeitadas sem migração.
+O golden completo passa de `2a2e3f30` para **`b1bbca51`**; os hashes de estado
+`adfa2802`/`9f6adbc6` e os 12784 caracteres permanecem iguais. O envelope
+histórico com `c1fecb57` continua reproduzindo o golden `2a2e3f30` nos testes.
+
+### Tech-Zero: procedimentos da mão e escolha na resolução (v23) — 06/10/2026
+
+Glider Wyvern (504) e Pulse Soldier (508) usam `hand_summon_procedure`, sem
+custo, ativação de efeito ou Chain própria. Glider exige um Regulador Tech-Zero
+identificável com a face para cima; Pulse Soldier exige não controlar monstros.
+O limite por nome usa `oncePerTurnConsumeOn: "success"`: uma Invocação negada
+ou um cancelamento antes do compromisso deixa outra cópia disponível; o sucesso
+consome o limite de todas as cópias. Decisões de posição e espaço continuam no
+broker, inclusive quando o cancelamento humano é reproduzido sob controle da IA.
+
+O trigger de Invocação-Normal de Electrocatapult (502) escolhe na resolução
+o monstro Tech-Zero de Nível 2 ou menos da mão ou Cemitério, sem publicar alvo
+na ativação. Seu outro trigger mantém o alvo Regulador no Cemitério.
+
+A correção compartilhada prepara o espaço de qualquer procedimento da mão
+antes de revalidar fonte e condições. Se uma condição desaparecer durante
+a escolha, a tentativa falha antes do compromisso. A transação reutiliza o
+espaço preparado, sem pedir a mesma decisão novamente. Essa mudança avança
+`engine-rules-v22` para **`engine-rules-v23`**, mantendo schema `2`, comandos
+e kinds de decisão. Versão v22 e assinatura anterior são rejeitadas
+independentemente, antes de inicializar ou alterar o jogo de reprodução.
+
+Os textos EN autorizados e as três mudanças declarativas atualizam a assinatura
+de `f60cba87` para **`7e5d54cb`**; PT-BR continua fora dela. O golden completo
+passa de `b1bbca51` para **`7bfe1e4a`**, preservando os hashes de estado
+`adfa2802`/`9f6adbc6` e os 12784 caracteres. Os envelopes históricos v22
+permanecem testados com suas versões e assinaturas originais, sem migração.
+
+### Ascensão — remoção dos rótulos de requisito
+
+Os textos EN autorizados de Shadow-Heart Devastation Dragon (124) e Luminarch
+Fortress Aegis (172) removem `Requirement:` e começam o parágrafo do material
+com `The`. A revisão é textual: mantém schema `2`, `engine-rules-v23`, regras,
+comandos e decisões. PT-BR e os catálogos continuam fora da assinatura.
+
+A assinatura completa passa de `7e5d54cb` para **`feeb687b`** e o golden completo
+passa de `7bfe1e4a` para **`6b0653a2`**, com os mesmos hashes de estado
+`adfa2802`/`9f6adbc6` e 12784 caracteres. Gravações v23 com a assinatura anterior
+são rejeitadas pela assinatura, sem migração. O envelope anterior permanece
+testado com `engine-rules-v23` e `7e5d54cb` explícitos, reproduzindo `7bfe1e4a`.

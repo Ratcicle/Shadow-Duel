@@ -5,7 +5,7 @@ import type { BotStrategyPort } from "../contracts/bot.js";
 import { canUseNormalSummonForCard } from "../Player.js";
 import { getTributeCardsFromIndices, getTributeValueTotal } from "../game/summon/tributeValue.js";
 import { buildStrategyAnalysis } from "./common/analysis.js";
-import { getGenericHandSpellActions, getGenericIgnitionEffectActions, getGenericNormalSummonActions,
+import { getGenericHandSpellActions, getGenericHandSummonProcedureActions, getGenericIgnitionEffectActions, getGenericNormalSummonActions,
   getGenericSynchroActions } from "./common/actionGeneration.js";
 import { getGenericSetBackrowActions } from "./common/backrowPlanning.js";
 import { findIgnitionEffect, findSpellActivationEffect } from "./common/effectDiscovery.js";
@@ -156,6 +156,7 @@ export default class TechZeroStrategy extends BaseStrategy {
     if (sourceCard.id === TZ.CORE && effect.id === "tech_zero_energy_core_level_mod")
       return Object.keys(decisions?.cases || {}).length > 0;
     if ([TZ.GHOST, TZ.KAISER, TZ.PORTAL].some(id => id === sourceCard.id) ||
+        (sourceCard.id === TZ.ELECTROCATAPULT && effect.id === "tech_zero_electrocatapult_normal_summon") ||
         (sourceCard.id === TZ.PRISM && effect.id === "tech_zero_prism_activator_synchro_summon")) {
       const groups = [...Object.values(decisions?.selections || {}), ...Object.values(decisions?.specialSummons || {})];
       if (groups.length) return groups.some(ids => ids.length > 0);
@@ -214,6 +215,10 @@ export default class TechZeroStrategy extends BaseStrategy {
       buildActivationContext: card => context(card, findSpellActivationEffect(card), "hand"),
       canActivate: ({ card, activationContext }) => canActivateSpellFromHand(game, card, player, activationContext),
     }));
+    actions.push(...getGenericHandSummonProcedureActions(game).map(action => ({
+      ...action, priority: 6,
+      position: this.chooseSpecialSummonPosition(player.hand[action.index ?? -1], { game, player }),
+    })));
     for (const zone of ["hand", "field", "graveyard", "spellTrap", "fieldSpell"] as const) {
       const cards = zone === "fieldSpell" ? (player.fieldSpell ? [player.fieldSpell] : []) : player[zone];
       const type = zone === "hand" ? "handIgnition" : zone === "field" ? "monsterEffect"

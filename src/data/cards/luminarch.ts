@@ -1267,7 +1267,7 @@ export const luminarchCards = [
       position: "choice",
     },
     description:
-      "\"Luminarch Aegisbearer\"\n\nRequirement: The material must have been face-up on the field for 2 turns.\n\nYour opponent cannot target other monsters you control for attacks.\n\nIf this card is Ascension Summoned: Gain 500 LP for each \"Luminarch\" monster you control.\n\nOnce per turn: You can pay 1000 LP, then target 1 \"Luminarch\" monster with 2000 or less DEF in your GY; Special Summon it.",
+      "\"Luminarch Aegisbearer\"\n\nThe material must have been face-up on the field for 2 turns.\n\nYour opponent cannot target other monsters you control for attacks.\n\nIf this card is Ascension Summoned: Gain 500 LP for each \"Luminarch\" monster you control.\n\nOnce per turn: You can pay 1000 LP, then target 1 \"Luminarch\" monster with 2000 or less DEF in your GY; Special Summon it.",
     image: "assets/Luminarch Fortress Aegis.png",
     effects: [
       {

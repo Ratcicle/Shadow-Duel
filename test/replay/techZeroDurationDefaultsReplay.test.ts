@@ -94,7 +94,7 @@ for (const seat of ["player", "bot"] as const) {
         else assert.equal(affected.effectsNegated, true);
         const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "techzero-duration-defaults" }))));
         assert.ok(replay.commands.some(command => command.type === "phase_intent"));
-        assert.equal(replay.engineVersion, "engine-rules-v22");
+        assert.equal(replay.engineVersion, "engine-rules-v23");
         if (controller === "ai") {
           const mode = required(replay.decisions.find(decision => decision.kind === "choice"));
           const target = required(replay.decisions.find(decision => decision.kind === "target"));

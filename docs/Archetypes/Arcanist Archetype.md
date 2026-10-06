@@ -19,7 +19,7 @@ Arcanist reúne 16 cartas com foco em Magias, Equipamentos e efeitos que recompe
 
 #### Monstros (7)
 
-| ID | PT-BR | Canônico | Nível | Tipo | Atributo | ATK | DEF |
+| ID | PT-BR | EN | Nível | Tipo | Atributo | ATK | DEF |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 302 | Aprendiz Arcanista | Arcanist Apprentice | 3 | Spellcaster | Light | 1500 | 1000 |
 | 305 | Viridis, Arcanista da Vida | Viridis, Arcanist of Life | 4 | Spellcaster | Wind | 1600 | 1500 |
@@ -31,7 +31,7 @@ Arcanist reúne 16 cartas com foco em Magias, Equipamentos e efeitos que recompe
 
 #### Magias (9)
 
-| ID | PT-BR | Canônico | Subtipo |
+| ID | PT-BR | EN | Subtipo |
 | --- | --- | --- | --- |
 | 301 | Grimório do Arcanista Aprendiz | Grimoire of the Apprentice Arcanist | Equipamento |
 | 303 | Explosão Carmesim Arcanista | Arcanist Crimson Explosion | Normal |

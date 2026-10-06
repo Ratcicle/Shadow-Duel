@@ -3,6 +3,7 @@ import test from "node:test";
 import Bot from "../../src/core/Bot.js";
 import Card from "../../src/core/Card.js";
 import BaseStrategy from "../../src/core/ai/BaseStrategy.js";
+import TechZeroStrategy from "../../src/core/ai/TechZeroStrategy.js";
 import { buildTechZeroActivationContext } from "../../src/core/ai/techzero/priorities.js";
 import { createPlanningCopy } from "../../src/core/ai/common/planningCopy.js";
 import { evaluateSimulatedConditions } from "../../src/core/ai/common/simulatedConditions.js";
@@ -27,6 +28,38 @@ function scenario(actor: "player" | "bot") {
 }
 
 for (const actor of ["player", "bot"] as const) {
+  test(`Electrocatapult declines its optional resolution summon when no legal small monster exists (${actor})`, () => {
+    const { state, make } = scenario(actor);
+    const source = make(502), raptor = make(505);
+    state.bot.hand.push(source); state.bot.graveyard.push(raptor);
+    const strategy = new TechZeroStrategy(state.bot);
+    const effect = required(source.effects?.find(entry => entry.id === "tech_zero_electrocatapult_normal_summon"));
+    assert.equal(strategy.shouldActivateEffect({ sourceCard: source, effect, player: state.bot, game: state }), false,
+      "an empty resolution-summon plan must retain the previous empty-target refusal");
+    strategy.simulateMainPhaseAction(state, { type: "summon", index: 0, cardId: 502, position: "attack" });
+    assert.deepEqual(state.bot.field.map(card => card.id), [502]);
+    assert.deepEqual(state.bot.graveyard.map(card => card.id), [505]);
+    assert.deepEqual(state._simUnsupportedActions || [], []);
+  });
+
+  for (const zone of ["hand", "graveyard"] as const) {
+    test(`Electrocatapult compiles its ${zone} resolution summon into the exact non-targeted channel (${actor})`, () => {
+      const { state, make } = scenario(actor);
+      const source = make(502), core = make(501);
+      source.fieldSlot = 0; state.bot.field.push(source); state.bot[zone].push(core);
+      const effect = required(source.effects?.find(entry => entry.id === "tech_zero_electrocatapult_normal_summon"));
+      const activationContext = buildTechZeroActivationContext(source, effect, { player: state.bot, opponent: state.player });
+      assert.deepEqual(activationContext.decisions?.specialSummons?.[required(effect.id)], [core.instanceId]);
+      assert.equal(activationContext.decisions?.selections?.tech_zero_electrocatapult_summon_target, undefined);
+      assert.equal(activationContext.decisions?.selections?.tech_zero_electrocatapult_summon_choice, undefined);
+      assert.equal(applySimulatedEffectResolution({ effect, state, selections: {}, options: { sourceCard: source, effect,
+        activationContext: { decisions: required(activationContext.decisions) }, shouldActivateEffect: () => false } }), true);
+      assert.ok(state.bot.field.includes(core));
+      assert.equal(state.bot[zone].includes(core), false);
+      assert.deepEqual(state._simUnsupportedActions || [], []);
+    });
+  }
+
   for (const occupied of [false, true]) {
   test(`Lab placement is generated live and in the planning clone without consuming its ignition (${actor}, occupied ${occupied})`, async t => {
     const first = new Bot("techzero"); first.id = "player";

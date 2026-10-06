@@ -86,9 +86,9 @@ function prepareCombo(scenario: Scenario, combo: Combo, drawIds: readonly number
           candidates.find(candidate => candidate.key?.endsWith(":decrease_2"));
       } else if (id === "tech_zero_energy_core_level_down_target") {
         chosen = candidates.find(candidate => candidate.cardRef === catapult);
-      } else if (id === "tech_zero_multimodal_machine_level_down_2_target") {
+      } else if (id === "tech_zero_multimodal_machine_level_target") {
         chosen = candidates.find(candidate => candidate.cardRef === cards.multimodal);
-      } else if (id === "tech_zero_electrocatapult_summon_target") {
+      } else if (id === "tech_zero_electrocatapult_summon_choice") {
         chosen = candidates.find(candidate => candidate.cardRef === core);
       } else if (id === "tech_zero_electrocatapult_tuner_target") {
         const revive = combo === "wyvern" && player.graveyard.includes(cards.multimodal)
@@ -132,9 +132,7 @@ async function reachPortal(scenario: Scenario, cards: ReturnType<typeof prepareC
   assert.ok(player.field.includes(core));
   assert.equal(core.effectsNegated, true);
   if (combo === "wyvern") {
-    assert.equal((await game.tryActivateMonsterEffect(required(extension), null, "hand", player, {
-      effectId: "tech_zero_glider_wyvern_special_summon",
-    })).success, true);
+    assert.equal((await game.performHandSummonProcedure(required(extension), player, { position: "attack" })).success, true);
   }
   assert.equal((await game.tryActivateMonsterEffect(multimodal, null, "field", player, {
     effectId: "tech_zero_multimodal_machine_level_mod",
@@ -179,9 +177,7 @@ for (const actor of ["player", "bot"] as const) {
     placeFieldCards(player.field, core, make(502), make(505), make(506), make(508));
     const wyvern = make(504);
     player.hand.push(wyvern);
-    const activate = () => game.tryActivateMonsterEffect(wyvern, null, "hand", player, {
-      effectId: "tech_zero_glider_wyvern_special_summon",
-    });
+    const activate = () => game.performHandSummonProcedure(wyvern, player, { position: "attack" });
     assert.equal((await activate()).success, false);
     assert.deepEqual(player.hand, [wyvern]);
     assert.equal(player.field.length, 5);

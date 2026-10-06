@@ -1261,7 +1261,7 @@ export const shadowHeartCards = [
       position: "choice",
     },
     description:
-      "\"Shadow-Heart Scale Dragon\"\n\nRequirement: the material must have been face-up on the field for 3 turns.\n\nIf this card is Ascension Summoned: This card gains 700 ATK until the end of this turn.\n\nWhile this card is face-up on the field, negate your opponent's card effects that prevent monsters from being destroyed by battle.\n\nIf this card destroys a Defense Position monster by battle: Destroy all Defense Position monsters your opponent controls.",
+      "\"Shadow-Heart Scale Dragon\"\n\nThe material must have been face-up on the field for 3 turns.\n\nIf this card is Ascension Summoned: This card gains 700 ATK until the end of this turn.\n\nWhile this card is face-up on the field, negate your opponent's card effects that prevent monsters from being destroyed by battle.\n\nIf this card destroys a Defense Position monster by battle: Destroy all Defense Position monsters your opponent controls.",
     image: "assets/Shadow-Heart Devastation Dragon.png",
     effects: [
       {

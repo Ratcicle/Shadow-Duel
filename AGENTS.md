@@ -472,11 +472,13 @@ registerStrategy("my_archetype", MyStrategy);
 import { getCardDisplayName, getCardDisplayDescription } from "./i18n.js";
 ```
 
-O inglês canônico vem das definições das cartas; a tradução está em
-[public/locales/pt-br.json](public/locales/pt-br.json). Textos de UI e escolhas
-também usam os dicionários de [src/core/i18n.ts](src/core/i18n.ts).
+Os nomes e descrições em PT-BR de
+[public/locales/pt-br.json](public/locales/pt-br.json) são a fonte editorial das cartas.
+As definições em [src/data/cards/](src/data/cards/) mantêm a versão sincronizada em
+inglês, usada como fallback e nas assinaturas do banco de cartas dos replays.
+Textos de UI e escolhas também usam os dicionários de [src/core/i18n.ts](src/core/i18n.ts).
 
-Toda nova carta exige nome/descrição em inglês e tradução para português.
+Toda nova carta exige nome/descrição em PT-BR e a versão sincronizada em inglês.
 
 ---
 
@@ -513,4 +515,4 @@ Em [docs/](docs/):
 - [Estrutura do Projeto.md](docs/Estrutura%20do%20Projeto.md) — Organização dos módulos e estratégias
 - [Replay canônico.md](docs/Replay%20can%C3%B4nico.md) — Schema, captura e reprodução de replays
 - Catálogos por arquétipo: `Arcanist`, `Bloomrot`, `Burning West`, `Dragon`,
-  `Luminarch`, `Miragebound`, `Shadow-Heart`, `Tech-Zero`, `Void`
+  `Luminarch`, `Miragebound`, `Shadow-Heart`, `Tech-Zero`, `Void`, `Vulcanomaton`
