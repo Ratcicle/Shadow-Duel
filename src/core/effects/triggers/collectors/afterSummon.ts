@@ -7,7 +7,7 @@ import type {
   TriggerRuntimeCard,
   TriggerRuntimePlayer,
 } from "../runtime.js";
-import { debugTriggerLog } from "./shared.js";
+import { debugTriggerLog, matchesAfterSummonTrigger } from "./shared.js";
 import { walkActionList } from "../../../actionHandlers/actionWalker.js";
 
 /**
@@ -144,12 +144,10 @@ export async function collectAfterSummonTriggers(
           }
         }
 
-        if (effect.triggerPlayer === "self" && summoner.id !== owner.id) continue;
-        if (effect.triggerPlayer === "opponent" && summoner.id === owner.id) continue;
-        if (effect.requireOpponentSummon === true) {
-          const isOpponentSummon = summoner?.id && summoner.id !== owner.id;
-          if (!isOpponentSummon) continue;
-        }
+        if (!matchesAfterSummonTrigger(effect, {
+          sourceCard, owner, summonedCard: card, summoner, method,
+          fromZone: summonFromZone, sourceZone, phase: currentPhase,
+        }, deferActivationChecks ? undefined : conditions => this.evaluateConditions(conditions, ctx)?.ok === true)) continue;
 
         const optCheck = this.checkOncePerTurn(sourceCard, owner, effect);
         if (!optCheck.ok) {
@@ -161,58 +159,6 @@ export async function collectAfterSummonTriggers(
         if (!duelCheck.ok) {
           debugTriggerLog(this, duelCheck.reason);
           continue;
-        }
-
-        const summonMethods = effect.summonMethods ?? effect.summonMethod;
-        const summonFrom = effect.summonFrom ?? effect.requireSummonedFrom;
-        if (summonMethods) {
-          const methods = Array.isArray(summonMethods)
-            ? summonMethods
-            : [summonMethods];
-          if (!methods.some((summonMethod) => summonMethod === method)) {
-            continue;
-          }
-        }
-
-        if (summonFrom && summonFromZone && summonFrom !== summonFromZone) {
-          continue;
-        }
-
-        if (effect.requireSelfAsSummoned && ctx.summonedCard !== sourceCard) {
-          continue;
-        }
-
-        if (effect.requirePhase) {
-          const allowedPhases = Array.isArray(effect.requirePhase)
-            ? effect.requirePhase
-            : [effect.requirePhase];
-          if (!allowedPhases.some((phase: string) => phase === currentPhase)) {
-            continue;
-          }
-        }
-
-        if (effect.condition) {
-          const conditionMet = this.checkEffectCondition(
-            effect.condition,
-            sourceCard,
-            owner,
-            card,
-            sourceZone,
-            summonFromZone,
-          );
-          if (!conditionMet) continue;
-        }
-
-        if (Array.isArray(effect.conditions) && effect.conditions.length > 0) {
-          const conditionResult = this.evaluateConditions(effect.conditions, ctx);
-          if (!conditionResult?.ok) {
-            debugTriggerLog(this,
-              `[after_summon] Skipping ${effect.id}: ${
-                conditionResult?.reason || "conditions not met"
-              }.`,
-            );
-            continue;
-          }
         }
 
         if (!deferActivationChecks && Array.isArray(effect.targets) && effect.targets.length > 0) {

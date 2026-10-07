@@ -31,6 +31,10 @@ import type {
   PreparedActivation,
   PreparedActivationContext,
   SerializedTriggerCandidate,
+  SerializedTriggerOccurrenceState,
+  SerializedTriggerPresence,
+  ChainSourceSnapshot,
+  ChainTargetSnapshot,
 } from "../contracts/chainRuntime.js";
 import type { SegocGroup } from "../contracts/chain.js";
 import { getCardDisplayName, getUIText } from "../i18n.js";
@@ -75,6 +79,7 @@ interface SerializedTriggerOccurrence {
   phase: string | null;
   chainId: number | string | null;
   resolvingLinkId: number | string | null;
+  timingRelevance: "semantic" | "source_cleanup";
   snapshot: CompactSerializable | null | undefined;
 }
 
@@ -178,7 +183,6 @@ function compactSerializable(
   if (Object.hasOwn(value, "cardId") && Object.hasOwn(value, "duelCardId") &&
       Object.hasOwn(value, "zone") && Object.hasOwn(value, "faceUp")) {
     return { cardId: Reflect.get(value, "cardId"), duelCardId: Reflect.get(value, "duelCardId"),
-      instanceId: typeof instanceId === "string" || typeof instanceId === "number" ? instanceId : null,
       controllerId: Reflect.get(value, "controllerId"), zone: Reflect.get(value, "zone"),
       faceUp: Reflect.get(value, "faceUp"), locationVersion: Number(Reflect.get(value, "locationVersion") || 0) };
   }
@@ -191,7 +195,7 @@ function compactSerializable(
     const locationVersion = Reflect.get(value, "locationVersion");
     return {
       id: typeof id === "number" ? id : null,
-      instanceId: cardInstanceId(value as ChainCard),
+      duelCardId: Reflect.get(value, "duelCardId") ?? null,
       name: typeof name === "string" ? name : null,
       owner: typeof owner === "string" ? owner : null,
       controller:
@@ -207,7 +211,9 @@ function compactSerializable(
   seen.add(value);
   const output: CompactSerializableObject = {};
   for (const [key, entry] of Object.entries(value)) {
-    if (key === "eventReferenceSnapshots" || key === "referenceSnapshots") continue;
+    if (key === "eventReferenceSnapshots" || key === "referenceSnapshots" ||
+        key === "instanceId" || key === "cardInstanceId" || key === "_instanceId" ||
+        key === "sourceInstanceId" || key === "simInstanceId" || key === "uuid") continue;
     const compact = compactSerializable(entry, seen, depth + 1);
     if (compact !== undefined) output[key] = compact;
   }
@@ -228,6 +234,7 @@ function serializeOccurrence(
     phase: occurrence.phase || null,
     chainId: occurrence.chainId ?? null,
     resolvingLinkId: occurrence.resolvingLinkId ?? null,
+    timingRelevance: occurrence.timingRelevance || "semantic",
     snapshot: occurrence.snapshot
       ? compactSerializable(occurrence.snapshot)
       : null,
@@ -256,21 +263,27 @@ function serializeCandidate(
   };
 }
 
+function serializeCanonicalCandidate(candidate: ChainTriggerCandidate): SerializedTriggerCandidate | null {
+  const serialized = serializeCandidate(candidate);
+  return serialized ? { ...serialized, cardInstanceId: null,
+    duelCardId: candidate.card.duelCardId ?? null } : null;
+}
+
 function serializeGroups(
   groups: Partial<ChainTriggerGroups> = {},
 ): ChainTriggerState["groups"] {
   return {
     turn_player_mandatory: (groups.turn_player_mandatory || [])
-      .map(serializeCandidate)
+      .map(serializeCanonicalCandidate)
       .filter(Boolean),
     opponent_mandatory: (groups.opponent_mandatory || [])
-      .map(serializeCandidate)
+      .map(serializeCanonicalCandidate)
       .filter(Boolean),
     turn_player_optional: (groups.turn_player_optional || [])
-      .map(serializeCandidate)
+      .map(serializeCanonicalCandidate)
       .filter(Boolean),
     opponent_optional: (groups.opponent_optional || [])
-      .map(serializeCandidate)
+      .map(serializeCanonicalCandidate)
       .filter(Boolean),
   };
 }
@@ -293,6 +306,12 @@ export function allocateAtomicEventGroupId(
   return nextId(this, "nextAtomicEventGroupId");
 }
 
+/** Freeze the occurrence payload before any immediate effect can mutate its references. */
+export function captureTriggerEventSnapshot(payload: object): object {
+  const snapshot = compactSerializable(payload);
+  return snapshot && typeof snapshot === "object" ? snapshot : {};
+}
+
 export function createTriggerOccurrence(
   this: FullChainHost,
   eventName: string | null | undefined,
@@ -307,13 +326,14 @@ export function createTriggerOccurrence(
     occurrenceId: nextId(this, "nextTriggerOccurrenceId"),
     atomicGroupId,
     eventName,
+    timingRelevance: payload.timingRelevance || "semantic",
     sequence: Number(options.sequence ?? this.game?.eventResolutionCounter ?? 0),
     turnCounter: Number(this.game?.turnCounter ?? 0),
     phase: this.game?.phase || null,
     chainId: this.activeChainId ?? null,
     resolvingLinkId: this.currentResolvingLink?.linkId ?? null,
     payload: payload || {},
-    snapshot: compactSerializable(payload || {}) as object,
+    snapshot: options.snapshot ?? captureTriggerEventSnapshot(payload || {}),
     ...(options.referenceSnapshots !== undefined ? { referenceSnapshots: options.referenceSnapshots } : {}),
     entries: Array.isArray(options.entries) ? options.entries : null,
     entriesProvided: options.entriesProvided === true,
@@ -356,14 +376,14 @@ export function buildTriggerOpportunity(
   const orderedOccurrences = (occurrences || [])
     .filter((entry) => entry?.eventName)
     .slice()
-    .sort((a, b) => a.occurrenceId - b.occurrenceId);
+    .sort((a, b) => a.sequence - b.sequence || a.occurrenceId - b.occurrenceId);
   if (orderedOccurrences.length === 0) return null;
   const opportunity: ChainTriggerOpportunity = {
     opportunityId: nextId(this, "nextTriggerOpportunityId"),
     occurrences: orderedOccurrences,
     occurrenceIds: orderedOccurrences.map((entry) => entry.occurrenceId),
     lastRelevantAtomicGroupId:
-      orderedOccurrences[orderedOccurrences.length - 1]?.atomicGroupId ?? null,
+      orderedOccurrences.slice().reverse().find(entry => entry.timingRelevance !== "source_cleanup")?.atomicGroupId ?? null,
     turnPlayer: this.getCurrentTurnPlayer?.() || null,
     groups: {
       turn_player_mandatory: [],
@@ -437,10 +457,14 @@ export function revalidateTriggerCandidate(
   if (!VALID_TIMINGS.has(candidate.triggerTiming)) {
     return { ok: false, reason: "invalid_trigger_timing" };
   }
+  const occurrenceIndex = opportunity.occurrences.findIndex(occurrence => occurrence.occurrenceId === candidate.occurrenceId);
   if (
     candidate.triggerRequirement === TRIGGER_REQUIREMENTS.OPTIONAL &&
     candidate.triggerTiming === TRIGGER_TIMINGS.WHEN &&
-    candidate.atomicGroupId !== opportunity.lastRelevantAtomicGroupId
+    occurrenceIndex >= 0 &&
+    opportunity.occurrences.slice(occurrenceIndex + 1).some(occurrence =>
+      occurrence.atomicGroupId !== candidate.atomicGroupId &&
+      occurrence.timingRelevance !== "source_cleanup")
   ) {
     return { ok: false, reason: "optional_when_missed_timing" };
   }
@@ -1047,18 +1071,77 @@ export async function resolveTriggerOccurrences(
   }
 }
 
-export function getTriggerState(this: FullChainHost): ChainTriggerState {
-  const opportunity = this.activeTriggerOpportunity || null;
+function serializeTriggerPresence(
+  card: ChainCard | null | undefined,
+  snapshot: ChainSourceSnapshot | ChainTargetSnapshot | null | undefined,
+): SerializedTriggerPresence | null {
+  if (!snapshot) return null;
   return {
+    cardId: card?.id ?? null, duelCardId: card?.duelCardId ?? null,
+    controllerId: snapshot.controllerId, zone: snapshot.zone,
+    faceUp: snapshot.faceUp, locationVersion: snapshot.locationVersion,
+    ...("counters" in snapshot && snapshot.counters ? { counters: { ...snapshot.counters } } : {}),
+  };
+}
+
+/** Expose captured facts, never closures or live Card/Player references. */
+function serializeOccurrenceState(occurrence: ChainTriggerOccurrence): SerializedTriggerOccurrenceState {
+  return {
+    occurrenceId: occurrence.occurrenceId, atomicGroupId: occurrence.atomicGroupId,
+    eventName: occurrence.eventName, sequence: occurrence.sequence,
+    turnCounter: occurrence.turnCounter, phase: occurrence.phase,
+    chainId: occurrence.chainId, resolvingLinkId: occurrence.resolvingLinkId,
+    timingRelevance: occurrence.timingRelevance || "semantic",
+    entriesProvided: occurrence.entriesProvided,
+    entries: (occurrence.entries || []).map((entry, index) => {
+      const card = entry.card || entry.config?.card;
+      return {
+        entryId: `${occurrence.occurrenceId}:${index}`, cardId: card?.id ?? null,
+        duelCardId: card?.duelCardId ?? null,
+        effectId: entry.effect?.id || entry.config?.effect?.id || null,
+        controllerId: entry.owner?.id || entry.config?.owner?.id || null,
+        registrationId: entry.registrationId ?? null,
+        sourceAtTrigger: serializeTriggerPresence(card, sourceSnapshot(entry)),
+      };
+    }),
+    referenceSnapshots: (occurrence.referenceSnapshots || []).map(binding => ({
+      sourceDuelCardId: binding.source.duelCardId ?? null,
+      effectId: binding.effect.id || null,
+      sourcePresence: serializeTriggerPresence(binding.source, binding.sourcePresence),
+      references: binding.references.map(reference => ({
+        targetId: reference.targetId,
+        cards: reference.cards.map(snapshot => ({
+          cardId: snapshot.card.id ?? null, duelCardId: snapshot.card.duelCardId ?? null,
+          controllerId: snapshot.controllerId, zone: snapshot.zone,
+          faceUp: snapshot.faceUp, locationVersion: snapshot.locationVersion,
+        })),
+      })),
+    })),
+    snapshot: compactSerializable(occurrence.snapshot) ?? null,
+  };
+}
+
+/** Share the canonical opportunity projection with suspended parent Chain frames. */
+export function serializeTriggerOpportunityState(
+  opportunity: ChainTriggerOpportunity | null,
+  pendingOccurrences: ChainTriggerOccurrence[] = [],
+  pendingSelection = false,
+): ChainTriggerState {
+  return {
+    pendingOccurrences: pendingOccurrences.map(serializeOccurrenceState),
+    activeOccurrences: (opportunity?.occurrences || []).map(serializeOccurrenceState),
+    lastRelevantAtomicGroupId: opportunity?.lastRelevantAtomicGroupId ?? null,
     opportunityId: opportunity?.opportunityId ?? null,
-    pendingOccurrenceCount: Array.isArray(this.pendingTriggerOccurrences)
-      ? this.pendingTriggerOccurrences.length
-      : 0,
-    selecting:
-      opportunity?.selecting === true || this.pendingTriggerSelection != null,
+    pendingOccurrenceCount: pendingOccurrences.length,
+    selecting: opportunity?.selecting === true || pendingSelection,
     occurrenceIds: opportunity?.occurrenceIds?.slice() || [],
     groups: serializeGroups(opportunity?.groups || {}),
   };
+}
+
+export function getTriggerState(this: FullChainHost): ChainTriggerState {
+  return serializeTriggerOpportunityState(this.activeTriggerOpportunity || null,
+    this.pendingTriggerOccurrences || [], this.pendingTriggerSelection != null);
 }
 
 export function resetTriggerState(

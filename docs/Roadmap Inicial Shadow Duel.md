@@ -2,11 +2,11 @@
 
 Este documento registra a direção geral de desenvolvimento do **Shadow Duel** para evitar dispersão entre múltiplas frentes e preservar uma ordem de prioridades clara.
 
-## Estado de referência — 30/09/2026
+## Estado de referência — 06/10/2026
 
 | Frente | Estado conferido no repositório |
 | --- | --- |
-| Estabilização pós-TypeScript | Há testes e correções de regras; o encerramento da etapa ainda precisa ser avaliado. |
+| Estabilização pós-TypeScript | Concluída em 06/10/2026. |
 | IAs atuais | Os nove bots têm estratégias registradas. A comparação de força entre eles precisa de benchmarks atuais em condições equivalentes. |
 | Carmim Real | Catálogo proposto, com decisões de regra em aberto; cartas e IA ainda não implementadas. |
 | Suporte adicional de Burning West e Bloomrot | Planejado; escopo e necessidade dependem do diagnóstico dos decks e das IAs. |
@@ -29,9 +29,11 @@ A prioridade é sempre terminar uma etapa de forma estável antes de transformar
 
 ## 1. Estabilização pós-TypeScript
 
+**Status:** concluída em **06/10/2026**.
+
 **Objetivo:** corrigir bugs e divergências introduzidos ou revelados após a migração para TypeScript.
 
-Prioridades:
+Escopo da etapa concluída:
 
 - revisar cartas e efeitos;
 - corrigir divergências entre texto e comportamento;
@@ -82,7 +84,7 @@ Pendências principais:
 - criar IA própria;
 - testar e balancear.
 
-**Trabalho paralelo permitido:** produção das artes enquanto as Fases 1 e 2 ainda estiverem em andamento.
+**Trabalho paralelo permitido:** produção das artes durante a Fase 2.
 
 ---
 
@@ -244,7 +246,7 @@ A implementação deve ser feita **depois do Renderer Three.js**, para que esse 
 
 ## Ordem resumida
 
-1. **Bugs pós-TypeScript**
+1. **Estabilização pós-TypeScript — concluída**
 2. **IAs atuais**
 3. **Carmim Real**
 4. **Burning West + Bloomrot**
@@ -258,12 +260,12 @@ A implementação deve ser feita **depois do Renderer Three.js**, para que esse 
 
 ## Regra de foco
 
-Exemplo de organização:
+Exemplo de organização da etapa concluída:
 
 **Projeto principal:** correção de bugs pós-TypeScript  
 **Projeto paralelo:** artes do Carmim Real
 
-Depois:
+Organização prevista para a próxima etapa:
 
 **Projeto principal:** aprimoramento das IAs  
 **Projeto paralelo:** preparação final do Carmim Real

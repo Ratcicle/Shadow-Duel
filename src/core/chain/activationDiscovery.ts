@@ -4,6 +4,7 @@ import {
   isQuickSpell,
 } from "../game/spellTrap/quickSpellRules.js";
 import type { SpellSpeed } from "../contracts/chain.js";
+import { captureReferencePresence, matchesFrozenReferencePresence } from "../effects/targeting/references.js";
 import type {
   ChainActivationCandidate,
   ChainCard,
@@ -14,6 +15,7 @@ import type {
   FullChainHost,
 } from "../contracts/chainRuntime.js";
 import type { CanonicalZone } from "../contracts/zones.js";
+import { matchesAfterSummonTrigger } from "../effects/triggers/collectors/shared.js";
 import {
   buildActivationQuery,
   getCanonicalActivationCandidateKey,
@@ -166,6 +168,9 @@ function buildPreviewContext(
     target: context?.target || context?.defender || null,
     attacker: context?.attacker || null,
     summonedCard: context?.summonedCard || context?.card || null,
+    summonMethod: context?.method || context?.summonMethod || null,
+    summonFromZone: context?.fromZone || null,
+    currentPhase: chainSystem.game?.phase || null,
     activationContext: {
       preview: true,
       isPreview: true,
@@ -351,7 +356,60 @@ function candidateForEffect(
   zone: CanonicalZone,
   context: FastEffectContextInput,
 ): ChainActivationCandidate | null {
+  const responseContext = buildResponseContext(chainSystem, context, effect, zone);
+  const link = responseContext.respondingToChainLink;
+  const usesTargetReference = effect.targets?.some(definition =>
+    definition.intent === "reference" && definition.targetFromContext === "target");
+  if (!link || !usesTargetReference || responseContext.event !== "effect_targeted") {
+    return candidateForResponseContext(chainSystem, player, card, effect, zone, context);
+  }
+  const selected = context.responseReference;
+  if (selected && (selected.chainId !== link.chainId || selected.linkId !== link.linkId)) return null;
+  const seen = new Set<ChainCard>();
+  const references = link.declaredTargetSnapshots.flatMap(entry => entry.cards).filter(snapshot => {
+    if (seen.has(snapshot.card)) return false;
+    seen.add(snapshot.card);
+    return (!selected || selected.target.card === snapshot.card &&
+      matchesFrozenReferencePresence(selected.target, snapshot)) &&
+      matchesFrozenReferencePresence(snapshot,
+        captureReferencePresence(snapshot.card, [chainSystem.game?.player, chainSystem.game?.bot]));
+  });
+  const legal = references.flatMap(target => {
+    const responseReference = { chainId: link.chainId, linkId: link.linkId, target };
+    const targetOwner = [chainSystem.game?.player, chainSystem.game?.bot]
+      .find(owner => owner?.id === target.controllerId) || null;
+    const candidate = candidateForResponseContext(chainSystem, player, card, effect, zone,
+      { ...responseContext, target: target.card, targetOwner, responseReference });
+    return candidate ? [{ candidate, responseReference }] : [];
+  });
+  const first = legal[0];
+  if (!first) return null;
+  return { ...first.candidate,
+    context: legal.length === 1 ? first.candidate.context : { ...responseContext, responseReference: null },
+    responseReferences: legal.map(entry => entry.responseReference) };
+}
+
+function candidateForResponseContext(
+  chainSystem: FullChainHost,
+  player: ChainPlayer,
+  card: ChainCard,
+  effect: ChainEffect,
+  zone: CanonicalZone,
+  context: FastEffectContextInput,
+): ChainActivationCandidate | null {
   const placementOnly = effect.placementOnly === true;
+  if (effect.event === "after_summon" &&
+      (context.type === "summon" || context.type === "after_summon") &&
+      !matchesAfterSummonTrigger(effect, {
+        sourceCard: card, owner: player,
+        summonedCard: context.summonedCard || context.card,
+        summoner: context.player || context.triggerPlayer,
+        method: context.method || context.summonMethod,
+        fromZone: context.fromZone, sourceZone: zone, phase: chainSystem.game?.phase,
+      }, conditions => chainSystem.game?.effectEngine?.evaluateConditions?.(conditions,
+        buildPreviewContext(chainSystem, card, effect, player, context, zone))?.ok !== false)) {
+    return null;
+  }
   if (
     placementOnly &&
     (zone !== "spellTrap" || card.isFacedown !== true || !canUsePlacementOnly(card))

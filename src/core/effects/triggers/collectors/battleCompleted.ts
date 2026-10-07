@@ -174,6 +174,7 @@ export async function collectBattleCompletedTriggers(
         sourceZone || "graveyard",
       );
       const entry = this.buildTriggerEntry({
+        deferActivationChecks: payload.deferActivationChecks === true,
         sourceCard: card,
         owner,
         effect,

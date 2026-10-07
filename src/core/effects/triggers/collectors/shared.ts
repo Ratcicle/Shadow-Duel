@@ -8,7 +8,57 @@ import type {
   TriggerZone,
 } from "../runtime.js";
 import type { EventEquipHostExitBinding } from "../../../contracts/events.js";
+import type { EffectCondition } from "../../../contracts/effects.js";
 import { matchesEventCardPresence, type PresenceCard } from "../../../game/zones/ownership.js";
+
+/** Shared factual gates for one successful Summon, independent of activation. */
+export function matchesAfterSummonTrigger(
+  effect: {
+    readonly summonMethods?: readonly string[];
+    readonly summonMethod?: string | readonly string[];
+    readonly summonFrom?: string;
+    readonly requireSummonedFrom?: string;
+    readonly requireSelfAsSummoned?: boolean;
+    readonly requireOpponentSummon?: boolean;
+    readonly triggerPlayer?: string;
+    readonly requirePhase?: string | readonly string[];
+    readonly condition?: EffectCondition;
+    readonly conditions?: readonly EffectCondition[];
+  },
+  occurrence: {
+    readonly sourceCard: object;
+    readonly owner: { readonly id: string; readonly hand?: readonly object[] };
+    readonly summonedCard: { readonly archetypes?: readonly string[]; readonly archetype?: string | null } | null | undefined;
+    readonly summoner: { readonly id: string } | null | undefined;
+    readonly method?: string | null | undefined;
+    readonly fromZone?: string | null | undefined;
+    readonly sourceZone?: string | null | undefined;
+    readonly phase?: string | null | undefined;
+  },
+  evaluateConditions?: (conditions: readonly EffectCondition[]) => boolean,
+): boolean {
+  const { sourceCard, owner, summonedCard, summoner, method, fromZone, sourceZone, phase } = occurrence;
+  if (effect.triggerPlayer === "self" && summoner?.id !== owner.id) return false;
+  if (effect.triggerPlayer === "opponent" && summoner?.id === owner.id) return false;
+  if (effect.requireOpponentSummon && (!summoner?.id || summoner.id === owner.id)) return false;
+  const methods = effect.summonMethods ?? effect.summonMethod;
+  if (methods && !asArray(methods).includes(method)) return false;
+  const origin = effect.summonFrom ?? effect.requireSummonedFrom;
+  // Legacy payloads without an origin retain the collector's compatibility.
+  if (origin && fromZone && origin !== fromZone) return false;
+  if (effect.requireSelfAsSummoned && summonedCard !== sourceCard) return false;
+  if (effect.requirePhase && !asArray(effect.requirePhase).includes(phase)) return false;
+  const condition = effect.condition;
+  if (condition && "requires" in condition && condition.requires === "self_in_hand") {
+    if (!(sourceZone === "hand" && owner.hand?.includes(sourceCard)) &&
+        !(fromZone === "hand" && summonedCard === sourceCard)) return false;
+    if (condition.triggerArchetype) {
+      const archetypes = summonedCard?.archetypes ?? (summonedCard?.archetype ? [summonedCard.archetype] : []);
+      if (!archetypes.includes(condition.triggerArchetype)) return false;
+    }
+  }
+  return !effect.conditions?.length || !evaluateConditions || evaluateConditions(effect.conditions);
+}
 
 /** Only the explicit host-bound observer operator can use exit eligibility. */
 interface EquipHostExitEffect {

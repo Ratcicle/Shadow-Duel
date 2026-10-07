@@ -467,3 +467,20 @@ test("IDs de timing são determinísticos e isolados entre harnesses", async () 
     [1, 1],
   );
 });
+
+test("CS01 timing ingress normalizes only successful after_summon", async () => {
+  const { chain, player, bot } = createChainHarness();
+  const summoned = createTestCard();
+  const observed: string[] = [];
+  chain.offerChainResponse = async (_owner, context) => {
+    observed.push(required(context).type || "");
+    assert.equal(context?.event, "after_summon");
+    assert.equal(context?.method, "flip");
+    assert.equal(context?.card, summoned);
+    return null;
+  };
+  await chain.runFastEffectTiming({ actionPlayer: player,
+    context: { type: "after_summon", event: "after_summon", player: bot, card: summoned, method: "flip", fromZone: "field" } });
+  assert.ok(observed.length > 0);
+  assert.ok(observed.every(type => type === "summon"));
+});

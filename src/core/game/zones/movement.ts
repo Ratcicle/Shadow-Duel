@@ -784,6 +784,7 @@ async function emitCardMovedEvent(
     : null;
 
   const eventResult = game.emit?.("card_moved", {
+    timingRelevance: options.timingRelevance || "semantic" as const,
     card,
     fromZone,
     toZone,
@@ -3481,6 +3482,7 @@ export async function moveCardInternal(
         `[moveCard] Emitting card_to_grave event for ${card.name} (fromZone: ${fromZone})`,
       );
       const cardToGravePayload = {
+        timingRelevance: options.timingRelevance || "semantic" as const,
         card,
         fromZone: fromZone || options.fromZone || null,
         toZone: "graveyard",

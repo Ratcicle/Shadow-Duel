@@ -4,8 +4,132 @@ import Bot from "../../src/core/Bot.js";
 import Card from "../../src/core/Card.js";
 import type { ChainEffectTarget, FastEffectContextInput } from "../../src/core/contracts/chainRuntime.js";
 import type { ReplayDecisionInput } from "../../src/core/contracts/decisions.js";
-import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js";
+import { cardDefinition, chainSelections, required, selectionKey, unsafeFixture } from "../helpers/fixtures.js";
 import { createRuntimeGame, placeFieldCards } from "../helpers/game.js";
+import { chooseChainResponseReference } from "../../src/core/chain/selection.js";
+import { createCanonicalStateSnapshot, hashCanonicalGameState } from "../../src/core/game/replay/canonical.js";
+
+function referenceScenario(t: TestContext, ai = false) {
+  const game = createRuntimeGame({ captureReplay: false, laboratoryMode: true, chainResponseTimeoutMs: 0 });
+  t.after(() => game.dispose());
+  game.turn = "player"; game.phase = "main1"; game.turnCounter = 4; game.disablePresentationDelays = true;
+  game.player.controllerType = "human"; game.bot.controllerType = ai ? "ai" : "human";
+  const source = new Card(cardDefinition(361), "player");
+  source.effects = [{ id: "reference_test_targets", timing: "on_play", speed: 2,
+    targets: [{ id: "dragons", owner: "opponent", zone: "field", count: { min: 2, max: 2 } }],
+    actions: [{ type: "switch_position", targetRef: "dragons" }] }];
+  const dragons = [new Card(cardDefinition(257), "bot"), new Card(cardDefinition(257), "bot")];
+  const trap = new Card(cardDefinition(268), "bot");
+  trap.effects = trap.effects.map(effect => ({ ...effect, activationCosts: [{ type: "pay_lp", amount: 500 }] }));
+  trap.isFacedown = true; trap.setTurn = trap.turnSetOn = 1;
+  placeFieldCards(game.player.spellTrap, source);
+  placeFieldCards(game.bot.field, ...dragons); placeFieldCards(game.bot.spellTrap, trap);
+  for (const card of [source, ...dragons, trap]) game.ensureDuelCardId(card);
+  const chain = game.chainSystem;
+  const link = chain.addToChain(chain.createPreparedActivation({
+    card: source, controller: game.player, effect: required(source.effects[0]), activationZone: "spellTrap",
+    committed: true, costsPaid: true, targetSelections: chainSelections({ dragons }),
+  }));
+  assert.ok(link);
+  const context: FastEffectContextInput = { type: "effect_targeted", player: game.player };
+  const candidate = required(chain.getActivatableCardsInChain(game.bot, context).find(entry => entry.card === trap));
+  assert.equal(candidate.responseReferences?.length, 2);
+  return { game, chain, link, candidate, dragons, trap };
+}
+
+for (const change of ["cancel", "leave-return", "face-down", "new-link"] as const) {
+  test(`CS-02 reference ${change} aborts before source commitment, costs and OPT`, async t => {
+    const { game, chain, candidate, dragons, trap, link } = referenceScenario(t);
+    const beforeLp = game.bot.lp;
+    const choosing = chain.prepareChainResponse(candidate, game.bot, candidate.context);
+    const session = required(game.targetSelection);
+    const requirement = required(session.requirements[0]);
+    const chosen = required(dragons[1]);
+    if (change === "cancel") game.cancelTargetSelection();
+    else {
+      if (change === "leave-return") {
+        await game.moveCard(chosen, game.bot, "hand", { fromZone: "field", awaitEvents: true });
+        assert.ok(game.bot.hand.includes(chosen));
+        await game.moveCard(chosen, game.bot, "field", { fromZone: "hand", position: "attack",
+          summonOrigin: "effect_resolution", skipSummonAttempt: true });
+        assert.ok(game.bot.field.includes(chosen));
+      } else if (change === "face-down") chosen.isFacedown = true;
+      else chain.addToChain(chain.createPreparedActivation({ card: link.card, controller: game.player,
+        effect: { id: "new_link", timing: "on_play", speed: 2 }, activationZone: "spellTrap", committed: true }));
+      session.selections[requirement.id] = [required(requirement.candidates.find(entry => entry.cardRef === chosen)).key];
+      await game.finishTargetSelection();
+    }
+    const result = await choosing;
+    assert.equal(result.success, false);
+    assert.equal(game.bot.lp, beforeLp);
+    assert.equal(trap.isFacedown, true);
+    assert.ok(game.bot.spellTrap.includes(trap));
+    assert.equal(chain.checkActivationUsage(trap, game.bot, candidate.effect).ok, true);
+    assert.equal(game.targetSelection, null);
+  });
+}
+
+test("CS-02 chosen presence is detached and represented in the canonical active link", async t => {
+  const { game, chain, candidate, dragons } = referenceScenario(t);
+  const choosing = chain.prepareChainResponse(candidate, game.bot, candidate.context);
+  const session = required(game.targetSelection), requirement = required(session.requirements[0]);
+  session.selections[requirement.id] = [required(requirement.candidates[1]).key];
+  await game.finishTargetSelection();
+  const prepared = required((await choosing).preparedActivation);
+  assert.equal(prepared.referenceSnapshots?.[0]?.cards[0]?.card, dragons[1]);
+  assert.deepEqual(prepared.targetSelections, {});
+  const link = chain.addToChain(prepared);
+  assert.ok(link);
+  const before = createCanonicalStateSnapshot(game), hash = hashCanonicalGameState(game);
+  const snapshot = required(link.referenceSnapshots?.[0]?.cards[0]);
+  snapshot.locationVersion++;
+  assert.notEqual(hashCanonicalGameState(game), hash);
+  assert.notDeepEqual(createCanonicalStateSnapshot(game), before);
+  assert.equal(required(link.context?.responseReference).target.locationVersion, snapshot.locationVersion - 1,
+    "prepared reference snapshots are detached from original target declarations");
+});
+
+test("CS-02 AI reference provider records a choice and playback never calls policy", async t => {
+  const live = referenceScenario(t, true), replay = referenceScenario(t, true);
+  const decisions: ReplayDecisionInput[] = [];
+  live.game.on("decision_made", value => decisions.push(structuredClone(value)));
+  let calls = 0;
+  live.game.autoSelector.select = contract => {
+    calls++;
+    assert.ok("requirements" in contract && Array.isArray(contract.requirements));
+    const requirement = required(contract.requirements[0]);
+    const key = required(requirement.candidates?.[1]?.key);
+    return { ok: true, selections: { chain_response_reference: [selectionKey(key)] } };
+  };
+  const selected = await chooseChainResponseReference(live.chain, live.candidate, live.game.bot);
+  assert.equal(selected?.target.card, live.dragons[1]); assert.equal(calls, 1);
+  assert.equal(decisions.length, 1); assert.equal(decisions[0]?.kind, "choice");
+  replay.game.decisionBroker.loadReplayDecisions(JSON.parse(JSON.stringify(decisions)));
+  replay.game.autoSelector.select = () => assert.fail("replay cannot consult AI");
+  replay.game.ui.showTargetSelection = () => assert.fail("replay cannot consult UI");
+  const reproduced = await chooseChainResponseReference(replay.chain, replay.candidate, replay.game.bot);
+  assert.equal(reproduced?.target.card, replay.dragons[1]);
+  assert.equal(replay.game.decisionBroker.replayCursor, 1);
+});
+
+for (const field of ["chainId", "respondingToLinkId", "sourceDuelCardId", "effectId", "candidateKeys"] as const) {
+  test(`CS-02 malformed replay reference ${field} rejects without hanging`, async t => {
+    const live = referenceScenario(t), playback = referenceScenario(t);
+    const decisions: ReplayDecisionInput[] = [];
+    live.game.on("decision_made", value => decisions.push(structuredClone(value)));
+    const choose = chooseChainResponseReference(live.chain, live.candidate, live.game.bot);
+    const session = required(live.game.targetSelection), requirement = required(session.requirements[0]);
+    session.selections[requirement.id] = [required(requirement.candidates[1]).key];
+    await live.game.finishTargetSelection(); await choose;
+    const invalid: ReplayDecisionInput[] = JSON.parse(JSON.stringify(decisions));
+    if (field === "candidateKeys") required(invalid[0]).candidateKeys = ["wrong"];
+    else Reflect.set(required(required(invalid[0]).context), field, field === "effectId" ? "wrong" : 999);
+    playback.game.decisionBroker.loadReplayDecisions(invalid);
+    playback.game.ui.showTargetSelection = () => assert.fail("no replay UI");
+    await assert.rejects(chooseChainResponseReference(playback.chain, playback.candidate, playback.game.bot),
+      /reference choice does not match/);
+  });
+}
 
 for (const seat of ["player", "bot"] as const) {
   for (const purpose of ["cost", "target"] as const) {

@@ -3,12 +3,17 @@ import assert from "node:assert/strict";
 
 import {
   getCardDatabaseSignature,
+  createCanonicalStateSnapshot,
+  hashCanonicalGameState,
   hashCanonicalValue,
   serializeReplayEventPayload,
   stableStringify,
 } from "../../src/core/game/replay/canonical.js";
 import type { RawCardDefinition } from "../../src/core/contracts/cards.js";
 import type { CanonicalReplayGamePort } from "../../src/core/contracts/replay.js";
+import Card from "../../src/core/Card.js";
+import { cardDefinition, required } from "../helpers/fixtures.js";
+import { createRuntimeGame, placeFieldCards } from "../helpers/game.js";
 
 const serializationGame: CanonicalReplayGamePort = {
   ensureDuelCardId(card) {
@@ -35,6 +40,61 @@ const signatureCard = {
     actions: [{ type: "draw", amount: 1, player: "self" }],
   }],
 } as const satisfies RawCardDefinition;
+
+test("pending trigger hashes include frozen eligibility and timing, and snapshots remain detached", async t => {
+  const game = createRuntimeGame({ captureReplay: false, laboratoryMode: true, laboratoryUseBot: false });
+  t.after(() => game.dispose());
+  game.phase = "main1";
+  game.turnCounter = 4;
+  game.disablePresentationDelays = true;
+  const court = new Card(cardDefinition(17), "player");
+  const hollow = new Card(cardDefinition(204), "player");
+  placeFieldCards(game.player.spellTrap, court);
+  placeFieldCards(game.player.field, hollow);
+  game.ensureDuelCardId(court);
+  game.ensureDuelCardId(hollow);
+  game.chainSystem.isPreparingActivation = true;
+  await game.moveCard(hollow, game.player, "graveyard", { fromZone: "field", awaitCardMovedEvent: true });
+  game.chainSystem.isPreparingActivation = false;
+  const occurrence = required(game.chainSystem.pendingTriggerOccurrences.find(event => event.eventName === "card_to_grave"));
+  assert.ok("sequence" in occurrence, "the real Chain captures a full event occurrence");
+  assert.equal(occurrence.entriesProvided, true);
+  const entry = required(required(occurrence.entries)[0]);
+  assert.equal(entry.card, court);
+  const source = required(entry.sourceAtTrigger);
+  const snapshot = createCanonicalStateSnapshot(game);
+  const serialized = JSON.stringify(snapshot);
+  const baseline = hashCanonicalGameState(game);
+  assert.equal(JSON.stringify(snapshot.chain.triggers).includes("instanceId"), false);
+  assert.equal(JSON.stringify(snapshot.chain.triggers).includes("materialize"), false);
+  for (const changed of ["timing", "presence", "captured_entries", "frozen_counter"] as const) {
+    const oldRelevance = occurrence.timingRelevance;
+    const oldPresence = source.locationVersion;
+    const oldEntries = occurrence.entries;
+    const oldCounters = source.counters;
+    if (changed === "timing") occurrence.timingRelevance = "source_cleanup";
+    if (changed === "presence") source.locationVersion += 1;
+    if (changed === "captured_entries") occurrence.entries = [];
+    if (changed === "frozen_counter") source.counters = { funeral: 9 };
+    assert.notEqual(hashCanonicalGameState(game), baseline, changed);
+    assert.equal(JSON.stringify(snapshot), serialized, changed);
+    if (oldRelevance === undefined) delete occurrence.timingRelevance;
+    else occurrence.timingRelevance = oldRelevance;
+    source.locationVersion = oldPresence;
+    occurrence.entries = oldEntries;
+    if (oldCounters === undefined) delete source.counters;
+    else source.counters = oldCounters;
+    assert.equal(hashCanonicalGameState(game), baseline, `${changed} restored`);
+  }
+  game.chainSystem.pendingTriggerOccurrences = [];
+  const opportunity = required(game.chainSystem.buildTriggerOpportunity([occurrence]));
+  const activeHash = hashCanonicalGameState(game);
+  const activeSnapshot = createCanonicalStateSnapshot(game);
+  occurrence.timingRelevance = "source_cleanup";
+  opportunity.lastRelevantAtomicGroupId = null;
+  assert.notEqual(hashCanonicalGameState(game), activeHash);
+  assert.notDeepEqual(createCanonicalStateSnapshot(game).chain.triggers, activeSnapshot.chain.triggers);
+});
 
 test("assinatura inclui regras completas, actions aninhadas e características declarativas", () => {
   const baseline = getCardDatabaseSignature([signatureCard]);

@@ -248,12 +248,19 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   // Presence durations participate in the canonical state as well.
   assert.deepEqual(
     replay.commands.map(command => command.stateHash),
-    ["adfa2802", "9f6adbc6"],
+    ["07b23806", "2b228622"],
   );
   const replayResult = required(replay.result);
-  assert.equal(replayResult.finalStateHash, "9f6adbc6");
+  assert.equal(replayResult.finalStateHash, "2b228622");
   // Historical envelopes retain their exact version and declaration signature.
-  const historical = structuredClone(replay);
+  const beforeCapturedTriggers = structuredClone(replay);
+  const formerTriggerState = required(required(beforeCapturedTriggers.result).finalState).chain.triggers;
+  assert.ok(formerTriggerState !== null && typeof formerTriggerState === "object");
+  for (const key of ["pendingOccurrences", "activeOccurrences", "lastRelevantAtomicGroupId"]) Reflect.deleteProperty(formerTriggerState, key);
+  required(beforeCapturedTriggers.commands[0]).stateHash = "adfa2802";
+  required(beforeCapturedTriggers.commands[1]).stateHash = "9f6adbc6";
+  required(beforeCapturedTriggers.result).finalStateHash = "9f6adbc6";
+  const historical = structuredClone(beforeCapturedTriggers);
   for (const player of Object.values(required(required(historical.result).finalState).players)) {
     for (const zone of Object.values(player.zones)) {
       for (const card of Array.isArray(zone) ? zone : zone ? [zone] : []) {
@@ -275,15 +282,16 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   assert.equal(hashCanonicalValue({ ...historical, cardDatabaseSignature: "e1469707", engineVersion: "engine-rules-v16" }), "e161e690");
   assert.equal(hashCanonicalValue({ ...historical, engineVersion: "engine-rules-v17" }), "accbf7e6");
   assert.equal(hashCanonicalValue({ ...historical, engineVersion: "engine-rules-v18" }), "1133b3cb");
-  assert.equal(hashCanonicalValue({ ...replay, cardDatabaseSignature: "c6aef06c", engineVersion: "engine-rules-v19" }), "30c6d3d0");
-  assert.equal(hashCanonicalValue({ ...replay, cardDatabaseSignature: "f68bdfd5", engineVersion: "engine-rules-v20" }), "be73b885");
-  assert.equal(hashCanonicalValue({ ...replay, cardDatabaseSignature: "c0327049", engineVersion: "engine-rules-v21" }), "5894e47f");
-  assert.equal(hashCanonicalValue({ ...replay, cardDatabaseSignature: "4d85a5a8", engineVersion: "engine-rules-v22" }), "49c80dfc");
-  assert.equal(hashCanonicalValue({ ...replay, cardDatabaseSignature: "c1fecb57", engineVersion: "engine-rules-v22" }), "2a2e3f30");
-  assert.equal(hashCanonicalValue({ ...replay, cardDatabaseSignature: "f60cba87", engineVersion: "engine-rules-v22" }), "b1bbca51");
-  assert.equal(hashCanonicalValue({ ...replay, cardDatabaseSignature: "7e5d54cb", engineVersion: "engine-rules-v23" }), "7bfe1e4a");
-  assert.equal(hashCanonicalValue(replay), "6b0653a2");
-  assert.equal(JSON.stringify(replay).length, 12784);
+  assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "c6aef06c", engineVersion: "engine-rules-v19" }), "30c6d3d0");
+  assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "f68bdfd5", engineVersion: "engine-rules-v20" }), "be73b885");
+  assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "c0327049", engineVersion: "engine-rules-v21" }), "5894e47f");
+  assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "4d85a5a8", engineVersion: "engine-rules-v22" }), "49c80dfc");
+  assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "c1fecb57", engineVersion: "engine-rules-v22" }), "2a2e3f30");
+  assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "f60cba87", engineVersion: "engine-rules-v22" }), "b1bbca51");
+  assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "7e5d54cb", engineVersion: "engine-rules-v23" }), "7bfe1e4a");
+  assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, engineVersion: "engine-rules-v23" }), "6b0653a2");
+  assert.equal(hashCanonicalValue(replay), "f23d6b4f");
+  assert.equal(JSON.stringify(replay).length, 12864);
 
   const result = await replayCanonicalDuel(replay);
   assert.equal(result.ok, true);

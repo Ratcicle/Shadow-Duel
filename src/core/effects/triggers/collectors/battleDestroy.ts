@@ -204,7 +204,7 @@ export async function collectBattleDestroyTriggers(
           }
         }
 
-        if (Array.isArray(effect.targets) && effect.targets.length > 0) {
+        if (payload.deferActivationChecks !== true && Array.isArray(effect.targets) && effect.targets.length > 0) {
           const precheckCtx = {
             source: card,
             player: owner,
@@ -294,7 +294,7 @@ export async function collectBattleDestroyTriggers(
           if (!resolvedBattleDestroyers.includes(card.equippedTo)) continue;
         }
 
-        if (Array.isArray(effect.conditions) && effect.conditions.length > 0) {
+        if (payload.deferActivationChecks !== true && Array.isArray(effect.conditions) && effect.conditions.length > 0) {
           const conditionResult = this.evaluateConditions(effect.conditions, ctx);
           if (!conditionResult?.ok) {
             debugTriggerLog(
@@ -313,6 +313,8 @@ export async function collectBattleDestroyTriggers(
         );
 
         const entry = this.buildTriggerEntry({
+
+          deferActivationChecks: payload.deferActivationChecks === true,
           sourceCard: card,
           owner,
           effect,

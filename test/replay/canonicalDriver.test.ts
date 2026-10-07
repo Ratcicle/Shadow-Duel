@@ -148,6 +148,11 @@ function replay(commands: ReadonlyArray<CanonicalReplayCommand> = []) {
 }
 
 test("incompatible replay versions never initialize or mutate an existing duel", async () => {
+  const previous = driverFixture();
+  const previousState = createCanonicalStateSnapshot(previous.game);
+  await assert.rejects(() => replayCanonicalDuel({ ...replay(), engineVersion: "engine-rules-v23" }, { game: previous.game }), /engineVersion/);
+  assert.deepEqual(previous.calls, []);
+  assert.deepEqual(createCanonicalStateSnapshot(previous.game), previousState);
   for (const schemaVersion of [0, 1, 3]) {
     const { game, calls } = driverFixture();
     const before = createCanonicalStateSnapshot(game);

@@ -1,4 +1,5 @@
-import { CHAIN_RESOLUTION_STATUSES, CHAIN_FINALIZATION_STATUSES, FAST_EFFECT_STATES, FAST_EFFECT_ORIGINS } from "../../contracts/chain.js";
+import { CHAIN_RESOLUTION_STATUSES, CHAIN_FINALIZATION_STATUSES, FAST_EFFECT_STATES, FAST_EFFECT_ORIGINS, SEGOC_GROUPS, TRIGGER_ELIGIBILITY_STATUSES } from "../../contracts/chain.js";
+import { TRIGGER_REQUIREMENTS, TRIGGER_TIMINGS } from "../../contracts/effects.js";
 import { SELECTION_KINDS } from "../../contracts/selection.js";
 import { readChainResponseDecisions } from "../decisions/chainResponse.js";
 import {
@@ -515,6 +516,14 @@ function validateDecisionContext(
 ): void {
   if (value === null && kind !== "field_placement") return;
   const context = requireObject(value, path);
+  if (read(context, "type") === "chain_response_reference") {
+    if (kind !== "choice") invalid(path, "a choice context for a Chain response reference");
+    requireIdentity(read(context, "chainId"), `${path}.chainId`);
+    requireIdentity(read(context, "respondingToLinkId"), `${path}.respondingToLinkId`);
+    requireIdentity(read(context, "sourceDuelCardId"), `${path}.sourceDuelCardId`, true);
+    requireNullableString(read(context, "effectId"), `${path}.effectId`);
+    return;
+  }
   if (kind === "field_placement") {
     requireString(read(context, "procedureId"), `${path}.procedureId`);
     for (const key of ["decidingPlayerId", "destinationPlayerId"]) {
@@ -843,18 +852,53 @@ function validateProcedureSnapshot(value: unknown, path: string): void {
   }
 }
 
+function validateLocation(value: unknown, path: string): void {
+  const location = requireObject(value, path);
+  requireNullableString(read(location, "controllerId"), `${path}.controllerId`);
+  const zone = read(location, "zone");
+  if (zone !== null && (typeof zone !== "string" || ![...CARD_ZONES, "token", "temporary", "unknown"].includes(zone))) invalid(`${path}.zone`, "a canonical card zone or null");
+  requireBoolean(read(location, "faceUp"), `${path}.faceUp`);
+  requireInteger(read(location, "locationVersion"), `${path}.locationVersion`, 0);
+}
+
+function validateSource(value: unknown, path: string): void {
+  if (value === null) return;
+  const source = requireObject(value, path);
+  if (Object.keys(source).some(key => !["cardDuelCardId", "controllerId", "zone", "faceUp", "locationVersion", "counters"].includes(key))) invalid(path, "only canonical source presence fields");
+  requireIdentity(read(source, "cardDuelCardId"), `${path}.cardDuelCardId`, true);
+  validateLocation(source, path);
+  if (hasOwn(source, "counters")) for (const [key, count] of Object.entries(requireObject(read(source, "counters"), `${path}.counters`))) {
+    requireInteger(count, `${path}.counters.${key}`, 0);
+  }
+}
+
+function validateReferences(value: unknown, path: string): void {
+  requireArray(value, path).forEach((value, index) => {
+    const refPath = `${path}[${index}]`, ref = requireObject(value, refPath);
+    requireNullableString(read(ref, "targetId"), `${refPath}.targetId`);
+    requireArray(read(ref, "cards"), `${refPath}.cards`).forEach((card, index) => {
+      const cardPath = `${refPath}.cards[${index}]`;
+      validateSource(requireObject(card, cardPath), cardPath);
+    });
+  });
+}
+
+function validateLinkReferences(value: unknown, path: string): void {
+  if (!isObject(value)) return;
+  if (hasOwn(value, "referenceSnapshots")) validateReferences(read(value, "referenceSnapshots"), `${path}.referenceSnapshots`);
+  if (hasOwn(value, "responseReference")) {
+    const referencePath = `${path}.responseReference`;
+    const reference = requireObject(read(value, "responseReference"), referencePath);
+    for (const key of ["chainId", "linkId"]) requireIdentity(read(reference, key), `${referencePath}.${key}`);
+    requireIdentity(read(reference, "duelCardId"), `${referencePath}.duelCardId`, true);
+    if (Object.keys(reference).some(key => !["chainId", "linkId", "duelCardId"].includes(key))) invalid(referencePath, "only canonical Chain and duel card identities");
+  }
+}
+
 function validateAfterResolutionSnapshot(value: unknown, path: string): void {
   const state = requireObject(value, path);
   const checkEnum = (value: unknown, choices: readonly string[], path: string) => {
     if (typeof value !== "string" || !choices.includes(value)) invalid(path, "a canonical state value");
-  };
-  const validateLocation = (value: unknown, path: string) => {
-    const location = requireObject(value, path);
-    requireNullableString(read(location, "controllerId"), `${path}.controllerId`);
-    const zone = read(location, "zone");
-    if (zone !== null && (typeof zone !== "string" || ![...CARD_ZONES, "token", "temporary", "unknown"].includes(zone))) invalid(`${path}.zone`, "a canonical card zone or null");
-    requireBoolean(read(location, "faceUp"), `${path}.faceUp`);
-    requireInteger(read(location, "locationVersion"), `${path}.locationVersion`, 0);
   };
   const validateTiming = (value: unknown, path: string) => {
     const timing = requireObject(value, path);
@@ -891,25 +935,6 @@ function validateAfterResolutionSnapshot(value: unknown, path: string): void {
       });
       validatePaidReferenceMetadata({ costPayment: payment }, path);
     }
-  };
-  const validateSource = (value: unknown, path: string) => {
-    if (value === null) return;
-    const source = requireObject(value, path);
-    requireIdentity(read(source, "cardDuelCardId"), `${path}.cardDuelCardId`, true);
-    validateLocation(source, path);
-    if (hasOwn(source, "counters")) for (const [key, count] of Object.entries(requireObject(read(source, "counters"), `${path}.counters`))) {
-      requireInteger(count, `${path}.counters.${key}`, 0);
-    }
-  };
-  const validateReferences = (value: unknown, path: string) => {
-    requireArray(value, path).forEach((value, index) => {
-      const refPath = `${path}[${index}]`, ref = requireObject(value, refPath);
-      requireNullableString(read(ref, "targetId"), `${refPath}.targetId`);
-      requireArray(read(ref, "cards"), `${refPath}.cards`).forEach((card, index) => {
-        const cardPath = `${refPath}.cards[${index}]`;
-        validateSource(requireObject(card, cardPath), cardPath);
-      });
-    });
   };
   const validateLink = (value: unknown, path: string) => {
     const link = requireObject(value, path);
@@ -983,6 +1008,7 @@ function validateAfterResolutionSnapshot(value: unknown, path: string): void {
     requireBoolean(read(frame, "resolving"), `${framePath}.resolving`);
     requireBoolean(read(frame, "windowOpen"), `${framePath}.windowOpen`);
     validateTiming(read(frame, "timing"), `${framePath}.timing`);
+    if (hasOwn(frame, "triggers")) validateTriggerState(read(frame, "triggers"), `${framePath}.triggers`);
     requireArray(read(frame, "links"), `${framePath}.links`).forEach((link, index) => validateLink(link, `${framePath}.links[${index}]`));
     if (read(frame, "afterResolution") !== null) validatePhase(read(frame, "afterResolution"), `${framePath}.afterResolution`);
     requireArray(read(frame, "finalizations"), `${framePath}.finalizations`).forEach((value, index) => {
@@ -1002,6 +1028,110 @@ function validateAfterResolutionSnapshot(value: unknown, path: string): void {
   });
 }
 
+function requireTriggerObject(value: unknown, path: string, keys: readonly string[]): object {
+  const object = requireObject(value, path);
+  if (Object.keys(object).some(key => !keys.includes(key))) invalid(path, "only canonical trigger fields");
+  return object;
+}
+
+function validateTriggerPresence(value: unknown, path: string): void {
+  if (value === null) return;
+  const presence = requireTriggerObject(value, path, ["cardId", "duelCardId", "controllerId", "zone", "faceUp", "locationVersion", "counters"]);
+  for (const key of ["cardId", "duelCardId"]) requireIdentity(read(presence, key), `${path}.${key}`, true);
+  requirePlayerId(read(presence, "controllerId"), `${path}.controllerId`);
+  validateLocation(presence, path);
+  if (hasOwn(presence, "counters")) for (const [key, count] of Object.entries(requireObject(read(presence, "counters"), `${path}.counters`))) {
+    requireInteger(count, `${path}.counters.${key}`, 0);
+  }
+}
+
+function validateTriggerOccurrence(value: unknown, path: string): void {
+  const occurrence = requireTriggerObject(value, path, ["occurrenceId", "atomicGroupId", "eventName", "sequence", "turnCounter", "phase", "chainId", "resolvingLinkId", "timingRelevance", "entriesProvided", "entries", "referenceSnapshots", "snapshot"]);
+  for (const key of ["occurrenceId", "atomicGroupId"]) requireIdentity(read(occurrence, key), `${path}.${key}`);
+  for (const key of ["sequence", "turnCounter"]) requireInteger(read(occurrence, key), `${path}.${key}`, 0);
+  requireString(read(occurrence, "eventName"), `${path}.eventName`);
+  requirePhase(read(occurrence, "phase"), `${path}.phase`, true);
+  for (const key of ["chainId", "resolvingLinkId"]) requireIdentity(read(occurrence, key), `${path}.${key}`, true);
+  const relevance = read(occurrence, "timingRelevance");
+  if (relevance !== "semantic" && relevance !== "source_cleanup") invalid(`${path}.timingRelevance`, "semantic or source_cleanup");
+  requireBoolean(read(occurrence, "entriesProvided"), `${path}.entriesProvided`);
+  requireArray(read(occurrence, "entries"), `${path}.entries`).forEach((value, index) => {
+    const entryPath = `${path}.entries[${index}]`;
+    const entry = requireTriggerObject(value, entryPath, ["entryId", "cardId", "duelCardId", "effectId", "controllerId", "registrationId", "sourceAtTrigger"]);
+    requireString(read(entry, "entryId"), `${entryPath}.entryId`);
+    for (const key of ["cardId", "duelCardId"]) requireIdentity(read(entry, key), `${entryPath}.${key}`, true);
+    requireNullableString(read(entry, "effectId"), `${entryPath}.effectId`);
+    requirePlayerId(read(entry, "controllerId"), `${entryPath}.controllerId`);
+    const registrationId = read(entry, "registrationId");
+    if (registrationId !== null && typeof registrationId !== "string") requireInteger(registrationId, `${entryPath}.registrationId`, 0);
+    validateTriggerPresence(read(entry, "sourceAtTrigger"), `${entryPath}.sourceAtTrigger`);
+  });
+  requireArray(read(occurrence, "referenceSnapshots"), `${path}.referenceSnapshots`).forEach((value, index) => {
+    const bindingPath = `${path}.referenceSnapshots[${index}]`;
+    const binding = requireTriggerObject(value, bindingPath, ["sourceDuelCardId", "effectId", "sourcePresence", "references"]);
+    requireIdentity(read(binding, "sourceDuelCardId"), `${bindingPath}.sourceDuelCardId`, true);
+    requireNullableString(read(binding, "effectId"), `${bindingPath}.effectId`);
+    validateTriggerPresence(read(binding, "sourcePresence"), `${bindingPath}.sourcePresence`);
+    requireArray(read(binding, "references"), `${bindingPath}.references`).forEach((value, index) => {
+      const referencePath = `${bindingPath}.references[${index}]`;
+      const reference = requireTriggerObject(value, referencePath, ["targetId", "cards"]);
+      requireNullableString(read(reference, "targetId"), `${referencePath}.targetId`);
+      requireArray(read(reference, "cards"), `${referencePath}.cards`).forEach((card, index) => {
+        const cardPath = `${referencePath}.cards[${index}]`;
+        validateTriggerPresence(requireObject(card, cardPath), cardPath);
+      });
+    });
+  });
+  const snapshot = read(occurrence, "snapshot");
+  assertSerializable(snapshot, `${path}.snapshot`);
+  const rejectRuntimeIdentities = (value: unknown, path: string): void => {
+    if (value === null || typeof value !== "object") return;
+    for (const key of Object.keys(value)) {
+      if (["instanceId", "cardInstanceId", "sourceInstanceId", "_instanceId", "simInstanceId", "uuid"].includes(key)) invalid(`${path}.${key}`, "a duel-local identity instead of a runtime identifier");
+      rejectRuntimeIdentities(read(value, key), `${path}.${key}`);
+    }
+  };
+  rejectRuntimeIdentities(snapshot, `${path}.snapshot`);
+}
+
+function validateTriggerState(value: unknown, path: string): void {
+  if (value === null) return;
+  const state = requireObject(value, path);
+  requireIdentity(read(state, "opportunityId"), `${path}.opportunityId`, true);
+  const pendingCount = requireInteger(read(state, "pendingOccurrenceCount"), `${path}.pendingOccurrenceCount`, 0);
+  requireBoolean(read(state, "selecting"), `${path}.selecting`);
+  const occurrenceIds = requireArray(read(state, "occurrenceIds"), `${path}.occurrenceIds`);
+  occurrenceIds.forEach((id, index) => requireIdentity(id, `${path}.occurrenceIds[${index}]`));
+  const groups = requireObject(read(state, "groups"), `${path}.groups`);
+  const full = hasOwn(state, "pendingOccurrences") || hasOwn(state, "activeOccurrences") || hasOwn(state, "lastRelevantAtomicGroupId") || Object.keys(groups).length > 0;
+  if (!full) {
+    if (read(state, "opportunityId") !== null || read(state, "selecting") !== false || occurrenceIds.length !== 0) invalid(path, "an empty disabled-Chain trigger state");
+    return;
+  }
+  const pending = requireArray(read(state, "pendingOccurrences"), `${path}.pendingOccurrences`);
+  if (pending.length !== pendingCount) invalid(`${path}.pendingOccurrenceCount`, "the pending occurrence array length");
+  for (const key of ["pendingOccurrences", "activeOccurrences"]) {
+    requireArray(read(state, key), `${path}.${key}`).forEach((occurrence, index) => validateTriggerOccurrence(occurrence, `${path}.${key}[${index}]`));
+  }
+  requireIdentity(read(state, "lastRelevantAtomicGroupId"), `${path}.lastRelevantAtomicGroupId`, true);
+  for (const key of Object.values(SEGOC_GROUPS)) {
+    requireArray(read(groups, key), `${path}.groups.${key}`).forEach((value, index) => {
+      if (value === null) return;
+      const candidatePath = `${path}.groups.${key}[${index}]`;
+      const candidate = requireObject(value, candidatePath);
+      for (const field of ["candidateId", "occurrenceId", "atomicGroupId", "cardId", "duelCardId"]) requireIdentity(read(candidate, field), `${candidatePath}.${field}`, true);
+      if (read(candidate, "cardInstanceId") !== null) invalid(`${candidatePath}.cardInstanceId`, "null; canonical candidates use duelCardId");
+      requirePlayerId(read(candidate, "controllerId"), `${candidatePath}.controllerId`);
+      for (const field of ["eventName", "cardName", "effectId", "rejectionReason"]) requireNullableString(read(candidate, field), `${candidatePath}.${field}`);
+      for (const [field, choices] of [["triggerRequirement", Object.values(TRIGGER_REQUIREMENTS)], ["triggerTiming", Object.values(TRIGGER_TIMINGS)], ["eligibilityStatus", TRIGGER_ELIGIBILITY_STATUSES]] as const) {
+        const entry = read(candidate, field);
+        if (entry !== null && (typeof entry !== "string" || !(choices as readonly string[]).includes(entry))) invalid(`${candidatePath}.${field}`, "a canonical trigger value or null");
+      }
+      if (read(candidate, "segocGroup") !== null && read(candidate, "segocGroup") !== key) invalid(`${candidatePath}.segocGroup`, "the enclosing SEGOC group");
+    });
+  }
+}
+
 function validateStateSnapshot(value: unknown, path: string): void {
   const snapshot = requireObject(value, path);
   requireInteger(read(snapshot, "fieldPlacementSequence"), `${path}.fieldPlacementSequence`, 0);
@@ -1018,8 +1148,11 @@ function validateStateSnapshot(value: unknown, path: string): void {
       invalid(`${path}.chain.${key}`, "a serialized value");
   }
   const links = read(chain, "links");
-  if (Array.isArray(links)) links.forEach((link, index) =>
-    validatePaidReferenceMetadata(link, `${path}.chain.links[${index}]`));
+  if (Array.isArray(links)) links.forEach((link, index) => {
+    validatePaidReferenceMetadata(link, `${path}.chain.links[${index}]`);
+    validateLinkReferences(link, `${path}.chain.links[${index}]`);
+  });
+  validateTriggerState(read(chain, "triggers"), `${path}.chain.triggers`);
   if (hasOwn(chain, "afterResolution")) validateAfterResolutionSnapshot(read(chain, "afterResolution"), `${path}.chain.afterResolution`);
   for (const key of [
     "usage",

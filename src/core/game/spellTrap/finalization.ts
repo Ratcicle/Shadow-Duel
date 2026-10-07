@@ -193,6 +193,7 @@ async function applyDefaultSpellTrapFinalization(
   if (!activationZone) return false;
   const moveResult = await game.moveCard(card, owner, "graveyard", {
     fromZone: activationZone,
+    timingRelevance: "source_cleanup",
     sourceCard: card,
     effectId: activationContext.effectId || null,
     chainId: activationContext.chainId ?? null,

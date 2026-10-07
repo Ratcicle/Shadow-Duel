@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import Game from "../src/core/Game.js";
 import Card from "../src/core/Card.js";
+import type { EffectDefinition } from "../src/core/contracts/effects.js";
+import type ChainSystem from "../src/core/ChainSystem.js";
 import { applyPassiveBuffValue } from "../src/core/effects/passives/passiveBuffs.js";
 import { CANONICAL_REPLAY_ENGINE_VERSION } from "../src/core/contracts/replay.js";
 import { cardDatabase } from "../src/data/cards.js";
@@ -273,3 +275,65 @@ test("technical D2 destruction rollback preserves the pending return record and 
     game.dispose();
   }
 });
+
+for (const projection of ["pending", "active", "suspended"] as const) {
+  test(`public trigger ${projection} state conceals hidden references while canonical capture retains them`, async t => {
+    const snapshots = [];
+    for (const hiddenEffectId of ["hidden_reference_a", "hidden_reference_b"]) {
+      const game = createRuntimeGame({ captureReplay: false, laboratoryMode: true, laboratoryUseBot: false });
+      t.after(() => game.dispose());
+      Object.assign(game, { turn: "player", phase: "main1", turnCounter: 4 });
+      const target = new Card(cardDefinition(1), game.player.id);
+      placeFieldCards(game.player.field, target);
+      const effect = { id: hiddenEffectId, timing: "on_event", event: "card_moved",
+        triggerRequirement: "optional", triggerTiming: "if", requireZone: "spellTrap", requireFaceup: true,
+        targets: [{ id: "hidden_reference", intent: "reference", targetFromContext: "eventCard",
+          owner: "opponent", zone: "field", count: { min: 1, max: 1 } }],
+        actions: [{ type: "heal", amount: 100, player: "self" }] } satisfies EffectDefinition;
+      const handSource = new Card({ ...cardDefinition(268), effects: [effect] }, game.bot.id);
+      const setSource = new Card({ ...cardDefinition(268), effects: [effect] }, game.bot.id);
+      Object.assign(setSource, { isFacedown: true, setTurn: 1 });
+      game.bot.hand.push(handSource);
+      placeFieldCards(game.bot.spellTrap, setSource);
+      for (const card of [target, handSource, setSource]) game.ensureDuelCardId(card);
+      const chain: ChainSystem = game.chainSystem;
+      const createOccurrence = chain.createTriggerOccurrence.bind(chain);
+      const capturedOccurrences: NonNullable<ReturnType<typeof createOccurrence>>[] = [];
+      chain.createTriggerOccurrence = (...args) => {
+        const occurrence = createOccurrence(...args);
+        if (occurrence) capturedOccurrences.push(occurrence);
+        return occurrence;
+      };
+      const captured = await game.resolveEvent("card_moved", {
+        card: target, player: game.player, fromZone: "hand", toZone: "field",
+      }, { collectTriggersOnly: true });
+      const occurrence = required(capturedOccurrences[0]);
+      assert.equal(occurrence, captured.occurrence);
+      assert.equal(occurrence.referenceSnapshots?.length, 2, "both ineligible hidden sources have captured references");
+      assert.deepEqual(occurrence.entries, [], "neither hidden source is eligible to activate");
+      if (projection === "pending") game.chainSystem.queueTriggerOccurrence(occurrence);
+      else game.chainSystem.buildTriggerOpportunity([occurrence]);
+      if (projection === "suspended") {
+        const parentTriggers = game.chainSystem.getTriggerState();
+        // The public serializer consumes this same closed producer surface for
+        // a parent frame; frame lifecycle itself is covered by afterEffectResolution.
+        game.chainSystem.getAfterResolutionState = () => ({ suspended: [{
+          chainId: 1, resolving: true, windowOpen: false, links: [],
+          timing: game.chainSystem.getFastEffectState(), afterResolution: null,
+          triggers: parentTriggers, selection: null, finalizations: [],
+        }] });
+        game.chainSystem.activeTriggerOpportunity = null;
+      }
+      snapshots.push({ public: game.getPublicState("player"), canonical: createCanonicalStateSnapshot(game) });
+    }
+    const first = required(snapshots[0]), second = required(snapshots[1]);
+    assert.deepEqual(first.public, second.public, "identical visible states must not expose hidden effect/reference facts");
+    assert.notDeepEqual(first.canonical.chain, second.canonical.chain, "canonical Chain state retains authoritative hidden facts");
+    const publicJson = JSON.stringify(first.public);
+    assert.equal(publicJson.includes("hidden_reference_a"), false);
+    assert.equal(publicJson.includes("referenceSnapshots"), false);
+    assert.equal(publicJson.includes("pendingOccurrences"), false);
+    assert.equal(publicJson.includes("activeOccurrences"), false);
+    assert.equal(publicJson.includes("lastRelevantAtomicGroupId"), false);
+  });
+}

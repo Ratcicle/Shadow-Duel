@@ -8,8 +8,10 @@ import {
 } from "../../src/core/game/replay/canonical.js";
 import { CANONICAL_REPLAY_EVENT_NAMES, CANONICAL_REPLAY_ENGINE_VERSION } from "../../src/core/contracts/replay.js";
 import Card from "../../src/core/Card.js";
-import { cardDefinition, required } from "../helpers/fixtures.js";
+import { cardDefinition, record, required, unsafeFixture } from "../helpers/fixtures.js";
 import { createRuntimeGame, placeFieldCards } from "../helpers/game.js";
+import type { SerializedTriggerOccurrenceState } from "../../src/core/contracts/chainRuntime.js";
+import type { ChainId, ChainLinkId } from "../../src/core/contracts/primitives.js";
 
 type MutableReplay = Record<string, unknown>;
 
@@ -39,7 +41,9 @@ function replay(overrides: MutableReplay = {}): MutableReplay {
 }
 
 test("engine version is required and rejects recordings with previous semantics", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v23");
+  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v24");
+  assert.equal(getCardDatabaseSignature(), "feeb687b");
+  assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v23" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v22" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v18" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v13" })), /engineVersion/);
@@ -102,7 +106,7 @@ test("replays com a assinatura parcial antiga são rejeitados antes da reproduç
 });
 
 test("Miragebound S02 integration rejects previous full signatures and uses schema 2 with the current engine", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v23");
+  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v24");
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v14" })), /engineVersion/);
   assert.throws(
     () => validateCanonicalReplay(replay({ cardDatabaseSignature: "98009b78" })),
@@ -117,6 +121,76 @@ test("Miragebound S02 integration rejects previous full signatures and uses sche
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "a2cd2bdb" })), /card database signature does not match/);
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "db5833d7" })), /card database signature does not match/);
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "0f23140c" })), /card database signature does not match/);
+});
+
+test("captured trigger occurrences require canonical identities and deeply validated facts", t => {
+  const game = createRuntimeGame({ captureReplay: false });
+  t.after(() => game.dispose());
+  const presence = { cardId: 17, duelCardId: 7, controllerId: "player", zone: "spellTrap", faceUp: true, locationVersion: 2 } as const;
+  const occurrence: SerializedTriggerOccurrenceState = {
+    occurrenceId: 1, atomicGroupId: 2, eventName: "card_to_grave", sequence: 1,
+    turnCounter: 4, phase: "main1",
+    chainId: unsafeFixture<ChainId>(1, "Canonical scalar fixture used to validate serialized occurrence identities."),
+    resolvingLinkId: unsafeFixture<ChainLinkId>(2, "Canonical scalar fixture used to validate serialized occurrence identities."),
+    timingRelevance: "semantic", entriesProvided: true,
+    entries: [{ entryId: "1:0", cardId: 17, duelCardId: 7, effectId: "court_counter", controllerId: "player", registrationId: null, sourceAtTrigger: presence }],
+    referenceSnapshots: [{ sourceDuelCardId: 7, effectId: "court_counter", sourcePresence: presence,
+      references: [{ targetId: "event_card", cards: [presence] }] }],
+    snapshot: { eventName: "card_to_grave", card: { id: 204, duelCardId: 8 } },
+  };
+  const withOccurrence = (value: unknown, active = false) => {
+    const snapshot = createCanonicalStateSnapshot(game);
+    Reflect.set(snapshot.chain, "triggers", {
+      ...game.chainSystem.getTriggerState(),
+      pendingOccurrences: active ? [] : [value], pendingOccurrenceCount: active ? 0 : 1,
+      activeOccurrences: active ? [value] : [], opportunityId: active ? 1 : null,
+      occurrenceIds: active ? [1] : [], lastRelevantAtomicGroupId: active ? 2 : null,
+    });
+    return replay({ result: { finalState: snapshot } });
+  };
+  assert.doesNotThrow(() => validateCanonicalReplay(withOccurrence(occurrence)));
+  assert.doesNotThrow(() => validateCanonicalReplay(withOccurrence(occurrence, true)));
+  assert.doesNotThrow(() => validateCanonicalReplay(withOccurrence({ ...occurrence, timingRelevance: "source_cleanup", entries: [], referenceSnapshots: [] })));
+  const invalidFields: readonly [readonly string[], unknown][] = [
+    [["occurrenceId"], 0], [["atomicGroupId"], -1], [["sequence"], 1.5], [["turnCounter"], -1],
+    [["eventName"], null], [["phase"], "later"], [["chainId"], 0], [["resolvingLinkId"], "2"],
+    [["timingRelevance"], "cleanup"], [["entriesProvided"], "true"], [["entries"], null],
+    [["entries", "0", "entryId"], null], [["entries", "0", "duelCardId"], -1],
+    [["entries", "0", "controllerId"], "outsider"], [["entries", "0", "registrationId"], {}],
+    [["entries", "0", "sourceAtTrigger", "zone"], "hand_or_field"],
+    [["entries", "0", "sourceAtTrigger", "faceUp"], 1],
+    [["entries", "0", "sourceAtTrigger", "locationVersion"], -1],
+    [["entries", "0", "sourceAtTrigger", "counters"], { funeral: -1 }],
+    [["entries", "0", "sourceAtTrigger", "counters"], { funeral: "1" }],
+    [["entries", "0", "sourceAtTrigger", "instanceId"], 123],
+    [["entries", "0", "cardInstanceId"], 123], [["entries", "0", "materialize"], "callback"],
+    [["referenceSnapshots"], {}], [["referenceSnapshots", "0", "sourceDuelCardId"], "7"],
+    [["referenceSnapshots", "0", "references"], null],
+    [["referenceSnapshots", "0", "references", "0", "targetId"], 1],
+    [["referenceSnapshots", "0", "references", "0", "cards", "0", "duelCardId"], 0],
+    [["snapshot", "card", "instanceId"], 123],
+  ];
+  for (const [path, value] of invalidFields) {
+    const invalid = structuredClone(occurrence);
+    let parent: object = invalid;
+    for (const part of path.slice(0, -1)) {
+      const next: unknown = Reflect.get(parent, part);
+      assert.ok(next !== null && typeof next === "object");
+      parent = next;
+    }
+    Reflect.set(parent, required(path.at(-1)), value);
+    assert.throws(() => validateCanonicalReplay(withOccurrence(invalid)), /chain\.triggers/, path.join("."));
+  }
+  for (const field of ["timingRelevance", "entriesProvided", "entries", "referenceSnapshots", "snapshot"]) {
+    const invalid = structuredClone(occurrence);
+    Reflect.deleteProperty(invalid, field);
+    assert.throws(() => validateCanonicalReplay(withOccurrence(invalid, true)), /chain\.triggers/, field);
+  }
+  const invalidCount = withOccurrence(occurrence);
+  const invalidState = record(record(invalidCount.result).finalState);
+  const invalidTriggers = record(record(invalidState.chain).triggers);
+  invalidTriggers.pendingOccurrenceCount = 0;
+  assert.throws(() => validateCanonicalReplay(invalidCount), /pendingOccurrenceCount/);
 });
 
 test("Miragebound editorial alignment rejects the former database signature with the current engine", () => {
@@ -135,7 +209,7 @@ test("Tech-Zero procedure and resolution-choice alignment rejects the former dat
 });
 
 test("Ascension material editorial alignment rejects the former database signature with the same engine", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v23");
+  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v24");
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "7e5d54cb" })), /card database signature does not match/);
   assert.equal(validateCanonicalReplay(replay()).schemaVersion, 2);
 });
@@ -194,6 +268,37 @@ test("Chain response replay validates exact decisions and rejects execution cont
     { ...value, decisions: { allowDuringResolving: true } },
     { pass: true, decisions: value.decisions },
   ]) assert.throws(() => validateCanonicalReplay(replay({ decisions: [{ ...decision, value: invalid }] })), /Invalid canonical replay/);
+});
+
+test("response reference choices retain validated Chain context before costs", () => {
+  const context = { type: "chain_response_reference", chainId: 1, respondingToLinkId: 2, sourceDuelCardId: 7, effectId: "response" };
+  const decision = { sequence: 1, decisionId: 1, kind: "choice", actorId: "bot", candidateKeys: ["7"],
+    value: { selections: { chain_response_reference: [{ duelCardId: 7 }] } }, context };
+  assert.doesNotThrow(() => validateCanonicalReplay(replay({ decisions: [decision] })));
+  for (const [field, value] of [["chainId", 0], ["respondingToLinkId", "2"], ["sourceDuelCardId", -1], ["effectId", 5]] as const) {
+    assert.throws(() => validateCanonicalReplay(replay({ decisions: [{ ...decision, context: { ...context, [field]: value } }] })), /context/);
+  }
+  assert.throws(() => validateCanonicalReplay(replay({ decisions: [{ ...decision, kind: "target" }] })), /context/);
+});
+
+test("active links validate frozen response references with canonical card identity", t => {
+  const game = createRuntimeGame({ captureReplay: false });
+  t.after(() => game.dispose());
+  const presence = { cardDuelCardId: 7, controllerId: "bot", zone: "field", faceUp: true, locationVersion: 0 };
+  const withLink = (link: object) => {
+    const snapshot = createCanonicalStateSnapshot(game);
+    Reflect.set(snapshot.chain, "links", [link]);
+    return replay({ result: { finalState: snapshot } });
+  };
+  const references = [{ targetId: "selected_response_reference", cards: [presence] }];
+  const responseReference = { chainId: 1, linkId: 2, duelCardId: 7 };
+  assert.doesNotThrow(() => validateCanonicalReplay(withLink({ referenceSnapshots: references, responseReference })));
+  for (const [field, value] of [["cardDuelCardId", -1], ["zone", "nowhere"], ["faceUp", null], ["locationVersion", -1], ["cardInstanceId", 55]] as const) {
+    assert.throws(() => validateCanonicalReplay(withLink({ referenceSnapshots: [{ targetId: "selected_response_reference", cards: [{ ...presence, [field]: value }] }] })), /referenceSnapshots/);
+  }
+  for (const [field, value] of [["chainId", 0], ["linkId", "2"], ["duelCardId", -1], ["instanceId", 55]] as const) {
+    assert.throws(() => validateCanonicalReplay(withLink({ responseReference: { ...responseReference, [field]: value } })), /responseReference/);
+  }
 });
 
 const commandPayloads = [
@@ -563,21 +668,21 @@ test("paid reference snapshots are optional and deeply validated in serialized C
 });
 
 test("Tech-Zero P1 rejects old rules and old full signature independently", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v23");
+  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v24");
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v19" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "c6aef06c" })), /database signature/);
   assert.equal(validateCanonicalReplay(replay()).schemaVersion, 2);
 });
 
 test("Tech-Zero P2 rejects the historical v20 envelope and signature independently", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v23");
+  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v24");
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v20" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "f68bdfd5" })), /database signature/);
   assert.equal(validateCanonicalReplay(replay()).schemaVersion, 2);
 });
 
 test("Tech-Zero P3 rejects the historical v21 envelope and signature independently", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v23");
+  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v24");
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v21" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "c0327049" })), /database signature/);
   assert.equal(validateCanonicalReplay(replay()).schemaVersion, 2);

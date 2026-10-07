@@ -604,3 +604,78 @@ test("recusar confirmacao de Trigger opcional unico nao cria corrente", async ()
   assert.equal(result.selectedTriggerCount, 0);
   assert.deepEqual(activatedEffects(trace), []);
 });
+
+for (const scenario of ["cleanup_after", "semantic_then_cleanup", "cleanup_origin", "cleanup_only"] as const) {
+  test(`optional when distinguishes semantic events and source cleanup (${scenario})`, async () => {
+    const harness = createChainHarness({ playerControllerType: "ai" });
+    const { chain, player, trace } = harness;
+    const entry = createEntry(harness, player, "when_cleanup", {
+      requirement: TRIGGER_REQUIREMENTS.OPTIONAL, timing: TRIGGER_TIMINGS.WHEN,
+    });
+    const semanticBefore = occurrence(chain, [], { eventName: "before" });
+    const origin = occurrence(chain, [entry], {
+      payload: { timingRelevance: scenario === "cleanup_origin" || scenario === "cleanup_only" ? "source_cleanup" : "semantic" },
+    });
+    const later = occurrence(chain, [], { eventName: "later", payload: {
+      timingRelevance: scenario === "semantic_then_cleanup" ? "semantic" : "source_cleanup",
+    } });
+    const finalCleanup = occurrence(chain, [], { eventName: "cleanup", payload: { timingRelevance: "source_cleanup" } });
+    assert.deepEqual(trace.events.filter(event => event.eventName === "trigger_occurrence_queued")
+      .map(event => required(event.payload).timingRelevance), [
+      "semantic", origin.timingRelevance, later.timingRelevance, "source_cleanup",
+    ]);
+    const batch = scenario === "cleanup_only" ? [origin, later, finalCleanup]
+      : [semanticBefore, origin, later, finalCleanup];
+    const opportunity = required(chain.buildTriggerOpportunity(batch));
+    assert.equal(opportunity.lastRelevantAtomicGroupId, scenario === "semantic_then_cleanup" ? later.atomicGroupId
+      : scenario === "cleanup_only" ? null : scenario === "cleanup_origin" ? semanticBefore.atomicGroupId : origin.atomicGroupId);
+    await chain.resolveTriggerOccurrences(batch);
+    assert.equal(activatedEffects(trace).includes("when_cleanup_effect"), scenario !== "semantic_then_cleanup");
+    const rejected = trace.events.filter(event => event.eventName === "trigger_candidate_rejected");
+    assert.equal(rejected.length, scenario === "semantic_then_cleanup" ? 1 : 0);
+  });
+}
+
+test("canonical trigger state exposes detached pending and active occurrence facts without runtime identifiers", () => {
+  const harness = createChainHarness();
+  const entry = createEntry(harness, harness.player, "canonical_frozen");
+  entry.card.duelCardId = 73;
+  const event = occurrence(harness.chain, [entry], { payload: { timingRelevance: "source_cleanup", card: entry.card } });
+  harness.chain.queueTriggerOccurrence(event);
+  harness.chain.buildTriggerOpportunity([event]);
+  const state = harness.chain.getTriggerState();
+  assert.equal(state.pendingOccurrences.length, 1);
+  assert.equal(state.activeOccurrences.length, 1);
+  assert.equal(state.lastRelevantAtomicGroupId, null);
+  const captured = required(state.pendingOccurrences[0]);
+  assert.equal(captured.timingRelevance, "source_cleanup");
+  assert.equal(required(captured.entries[0]).duelCardId, 73);
+  assert.equal(required(captured.entries[0]).entryId, `${event.occurrenceId}:0`);
+  assert.equal(JSON.stringify(state).includes("canonical_frozen_instance"), false);
+  required(captured.entries[0]).sourceAtTrigger!.locationVersion = 99;
+  assert.equal(entry.sourceAtTrigger?.locationVersion, 0);
+});
+
+
+test("optional when follows occurrence sequence even when publication allocates IDs in reverse order", async () => {
+  const harness = createChainHarness({ playerControllerType: "ai" });
+  const { chain, player, trace } = harness;
+  const when = createEntry(harness, player, "reverse_publication", {
+    requirement: TRIGGER_REQUIREMENTS.OPTIONAL, timing: TRIGGER_TIMINGS.WHEN,
+  });
+  // An immediate effect publishes its later occurrence before the outer event.
+  const later = required(chain.createTriggerOccurrence("later_semantic", {}, {
+    entries: [], entriesProvided: true, sequence: 2,
+  }));
+  const earlier = required(chain.createTriggerOccurrence("earlier_when", {}, {
+    entries: [when], entriesProvided: true, sequence: 1,
+  }));
+  assert.ok(earlier.occurrenceId > later.occurrenceId);
+  const opportunity = required(chain.buildTriggerOpportunity([later, earlier]));
+  assert.deepEqual(opportunity.occurrenceIds, [earlier.occurrenceId, later.occurrenceId]);
+  assert.equal(opportunity.lastRelevantAtomicGroupId, later.atomicGroupId);
+  await chain.resolveTriggerOccurrences([later, earlier]);
+  assert.deepEqual(activatedEffects(trace), []);
+  assert.ok(trace.events.some(event => event.eventName === "trigger_candidate_rejected" &&
+    required(event.payload).rejectionReason === "optional_when_missed_timing"));
+});

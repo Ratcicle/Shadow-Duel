@@ -46,7 +46,7 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
     assert.equal(result.success, true);
     assert.deepEqual(target.effectsNegationContributions, [{ duration: "until_end_turn", sourceDuelCardId: source.duelCardId, sourceEffectId: "darkness_dragon_negate" }]);
     const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "negation" }))));
-    assert.equal(replay.engineVersion, "engine-rules-v23");
+    assert.equal(replay.engineVersion, "engine-rules-v24");
     assert.equal(replay.schemaVersion, 2);
     for (const engineVersion of ["dragon-rules-v3", "engine-rules-v4", "dragon-rules-v5", "dragon-rules-v6", "engine-rules-v6", "engine-rules-v7"]) {
       assert.throws(() => validateCanonicalReplay({ ...replay, engineVersion }), /engineVersion/);
@@ -61,6 +61,96 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
     assert.equal(played.finalStateHash, replay.result?.finalStateHash);
     assert.equal(playback.decisionBroker.replayCursor, replay.decisions.length);
     assert.notEqual(playback[seat].field[0]?.instanceId, source.instanceId);
+    assert.deepEqual(createCanonicalStateSnapshot(playback), createCanonicalStateSnapshot(live));
+    assert.equal(hashCanonicalGameState(playback), hashCanonicalGameState(live));
+  });
+}
+
+function installCrashTownScenario(game: RuntimeGame, negated: boolean) {
+  const start = game.startWithDecks.bind(game);
+  game.startWithDecks = async options => {
+    await start(options);
+    game.turn = "player";
+    game.turnCounter = 4;
+    game.phase = "main1";
+    game.phaseDelayMs = 0;
+    game.disablePresentationDelays = true;
+    game.waitForBoardPresentation = game.waitForPresentationDelay = game.waitForAiPresentationStep = async () => {};
+    game.player.controllerType = game.bot.controllerType = "human";
+    for (const player of [game.player, game.bot]) {
+      player.deck = [...player.hand, ...player.deck];
+      player.hand = [];
+    }
+    const take = (zone: RuntimeGame["player"]["deck"], id: number) => {
+      const card = required(zone.find(card => card.id === id));
+      zone.splice(zone.indexOf(card), 1);
+      card.isFacedown = false;
+      card.position = "attack";
+      return card;
+    };
+    const crash = take(game.player.deck, 462);
+    game.player.fieldSpell = crash;
+    game.player.hand.push(take(game.player.deck, 458));
+    if (negated) {
+      const singularity = take(game.bot.extraDeck, 517);
+      placeFieldCards(game.bot.field, singularity);
+      const effect = required(singularity.effects.find(effect => effect.id === "tech_zero_final_singularity_synchro_negate_all"));
+      const applied = await game.effectEngine.applyActions(required(effect.actions), {
+        source: singularity, effect, player: game.bot, opponent: game.player,
+      }, {});
+      assert.equal(applied.success, true);
+      assert.equal(crash.effectsNegated, true);
+      await game.moveCard(singularity, game.bot, "graveyard", { fromZone: "field", awaitCardMovedEvent: true });
+      assert.equal(crash.effectsNegated, true);
+    }
+    const bahamut = take(game.bot.extraDeck, 275);
+    bahamut.properSummonEstablished = true;
+    bahamut.properSummonProcedure = "graveyard_banish_fusion";
+    placeFieldCards(game.bot.field, bahamut);
+  };
+}
+
+for (const negated of [false, true]) {
+  test(`[CS-03] Crash Town passive protection replays with negated=${negated}`, async t => {
+    const live = createRuntimeGame({ captureReplay: true, randomSeed: 33, laboratoryMode: true, laboratoryUseBot: false });
+    const playback = createRuntimeGame({ captureReplay: false, replayMode: "playback", laboratoryMode: true, laboratoryUseBot: false });
+    t.after(() => { live.dispose(); playback.dispose(); });
+    // Both Games install the same fixture after canonical deck setup; the JSON
+    // exercises command/decision replay and is not a standalone scenario export.
+    installCrashTownScenario(live, negated);
+    installCrashTownScenario(playback, negated);
+    let responded = false;
+    live.ui.showChainResponseModal = async candidates => {
+      const candidate = !responded && candidates.find(candidate => candidate.card?.id === 275);
+      if (!candidate) return null;
+      responded = true;
+      return candidate;
+    };
+    playback.ui.showChainResponseModal = async () => assert.fail("Playback must consume recorded Chain decisions");
+    playback.autoSelector.select = () => assert.fail("Playback must not rerun AI selection");
+    await live.startWithDecks({
+      exactDecks: true, preserveDeckOrder: true, initializeOnly: true, startAtDrawPhase: true,
+      startingPlayer: "player", announceStartingPlayer: false,
+      playerDeck: [462, 458, 451, ...Array<number>(17).fill(1)], botDeck: Array<number>(20).fill(1),
+      playerExtraDeck: [], botExtraDeck: [275, 517],
+    });
+    const funeral = required(live.player.hand.find(card => card.id === 458));
+    const gunslinger = required(live.player.deck.find(card => card.id === 451));
+    await live.tryActivateSpell(funeral, 0, { funeral_at_sunset_sent_monster: [gunslinger] }, { owner: live.player });
+    assert.equal(responded, true);
+    assert.equal(live.player.deck.includes(gunslinger), negated);
+    assert.equal(live.player.graveyard.includes(gunslinger), !negated);
+    assert.equal(live.player.graveyard.includes(funeral), true);
+    const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "passive_negation_protection" }))));
+    const played = await replayCanonicalDuel(replay, {
+      game: unsafeFixture<ReplayDriverGamePort>(playback, "Concrete Game integration supplies the runtime replay ports."),
+    });
+    assert.equal(played.ok, true);
+    assert.equal(played.finalStateHash, replay.result?.finalStateHash);
+    assert.equal(playback.decisionBroker.replayCursor, replay.decisions.length);
+    assert.equal(replay.commands.length, 1);
+    assert.ok(replay.decisions.length > 0);
+    assert.notEqual(playback.player.fieldSpell?.instanceId, live.player.fieldSpell?.instanceId);
     assert.deepEqual(createCanonicalStateSnapshot(playback), createCanonicalStateSnapshot(live));
     assert.equal(hashCanonicalGameState(playback), hashCanonicalGameState(live));
   });

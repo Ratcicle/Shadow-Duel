@@ -100,6 +100,8 @@ export async function collectStandbyPhaseTriggers(
         );
 
         const entry = this.buildTriggerEntry({
+
+          deferActivationChecks: payload.deferActivationChecks === true,
           sourceCard: card,
           owner,
           effect,

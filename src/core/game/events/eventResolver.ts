@@ -16,6 +16,7 @@ import type {
   EventTriggerPackage,
   ResolvableEventName,
 } from "../../contracts/events.js";
+import { captureTriggerEventSnapshot } from "../../chain/segoc.js";
 import { captureEventReferenceSnapshots } from "../../effects/targeting/references.js";
 import { hasChainPostEffectSummonCapability } from "../../contracts/chainRuntime.js";
 
@@ -135,67 +136,51 @@ export async function resolveEvent<Name extends ResolvableEventName>(
     const referenceSnapshots = captureEventReferenceSnapshots(this, eventName, payload);
     const triggerPayload = { ...payload, eventReferenceSnapshots: referenceSnapshots,
       actionContext: { ...(payload.actionContext || {}), eventReferenceSnapshots: referenceSnapshots } };
+    const snapshot = captureTriggerEventSnapshot(triggerPayload);
+    const deferred = this.afterResolutionActivation != null ||
+      this.chainSystem?.isChainResolving?.() === true ||
+      this.chainSystem?.isPreparingActivation === true ||
+      this.chainSystem?.isChainWindowOpen?.() === true ||
+      Number(this.summonProcedureDepth || 0) > 0 ||
+      Number(this.damageStepProcedureDepth || 0) > 0;
+    // Start every collector before any immediate effect or presentation await.
+    // An empty captured package is authoritative: later sources cannot join it.
+    const collection = this.effectEngine?.collectEventTriggers?.(
+      eventName, { ...triggerPayload, deferActivationChecks: deferred || payload.deferActivationChecks === true },
+    );
+    const capturedCollection = Promise.resolve(collection).catch(err => {
+      console.error(`[Game] Failed to collect triggers for "${eventName}":`, err);
+      return null;
+    });
     await this.effectEngine?.applyImmediateEventEffects?.(eventName, payload);
     const occurrence = this.chainSystem?.createTriggerOccurrence?.(
-      eventName,
-      triggerPayload,
-      {
+      eventName, triggerPayload, {
         atomicGroupId: options.atomicGroupId ?? payload?.atomicGroupId ?? null,
-        sequence: eventCounter,
-        referenceSnapshots,
+        sequence: eventCounter, referenceSnapshots, snapshot,
       },
     );
+    const triggerPackage = (await capturedCollection) ?? null;
+    const metadata = getTriggerPackageMetadata(triggerPackage);
+    entries = Array.isArray(triggerPackage) ? triggerPackage
+      : Array.isArray(triggerPackage?.entries) ? triggerPackage.entries : [];
+    orderRule = metadata.orderRule;
+    onComplete = metadata.onComplete;
+    if (occurrence) {
+      occurrence.entries = entries;
+      occurrence.entriesProvided = true;
+      occurrence.orderRule = orderRule;
+      occurrence.onComplete = onComplete;
+    }
 
     if (collectTriggersOnly) {
-      let triggerPackage: EventTriggerPackage | EventTriggerEntry[] | null =
-        null;
-      try {
-        triggerPackage =
-          (await this.effectEngine?.collectEventTriggers?.(
-            eventName,
-            triggerPayload,
-          )) ?? null;
-      } catch (err) {
-        console.error(
-          `[Game] Failed to collect triggers for "${eventName}":`,
-          err,
-        );
-      }
-      const metadata = getTriggerPackageMetadata(triggerPackage);
-      if (Array.isArray(triggerPackage)) {
-        entries = triggerPackage;
-      } else {
-        entries = Array.isArray(triggerPackage?.entries)
-          ? triggerPackage.entries
-          : [];
-      }
-      orderRule = metadata.orderRule;
-      onComplete = metadata.onComplete;
-      if (occurrence) {
-        occurrence.entries = entries;
-        occurrence.entriesProvided = true;
-        occurrence.orderRule = orderRule;
-        occurrence.onComplete = onComplete;
-      }
       this.devLog("TRIGGERS_COLLECTED", {
-        summary: `${eventName} (${entries.length})`,
-        event: eventName,
-        count: entries.length,
-        order: entries.map((entry) => entry?.summary).filter(Boolean),
-        orderRule,
-        depth,
+        summary: `${eventName} (${entries.length})`, event: eventName,
+        count: entries.length, order: entries.map(entry => entry?.summary).filter(Boolean),
+        orderRule, depth,
       });
       resolutionResult = {
-        ok: true,
-        collectedOnly: true,
-        eventName,
-        payload,
-        occurrence,
-        entries,
-        orderRule,
-        onComplete,
-        triggerCount: entries.length,
-        results: [],
+        ok: true, collectedOnly: true, eventName, payload, occurrence, entries,
+        orderRule, onComplete, triggerCount: entries.length, results: [],
       };
     } else if (
       this.afterResolutionActivation != null ||
@@ -205,40 +190,11 @@ export async function resolveEvent<Name extends ResolvableEventName>(
       Number(this.summonProcedureDepth || 0) > 0 ||
       Number(this.damageStepProcedureDepth || 0) > 0
     ) {
-      if ((eventName === "lp_change" || eventName === "after_summon") && occurrence) {
-        // Preserve the event's sources and their presence before later links
-        // move them; summon activation choices/availability still wait for SEGOC.
-        try {
-          const triggerPackage =
-            (await this.effectEngine?.collectEventTriggers?.(eventName,
-              eventName === "after_summon" ? { ...triggerPayload, deferActivationChecks: true } : triggerPayload,
-            )) ?? null;
-          const metadata = getTriggerPackageMetadata(triggerPackage);
-          entries = Array.isArray(triggerPackage)
-            ? triggerPackage
-            : Array.isArray(triggerPackage?.entries)
-              ? triggerPackage.entries
-              : [];
-          orderRule = metadata.orderRule;
-          onComplete = metadata.onComplete;
-        } catch (err) {
-          console.error(`[Game] Failed to collect triggers for "${eventName}":`, err);
-        }
-        occurrence.entries = entries;
-        occurrence.entriesProvided = true;
-        occurrence.orderRule = orderRule;
-        occurrence.onComplete = onComplete;
-      }
       resolutionResult = this.queueTriggerOccurrence(occurrence);
     } else {
-      resolutionResult = await this.resolveEventEntries(
-        eventName,
-        payload,
-        null,
-        {
-          occurrence,
-        },
-      );
+      resolutionResult = await this.resolveEventEntries(eventName, payload, entries, {
+        occurrence, orderRule, onComplete,
+      });
     }
   } catch (err) {
     console.error(`[Game] Error resolving event "${eventName}":`, err);

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import Card from "../../src/core/Card.js";
+import { cardDatabaseById } from "../../src/data/cards.js";
 import type ChainSystem from "../../src/core/ChainSystem.js";
 import type { CardAction } from "../../src/core/contracts/actions.js";
 import type { ChainPlayer } from "../../src/core/contracts/chainRuntime.js";
@@ -43,6 +45,82 @@ function addMonsterEffectLink(
       }),
     ),
   );
+}
+
+for (const negation of ["negate_activation", "negate_summon_or_activation_and_destroy"] as const) {
+  for (const protection of ["absent", "active", "negated", "facedown", "wrong_zone"] as const) {
+    test(`[CS-03] ${negation} respects Crash Town with source ${protection}`, async t => {
+      const game = createRuntimeGame({ laboratoryMode: true, laboratoryUseBot: false });
+      t.after(() => game.dispose());
+      game.turn = "player";
+      game.phase = "main1";
+      game.turnCounter = 4;
+      game.player.controllerType = game.bot.controllerType = "human";
+      game.disablePresentationDelays = true;
+      game.waitForBoardPresentation = game.waitForPresentationDelay = game.waitForAiPresentationStep = async () => {};
+      const make = (id: number, owner = game.player.id) => new Card(required(cardDatabaseById.get(id)), owner);
+      const funeral = make(458);
+      const gunslinger = make(451);
+      const crash = make(462);
+      const bahamut = make(275, game.bot.id);
+      game.player.hand.push(funeral);
+      game.player.deck.push(gunslinger);
+      bahamut.properSummonEstablished = true;
+      bahamut.properSummonProcedure = "graveyard_banish_fusion";
+      if (negation === "negate_activation") {
+        // The catalog has no plain negate_activation effect. This fixture keeps
+        // Bahamut's response contract and substitutes only the handler under test.
+        bahamut.effects = bahamut.effects.map(effect => ({ ...effect, actions: [{ type: negation }] }));
+      }
+      if (protection === "wrong_zone") placeFieldCards(game.player.spellTrap, crash);
+      else if (protection !== "absent") game.player.fieldSpell = crash;
+      crash.isFacedown = protection === "facedown";
+      if (protection === "negated") {
+        const singularity = make(517, game.bot.id);
+        placeFieldCards(game.bot.field, singularity);
+        const effect = required(singularity.effects.find(effect => effect.id === "tech_zero_final_singularity_synchro_negate_all"));
+        const applied = await game.effectEngine.applyActions(required(effect.actions), {
+          source: singularity, effect, player: game.bot, opponent: game.player,
+        }, {});
+        assert.equal(applied.success, true);
+        assert.equal(crash.effectsNegated, true);
+        await game.moveCard(singularity, game.bot, "graveyard", { fromZone: "field", awaitCardMovedEvent: true });
+        assert.equal(crash.effectsNegated, true);
+      }
+      placeFieldCards(game.bot.field, bahamut);
+      const completed: { effectId: string | null | undefined; outcome: unknown }[] = [];
+      const funeralMoves: { fromZone: unknown; toZone: unknown; destroyed: boolean }[] = [];
+      game.on("chain_link_resolution", event => {
+        if (event.stage === "completed") completed.push({ effectId: event.effectId, outcome: event.outcome });
+      });
+      game.on("card_moved", event => {
+        if (event.card === funeral) funeralMoves.push({ fromZone: event.fromZone, toZone: event.toZone, destroyed: event.wasDestroyed === true });
+      });
+      let responded = false;
+      game.ui.showChainResponseModal = async candidates => {
+        const candidate = !responded && candidates.find(candidate => candidate.card === bahamut);
+        if (!candidate) return null;
+        responded = true;
+        return candidate;
+      };
+      await game.tryActivateSpell(funeral, 0, { funeral_at_sunset_sent_monster: [gunslinger] }, { owner: game.player });
+
+      const protectedActivation = protection === "active";
+      assert.equal(responded, true);
+      assert.equal(game.player.deck.includes(gunslinger), !protectedActivation);
+      assert.equal(game.player.graveyard.includes(gunslinger), protectedActivation);
+      assert.equal(game.player.graveyard.includes(funeral), true);
+      assert.equal(game.bot.field.includes(bahamut), true);
+      assert.deepEqual(completed, [
+        { effectId: "supreme_bahamut_dragon_negate", outcome: "success" },
+        { effectId: "funeral_at_sunset", outcome: protectedActivation ? "success" : "activation_negated" },
+      ]);
+      assert.deepEqual(funeralMoves.filter(move => move.toZone === "graveyard"), [{
+        fromZone: "spellTrap", toZone: "graveyard",
+        destroyed: !protectedActivation && negation === "negate_summon_or_activation_and_destroy",
+      }]);
+    });
+  }
 }
 
 test("[CS-06] negar ativação difere de negar somente o efeito", async () => {
@@ -856,3 +934,97 @@ test("negar somente o efeito mantem a ativacao e executa o cleanup normal", asyn
     "post_chain_cleanup",
   );
 });
+
+// Preserve the approved real CL1..CL4/CL1..CL3 audit controls permanently.
+for (const kinds of [
+  ["negate_activation", "negate_activation"],
+  ["negate_effect", "negate_activation"],
+  ["negate_activation", "negate_effect"],
+  ["negate_effect", "negate_effect"],
+] as const) {
+  test(`two independently successful negations in CL1..CL4: ${kinds.join("/")}`, async t => {
+    const game = createRuntimeGame({ laboratoryMode: true, laboratoryUseBot: false, chainResponseTimeoutMs: 10000 });
+    t.after(() => game.dispose());
+    game.turn = "player"; game.phase = "main1"; game.turnCounter = 4;
+    game.player.controllerType = game.bot.controllerType = "human";
+    game.disablePresentationDelays = true;
+    game.waitForBoardPresentation = game.waitForPresentationDelay = game.waitForAiPresentationStep = async () => {};
+    const damageEffect = (id: string, cost: number): EffectDefinition => ({
+      id, timing: "manual", activationZones: ["field"], speed: 2, isQuickEffect: true,
+      activationCosts: [{ type: "pay_lp", player: "self", amount: cost }],
+      actions: [{ type: "damage", player: "opponent", amount: 1000 }],
+    });
+    const responseEffect = (id: string, type: "negate_activation" | "negate_effect"): EffectDefinition => ({
+      id, timing: "manual", activationZones: ["field"], speed: 2, isQuickEffect: true,
+      canRespondTo: ["card_activation", "effect_activation"], actions: [{ type }],
+    });
+    const rootEffect: EffectDefinition = { ...damageEffect("root", 500), timing: "ignition", activationZones: ["field"], speed: 1, isQuickEffect: false };
+    const root = runtimeCard({ name: "Audit Root", cardKind: "monster", effects: [rootEffect] }, game.player.id);
+    const second = runtimeCard({ name: "Audit CL2", cardKind: "monster", effects: [responseEffect("second", kinds[0])] }, game.bot.id);
+    const third = runtimeCard({ name: "Audit CL3", cardKind: "monster", effects: [damageEffect("third", 700)] }, game.player.id);
+    const fourth = runtimeCard({ name: "Audit CL4", cardKind: "monster", effects: [responseEffect("fourth", kinds[1])] }, game.bot.id);
+    placeFieldCards(game.player.field, root, third); placeFieldCards(game.bot.field, second, fourth);
+    const queue = [second, third, fourth];
+    const completed: { effectId: unknown; outcome: unknown }[] = [];
+    game.on("chain_link_resolution", event => { if (event.stage === "completed") completed.push({ effectId: event.effectId, outcome: event.outcome }); });
+    game.ui.showChainResponseModal = async candidates => {
+      const candidate = candidates.find(candidate => candidate.card === queue[0]);
+      if (candidate) { queue.shift(); return candidate; }
+      return null;
+    };
+    await game.tryActivateMonsterEffect(root, {}, "field", game.player, { effectId: rootEffect.id });
+    assert.equal(queue.length, 0);
+    assert.equal(game.player.lp, 6800); assert.equal(game.bot.lp, 8000);
+    assert.deepEqual(completed, [
+      { effectId: "fourth", outcome: "success" },
+      { effectId: "third", outcome: kinds[1] === "negate_activation" ? "activation_negated" : "effect_negated" },
+      { effectId: "second", outcome: "success" },
+      { effectId: "root", outcome: kinds[0] === "negate_activation" ? "activation_negated" : "effect_negated" },
+    ]);
+  });
+}
+
+for (const kinds of [
+  ["negate_activation", "negate_activation"],
+  ["negate_effect", "negate_activation"],
+  ["negate_activation", "negate_effect"],
+  ["negate_effect", "negate_effect"],
+] as const) {
+  test(`real Chain CL1/CL2/CL3 with ${kinds.join("/")}`, async t => {
+    const game = createRuntimeGame({ laboratoryMode: true, laboratoryUseBot: false, chainResponseTimeoutMs: 10000 });
+    t.after(() => game.dispose());
+    game.turn = "player"; game.phase = "main1"; game.turnCounter = 4;
+    game.player.controllerType = game.bot.controllerType = "human";
+    game.disablePresentationDelays = true;
+    game.waitForBoardPresentation = game.waitForPresentationDelay = game.waitForAiPresentationStep = async () => {};
+    const rootEffect: EffectDefinition = { id: "root", timing: "ignition", activationZones: ["field"],
+      activationCosts: [{ type: "pay_lp", player: "self", amount: 500 }],
+      actions: [{ type: "damage", player: "opponent", amount: 1000 }] };
+    const responseEffect = (id: string, type: "negate_activation" | "negate_effect"): EffectDefinition => ({
+      id, timing: "manual", activationZones: ["field"], speed: 2, isQuickEffect: true,
+      canRespondTo: ["card_activation", "effect_activation"], actions: [{ type }],
+    });
+    const root = runtimeCard({ name: "Audit Root", cardKind: "monster", effects: [rootEffect] }, game.player.id);
+    const second = runtimeCard({ name: "Audit CL2", cardKind: "monster", effects: [responseEffect("second", kinds[0])] }, game.bot.id);
+    const third = runtimeCard({ name: "Audit CL3", cardKind: "monster", effects: [responseEffect("third", kinds[1])] }, game.player.id);
+    placeFieldCards(game.player.field, root, third); placeFieldCards(game.bot.field, second);
+    const chosen = new Set<Card>();
+    const completed: { effectId: unknown; outcome: unknown }[] = [];
+    game.on("chain_link_resolution", event => { if (event.stage === "completed") completed.push({ effectId: event.effectId, outcome: event.outcome }); });
+    game.ui.showChainResponseModal = async candidates => {
+      const next = !chosen.has(second) ? second : !chosen.has(third) ? third : null;
+      const candidate = candidates.find(candidate => candidate.card === next);
+      if (candidate && next) { chosen.add(next); return candidate; }
+      return null;
+    };
+    const result = await game.tryActivateMonsterEffect(root, {}, "field", game.player, { effectId: rootEffect.id });
+    assert.equal(result.success, true);
+    assert.equal(chosen.size, 2);
+    assert.equal(game.player.lp, 7500); assert.equal(game.bot.lp, 7000);
+    assert.deepEqual(completed, [
+      { effectId: "third", outcome: "success" },
+      { effectId: "second", outcome: kinds[1] === "negate_activation" ? "activation_negated" : "effect_negated" },
+      { effectId: "root", outcome: "success" },
+    ]);
+  });
+}

@@ -124,6 +124,8 @@ export async function collectEffectTargetedTriggers(
       );
 
       const entry = this.buildTriggerEntry({
+
+        deferActivationChecks: payload.deferActivationChecks === true,
         sourceCard: card,
         owner: targetOwner,
         effect,

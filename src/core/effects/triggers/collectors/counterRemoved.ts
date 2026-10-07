@@ -207,7 +207,7 @@ export async function collectCounterRemovedTriggers(
         const duelCheck = this.checkOncePerDuel(sourceCard, owner, effect);
         if (!duelCheck.ok) continue;
 
-        if (Array.isArray(effect.targets) && effect.targets.length > 0) {
+        if (payload.deferActivationChecks !== true && Array.isArray(effect.targets) && effect.targets.length > 0) {
           const precheckCtx = {
             ...ctx,
             activationContext: { logTargets: false },
@@ -232,6 +232,8 @@ export async function collectCounterRemovedTriggers(
         };
 
         const entry = this.buildTriggerEntry({
+
+          deferActivationChecks: payload.deferActivationChecks === true,
           sourceCard,
           owner,
           effect,

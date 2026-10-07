@@ -283,7 +283,7 @@ export async function collectPositionChangeTriggers(
     const duelCheck = this.checkOncePerDuel(sourceCard, owner, effectiveEffect);
     if (!duelCheck.ok) return;
 
-    if (Array.isArray(effect.targets) && effect.targets.length > 0) {
+    if (payload.deferActivationChecks !== true && Array.isArray(effect.targets) && effect.targets.length > 0) {
       const precheckCtx = {
         ...ctx,
         activationContext: { logTargets: false },
@@ -306,6 +306,8 @@ export async function collectPositionChangeTriggers(
     );
 
     const entry = this.buildTriggerEntry({
+
+      deferActivationChecks: payload.deferActivationChecks === true,
       sourceCard,
       owner,
       effect: effectiveEffect,

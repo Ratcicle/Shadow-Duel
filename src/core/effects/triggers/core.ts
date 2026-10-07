@@ -1,6 +1,7 @@
 import { getCardDisplayName, getUIText } from "../../i18n.js";
 import { isAI } from "../../Player.js";
 import { recordMaterialEffectIdentity } from "../../game/summon/materialStats.js";
+import { captureProcedureTriggerConditions } from "../conditions/runtime.js";
 import { captureSourceSnapshot } from "../../chain/link.js";
 import { walkActionList } from "../../actionHandlers/actionWalker.js";
 import { findTriggerSourceLocation, isTriggerSourceLegal, matchesEquipHostExitSourcePresence } from "./collectors/shared.js";
@@ -472,6 +473,14 @@ export function buildTriggerEntry(
     return null;
   }
 
+  // Event predicates remain facts; Monster Zone capacity is re-evaluated
+  // only when this frozen entry is materialized at its opportunity.
+  if (deferActivationChecks && !options.activationConditionCheck) {
+    const captured = captureProcedureTriggerConditions(effect.conditions || [],
+      condition => this.evaluateConditions([condition], options.ctx || {}));
+    if (!captured.possible) return null;
+    options = { ...options, activationConditionCheck: captured.check };
+  }
   if (!deferActivationChecks && options.activationConditionCheck?.().ok === false) return null;
 
   const sourceZone = options.activationContext?.activationZone ||
@@ -744,7 +753,7 @@ export function buildTriggerEntry(
         if (materializedEntry === undefined) {
           materializedEntry = this.buildTriggerEntry({
             ...options,
-            activationContext,
+            activationContext: config.activationContext,
             deferActivationChecks: false,
           });
           if (materializedEntry) {

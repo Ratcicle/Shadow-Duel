@@ -760,7 +760,8 @@ export interface PublicGameState {
     resolving: boolean;
     links: SerializedChainLink[];
     timing: FastEffectState | null;
-    triggers: ChainRuntimeTriggerState | null;
+    triggers: Pick<ChainRuntimeTriggerState,
+      "opportunityId" | "pendingOccurrenceCount" | "selecting" | "occurrenceIds" | "groups"> | null;
     finalization: ChainFinalizationState | null;
   };
   summon: SummonState;

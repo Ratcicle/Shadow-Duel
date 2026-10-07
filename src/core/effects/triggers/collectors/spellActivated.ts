@@ -148,6 +148,8 @@ export async function collectSpellActivatedTriggers(
         );
 
         const entry = this.buildTriggerEntry({
+
+          deferActivationChecks: payload.deferActivationChecks === true,
           sourceCard,
           owner,
           effect,

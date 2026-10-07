@@ -660,6 +660,11 @@ export function serializeChainLink(
 ): SerializedChainLink | null {
   if (!link) return null;
   return {
+    ...(link.referenceSnapshots?.length ? { referenceSnapshots: projectAfterResolutionReferences(link.referenceSnapshots) } : {}),
+    ...(link.context?.responseReference ? { responseReference: {
+      chainId: link.context.responseReference.chainId, linkId: link.context.responseReference.linkId,
+      duelCardId: link.context.responseReference.target.card.duelCardId ?? null,
+    } } : {}),
     chainId: link.chainId ?? null,
     linkId: link.linkId ?? null,
     chainLevel: link.chainLevel ?? null,

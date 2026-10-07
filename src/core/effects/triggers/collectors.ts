@@ -38,6 +38,7 @@ import {
   collectSpellActivatedTriggers,
   collectStandbyPhaseTriggers,
 } from "./collectors/index.js";
+import { captureProcedureTriggerConditions } from "../conditions/runtime.js";
 import type {
   TemporaryEventEffect,
   TriggerCollectorHost,
@@ -72,6 +73,7 @@ function buildTemporarySourceCard(
     owner: owner?.id || entry.ownerId || null,
     controller: owner?.id || entry.ownerId || null,
     instanceId: entry.sourceInstanceId ?? null,
+    duelCardId: entry.sourceDuelCardId ?? null,
     isFacedown: false,
     declaredValues:
       entry.declaredValues && typeof entry.declaredValues === "object"
@@ -225,8 +227,11 @@ function collectTemporaryEventTriggers(
       actionContext: payload?.actionContext || null,
     } as TriggerContext;
 
+    const capturedConditions = payload.deferActivationChecks === true
+      ? captureProcedureTriggerConditions(effect.conditions || [], condition => engine.evaluateConditions([condition], ctx))
+      : null;
     if (Array.isArray(effect.conditions) && effect.conditions.length > 0) {
-      const conditionResult = engine.evaluateConditions(effect.conditions, ctx);
+      const conditionResult = capturedConditions ? { ok: capturedConditions.possible } : engine.evaluateConditions(effect.conditions, ctx);
       if (!conditionResult?.ok) continue;
     }
 
@@ -247,8 +252,8 @@ function collectTemporaryEventTriggers(
       owner,
       effect,
       ctx,
-      deferActivationChecks: eventName === "after_summon" &&
-        "deferActivationChecks" in payload && payload.deferActivationChecks === true,
+      deferActivationChecks: payload.deferActivationChecks === true,
+      ...(capturedConditions ? { activationConditionCheck: capturedConditions.check } : {}),
       activationContext: {
         // The registration triggers independently of the physical card's zone.
         // Keep sourceCard available for actions that explicitly refer to self.
@@ -286,16 +291,9 @@ function collectTemporaryEventTriggers(
 }
 
 function appendTemporaryEventTriggers(
-  engine: TriggerCollectorHost,
-  eventName: ResolvableEventName,
   triggerPackage: TriggerPackage,
-  payload: DuelEventMap[ResolvableEventName],
+  temporaryEntries: TriggerEntry[],
 ): TriggerPackage {
-  const temporaryEntries = collectTemporaryEventTriggers(
-    engine,
-    eventName,
-    payload,
-  );
   if (temporaryEntries.length === 0) return triggerPackage;
 
   const baseEntries = Array.isArray(triggerPackage?.entries)
@@ -422,10 +420,14 @@ export async function collectEventTriggers<Name extends ResolvableEventName>(
   eventName: Name,
   payload: DuelEventMap[Name],
 ): Promise<TriggerPackage> {
-  const triggerPackage: TriggerPackage = isCollectedTriggerEvent(eventName)
-    ? await dispatchCollectedTrigger(this, eventName, payload)
-    : { entries: [], orderRule: "no_triggers" };
-  return appendTemporaryEventTriggers(this, eventName, triggerPackage, payload);
+  // Every ordinary collector captures factual eligibility synchronously. Start
+  // it and capture registrations before the first await can change the board.
+  const ordinaryCollection = isCollectedTriggerEvent(eventName)
+    ? dispatchCollectedTrigger(this, eventName, payload)
+    : Promise.resolve({ entries: [], orderRule: "no_triggers" });
+  const temporaryEntries = collectTemporaryEventTriggers(this, eventName, payload);
+  const triggerPackage = await ordinaryCollection;
+  return appendTemporaryEventTriggers(triggerPackage, temporaryEntries);
 }
 
 export {

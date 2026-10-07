@@ -80,7 +80,7 @@ export async function collectEndPhaseTriggers(
           continue;
         }
 
-        if (Array.isArray(effect.conditions) && effect.conditions.length > 0) {
+        if (payload.deferActivationChecks !== true && Array.isArray(effect.conditions) && effect.conditions.length > 0) {
           const conditionResult = this.evaluateConditions(effect.conditions, ctx);
           if (!conditionResult?.ok) {
             debugTriggerLog(
@@ -112,6 +112,8 @@ export async function collectEndPhaseTriggers(
         );
 
         const entry = this.buildTriggerEntry({
+
+          deferActivationChecks: payload.deferActivationChecks === true,
           sourceCard: card,
           owner,
           effect,

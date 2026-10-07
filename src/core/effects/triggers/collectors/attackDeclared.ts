@@ -203,7 +203,7 @@ export async function collectAttackDeclaredTriggers(
         // Avoid prompting/adding triggers that have impossible target requirements.
         // This keeps UX clean for effects that require a cost/target (e.g., send 1 monster),
         // but have no valid candidates at the moment.
-        if (Array.isArray(effect.targets) && effect.targets.length > 0) {
+        if (payload.deferActivationChecks !== true && Array.isArray(effect.targets) && effect.targets.length > 0) {
           const previewCtx = {
             ...ctx,
             activationContext: { isPreview: true, preview: true },
@@ -235,6 +235,8 @@ export async function collectAttackDeclaredTriggers(
         );
 
         const entry = this.buildTriggerEntry({
+
+          deferActivationChecks: payload.deferActivationChecks === true,
           sourceCard: card,
           owner: player,
           effect,

@@ -8,6 +8,7 @@ import {
 import type {
   ChainCard,
   ChainPlayer,
+  FastEffectContextInput,
 } from "../../contracts/chainRuntime.js";
 import { SUMMON_ORIGINS } from "../../contracts/summon.js";
 import type { GameCard } from "../../contracts/cards.js";
@@ -483,7 +484,7 @@ async function finishProcedureTiming(
   if (flushResult?.needsSelection) {
     return flushResult;
   }
-  const failedContext =
+  const failedContext: FastEffectContextInput | null =
     result?.success === false
       ? {
            type: result?.summonNegated ? "summon_negated" : "summon_failed",
@@ -493,7 +494,7 @@ async function finishProcedureTiming(
           summonId: transaction.summonId,
         }
       : null;
-  const context = failedContext || transaction.finalContext || {
+  const context: FastEffectContextInput = failedContext || (transaction.finalContext ? { ...transaction.finalContext } : null) || {
     type:
       transaction.summonMode === SUMMON_MODES.SET
         ? "monster_set"
@@ -510,6 +511,20 @@ async function finishProcedureTiming(
     player: transaction.controller,
     summonId: transaction.summonId,
   };
+  if (result.success !== false && transaction.summonMode === SUMMON_MODES.SUMMON) {
+    context.type = "summon";
+    context.event = "after_summon";
+    context.card = transaction.card ? toChainCard(transaction.card) : null;
+    context.player = toChainPlayer(transaction.controller);
+    context.method = transaction.summonMethod;
+    context.summonMethod = transaction.summonMethod;
+    context.fromZone = transaction.sourceAtStart.zone;
+    context.summonId = transaction.summonId;
+    const tributes = result.tributes || transaction.costPayments
+      .filter(cost => cost.kind === "tribute")
+      .map(cost => cost.card);
+    context.tributes = tributes.map(card => toChainCard(card));
+  }
   const timingResult = await game.chainSystem?.runFastEffectTiming?.({
     origin:
       flushResult?.chainBuilt === true

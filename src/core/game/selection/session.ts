@@ -361,6 +361,7 @@ export function startTargetSelectionSession(
     const pending = this.requestDecision({
       kind: decisionKind,
       actor,
+      ...(replaySelection.decisionContext ? { contextSnapshot: replaySelection.decisionContext } : {}),
       candidates: (replaySelection.requirements || []).flatMap(
         (requirement) => requirement.candidates || [],
       ),
@@ -583,6 +584,7 @@ export async function finishTargetSelection(
     {
       kind: getSelectionDecisionKind(selection),
       actor,
+      ...(selection.decisionContext ? { contextSnapshot: selection.decisionContext } : {}),
       candidates: (selection.requirements || []).flatMap(
         (requirement) => requirement.candidates || [],
       ),
@@ -670,6 +672,7 @@ export function cancelTargetSelection(this: SelectionSessionHost): void {
     this.recordDecision?.({
       kind: getSelectionDecisionKind(selection),
       actor: getSelectionActor(this, selection),
+      ...(selection.decisionContext ? { contextSnapshot: selection.decisionContext } : {}),
       candidates: selection.requirements.flatMap(requirement => requirement.candidates),
       requireCandidate: false,
     }, null);

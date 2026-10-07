@@ -169,14 +169,14 @@ export async function collectBattleDamageTriggers(
           activationZone: sourceZone,
         };
 
-        if (Array.isArray(effect.conditions) && effect.conditions.length > 0) {
+        if (payload.deferActivationChecks !== true && Array.isArray(effect.conditions) && effect.conditions.length > 0) {
           const conditionResult = this.evaluateConditions(effect.conditions, ctx);
           if (!conditionResult?.ok) {
             continue;
           }
         }
 
-        if (Array.isArray(effect.targets) && effect.targets.length > 0) {
+        if (payload.deferActivationChecks !== true && Array.isArray(effect.targets) && effect.targets.length > 0) {
           const previewCtx = {
             ...ctx,
             activationContext: {
@@ -214,6 +214,8 @@ export async function collectBattleDamageTriggers(
         );
 
         const entry = this.buildTriggerEntry({
+
+          deferActivationChecks: payload.deferActivationChecks === true,
           sourceCard: card,
           owner: player,
           effect,

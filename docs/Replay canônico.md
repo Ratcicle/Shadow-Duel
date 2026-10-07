@@ -971,3 +971,43 @@ passa de `7bfe1e4a` para **`6b0653a2`**, com os mesmos hashes de estado
 `adfa2802`/`9f6adbc6` e 12784 caracteres. Gravações v23 com a assinatura anterior
 são rejeitadas pela assinatura, sem migração. O envelope anterior permanece
 testado com `engine-rules-v23` e `7e5d54cb` explícitos, reproduzindo `7bfe1e4a`.
+
+### Chain System: filtros, referências e fatos de triggers (v24) — 06/10/2026
+
+O lote CS-01–CS-04/D-01 avança a versão de execução para **`engine-rules-v24`**.
+O schema permanece **2** e a assinatura do catálogo permanece **`feeb687b`**:
+nenhum texto ou dado de carta mudou. Gravações v23 são rejeitadas pela versão,
+antes de inicializar o playback, mesmo quando sua assinatura é a atual. Não há
+migração ou execução silenciosa de decisões antigas sob regras novas.
+
+O live agora aplica os filtros declarativos após Summon, consulta todos os
+targets de um elo, suspende proteção passiva de fonte negada e congela a
+elegibilidade dos triggers no instante do evento. A decisão aprovada D-01
+exclui apenas a finalização administrativa da fonte dos acontecimentos que
+invalidam optional `when`; movimentos semânticos posteriores continuam contando.
+
+Uma resposta com várias referências elegíveis mantém um candidato por efeito.
+Depois de escolher o efeito, o jogador escolhe a carta pertinente por uma
+decisão `choice`, antes dos custos. O contexto grava `type: chain_response_reference`,
+Chain/elo respondido, identidade do duelo da fonte e efeito. O broker valida
+contexto, ator e candidatos; os valores escolhidos usam identidades do duelo.
+A referência não declara outro alvo. Playback não chama UI nem recalcula IA.
+
+O estado canônico inclui ocorrências pendentes/ativas, candidatos congelados,
+presença da fonte/referências e `timingRelevance`, inclusive nos frames pais
+suspensos durante janelas filhas. Links ativos também projetam seus snapshots
+de referência e o vínculo ao elo respondido. Os snapshots são destacados do
+runtime e não carregam callbacks ou identidades locais ao processo. Esses fatos
+participam dos hashes e da validação profunda; não são expostos como informação
+privada nova no snapshot público usado para inspeção de IA/UI.
+
+No golden canônico existente, os hashes por comando passam a
+**`07b23806` / `2b228622`**, o estado final a **`2b228622`**, o envelope completo
+a **`f23d6b4f`** e o JSON a **12864 caracteres**. A diferença inclui os campos
+canônicos de triggers, mesmo vazios. Os envelopes históricos v12–v23 continuam
+verificados com seu shape, hashes, versão e assinatura originais.
+
+As regressões live/replay de Summon, multi-target, proteção negada, Court e
+Grave/Imp verificam instâncias independentes, consumo completo de decisões e
+igualdade de hashes/estado. Seus setups determinísticos são instalados em ambos
+os Games; esses testes não tornam os JSONs de fixtures artefatos standalone do CLI.

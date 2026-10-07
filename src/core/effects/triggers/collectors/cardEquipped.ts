@@ -120,6 +120,8 @@ export async function collectCardEquippedTriggers(
       );
 
       const entry = this.buildTriggerEntry({
+
+        deferActivationChecks: payload.deferActivationChecks === true,
         sourceCard: card,
         owner,
         effect,

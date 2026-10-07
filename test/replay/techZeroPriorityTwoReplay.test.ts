@@ -126,7 +126,7 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
 }
 
 test("Tech-Zero hand procedures use the current engine version with schema 2 retained", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v23");
+  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v24");
 });
 
 test("v23 rejects the previous rules and declaration signature independently before playback mutation", async t => {
@@ -264,7 +264,7 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
         if (scenario === "mage-full") assert.equal(owner.field.filter(card => card.id === 502).length, 1);
       }
       const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: `p2_${scenario}` }))));
-      assert.equal(replay.schemaVersion, 2); assert.equal(replay.engineVersion, "engine-rules-v23");
+      assert.equal(replay.schemaVersion, 2); assert.equal(replay.engineVersion, "engine-rules-v24");
       assert.ok(replay.commands.length > 0); assert.ok(replay.decisions.length > 0);
       playback.ui.showTargetSelection = () => assert.fail("Playback must consume recorded target/choice decisions");
       playback.ui.showConfirmPrompt = playback.ui.showTrapActivationModal = async () => assert.fail("Playback must consume recorded consent");

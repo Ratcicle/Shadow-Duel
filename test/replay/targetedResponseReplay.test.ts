@@ -38,6 +38,108 @@ function installSetup(game: RuntimeGame, seat: Seat, scenario: Scenario) {
   };
 }
 
+function installMultiTargetSetup(game: RuntimeGame, seat: Seat, multiple: boolean) {
+  const start = game.startWithDecks.bind(game);
+  game.startWithDecks = async options => {
+    await start(options);
+    game.turn = seat; game.phase = "main1"; game.turnCounter = 4;
+    game.disablePresentationDelays = true;
+    game.player.controllerType = game.bot.controllerType = "human";
+    const owner = game[seat], opponent = game[seat === "player" ? "bot" : "player"];
+    for (const player of [owner, opponent]) player.deck.push(...player.hand.splice(0));
+    const take = (player: typeof owner, id: number) => {
+      const card = required(player.deck.find(entry => entry.id === id));
+      player.deck.splice(player.deck.indexOf(card), 1);
+      card.isFacedown = false; card.position = "attack";
+      return card;
+    };
+    const spell = take(owner, 361);
+    // A declarative fixture exercises two eligible copies without changing any catalog card.
+    if (multiple) spell.effects = [{ id: "audit_multiple_targets", timing: "on_play", speed: 2,
+      targets: [{ id: "dragons", owner: "opponent", zone: "field", cardKind: "monster", count: { min: 2, max: 2 } }],
+      actions: [{ type: "switch_position", targetRef: "dragons" }] }];
+    owner.hand.push(spell);
+    placeFieldCards(owner.field, take(owner, 351));
+    placeFieldCards(opponent.field, take(opponent, 257), ...(multiple ? [take(opponent, 257)] : []));
+    const trap = take(opponent, 268);
+    trap.isFacedown = true; trap.setTurn = trap.turnSetOn = 1;
+    placeFieldCards(opponent.spellTrap, trap);
+  };
+}
+
+for (const seat of ["player", "bot"] as const) for (const selectedIndex of [-1, 0, 1]) {
+  test(`CS-02 declared target references remain selectable and replayable (${seat}, ${selectedIndex})`, async t => {
+    const multiple = selectedIndex >= 0;
+    const game = createRuntimeGame({ laboratoryMode: true, laboratoryUseBot: false,
+      captureReplay: true, randomSeed: 611, chainResponseTimeoutMs: 0 });
+    const playback = createRuntimeGame({ laboratoryMode: true, laboratoryUseBot: false,
+      captureReplay: false, replayMode: "playback", chainResponseTimeoutMs: 0 });
+    t.after(() => { game.dispose(); playback.dispose(); });
+    installMultiTargetSetup(game, seat, multiple); installMultiTargetSetup(playback, seat, multiple);
+    const sourceDeck = [361, 351, 1, 1, 1, 3, 3, 3, 4, 4];
+    const responseDeck = [257, 257, 268, 1, 1, 3, 3, 3, 4, 4];
+    await game.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true,
+      startAtDrawPhase: true, startingPlayer: seat, announceStartingPlayer: false,
+      playerDeck: seat === "player" ? sourceDeck : responseDeck,
+      botDeck: seat === "bot" ? sourceDeck : responseDeck });
+    const owner = game[seat], opponent = game[seat === "player" ? "bot" : "player"];
+    const dragons = opponent.field.filter(card => card != null);
+    const chosen = required(dragons[Math.max(0, selectedIndex)]);
+    const targeted: number[] = [], returned: number[] = [];
+    let offers = 0, choicePrompts = 0;
+    game.on("effect_targeted", event => { if (event.target) targeted.push(game.ensureDuelCardId(event.target)); });
+    game.on("card_moved", event => {
+      if (event.fromZone === "field" && event.toZone === "hand" && event.card?.id === 257)
+        returned.push(game.ensureDuelCardId(event.card));
+    });
+    game.ui.showConfirmPrompt = async () => true;
+    game.ui.showSpecialSummonPositionModal = (_card, choose) => choose("attack");
+    game.ui.showChainResponseModal = async candidates => {
+      const matches = candidates.filter(candidate => candidate.card?.id === 268);
+      if (!matches.length) return null;
+      assert.equal(matches.length, 1, "one effect candidate, not one duplicate per reference");
+      offers++;
+      return required(matches[0]);
+    };
+    const originalStartSelection = game.startTargetSelectionSession.bind(game);
+    game.startTargetSelectionSession = session => {
+      const result = originalStartSelection(session);
+      if (game.targetSelection?.kind === "choice" && game.targetSelection.requirements.some(req => req.id === "chain_response_reference")) {
+        choicePrompts++;
+        const current = required(game.targetSelection);
+        const requirement = required(current.requirements[0]);
+        assert.equal(requirement.candidates.length, 2);
+        assert.ok(required(opponent.spellTrap[0]).isFacedown, "reference choice precedes commitment");
+        current.selections[requirement.id] = [required(requirement.candidates.find(candidate => candidate.cardRef === chosen)).key];
+        void game.finishTargetSelection();
+      }
+      return result;
+    };
+    const targets = multiple ? { dragons: selectedIndex === 0 ? [...dragons].reverse() : dragons }
+      : { miragebound_vanishing_step_return_target: [required(owner.field[0])],
+        miragebound_vanishing_step_position_target: [required(dragons[0])] };
+    const action = game.tryActivateSpell(required(owner.hand[0]), 0, targets, { owner });
+    await completeTestSelections(game, action); await action;
+    assert.equal(offers, 1, "Sanctuary must be offered for every eligible declared target position");
+    assert.equal(choicePrompts, multiple ? 1 : 0);
+    assert.deepEqual(returned, [game.ensureDuelCardId(chosen)], "bind the chosen physical copy");
+    assert.equal(targeted.length, 2, "reference choice must not declare another target");
+    assert.ok(opponent.graveyard.some(card => card.id === 268));
+    playback.ui.showConfirmPrompt = async () => assert.fail("playback consent");
+    playback.ui.showChainResponseModal = async () => assert.fail("playback response");
+    playback.ui.showTargetSelection = () => assert.fail("playback reference/target choice");
+    playback.ui.showSpecialSummonPositionModal = () => assert.fail("playback position");
+    playback.autoSelector.select = () => assert.fail("playback AI");
+    const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(game.finalizeReplay({ reason: "chain-multiple-target-response" }))));
+    const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback,
+      "Both Games install the same explicit multi-target fixture before command playback.") });
+    assert.equal(result.ok, true);
+    assert.equal(result.finalStateHash, replay.result?.finalStateHash);
+    assert.equal(playback.decisionBroker.replayCursor, replay.decisions.length);
+    assert.deepEqual(createCanonicalStateSnapshot(playback), createCanonicalStateSnapshot(game));
+  });
+}
+
 for (const seat of ["player", "bot"] as const) for (const scenario of ["first-link", "second-link", "second-link-decline"] as const) {
   test(`targeted response uses the declared ${scenario} target (${seat}), with canonical replay`, async t => {
     const game = createRuntimeGame({ laboratoryMode: true, laboratoryUseBot: false, captureReplay: true,
@@ -124,7 +226,7 @@ for (const seat of ["player", "bot"] as const) for (const scenario of ["first-li
     playback.ui.showSpecialSummonPositionModal = () => assert.fail("playback must not ask position");
     playback.autoSelector.select = () => assert.fail("playback must not rerun AI");
     const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(game.finalizeReplay({ reason: "targeted-response-context" }))));
-    assert.equal(replay.engineVersion, "engine-rules-v23");
+    assert.equal(replay.engineVersion, "engine-rules-v24");
     assert.equal(replay.schemaVersion, 2);
     assert.equal(replay.cardDatabaseSignature, getCardDatabaseSignature());
     const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback,

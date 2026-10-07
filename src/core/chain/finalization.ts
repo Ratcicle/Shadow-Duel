@@ -135,6 +135,7 @@ async function moveToGraveyard(
     "graveyard",
     {
       fromZone: entry.activationZone,
+      timingRelevance: "source_cleanup",
       sourceCard: entry.card,
       effectId: entry.link?.effectId || entry.link?.effect?.id || null,
       chainId: entry.chainId,

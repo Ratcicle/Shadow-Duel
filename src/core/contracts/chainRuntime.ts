@@ -110,8 +110,13 @@ export interface ChainEffect {
   readonly requirePhase?: readonly ChainPhase[] | ChainPhase;
   readonly requireZone?: CanonicalZone;
   readonly movementTriggerOwnership?: "destination" | "field_exit_controller";
-  readonly summonMethod?: SummonMethod;
+  readonly summonMethod?: SummonMethod | readonly SummonMethod[];
   readonly summonMethods?: readonly SummonMethod[];
+  readonly summonFrom?: CanonicalZone;
+  readonly requireSummonedFrom?: CanonicalZone;
+  readonly requireSelfAsSummoned?: boolean;
+  readonly triggerPlayer?: "current" | "opponent" | "self";
+  readonly condition?: EffectCondition;
   readonly requiresSourceAtResolution?: boolean;
   readonly activationLabel?: string;
   readonly activationLabelKey?: string;
@@ -245,6 +250,13 @@ export interface ChainTargetSnapshot {
 export interface ChainDeclaredTargetSnapshot {
   targetId: string | null;
   cards: ChainTargetSnapshot[];
+}
+
+/** A response binds one declared target of a particular link, without targeting again. */
+export interface ChainResponseReference {
+  chainId: ChainId;
+  linkId: ChainLinkId;
+  target: ChainTargetSnapshot;
 }
 
 export type ChainTriggerReferenceSnapshots = TriggerOccurrenceReferenceSnapshots<
@@ -442,6 +454,7 @@ export interface ChainContextPayload {
   target?: (ChainCard | null) | undefined;
   targetOwner?: (ChainPlayer | null) | undefined;
   targets?: ChainCard[];
+  responseReference?: ChainResponseReference | null;
   destroyed?: ChainCard | null;
   destroyedOwner?: ChainPlayer | null;
   destroyedOwnerId?: PlayerId | string | null;
@@ -451,6 +464,7 @@ export interface ChainContextPayload {
   summonedCard?: ChainCard | null;
   method?: SummonMethod | null;
   summonMethod?: SummonMethod | null;
+  tributes?: readonly ChainCard[];
   fromZone?: ChainSourceZone | null;
   fromPhase?: ChainPhase | string | null;
   toPhase?: ChainPhase | string | null;
@@ -834,6 +848,12 @@ export interface SerializedChainCard {
 }
 
 export interface SerializedChainLink {
+  referenceSnapshots?: {
+    targetId: string | null;
+    cards: { cardDuelCardId: number | null; controllerId: string | null;
+      zone: ChainSourceZone | null; faceUp: boolean; locationVersion: number }[];
+  }[];
+  responseReference?: { chainId: ChainId; linkId: ChainLinkId; duelCardId: number | null };
   activationCaseId?: string;
   chainId: ChainId | null;
   linkId: ChainLinkId | null;
@@ -902,6 +922,7 @@ export interface ChainActivationCandidate {
   sourceLocationVersion: number;
   spellSpeed: SpellSpeed;
   context: FastEffectContextInput;
+  responseReferences?: ChainResponseReference[];
   effectLabel: string;
   activationLabelKey: string | null;
   category?: "monster_effect" | "spell_trap_effect";
@@ -1017,6 +1038,7 @@ export interface TriggerOrderSelectionContract {
 }
 
 export interface ChainSelectionSessionInput {
+  decisionContext?: import("./decisions.js").SelectionDecisionContext;
   kind?: SelectionKind | "trigger_order";
   selectionContract: ChainSelectionContract;
   /** Decision actor, independent of the turn player and selected cards' owners. */
@@ -1145,6 +1167,7 @@ export interface ChainTriggerCollectionResult {
 }
 
 export interface ChainTriggerOccurrenceOptions {
+  snapshot?: object;
   referenceSnapshots?: ChainTriggerReferenceSnapshots[];
   entries?: ChainTriggerEntry[];
   entriesProvided?: boolean;
@@ -1155,10 +1178,12 @@ export interface ChainTriggerOccurrenceOptions {
 }
 
 export interface ChainEventPayload extends ChainContextPayload {
+  timingRelevance?: "semantic" | "source_cleanup";
   atomicGroupId?: number | null;
 }
 
 export interface ChainTriggerOccurrence {
+  timingRelevance?: "semantic" | "source_cleanup";
   referenceSnapshots?: ChainTriggerReferenceSnapshots[];
   occurrenceId: number;
   atomicGroupId: number;
@@ -1178,6 +1203,7 @@ export interface ChainTriggerOccurrence {
 
 /** Reduced occurrence emitted by NullChainSystem while Chains are disabled. */
 export interface DisabledChainTriggerOccurrence {
+  timingRelevance?: "semantic" | "source_cleanup";
   referenceSnapshots?: ChainTriggerReferenceSnapshots[];
   occurrenceId: number;
   atomicGroupId: number;
@@ -1242,6 +1268,7 @@ export interface PendingTriggerSelection {
 }
 
 export interface SerializedTriggerCandidate {
+  duelCardId?: number | null;
   candidateId: number | null;
   occurrenceId: number | null;
   atomicGroupId: number | null;
@@ -1258,7 +1285,50 @@ export interface SerializedTriggerCandidate {
   rejectionReason: string | null;
 }
 
+/** Canonical factual presence; process-local instance identifiers are omitted. */
+export interface SerializedTriggerPresence {
+  counters?: Readonly<Record<string, number>>;
+  cardId: number | null;
+  duelCardId: number | null;
+  controllerId: string | null;
+  zone: ChainSourceZone | null;
+  faceUp: boolean;
+  locationVersion: number;
+}
+
+export interface SerializedTriggerOccurrenceState {
+  occurrenceId: number;
+  atomicGroupId: number;
+  eventName: string;
+  sequence: number;
+  turnCounter: number;
+  phase: string | null;
+  chainId: ChainId | null;
+  resolvingLinkId: ChainLinkId | null;
+  timingRelevance: "semantic" | "source_cleanup";
+  entriesProvided: boolean;
+  entries: {
+    entryId: string;
+    cardId: number | null;
+    duelCardId: number | null;
+    effectId: string | null;
+    controllerId: string | null;
+    registrationId: string | number | null;
+    sourceAtTrigger: SerializedTriggerPresence | null;
+  }[];
+  referenceSnapshots: {
+    sourceDuelCardId: number | null;
+    effectId: string | null;
+    sourcePresence: SerializedTriggerPresence | null;
+    references: { targetId: string | null; cards: SerializedTriggerPresence[] }[];
+  }[];
+  snapshot: unknown;
+}
+
 export interface ChainTriggerState {
+  pendingOccurrences: SerializedTriggerOccurrenceState[];
+  activeOccurrences: SerializedTriggerOccurrenceState[];
+  lastRelevantAtomicGroupId: number | null;
   opportunityId: number | null;
   pendingOccurrenceCount: number;
   selecting: boolean;
@@ -1361,7 +1431,7 @@ export type ChainDecisionContextSnapshot =
 export interface ChainAutoSelectionOptions {
   owner: ChainPlayer;
   selectionContract: ChainSelectionContract;
-  selectionKind: "cost" | "target";
+  selectionKind: "cost" | "target" | "choice";
   activationContext?: Pick<PreparedActivationContext, "decisions">;
   effect?: ChainEffect | null;
 }
@@ -1467,6 +1537,7 @@ export interface ChainPendingEventSelection {
 }
 
 export interface ChainMoveCardOptions {
+  timingRelevance?: "semantic" | "source_cleanup";
   isFacedown?: boolean;
   allowPlacementCancel?: boolean;
   fromZone?: ChainActivationZone;
@@ -1537,7 +1608,7 @@ export interface ChainGamePort {
     outcome: { activationNegated: boolean; effectNegated: boolean },
   ): ChainUsageReservation | null;
   releaseEffectUsageReservations?(reason: string): void;
-  requestDecision?(request: ChainDecisionRequest | import("./decisions.js").DecisionRequest<"cost" | "target">): ChainMaybePromise<unknown>;
+  requestDecision?(request: ChainDecisionRequest | import("./decisions.js").DecisionRequest<"cost" | "target" | "choice">): ChainMaybePromise<unknown>;
   startTargetSelectionSession?(session: ChainSelectionSessionInput): unknown;
   resumePendingEventSelection?(
     selections: ChainSelectionMap | SelectionResult,

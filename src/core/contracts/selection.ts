@@ -376,6 +376,7 @@ export type SelectionSessionResolver = {
 }["bivarianceHack"];
 
 export interface SelectionSessionInput {
+  decisionContext?: import("./decisions.js").SelectionDecisionContext;
   kind?: SelectionKind | undefined;
   selectionContract: RawSelectionContract;
   owner?: SelectionPlayerReference | null;

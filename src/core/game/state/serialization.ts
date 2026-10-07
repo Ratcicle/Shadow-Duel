@@ -28,6 +28,36 @@ import type {
   PublicTemporaryControlState,
 } from "../../contracts/aiState.js";
 import type { PlayerId } from "../../contracts/primitives.js";
+import type { ChainRuntimeTriggerState } from "../../contracts/chainRuntime.js";
+
+type PublicTriggerState = Pick<ChainRuntimeTriggerState,
+  "opportunityId" | "pendingOccurrenceCount" | "selecting" | "occurrenceIds" | "groups">;
+
+/** Occurrence facts include ineligible hidden sources and belong to canonical capture. */
+function projectPublicTriggers(state: ChainRuntimeTriggerState | null | undefined): PublicTriggerState | null {
+  if (!state) return null;
+  return {
+    opportunityId: state.opportunityId,
+    pendingOccurrenceCount: state.pendingOccurrenceCount,
+    selecting: state.selecting,
+    occurrenceIds: state.occurrenceIds,
+    groups: state.groups,
+  };
+}
+
+function projectPublicAfterResolution(state: object | null): object | null {
+  if (!state) return null;
+  const suspended: unknown = Reflect.get(state, "suspended");
+  if (!Array.isArray(suspended)) return state;
+  return { ...state, suspended: suspended.map((frame: unknown) => {
+    if (!frame || typeof frame !== "object") return frame;
+    const triggers: unknown = Reflect.get(frame, "triggers");
+    if (!triggers || typeof triggers !== "object") return { ...frame };
+    const publicFields = ["opportunityId", "pendingOccurrenceCount", "selecting", "occurrenceIds", "groups"] as const;
+    return { ...frame, triggers: Object.fromEntries(publicFields.flatMap(key =>
+      Object.hasOwn(triggers, key) ? [[key, Reflect.get(triggers, key)]] : [])) };
+  }) };
+}
 
 interface SerializedTemporaryEventSource {
   id: string | number;
@@ -238,8 +268,9 @@ export function getPublicState(
     graveyard: serializeGraveyard(owner),
   });
 
-  const afterResolution = (hasChainPostEffectSummonCapability(this.chainSystem) ? this.chainSystem.getAfterResolutionState() : null)
-    || getDirectAfterResolutionSnapshot(this);
+  const afterResolution = projectPublicAfterResolution(
+    (hasChainPostEffectSummonCapability(this.chainSystem) ? this.chainSystem.getAfterResolutionState() : null)
+      || getDirectAfterResolutionSnapshot(this));
   return {
     schemaVersion: 2,
     turn: this.turn,
@@ -258,7 +289,7 @@ export function getPublicState(
       resolving: this.chainSystem?.isChainResolving?.() === true,
       links: this.chainSystem?.getChainSummary?.() || [],
       timing: this.chainSystem?.getFastEffectState?.() || null,
-      triggers: this.chainSystem?.getTriggerState?.() || null,
+      triggers: projectPublicTriggers(this.chainSystem?.getTriggerState?.()),
       finalization:
         this.chainSystem?.getChainFinalizationState?.() || null,
       ...(afterResolution ? { afterResolution } : {}),

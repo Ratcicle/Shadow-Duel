@@ -266,6 +266,10 @@ export async function runFastEffectTiming(
     openState: origin === FAST_EFFECT_ORIGINS.PHASE_START,
     legalWindow: origin !== FAST_EFFECT_ORIGINS.PHASE_START,
   };
+  if (context.type === "after_summon") {
+    context.type = "summon";
+    context.event = "after_summon";
+  }
 
   if (origin === FAST_EFFECT_ORIGINS.PHASE_START) {
     this.activeTimingWindowId = null;

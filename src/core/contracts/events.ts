@@ -165,6 +165,10 @@ export interface AttackRedirect {
 
 /** Shared mutable capabilities present across the established event payloads. */
 export interface EventPayloadBase {
+  /** Freeze occurrence eligibility; activation availability waits for SEGOC. */
+  deferActivationChecks?: boolean;
+  /** Only primary source finalization is administrative for optional when. */
+  timingRelevance?: "semantic" | "source_cleanup";
   /** Runtime-only occurrence references, carried to the post-event response window. */
   eventReferenceSnapshots?: EventTriggerReferenceSnapshots[];
   type?: string | null;
@@ -879,6 +883,7 @@ export interface TriggerOccurrenceQueuedEventPayload {
   phase?: string | null;
   chainId?: EventEntityId | null;
   resolvingLinkId?: EventEntityId | null;
+  timingRelevance?: "semantic" | "source_cleanup";
   snapshot?: object | null;
 }
 
@@ -1225,6 +1230,7 @@ export interface EventChainPort
     eventName: ResolvableEventName,
     payload: EventPayloadBase,
     options?: {
+      snapshot?: object;
       referenceSnapshots?: EventTriggerReferenceSnapshots[];
       entries?: EventTriggerEntry[];
       entriesProvided?: boolean;

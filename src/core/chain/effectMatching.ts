@@ -1,3 +1,4 @@
+import { matchesAfterSummonTrigger } from "../effects/triggers/collectors/shared.js";
 import { CHAIN_CONTEXTS } from "./contexts.js";
 import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
 import type {
@@ -107,10 +108,13 @@ export function getCurrentChainActivationContext(
   const controller = lastLink?.controller || null;
   if (!lastLink?.card || !controller || !lastLink?.effect) return null;
   const responseContextType = lastLink.responseContextType;
-  // Declared targets exclude costs and contextual references. Keep the existing
-  // first-target contract and ordered list used when the initial link opens.
+  // Keep every declared target. A response's selected reference belongs to this
+  // particular link; a later link must never inherit that binding.
   const targets = [...new Set(lastLink.declaredTargets.flatMap(entry => entry.cards))];
-  const target = targets[0] || null;
+  const binding = context?.responseReference;
+  const responseReference = binding?.chainId === lastLink.chainId && binding.linkId === lastLink.linkId
+    ? binding : null;
+  const target = responseReference?.target.card || targets[0] || null;
   const targetControllerId = target
     ? lastLink.declaredTargetSnapshots.flatMap(entry => entry.cards)
         .find(snapshot => snapshot.card === target)?.controllerId ?? target.controller ?? target.owner
@@ -132,6 +136,7 @@ export function getCurrentChainActivationContext(
     target,
     targetOwner,
     targets,
+    responseReference,
     effect: lastLink.effect,
     activationZone: lastLink.activationZone || null,
     activationAttempt: {
@@ -425,36 +430,20 @@ export function findActivatableEffect(
               continue;
             }
           }
-          if (effect.event === "after_summon" && activeContext?.type === "summon") {
-            const summoner = activeContext.player || activeContext.triggerPlayer;
-            const controllerId = ownerPlayer?.id || card.owner;
-            if (effect.triggerPlayer === "self" && summoner?.id !== controllerId) continue;
-            if (effect.triggerPlayer === "opponent" && summoner?.id === controllerId) continue;
-          }
-          if (effect.requireOpponentSummon && activeContext?.type === "summon") {
-            // Only valid if opponent summoned (check from card owner's perspective)
-            const cardOwnerId = ownerPlayer?.id || card.owner;
-            if (
-              !isOpponentAction(
-                activeContext.player?.id,
-                cardOwnerId,
-                Reflect.get(activeContext, "isOpponentSummon") === true,
-              )
-            ) {
-              continue;
-            }
-          }
-          if (activeContext?.type === "summon") {
-            const summonMethods = effect.summonMethods ?? effect.summonMethod;
-            if (summonMethods) {
-              const methods = Array.isArray(summonMethods)
-                ? summonMethods
-                : [summonMethods];
-              const contextMethod = activeContext.method || activeContext.summonMethod;
-              if (!methods.includes(contextMethod)) {
-                continue;
-              }
-            }
+          if (effect.event === "after_summon" &&
+              (activeContext?.type === "summon" || activeContext?.type === "after_summon")) {
+            const summonOwner = resolveEffectOwner(this, card, ownerPlayer);
+            if (!summonOwner || !matchesAfterSummonTrigger(effect, {
+              sourceCard: card, owner: summonOwner,
+              summonedCard: activeContext.summonedCard || activeContext.card,
+              summoner: activeContext.player || activeContext.triggerPlayer,
+              method: activeContext.method || activeContext.summonMethod,
+              fromZone: activeContext.fromZone,
+              sourceZone: activationZoneOverride || this.determineCardZone?.(card, summonOwner),
+              phase: this.game?.phase,
+            }, conditions => this.game?.effectEngine?.evaluateConditions?.(conditions,
+              buildChainPreviewContext(this, card, effect, activeContext, summonOwner,
+                activationZoneOverride || "spellTrap"))?.ok !== false)) continue;
           }
           const previewCtx = buildChainPreviewContext(
             this,

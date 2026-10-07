@@ -221,6 +221,8 @@ class NullChainSystem implements ChainRuntimePort {
         options.atomicGroupId ?? payload.atomicGroupId ?? null,
       ),
       eventName,
+      timingRelevance: payload.timingRelevance || "semantic",
+      ...(options.referenceSnapshots !== undefined ? { referenceSnapshots: options.referenceSnapshots } : {}),
       payload,
       entries: Array.isArray(options.entries) ? options.entries : null,
       entriesProvided: options.entriesProvided === true,

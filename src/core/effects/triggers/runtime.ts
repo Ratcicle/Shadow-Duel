@@ -438,6 +438,7 @@ export interface BuildTriggerEntryOptions {
 }
 
 export interface TemporaryEventEffect {
+  sourceDuelCardId?: number | null;
   id?: string;
   event?: string;
   ownerId?: string;

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type {
   ChainPlayer,
+  ChainEffect,
   FastEffectContextInput,
 } from "../../src/core/contracts/chainRuntime.js";
 import { required, unsafeFixture } from "../helpers/fixtures.js";
@@ -499,3 +500,47 @@ test("locationVersion invalida um candidato descoberto antes do commit", () => {
     },
   );
 });
+
+for (const contextType of ["summon", "after_summon"] as const) {
+  const cases: readonly { name: string; effect: Partial<ChainEffect>; expected: boolean;
+    own?: boolean; method?: "normal" | "flip"; origin?: "hand" | "graveyard" | null }[] = [
+    { name: "normal method accepted", effect: { summonMethods: ["normal"] }, expected: true },
+    { name: "Flip method rejected", effect: { summonMethods: ["normal"] }, method: "flip", expected: false },
+    { name: "legacy method alias accepted", effect: { summonMethod: "normal" }, expected: true },
+    { name: "legacy method array rejected", effect: { summonMethod: ["special", "flip"] }, expected: false },
+    { name: "origin accepted", effect: { summonFrom: "hand" }, expected: true },
+    { name: "origin rejected", effect: { summonFrom: "graveyard" }, expected: false },
+    { name: "legacy origin rejected", effect: { requireSummonedFrom: "graveyard" }, expected: false },
+    { name: "missing origin retains compatibility", effect: { summonFrom: "graveyard" }, origin: null, expected: true },
+    { name: "self summoned rejected", effect: { requireSelfAsSummoned: true }, expected: false },
+    { name: "opponent accepted", effect: { requireOpponentSummon: true }, expected: true },
+    { name: "own summon rejected", effect: { requireOpponentSummon: true }, own: true, expected: false },
+    { name: "self trigger rejected", effect: { triggerPlayer: "self" }, expected: false },
+    { name: "opponent trigger rejected", effect: { triggerPlayer: "opponent" }, own: true, expected: false },
+    { name: "current keeps existing semantics", effect: { triggerPlayer: "current" }, expected: true },
+    { name: "phase rejected", effect: { requirePhase: ["battle"] }, expected: false },
+    { name: "self_in_hand rejects field source", effect: { condition: { requires: "self_in_hand" } }, expected: false },
+  ];
+  for (const scenario of cases) {
+    test(`CS01 discovery/revalidation ${contextType}: ${scenario.name}`, () => {
+      const { chain, player, bot } = createChainHarness({ turnCounter: 4 });
+      const effect = createTestEffect({ timing: "on_event", event: "after_summon", actions: [], ...scenario.effect });
+      const trap = createTestCard({ cardKind: "trap", subtype: "normal", isFacedown: true, setTurn: 1, effects: [effect] });
+      placeCard(player, "spellTrap", trap);
+      const summoned = createTestCard({ archetype: "Dragon" });
+      const context: FastEffectContextInput = { type: contextType, event: "after_summon",
+        player: scenario.own ? player : bot, card: summoned, method: scenario.method || "normal",
+        fromZone: scenario.origin === undefined ? "hand" : scenario.origin, openState: true, legalWindow: true };
+      const candidates = chain.getActivatableCardsInChain(player, context);
+      assert.equal(candidates.some(candidate => candidate.card === trap), scenario.expected);
+      if (scenario.expected) {
+        const candidate = required(candidates.find(entry => entry.card === trap));
+        assert.equal(chain.revalidateActivationCandidate(candidate, player, context).ok, true);
+        candidate.context = { ...context, method: "flip", summonMethod: "flip" };
+        if (effect.summonMethods || effect.summonMethod) {
+          assert.equal(chain.revalidateActivationCandidate(candidate, player, candidate.context).ok, false);
+        }
+      }
+    });
+  }
+}

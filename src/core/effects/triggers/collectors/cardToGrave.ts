@@ -298,7 +298,7 @@ export async function collectCardToGraveTriggers(
     // Isso evita ativações inválidas como Shadow-Heart Coward sem monstro
     // do oponente em campo.
     if (
-      !deferTargetPrecheck &&
+      !deferActivationChecks && !deferTargetPrecheck &&
       Array.isArray(effect.targets) &&
       effect.targets.length > 0
     ) {

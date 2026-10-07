@@ -8,7 +8,7 @@ import { createRuntimeGame } from "../helpers/game.js";
 
 for (const incompatible of ["version", "declaration"] as const) {
   test(`T01 schema 2 rejects the prior ${incompatible} before changing the game`, async t => {
-    assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v23");
+    assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v24");
     const live = createRuntimeGame({ captureReplay: true, laboratoryMode: true });
     const playback = createRuntimeGame({ replayMode: "playback", laboratoryMode: true });
     t.after(() => { live.dispose(); playback.dispose(); });

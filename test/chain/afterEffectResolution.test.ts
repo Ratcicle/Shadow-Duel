@@ -335,12 +335,18 @@ test("direct NullChain activation completes the post-effect phase before finaliz
   game.ui.showSpecialSummonPositionModal = (_card, choose) => choose("attack");
   game.ui.showTrapActivationModal = async () => true;
   let sourcePresentAtSynchro = false;
+  const moves: Array<{ card: unknown; event: string; relevance: string }> = [];
+  for (const event of ["card_to_grave", "card_moved"] as const) game.on(event, payload => {
+    moves.push({ card: payload.card, event, relevance: payload.timingRelevance || "semantic" });
+  });
   game.on("after_summon", payload => { if (payload.card === boss) sourcePresentAtSynchro = game.player.spellTrap.includes(trap); });
   const action = game.tryActivateSpellTrapEffect(trap, null, { owner: game.player });
   await completeTestSelections(game, action);
   assert.equal((await action).success, true, (await action).reason || undefined);
   assert.equal(sourcePresentAtSynchro, true);
   assert.ok(game.player.field.includes(boss)); assert.ok(game.player.graveyard.includes(trap));
+  assert.deepEqual(moves.filter(move => move.card === trap && move.event === "card_to_grave").map(move => move.relevance), ["source_cleanup"]);
+  assert.ok(moves.filter(move => move.card === tuner || move.card === material).every(move => move.relevance === "semantic"), "materials and actual effects retain semantic relevance");
 });
 
 test("direct NullChain post-effect pause resumes its cursor without repeating primary actions", async t => {
@@ -441,4 +447,61 @@ test("direct post-effect teardown clears its frame without reactivation or sourc
   assert.equal(primaryCalls, 1); assert.equal(game.player.hand.length, 1);
   assert.equal(game.afterResolutionActivation, null); assert.equal(createCanonicalStateSnapshot(game).chain.afterResolution, undefined);
   assert.ok(game.player.spellTrap.includes(source)); assert.ok(!game.player.graveyard.includes(source));
+});
+
+
+test("suspended parent retains frozen trigger eligibility and timing in canonical child-window hashes", async t => {
+  const { game, make, add } = scenario(t);
+  const tuner = make(501), material = make(503), boss = make(510);
+  const court = new Card(cardDefinition(17), game.player.id);
+  game.player.graveyard.push(tuner);
+  placeFieldCards(game.player.field, material);
+  placeFieldCards(game.player.spellTrap, court);
+  game.player.extraDeck.push(boss);
+  const captured = await game.resolveEvent("card_to_grave", {
+    card: tuner, player: game.player, fromZone: "field", toZone: "graveyard", deferActivationChecks: true,
+  }, { collectTriggersOnly: true });
+  const parent = required(captured.occurrence);
+  const occurrence = required(game.chainSystem.createTriggerOccurrence("card_to_grave", {}, {
+    entries: captured.entries || [], entriesProvided: true,
+  }));
+  assert.equal(parent.entries?.length, 1);
+  assert.ok("sequence" in occurrence);
+  game.chainSystem.buildTriggerOpportunity([occurrence]);
+  add(synchroEffect());
+  let inspected = false;
+  const original = game.chainSystem.runFastEffectTiming.bind(game.chainSystem);
+  game.chainSystem.runFastEffectTiming = async input => {
+    if (input?.origin === FAST_EFFECT_ORIGINS.SUMMON_ATTEMPT) {
+      inspected = true;
+      assert.equal(game.chainSystem.activeTriggerOpportunity, null, "child uses its own trigger opportunity");
+      const state = createCanonicalStateSnapshot(game);
+      const suspended = record(state.chain.afterResolution).suspended;
+      assert.ok(Array.isArray(suspended));
+      const triggers = record(record(required(suspended[0])).triggers);
+      const active = triggers.activeOccurrences;
+      assert.ok(Array.isArray(active));
+      const projection = record(required(active[0]));
+      assert.equal(projection.entriesProvided, true);
+      assert.equal(projection.timingRelevance, "semantic");
+      assert.ok(Array.isArray(projection.entries));
+      assert.equal(projection.entries.length, 1);
+      assert.doesNotThrow(() => validateCanonicalReplay(replayWithState(state)));
+      const hash = hashCanonicalGameState(game);
+      const entries = occurrence.entries;
+      occurrence.entries = [];
+      assert.notEqual(hashCanonicalGameState(game), hash, "captured eligibility changes the child-window hash");
+      occurrence.entries = entries;
+      occurrence.timingRelevance = "source_cleanup";
+      assert.notEqual(hashCanonicalGameState(game), hash, "timing relevance changes the child-window hash");
+      occurrence.timingRelevance = "semantic";
+      projection.entries.splice(0);
+      assert.equal(occurrence.entries?.length, 1, "the returned suspended state is detached");
+    }
+    return await original(input);
+  };
+  const action = Promise.resolve(game.chainSystem.resolveChain());
+  await completeTestSelections(game, action);
+  assert.equal(inspected, true);
+  assert.ok(game.player.field.includes(boss));
 });

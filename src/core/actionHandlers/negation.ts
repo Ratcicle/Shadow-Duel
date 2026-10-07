@@ -1,4 +1,5 @@
 import { getUI } from "./shared.js";
+import { isPassiveSourceActive } from "../effects/passives/passiveBuffs.js";
 import { hasChainLinkMutationCapability } from "../contracts/chainRuntime.js";
 import type { ActionOf } from "../contracts/actions.js";
 import type {
@@ -150,21 +151,6 @@ function getActivationProtectionSources(
   return sources;
 }
 
-function isPassiveSourceActive(
-  card: ActionRuntimeCard,
-  effect: EffectDefinition,
-  passive: ActivationProtectionPassive,
-  sourceZone: ProtectionSource["zone"],
-) {
-  if (!card || !effect || effect.timing !== "passive") return false;
-  if (effect.requireZone && effect.requireZone !== sourceZone) return false;
-  if (passive.requireZone && passive.requireZone !== sourceZone) return false;
-  const requireFaceup =
-    effect.requireFaceup === true || passive.requireFaceup === true;
-  if (requireFaceup && card.isFacedown) return false;
-  return true;
-}
-
 function cardMentionsAny(
   card: ActionRuntimeCard,
   values: string | readonly string[],
@@ -224,15 +210,15 @@ export function isActivationNegationProtected(
 
   for (const source of getActivationProtectionSources(game)) {
     const sourceCard = source.card;
-    if (!sourceCard || !Array.isArray(sourceCard.effects)) continue;
+    if (!isPassiveSourceActive(sourceCard) || !Array.isArray(sourceCard.effects)) continue;
 
     for (const effect of sourceCard.effects) {
       if (!("passive" in effect)) continue;
       const passive = effect.passive as ActivationProtectionPassive;
       if (passive.type !== "activation_negation_protection") continue;
-      if (!isPassiveSourceActive(sourceCard, effect, passive, source.zone)) {
-        continue;
-      }
+      if (effect.timing !== "passive") continue;
+      if (effect.requireZone && effect.requireZone !== source.zone) continue;
+      if (passive.requireZone && passive.requireZone !== source.zone) continue;
       if (!passiveMatchesActivationCard(game, passive, targetCard)) {
         continue;
       }

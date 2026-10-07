@@ -10,6 +10,7 @@ import type {
   ChainPendingEventSelection,
   ChainRuntimePort,
   FastEffectState,
+  FastEffectContextInput,
 } from "./chainRuntime.js";
 import type { MaybePromise } from "./decisions.js";
 import type { DecisionBrokerPort } from "./decisions.js";
@@ -143,6 +144,7 @@ export interface SynchroMaterialFollowup {
 }
 
 export interface MoveCardOptions {
+  timingRelevance?: "semantic" | "source_cleanup";
   /** Runtime continuation check after internal choices, before the first zone mutation. */
   validateBeforeMove?: () => boolean;
   fieldPlacement?: import("./placement.js").FieldPlacementIntent | null;
@@ -404,7 +406,7 @@ export interface PreparedSummonInput {
   ) => MaybePromise<unknown>;
   /** Runs before the transaction unlocks and before post-summon trigger timing. */
   onSuccess?: (transaction: SummonTransaction) => void;
-  finalContext?: unknown;
+  finalContext?: FastEffectContextInput | null;
   skipFinalTiming?: boolean;
   negationWindowPolicy?: "auto" | "suppressed";
 }
@@ -434,7 +436,7 @@ export interface PreparedSummon {
   perform: PreparedSummonInput["perform"] | null;
   onFailure: PreparedSummonInput["onFailure"] | null;
   onSuccess: PreparedSummonInput["onSuccess"] | null;
-  finalContext: unknown;
+  finalContext: FastEffectContextInput | null;
   skipFinalTiming: boolean;
   negationWindowPolicy: "auto" | "suppressed";
 }

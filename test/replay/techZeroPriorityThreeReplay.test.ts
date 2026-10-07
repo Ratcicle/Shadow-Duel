@@ -107,7 +107,7 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
       assert.equal(live.damageCalculationTempBuffs.length, 0); assert.equal(live.endOfDamageStepTempBuffs.length, 0);
       const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "p3_ghost_battle" }))));
       assert.deepEqual(replay.commands.map(command => command.type), ["attack"]);
-      assert.equal(replay.schemaVersion, 2); assert.equal(replay.engineVersion, "engine-rules-v23");
+      assert.equal(replay.schemaVersion, 2); assert.equal(replay.engineVersion, "engine-rules-v24");
       assert.equal(replay.decisions.some(decision => decision.kind === "target" || decision.kind === "target_selection"), false);
       assert.deepEqual(captured.decisions, replay.decisions.map(({ sequence: _sequence, ...decision }) => decision));
       playback.ui.showTargetSelection = () => assert.fail("Playback uses recorded decisions");

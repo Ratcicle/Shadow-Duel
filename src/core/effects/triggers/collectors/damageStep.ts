@@ -183,11 +183,12 @@ async function collectDamageStepEvent<Name extends DamageCollectorEventName>(
         };
         if (
           Array.isArray(effect.conditions) &&
+          payload.deferActivationChecks !== true &&
           engine.evaluateConditions(effect.conditions, ctx)?.ok === false
         ) {
           continue;
         }
-        if (Array.isArray(effect.targets) && effect.targets.length > 0) {
+        if (payload.deferActivationChecks !== true && Array.isArray(effect.targets) && effect.targets.length > 0) {
           const preview = engine.resolveTargets(effect.targets, {
             ...ctx,
             activationContext: {
@@ -210,6 +211,7 @@ async function collectDamageStepEvent<Name extends DamageCollectorEventName>(
           }
         }
         const entry = engine.buildTriggerEntry({
+          deferActivationChecks: payload.deferActivationChecks === true,
           sourceCard: card,
           owner,
           effect,

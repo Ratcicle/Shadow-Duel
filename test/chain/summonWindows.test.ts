@@ -9,9 +9,9 @@ import type { CardConstructorData } from "../../src/core/contracts/cards.js";
 import type { FastEffectOrigin } from "../../src/core/contracts/chain.js";
 import type { RuntimeEventMap } from "../../src/core/contracts/events.js";
 import type { GamePlayer } from "../../src/core/contracts/player.js";
-import { required, unsafeFixture } from "../helpers/fixtures.js";
+import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js";
 import type { RuntimeGame } from "../helpers/game.js";
-import { createRuntimeGame } from "../helpers/game.js";
+import { completeTestSelections, placeFieldCards, createRuntimeGame } from "../helpers/game.js";
 
 import Card from "../../src/core/Card.js";
 import { handleNegateSummonOrActivationAndDestroy } from "../../src/core/actionHandlers/negation.js";
@@ -603,4 +603,91 @@ test("IDs de Invocação são monotônicos e isolados por Game", async (t) => {
     required(first.getPublicState("player").summon.last).summonId,
     2,
   );
+});
+
+// Permanent CS01 probes use the real procedure, response broker and actions.
+for (const summonerSeat of ["player", "bot"] as const) {
+  for (const method of ["normal", "flip"] as const) {
+    test(`CS01 Down of Fool rejects Flip and accepts Normal: ${summonerSeat}/${method}`, async t => {
+      const game = createSummonGame(t);
+      game.turn = summonerSeat;
+      game.player.controllerType = game.bot.controllerType = "human";
+      const summoner = game[summonerSeat];
+      const responder = game.getOpponent(summoner);
+      const monster = new Card(cardDefinition(1), summoner.id);
+      const trap = new Card(cardDefinition(15), responder.id);
+      Object.assign(trap, { isFacedown: true, setTurn: 1 });
+      placeFieldCards(responder.spellTrap, trap);
+      let accepted = false;
+      game.ui.showChainResponseModal = async candidates => {
+        if (accepted) return null;
+        const candidate = candidates.find(entry => entry.card === trap);
+        accepted = !!candidate;
+        return candidate ?? null;
+      };
+      if (method === "normal") summoner.hand.push(monster);
+      else {
+        Object.assign(monster, { isFacedown: true, position: "defense", setTurn: 1 });
+        placeFieldCards(summoner.field, monster);
+      }
+      await completeTestSelections(game, method === "normal"
+        ? game.performNormalSummon(summoner, 0, "attack", false)
+        : game.flipSummon(monster));
+      assert.equal(accepted, method === "normal");
+      assert.equal(summoner.graveyard.includes(monster), method === "normal");
+      assert.equal(responder.graveyard.includes(trap), method === "normal");
+    });
+  }
+  for (const ownSummon of [true, false]) {
+    test(`CS01 Void Mirror Dimension requires opposing Summon: ${summonerSeat}/${ownSummon}`, async t => {
+      const game = createSummonGame(t);
+      game.turn = summonerSeat;
+      game.player.controllerType = game.bot.controllerType = "human";
+      const summoner = game[summonerSeat];
+      const responder = ownSummon ? summoner : game.getOpponent(summoner);
+      const monster = new Card(cardDefinition(1), summoner.id);
+      const recruit = new Card(cardDefinition(1), responder.id);
+      summoner.hand.push(monster);
+      responder.hand.push(recruit);
+      const trap = new Card(cardDefinition(220), responder.id);
+      Object.assign(trap, { isFacedown: true, setTurn: 1 });
+      placeFieldCards(responder.spellTrap, trap);
+      let accepted = false;
+      game.ui.showChainResponseModal = async candidates => {
+        if (accepted) return null;
+        const candidate = candidates.find(entry => entry.card === trap);
+        accepted = !!candidate;
+        return candidate ?? null;
+      };
+      game.ui.showSpecialSummonPositionModal = (_card, choose) => choose("attack");
+      await completeTestSelections(game, game.performNormalSummon(summoner, 0, "attack", false));
+      assert.equal(accepted, !ownSummon);
+      assert.equal(responder.field.includes(recruit), !ownSummon);
+    });
+  }
+}
+
+test("CS01 successful final timing retains the complete Summon occurrence", async t => {
+  const game = createSummonGame(t);
+  const monster = createMonster(game.player);
+  game.player.hand.push(monster);
+  let observed = false;
+  const timing = game.chainSystem.runFastEffectTiming.bind(game.chainSystem);
+  game.chainSystem.runFastEffectTiming = async input => {
+    const context = input?.context;
+    if (context?.event === "after_summon") {
+      observed = true;
+      assert.equal(context.type, "summon");
+      assert.equal(context.card, monster);
+      assert.equal(context.player, game.player);
+      assert.equal(context.method, "normal");
+      assert.equal(context.summonMethod, "normal");
+      assert.equal(context.fromZone, "hand");
+      assert.equal(context.summonId, 1);
+      assert.deepEqual(Reflect.get(context, "tributes"), []);
+    }
+    return timing(input);
+  };
+  await game.performNormalSummon(game.player, 0, "attack", false);
+  assert.equal(observed, true);
 });

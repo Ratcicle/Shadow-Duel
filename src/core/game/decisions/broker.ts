@@ -237,6 +237,17 @@ export class DecisionBroker {
           throw new Error("Replay field placement context or candidates do not match the current procedure.");
         }
       }
+      if (runtimeInput.kind === "choice" && runtimeInput.contextSnapshot &&
+          Reflect.get(runtimeInput.contextSnapshot, "type") === "chain_response_reference") {
+        const expected = runtimeInput.contextSnapshot;
+        const received = recorded.context;
+        if (!received || recorded.actorId !== (runtimeInput.actor?.id || runtimeInput.actorId || null) ||
+            ["type", "chainId", "respondingToLinkId", "sourceDuelCardId", "effectId"]
+              .some(key => Reflect.get(expected, key) !== Reflect.get(received, key)) ||
+            JSON.stringify(recorded.candidateKeys) !== JSON.stringify(candidates.map(candidateKey))) {
+          throw new Error("Replay Chain reference choice does not match the current link or candidates.");
+        }
+      }
       const decoded = typeof runtimeInput.deserializeReplayValue === "function"
         ? runtimeInput.deserializeReplayValue(recorded.value, candidates)
         : matchReplayValue(recorded.value, candidates);

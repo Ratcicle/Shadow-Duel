@@ -1,6 +1,7 @@
 import type { ChainCard, ChainEffect, ChainLink, ChainOperationResult, ChainSelectionMap, FastEffectTimingInput, FullChainHost, SuspendedChainFrame } from "../contracts/chainRuntime.js";
 import { FAST_EFFECT_ORIGINS } from "../contracts/chain.js";
 import { copyCostPayment, projectAfterResolutionReferences, projectAfterResolutionSource } from "./link.js";
+import { serializeTriggerOpportunityState } from "./segoc.js";
 import { serializeChainResponseDecisions } from "../game/decisions/chainResponse.js";
 
 /** Continue the completed link's static action list, never its primary actions. */
@@ -132,6 +133,7 @@ export function getAfterResolutionState(this: FullChainHost): object | null {
       links: frame.chainStack.map(projectLink), timing: { ...frame.fastEffectState,
         phaseIntent: frame.fastEffectState.phaseIntent ? { ...frame.fastEffectState.phaseIntent } : null },
       afterResolution: project(frame.currentResolvingLink),
+      triggers: serializeTriggerOpportunityState(frame.activeTriggerOpportunity, [], frame.pendingTriggerSelection != null),
       selection: frame.pendingChainSelection ? { phase: frame.pendingChainSelection.phase || "resolution",
         link: projectLink(frame.pendingChainSelection.link),
         selections: resultIdentities(frame.pendingChainSelection.link.resolutionSelections) } : null,

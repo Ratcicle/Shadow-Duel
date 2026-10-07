@@ -41,6 +41,7 @@ import {
 } from "../contracts/chain.js";
 import {
   capCostDefinitionsByLinkedTargetCapacity,
+  chooseChainResponseReference,
   resolveCountFromSelectionDefinitions,
 } from "./selection.js";
 import { hasEquipHostExitProof, matchesEquipHostExitSourcePresence } from "../effects/triggers/collectors/shared.js";
@@ -834,6 +835,21 @@ export async function prepareChainResponse(
     return { success: false, reason: "Invalid chain response." };
   }
 
+  if (candidate.responseReferences?.length) {
+    const initialCheck = this.revalidateActivationCandidate(candidate, player, candidate.context);
+    if (!initialCheck.ok) return { success: false, code: "CHAIN_RESPONSE_NO_LONGER_LEGAL",
+      reason: initialCheck.reason || "Chain response is no longer legal." };
+    const binding = await chooseChainResponseReference(this, candidate, player);
+    if (!binding) return { success: false, cancelled: true, code: "CHAIN_RESPONSE_REFERENCE_CANCELLED",
+      reason: "Chain response reference selection cancelled." };
+    candidate = { ...candidate, context: { ...candidate.context,
+      responseReference: binding, target: binding.target.card,
+      targetOwner: [this.game?.player, this.game?.bot].find(owner => owner?.id === binding.target.controllerId) || null } };
+    const boundCheck = this.revalidateActivationCandidate(candidate, player, candidate.context);
+    if (!boundCheck.ok) return { success: false, code: "CHAIN_RESPONSE_NO_LONGER_LEGAL",
+      reason: boundCheck.reason || "Chain response reference is no longer legal." };
+  }
+
   const sourceZone =
     candidate.sourceZone || this.determineCardZone(candidate.card, player);
   const occurrenceReferences = (candidate.context || context)?.eventReferenceSnapshots;
@@ -872,6 +888,14 @@ export async function prepareChainResponse(
   const preparedEffect = prepared.effect;
   if (!preparedCard || !preparedEffect) {
     return { success: false, reason: "Invalid chain response." };
+  }
+
+  const responseReference = candidate.context.responseReference;
+  if (responseReference) {
+    prepared.referenceSnapshots = (preparedEffect.targets || []).filter(def => def.intent === "reference")
+      .map(def => def.targetFromContext === "target"
+        ? { targetId: def.id, cards: [{ ...responseReference.target }] }
+        : prepared.referenceSnapshots?.find(snapshot => snapshot.targetId === def.id) || { targetId: def.id, cards: [] });
   }
 
   const responseContext = candidate.context || context || null;
@@ -1073,6 +1097,10 @@ export async function prepareChainResponse(
 
   // Selection can keep a human prompt open. Revalidate the transaction at the
   // last cancellable boundary so state changes cannot commit a stale offer.
+  if (responseReference && !this.revalidateActivationCandidate(candidate, player, candidate.context).ok) {
+    return { success: false, code: "CHAIN_RESPONSE_REFERENCE_CHANGED_BEFORE_COMMIT",
+      reason: "Chain response reference changed before it could be committed." };
+  }
   const equipBinding = prepared.activationContext.equipHostExitBinding;
   const physicalBeforeCommit = equipBinding ? resolvePhysicalSourceLocation(this, preparedCard) : null;
   const sourceZoneBeforeCommit = physicalBeforeCommit?.zone || this.determineCardZone?.(preparedCard, player);

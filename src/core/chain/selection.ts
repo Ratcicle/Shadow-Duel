@@ -1,11 +1,14 @@
 import { isAI } from "../Player.js";
 import type {
   ChainActionContext,
+  ChainActivationCandidate,
   ChainCard,
   ChainEffect,
   ChainEffectEnginePort,
   ChainEffectTarget,
   ChainPlayer,
+  ChainResponseReference,
+  ChainCompatibilitySelectionContract,
   PreparedActivationContext,
   ChainSelectionHost,
   ChainSelectionKeyMap,
@@ -16,7 +19,90 @@ import type {
 } from "../contracts/chainRuntime.js";
 import type { CanonicalZone } from "../contracts/zones.js";
 import type { SelectionCandidateKey } from "../contracts/primitives.js";
-import type { SelectionResult } from "../contracts/selection.js";
+import type { SelectionResult, SelectionCandidate, SelectionCardReference } from "../contracts/selection.js";
+import { buildSelectionCandidateKey } from "../game/selection/contract.js";
+
+function isSelectableResponseCard(card: ChainCard): card is ChainCard & SelectionCardReference {
+  return card.cardKind !== null && card.owner !== null && card.controller !== null && card.instanceId !== null;
+}
+
+/** Select the event card a response refers to, before commitment or payment. */
+export async function chooseChainResponseReference(
+  chain: FullChainHost,
+  candidate: ChainActivationCandidate,
+  player: ChainPlayer,
+): Promise<ChainResponseReference | null> {
+  const references = candidate.responseReferences || [];
+  if (references.length === 1) return references[0] || null;
+  const game = chain.game;
+  if (!game || references.length === 0) return null;
+  const id = "chain_response_reference";
+  const candidates: SelectionCandidate[] = [];
+  for (const [index, reference] of references.entries()) {
+    const cardRef = reference.target.card;
+    const zone = reference.target.zone;
+    if (!isSelectableResponseCard(cardRef) || !zone || zone === "unknown" || zone === "temporary" || zone === "token") return null;
+    const raw = { cardRef, zone, zoneIndex: index, controller: reference.target.controllerId || player.id };
+    candidates.push({ ...raw, key: buildSelectionCandidateKey(raw, index) });
+  }
+  const contract: ChainCompatibilitySelectionContract = {
+    kind: "choice", purpose: "choice", timing: "activation",
+    requirements: [{ id, min: 1, max: 1, candidates }],
+    ui: { allowCancel: true, preventCancel: false },
+  };
+  const first = references[0];
+  if (!first) return null;
+  const decisionContext = { type: "chain_response_reference" as const,
+    chainId: first.chainId, respondingToLinkId: first.linkId,
+    sourceDuelCardId: game.ensureDuelCardId?.(candidate.card) ?? null,
+    effectId: candidate.effectId };
+  const selectedReference = (value: unknown): ChainResponseReference | null => {
+    if (!value || typeof value !== "object") return null;
+    const keys: unknown = Reflect.get(value, id);
+    if (!Array.isArray(keys) || keys.length !== 1) return null;
+    const index = candidates.findIndex(entry => entry.key === keys[0]);
+    return references[index] || null;
+  };
+  if (isAI(player)) {
+    const result = await game.requestDecision?.({
+      kind: "choice", actor: player, candidates, requireCandidate: false, contextSnapshot: decisionContext,
+      resolveAI: () => {
+        const selected = game.autoSelector?.select(contract, { owner: player, selectionContract: contract,
+          selectionKind: "choice", effect: candidate.effect });
+        return selected?.ok ? selected.selections : null;
+      },
+      serializeResult: selections => {
+        const reference = selectedReference(selections);
+        return reference ? { selections: { [id]: [{
+          duelCardId: game.ensureDuelCardId?.(reference.target.card) ?? reference.target.card.duelCardId ?? null,
+          cardId: reference.target.card.id ?? null, effectId: null, candidateKey: null, key: null,
+        }] } } : { pass: true };
+      },
+      deserializeReplayValue: value => {
+        if (!("selections" in value)) return null;
+        const recorded = value.selections[id];
+        if (recorded?.length !== 1) return null;
+        const identity = recorded[0];
+        const selected = candidates.find(entry => identity && "duelCardId" in identity &&
+          identity.duelCardId != null && entry.cardRef?.duelCardId === identity.duelCardId);
+        return selected ? { [id]: [selected.key] } : null;
+      },
+    });
+    return selectedReference(result);
+  }
+  if (!game.startTargetSelectionSession) return null;
+  return new Promise((resolve, reject) => {
+    const session = game.startTargetSelectionSession?.({ owner: player, card: candidate.card,
+      kind: "choice", selectionContract: contract, decisionContext,
+      replayCommandHandledByCaller: true, allowCancel: true,
+      execute: selections => { resolve(selectedReference(selections)); return { success: true, needsSelection: false }; },
+      onCancel: () => resolve(null), onAbort: () => resolve(null),
+    });
+    // Replay validates this decision asynchronously. Forward rejection to the
+    // awaiting activation instead of leaving its reference choice pending.
+    Promise.resolve(session).catch(reject);
+  });
+}
 
 function selectionCards(value: unknown): unknown[] {
   if (Array.isArray(value)) {

@@ -72,6 +72,11 @@ export interface SegocOrderDecisionContext {
 
 export interface SelectionDecisionContext {
   session?: ActiveSelectionSession;
+  type?: "chain_response_reference";
+  chainId?: number;
+  respondingToLinkId?: number;
+  sourceDuelCardId?: number | null;
+  effectId?: string | null;
 }
 
 export interface PassDecisionValue {
