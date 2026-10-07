@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
-import { validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
+import { createCanonicalStateSnapshot, validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
 import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
 import { required, unsafeFixture } from "../helpers/fixtures.js";
 import { completeTestSelections, createRuntimeGame, placeFieldCards, type RuntimeGame } from "../helpers/game.js";
@@ -100,4 +100,84 @@ test("ordinary Main 2 advance enters End without replaying a turn-ending shortcu
   assert.equal(playback.turn, "player");
   assert.equal(playback.phase, "end");
   assert.equal(result.finalStateHash, replay.result?.finalStateHash);
+});
+
+test("public summon, position, attack and turn reset replay card action state and detect counter tampering", async t => {
+  const live = createRuntimeGame({ captureReplay: true, randomSeed: 139, laboratoryMode: true, laboratoryUseBot: false });
+  const playback = createRuntimeGame({ captureReplay: false, replayMode: "playback", laboratoryMode: true, laboratoryUseBot: false });
+  const tampered = createRuntimeGame({ captureReplay: false, replayMode: "playback", laboratoryMode: true, laboratoryUseBot: false });
+  t.after(() => { live.dispose(); playback.dispose(); tampered.dispose(); });
+  for (const game of [live, playback, tampered]) {
+    const start = game.startWithDecks.bind(game);
+    game.startWithDecks = async options => {
+      await start(options);
+      game.player.controllerType = "human";
+      game.bot.controllerType = "human";
+      game.disablePresentationDelays = true;
+      game.phaseDelayMs = 0;
+    };
+  }
+  await live.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true,
+    startAtDrawPhase: true, startingPlayer: "player", announceStartingPlayer: false,
+    playerDeck: Array<number>(16).fill(1), botDeck: Array<number>(16).fill(1), playerExtraDeck: [], botExtraDeck: [] });
+  await live.skipToPhase("main1");
+  const summonedOnTurn = live.turnCounter;
+  await live.performNormalSummon(live.player, 0, "attack", false, null);
+  const card = required(live.player.field[0]);
+  const snapshotCard = (index = 0) => required(createCanonicalStateSnapshot(live).players.player.zones.field[index]);
+  assert.equal(snapshotCard().summonedTurn, summonedOnTurn);
+  assert.equal(snapshotCard().attacksUsedThisTurn, 0);
+  assert.equal(snapshotCard().hasAttacked, false);
+  await live.skipToPhase("end");
+  assert.equal(live.turn, "bot");
+  await live.skipToPhase("end");
+  assert.equal(live.turn, "player");
+  await live.skipToPhase("main1");
+  assert.equal((await live.changeMonsterPosition(card, "defense")).ok, true);
+  assert.equal(snapshotCard().positionChangedThisTurn, true);
+  const attackerSummonedOnTurn = live.turnCounter;
+  await live.performNormalSummon(live.player, 0, "attack", false, null);
+  const attacker = required(live.player.field[1]);
+  await live.skipToPhase("battle");
+  await live.resolveCombat(attacker, null);
+  const attacked = snapshotCard(1);
+  assert.equal(attacked.attacksUsedThisTurn, 1);
+  assert.equal(attacked.hasAttacked, true);
+  assert.equal(attacked.summonedTurn, attackerSummonedOnTurn);
+  assert.equal(attacked.positionChangedThisTurn, false);
+  await live.skipToPhase("end");
+  assert.equal(snapshotCard(1).attacksUsedThisTurn, 1, "usage remains until this monster's controller starts a turn");
+  assert.equal(snapshotCard().positionChangedThisTurn, true);
+  await live.skipToPhase("end");
+  assert.equal(live.turn, "player");
+  const reset = snapshotCard(1);
+  assert.equal(reset.attacksUsedThisTurn, 0);
+  assert.equal(reset.hasAttacked, false);
+  assert.equal(reset.positionChangedThisTurn, false);
+  assert.equal(reset.summonedTurn, attackerSummonedOnTurn);
+  assert.equal(snapshotCard().positionChangedThisTurn, false);
+  assert.equal(snapshotCard().summonedTurn, summonedOnTurn);
+  assert.equal(attacked.attacksUsedThisTurn, 1, "older snapshots remain detached after reset");
+  const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "card-action-lifecycle" }))));
+  assert.ok(replay.commands.some(command => command.type === "summon"));
+  assert.ok(replay.commands.some(command => command.type === "change_position"));
+  const attackCommand = required(replay.commands.find(command => command.type === "attack"));
+  const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback, "Concrete Game with identical presentation and controller configuration.") });
+  assert.equal(result.finalStateHash, replay.result?.finalStateHash);
+  assert.deepEqual(createCanonicalStateSnapshot(playback), createCanonicalStateSnapshot(live));
+  const resolveCombat = tampered.resolveCombat.bind(tampered);
+  tampered.resolveCombat = async (attacker, target, options) => {
+    const result = await resolveCombat(attacker, target, options);
+    required(attacker).attacksUsedThisTurn += 1;
+    return result;
+  };
+  await assert.rejects(() => replayCanonicalDuel(replay, {
+    game: unsafeFixture<ReplayDriverGamePort>(tampered, "Concrete playback Game with a deliberately corrupted attack counter."),
+  }), error => {
+    assert.ok(error instanceof Error);
+    assert.match(error.message, new RegExp(`Replay divergence at command ${attackCommand.sequence} \\(attack\\)`));
+    assert.equal(Reflect.get(error, "expectedHash"), attackCommand.stateHash);
+    assert.notEqual(Reflect.get(error, "observedHash"), attackCommand.stateHash);
+    return true;
+  });
 });

@@ -76,6 +76,7 @@ export interface SimulatedActionContextData {
   effectNegated?: boolean;
   attackRedirect?: {
     target: SimulatedCardState;
+    targetLocationVersion: number;
     reason: string;
   };
   redirectedTarget?: SimulatedCardState | null;

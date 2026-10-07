@@ -159,6 +159,8 @@ export interface EventActionContext {
 export interface AttackRedirect {
   target: EventCard;
   targetOwner?: EventPlayer | null;
+  /** Field presence selected when the redirect resolves, before later responses. */
+  targetLocationVersion: number;
   source?: EventCard | null;
   reason?: string | null;
 }

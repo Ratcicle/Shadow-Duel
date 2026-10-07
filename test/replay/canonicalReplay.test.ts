@@ -248,12 +248,28 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   // Presence durations participate in the canonical state as well.
   assert.deepEqual(
     replay.commands.map(command => command.stateHash),
-    ["07b23806", "2b228622"],
+    ["387cada4", "f9154acc"],
   );
   const replayResult = required(replay.result);
-  assert.equal(replayResult.finalStateHash, "2b228622");
+  assert.equal(replayResult.finalStateHash, "f9154acc");
   // Historical envelopes retain their exact version and declaration signature.
-  const beforeCapturedTriggers = structuredClone(replay);
+  const beforeTurnActionState = structuredClone(replay);
+  for (const player of Object.values(required(required(beforeTurnActionState.result).finalState).players)) {
+    for (const zone of Object.values(player.zones)) {
+      for (const card of Array.isArray(zone) ? zone : zone ? [zone] : []) {
+        if (!card) continue;
+        for (const field of ["attacksUsedThisTurn", "hasAttacked", "summonedTurn", "positionChangedThisTurn"]) {
+          Reflect.deleteProperty(card, field);
+        }
+      }
+    }
+  }
+  required(beforeTurnActionState.commands[0]).stateHash = "07b23806";
+  required(beforeTurnActionState.commands[1]).stateHash = "2b228622";
+  required(beforeTurnActionState.result).finalStateHash = "2b228622";
+  assert.equal(hashCanonicalValue({ ...beforeTurnActionState, engineVersion: "engine-rules-v24" }), "1958ef50");
+  assert.equal(JSON.stringify({ ...beforeTurnActionState, engineVersion: "engine-rules-v24" }).length, 12864);
+  const beforeCapturedTriggers = structuredClone(beforeTurnActionState);
   const formerTriggerState = required(required(beforeCapturedTriggers.result).finalState).chain.triggers;
   assert.ok(formerTriggerState !== null && typeof formerTriggerState === "object");
   for (const key of ["pendingOccurrences", "activeOccurrences", "lastRelevantAtomicGroupId"]) Reflect.deleteProperty(formerTriggerState, key);
@@ -290,8 +306,8 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "f60cba87", engineVersion: "engine-rules-v22" }), "b1bbca51");
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "7e5d54cb", engineVersion: "engine-rules-v23" }), "7bfe1e4a");
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "feeb687b", engineVersion: "engine-rules-v23" }), "6b0653a2");
-  assert.equal(hashCanonicalValue(replay), "1958ef50");
-  assert.equal(JSON.stringify(replay).length, 12864);
+  assert.equal(hashCanonicalValue(replay), "5569d130");
+  assert.equal(JSON.stringify(replay).length, 14016);
 
   const result = await replayCanonicalDuel(replay);
   assert.equal(result.ok, true);

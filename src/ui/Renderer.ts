@@ -6,6 +6,7 @@ import {
 import type { EquipLink, LpDisplayState } from "./renderer/types.js";
 import type { PlayerId } from "../core/contracts/primitives.js";
 import type { FieldPlacementSession } from "./renderer/placement.js";
+import { disposeLpPresentation } from "./renderer/animations.js";
 
 /**
  * Renderer - Main UI rendering class for Shadow Duel
@@ -180,6 +181,7 @@ class Renderer implements GameUI {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    disposeLpPresentation(this);
     this.cancelFieldPlacement();
     this.chainSkipInputCleanup?.();
     this.chainSkipInputCleanup = null;

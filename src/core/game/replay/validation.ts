@@ -637,6 +637,12 @@ function validateCardSnapshot(value: unknown, path: string, onField = false): vo
     return;
   }
   const card = requireObject(value, path);
+  requireInteger(read(card, "attacksUsedThisTurn"), `${path}.attacksUsedThisTurn`, 0);
+  requireBoolean(read(card, "hasAttacked"), `${path}.hasAttacked`);
+  if (read(card, "summonedTurn") !== null) {
+    requireInteger(read(card, "summonedTurn"), `${path}.summonedTurn`, 0);
+  }
+  requireBoolean(read(card, "positionChangedThisTurn"), `${path}.positionChangedThisTurn`);
   const presenceId = read(card, "fieldPresenceId");
   if (presenceId !== null && typeof presenceId !== "string" && typeof presenceId !== "number") {
     invalid(`${path}.fieldPresenceId`, "a field presence identity or null");

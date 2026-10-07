@@ -1,4 +1,4 @@
-import { cardMatchesKind } from "../Card.js";
+import { cardMatchesKind, getCardLocationVersion } from "../Card.js";
 import { getCardDisplayName, getUIText } from "../i18n.js";
 import type { ActionCase, ActionOf } from "../contracts/actions.js";
 import type {
@@ -860,6 +860,7 @@ export async function handleRedirectCurrentAttackToTarget(
   const redirect = {
     target,
     targetOwner,
+    targetLocationVersion: getCardLocationVersion(target),
     source: ctx?.source || null,
     reason: action?.contextLabel || "redirect_attack",
   };
@@ -870,8 +871,15 @@ export async function handleRedirectCurrentAttackToTarget(
     Reflect.set(context, "redirectedTargetOwner", targetOwner);
   };
 
-  applyRedirect(attackContext);
-  applyRedirect(readRecordValue(attackContext, "_chainRootContext"));
+  // Timing and per-response contexts can each retain a parent. Publish the
+  // resolved presence through those copies to the pending combat window.
+  const visited = new Set<object>();
+  let redirectContext: unknown = attackContext;
+  while (redirectContext && typeof redirectContext === "object" && !visited.has(redirectContext)) {
+    visited.add(redirectContext);
+    applyRedirect(redirectContext);
+    redirectContext = readRecordValue(redirectContext, "_chainRootContext");
+  }
   game.updateBoard?.();
   return true;
 }

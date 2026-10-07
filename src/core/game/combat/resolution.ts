@@ -11,6 +11,7 @@ import {
 } from "./availability.js";
 
 import type { GameCard } from "../../contracts/cards.js";
+import { getCardLocationVersion } from "../../Card.js";
 import type { GamePlayer } from "../../contracts/player.js";
 import { DAMAGE_STEP_TIMINGS, type EffectDefinition } from "../../contracts/effects.js";
 
@@ -60,8 +61,31 @@ interface AttackAvailabilityResult {
 }
 
 interface AttackRedirect {
-  target?: CombatCard | null;
+  target: CombatCard;
   targetOwner?: GamePlayer | null;
+  targetLocationVersion: number;
+}
+
+interface AttackParticipantPresence {
+  card: CombatCard;
+  controller: GamePlayer;
+  controllerId: string;
+  locationVersion: number;
+}
+
+function captureAttackParticipant(
+  card: CombatCard,
+  controller: GamePlayer,
+): AttackParticipantPresence {
+  return { card, controller, controllerId: card.controller ?? card.owner,
+    locationVersion: getCardLocationVersion(card) };
+}
+
+function isAttackParticipantPresent(presence: AttackParticipantPresence): boolean {
+  return presence.controller.field.includes(presence.card) &&
+    (presence.card.controller ?? presence.card.owner) === presence.controllerId &&
+    presence.controller.id === presence.controllerId &&
+    getCardLocationVersion(presence.card) === presence.locationVersion;
 }
 
 interface AttackWindowPayload {
@@ -207,7 +231,7 @@ function getController(
   card: CombatCard | null | undefined,
 ): GamePlayer | null {
   if (!game || !card) return null;
-  return card.owner === "player" ? game.player : game.bot;
+  return (card.controller ?? card.owner) === "player" ? game.player : game.bot;
 }
 
 function getOpponentPlayer(
@@ -517,7 +541,7 @@ export async function resolveCombat(
   options: ResolveCombatOptions = {},
 ): Promise<CombatResult | undefined> {
   if (!attacker) return;
-  const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
+  const attackerOwner = getController(this, attacker)!;
   const guard = this.guardActionStart(
     {
       actor: attackerOwner,
@@ -532,6 +556,13 @@ export async function resolveCombat(
 
   const availability = this.getAttackAvailability(attacker);
   if (!availability.ok) return;
+
+  // An attack belongs to these field presences, before the first response window.
+  const attackerPresence = captureAttackParticipant(attacker, attackerOwner);
+  let defenderOwner = target ? getController(this, target)! :
+    attackerOwner === this.player ? this.bot : this.player;
+  let targetOwner = defenderOwner;
+  let targetPresence = target ? captureAttackParticipant(target, targetOwner) : null;
 
   this.applyAttackResolutionIndicators(attacker, target);
 
@@ -555,70 +586,78 @@ export async function resolveCombat(
 
   this.battleStep = "battle";
 
-  let defenderOwner = target
-    ? target.owner === "player"
-      ? this.player
-      : this.bot
-    : attacker.owner === "player"
-      ? this.bot
-      : this.player;
-  let targetOwner = defenderOwner;
-
-  const applyAttackRedirect = (redirectPayload: AttackWindowPayload) => {
-    const redirectedTarget =
-      redirectPayload?.attackRedirect?.target ||
-      redirectPayload?.redirectedTarget ||
-      null;
-    const redirectedTargetOwner =
-      redirectPayload?.attackRedirect?.targetOwner ||
-      redirectPayload?.redirectedTargetOwner ||
-      null;
+  const applyAttackRedirect = (
+    redirectPayload: AttackWindowPayload,
+  ): "absent" | "valid" | "invalid" => {
+    const redirect = redirectPayload.attackRedirect;
+    if (!redirect) {
+      // Legacy references mirror a redirect; they cannot establish its presence.
+      return redirectPayload.redirectedTarget || redirectPayload.redirectedTargetOwner
+        ? "invalid" : "absent";
+    }
+    const redirectedTarget = redirect.target;
+    const redirectedTargetOwner = redirect.targetOwner;
     const redirectIsValid =
       redirectedTarget &&
       redirectedTarget.cardKind === "monster" &&
       redirectedTargetOwner &&
-      Array.isArray(redirectedTargetOwner.field) &&
+      (redirectedTargetOwner === this.player || redirectedTargetOwner === this.bot) &&
       redirectedTargetOwner.field.includes(redirectedTarget) &&
-      redirectedTargetOwner.id !== attackerOwner?.id;
-    if (!redirectIsValid) return false;
+      redirectedTargetOwner.id !== attackerOwner.id &&
+      (redirectedTarget.controller ?? redirectedTarget.owner) === redirectedTargetOwner.id &&
+      getCardLocationVersion(redirectedTarget) === redirect.targetLocationVersion;
+    if (!redirectIsValid) return "invalid";
 
     target = redirectedTarget;
     defenderOwner = redirectedTargetOwner;
     targetOwner = redirectedTargetOwner;
+    targetPresence = { card: target, controller: targetOwner, controllerId: targetOwner.id,
+      locationVersion: redirect.targetLocationVersion };
     this.applyAttackResolutionIndicators(attacker, target);
     this.ui?.log?.(`Attack target changed to ${target.name}.`);
-    return true;
+    return "valid";
   };
 
-  const validateAttackDeclaration = () => {
-    const attackerStillOnField =
-      attackerOwner && Array.isArray(attackerOwner.field)
-        ? attackerOwner.field.includes(attacker)
-        : false;
-    if (!attackerStillOnField) {
+  const validateAttackParticipants = () => {
+    if (!isAttackParticipantPresent(attackerPresence)) {
       return {
         ok: false,
-        reason: "Attack stopped before declaration because the attacker left the field.",
+        reason: "Attack stopped because the attacker's field presence changed.",
       };
     }
     if (attacker.position !== "attack" || attacker.isFacedown) {
       return {
         ok: false,
         reason:
-          "Attack stopped before declaration because the attacker is no longer in Attack Position.",
+          "Attack stopped because the attacker is no longer in Attack Position.",
       };
     }
-    if (target) {
-      const targetOwnerField =
-        targetOwner?.field ||
-        (target.owner === "player" ? this.player.field : this.bot.field);
-      if (!targetOwnerField.includes(target)) {
-        return {
-          ok: false,
-          reason: "Attack stopped before declaration because the target left the field.",
-        };
+    if (targetPresence && !isAttackParticipantPresent(targetPresence)) {
+      return { ok: false, reason: "Attack stopped because the target's field presence changed." };
+    }
+    return { ok: true };
+  };
+
+  let attackContinuationActive = true;
+  const stopAttack = (reason: string, beforeDeclaration = false): CombatResult => {
+    attackContinuationActive = false;
+    if (isAttackParticipantPresent(attackerPresence)) {
+      if (beforeDeclaration) {
+        if (usingSecondAttack) attacker.secondAttackUsedThisTurn = false;
+      } else {
+        this.markAttackUsed(attacker, target);
       }
-    } else {
+    }
+    this.ui.log(reason);
+    this.clearAttackResolutionIndicators();
+    this.updateBoard();
+    return { ok: true };
+  };
+
+  const validateAttackDeclaration = () => {
+    const participants = validateAttackParticipants();
+    if (!participants.ok) return participants;
+    if (!target) {
       if (
         (attacker.attacksUsedThisTurn || 0) > 0 &&
         (attacker.extraAttackTargetRestriction ||
@@ -661,6 +700,31 @@ export async function resolveCombat(
     return { ok: true };
   };
 
+  const continueDeclaredAttack = (redirect: "absent" | "valid" | "invalid" = "absent"): boolean => {
+    if (this.lastAttackNegated) {
+      attackContinuationActive = false;
+      if (isAttackParticipantPresent(attackerPresence)) {
+        attacker.attacksUsedThisTurn = (attacker.attacksUsedThisTurn || 0) + 1;
+        const limit = this.getMonsterAttackLimit
+          ? this.getMonsterAttackLimit(attacker) : getMonsterAttackLimit.call(this, attacker);
+        if (!attacker.canAttackAllOpponentMonstersThisTurn) {
+          attacker.hasAttacked = attacker.attacksUsedThisTurn >= limit;
+        }
+      }
+      this.clearAttackResolutionIndicators();
+      this.updateBoard();
+      this.checkWinCondition();
+      return false;
+    }
+    const participants = validateAttackParticipants();
+    if (redirect === "invalid" || !participants.ok) {
+      stopAttack(redirect === "invalid" ? "Attack stopped because the redirected target is no longer valid."
+        : participants.reason || "Attack stopped.");
+      return false;
+    }
+    return true;
+  };
+
   const battleStepOpenContext: AttackWindowPayload = {
     attacker,
     target: target || null,
@@ -675,17 +739,12 @@ export async function resolveCombat(
     addTriggerToChain: false,
   };
   await this.checkAndOfferTraps("battle_step_open", battleStepOpenContext);
-  applyAttackRedirect(battleStepOpenContext);
+  const initialRedirect = applyAttackRedirect(battleStepOpenContext);
 
   const declarationCheck = validateAttackDeclaration();
-  if (!declarationCheck.ok) {
-    if (usingSecondAttack) {
-      attacker.secondAttackUsedThisTurn = false;
-    }
-    this.ui?.log?.(declarationCheck.reason || "Attack stopped before declaration.");
-    this.clearAttackResolutionIndicators();
-    this.updateBoard();
-    return { ok: true };
+  if (initialRedirect === "invalid" || !declarationCheck.ok) {
+    return stopAttack(initialRedirect === "invalid" ? "Attack stopped because the redirected target is no longer valid."
+      : declarationCheck.reason || "Attack stopped before declaration.", true);
   }
 
   this.ui.log(`${attacker.name} attacks ${target ? target.name : "directly"}!`);
@@ -748,6 +807,7 @@ export async function resolveCombat(
     return true;
   };
   const playBattleImpactOnContact = (contact: AttackContact = {}): void => {
+    if (!attackContinuationActive || this.lastAttackNegated || !validateAttackParticipants().ok) return;
     if (!battleImpactVisualPlayed) {
       const played = this.ui?.playBattleImpactImmediate?.({
         sourceCard: attacker,
@@ -797,7 +857,12 @@ export async function resolveCombat(
   }
   await this.emit("attack_declared", attackDeclaredPayload);
 
-  if (applyAttackRedirect(attackDeclaredPayload)) {
+  const declaredRedirect = applyAttackRedirect(attackDeclaredPayload);
+  const openRedirectWindow = declaredRedirect === "valid" && validateAttackParticipants().ok;
+  // Preserve the redirect response opportunity before settling a negated
+  // attack, while an invalid participant must stop before that opportunity.
+  if (!openRedirectWindow && !continueDeclaredAttack(declaredRedirect)) return { ok: true };
+  if (openRedirectWindow) {
     const battleStepOpenContext: AttackWindowPayload = {
       attacker,
       target,
@@ -812,56 +877,7 @@ export async function resolveCombat(
       addTriggerToChain: false,
     };
     await this.checkAndOfferTraps("battle_step_open", battleStepOpenContext);
-    applyAttackRedirect(battleStepOpenContext);
-  }
-
-  if (this.lastAttackNegated) {
-    attacker.attacksUsedThisTurn = (attacker.attacksUsedThisTurn || 0) + 1;
-    const maxAttacks = this.getMonsterAttackLimit
-      ? this.getMonsterAttackLimit(attacker)
-      : getMonsterAttackLimit.call(this, attacker);
-    // For multi-attack mode, don't block further attacks when one is negated
-    if (!attacker.canAttackAllOpponentMonstersThisTurn) {
-      attacker.hasAttacked = attacker.attacksUsedThisTurn >= maxAttacks;
-    }
-    this.clearAttackResolutionIndicators();
-    this.updateBoard();
-    this.checkWinCondition();
-    return { ok: true };
-  }
-
-  const attackerStillOnField =
-    attackerOwner && Array.isArray(attackerOwner.field)
-      ? attackerOwner.field.includes(attacker)
-      : false;
-  if (!attackerStillOnField) {
-    this.ui.log("Attack stopped because the attacker left the field.");
-    this.clearAttackResolutionIndicators();
-    this.updateBoard();
-    return { ok: true };
-  }
-
-  if (attacker.position !== "attack" || attacker.isFacedown) {
-    this.ui.log(
-      "Attack stopped because the attacker is no longer in Attack Position.",
-    );
-    this.markAttackUsed(attacker, target);
-    this.clearAttackResolutionIndicators();
-    this.updateBoard();
-    return { ok: true };
-  }
-
-  if (target) {
-    const targetOwnerField =
-      targetOwner?.field ||
-      (target.owner === "player" ? this.player.field : this.bot.field);
-    if (!targetOwnerField.includes(target)) {
-      this.ui.log("Attack stopped because the target left the field.");
-      this.markAttackUsed(attacker, target);
-      this.clearAttackResolutionIndicators();
-      this.updateBoard();
-      return { ok: true };
-    }
+    if (!continueDeclaredAttack(applyAttackRedirect(battleStepOpenContext))) return { ok: true };
   }
 
   if (!target) {
@@ -891,6 +907,7 @@ export async function resolveCombat(
     setBattleLpLossPreview(resolveBattleLpLossPreview(this, attacker, null));
     const attackPresentation = startAttackPresentation();
     await waitForAttackPresentation(this, attackPresentation);
+    if (!continueDeclaredAttack()) return { ok: true };
     if (!battleImpactVisualPlayed) {
       this.queueVisualFeedback?.({
         kind: "impact",
@@ -929,6 +946,7 @@ export async function resolveCombat(
   } else {
     await waitForAttackPresentation(this, attackPresentation);
   }
+  if (!continueDeclaredAttack()) return { ok: true };
 
   const damageStep = this.createDamageStepTransaction({
     attacker,

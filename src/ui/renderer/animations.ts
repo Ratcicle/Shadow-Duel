@@ -29,6 +29,47 @@ const LP_ODOMETER_MIN_MS = 600;
 const LP_ODOMETER_MAX_MS = 1400;
 const FIELD_DAMAGE_HIT_MS = 680;
 
+// Presentation work belongs to its renderer, even when a later duel reuses the DOM.
+const lpCancellations = new WeakMap<Renderer, Set<() => void>>();
+const lpCounterFlashes = new WeakMap<HTMLElement, () => void>();
+const lpDamageHits = new WeakMap<DamageHitElement, () => void>();
+
+function registerLpCancellation(renderer: Renderer, cancel: () => void): () => void {
+  let pending = lpCancellations.get(renderer);
+  if (!pending) {
+    pending = new Set();
+    lpCancellations.set(renderer, pending);
+  }
+  pending.add(cancel);
+  return () => pending.delete(cancel);
+}
+
+function scheduleLpCleanup(renderer: Renderer, cleanup: () => void, delay: number): () => void {
+  let settled = false;
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    unregister();
+    cleanup();
+  };
+  const timer = setTimeout(finish, Math.max(0, delay));
+  const unregister = registerLpCancellation(renderer, finish);
+  return finish;
+}
+
+export function disposeLpPresentation(renderer: Renderer): void {
+  const pending = lpCancellations.get(renderer);
+  lpCancellations.delete(renderer);
+  for (const cancel of pending || []) cancel();
+  for (const state of Object.values(renderer.lpDisplayState || {})) {
+    state.queue.length = 0;
+    state.animating = false;
+    state.presentationPromise = null;
+    state.floatingPromises.clear();
+  }
+}
+
 function prefersReducedMotion() {
   return (
     typeof window !== "undefined" &&
@@ -267,14 +308,17 @@ function getOdometerDuration(amount: number): number {
   return clamp(560 + value * 0.24, LP_ODOMETER_MIN_MS, LP_ODOMETER_MAX_MS);
 }
 
-function playCounterFlash(counter: HTMLElement | null, kind: string): void {
-  if (!counter) return;
+function playCounterFlash(renderer: Renderer, counter: HTMLElement | null, kind: string): void {
+  if (renderer.destroyed || !counter) return;
+  lpCounterFlashes.get(counter)?.();
   const flashClass = kind === "heal" ? "lp-flash-heal" : "lp-flash-damage";
   counter.classList.remove("lp-flash-heal", "lp-flash-damage");
   counter.classList.add(flashClass);
-  setTimeout(() => {
+  const cancel = scheduleLpCleanup(renderer, () => {
     counter.classList.remove(flashClass);
+    lpCounterFlashes.delete(counter);
   }, 420);
+  lpCounterFlashes.set(counter, cancel);
 }
 
 function playEffectDamageShake(
@@ -305,6 +349,7 @@ export function showFieldDamageHit(
   player: LpPlayer,
   options: LpChangeOptions = {},
 ): boolean {
+  if (this.destroyed) return false;
   const area = getPlayerAreaElement(player);
   if (!area) return false;
 
@@ -314,19 +359,17 @@ export function showFieldDamageHit(
       ? 180
       : FIELD_DAMAGE_HIT_MS;
 
-  if (area._damageHitTimer) {
-    clearTimeout(area._damageHitTimer);
-    area._damageHitTimer = null;
-  }
+  lpDamageHits.get(area)?.();
 
   area.classList.remove("damage-hit");
   void area.offsetWidth;
   area.classList.add("damage-hit");
 
-  area._damageHitTimer = setTimeout(() => {
+  const cancel = scheduleLpCleanup(this, () => {
     area.classList.remove("damage-hit");
-    area._damageHitTimer = null;
+    lpDamageHits.delete(area);
   }, duration);
+  lpDamageHits.set(area, cancel);
 
   return true;
 }
@@ -351,7 +394,7 @@ async function playTravelingLpChangeNumber(
     onArrival?.();
   };
 
-  if (prefersReducedMotion()) {
+  if (renderer.destroyed || prefersReducedMotion()) {
     markArrived();
     return;
   }
@@ -428,14 +471,27 @@ async function playTravelingLpChangeNumber(
         )
       : null;
 
-  arrivalTimer = setTimeout(markArrived, arrivalMs);
-
-  try {
-    await finishAnimation(animation, duration);
-  } finally {
-    markArrived();
-    float.remove();
-  }
+  await new Promise<void>(resolve => {
+    let settled = false;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    const finish = (completed: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (fallbackTimer !== null) clearTimeout(fallbackTimer);
+      unregister();
+      if (!completed) animation?.cancel();
+      markArrived();
+      float.remove();
+      resolve();
+    };
+    const unregister = registerLpCancellation(renderer, () => finish(false));
+    arrivalTimer = setTimeout(markArrived, arrivalMs);
+    if (animation) {
+      void animation.finished.then(() => finish(true), () => finish(false));
+    } else {
+      fallbackTimer = setTimeout(() => finish(true), duration);
+    }
+  });
 }
 
 function trackFloatingLpChangeNumber(
@@ -444,7 +500,7 @@ function trackFloatingLpChangeNumber(
   state: LpDisplayState | null,
   entry: LpQueueEntry,
 ): Promise<void> | null {
-  if (prefersReducedMotion()) return null;
+  if (renderer.destroyed || prefersReducedMotion()) return null;
   if (!state) return null;
 
   if (!state.floatingPromises) {
@@ -459,7 +515,7 @@ function trackFloatingLpChangeNumber(
   const settleArrival = () => {
     if (arrivalSettled) return;
     arrivalSettled = true;
-    resolveArrival(true);
+    resolveArrival(renderer.destroyed !== true);
   };
   entry.floatArrivalPromise = arrivalPromise;
 
@@ -483,6 +539,7 @@ async function runLpDamageQueue(
   player: LpPlayer,
   state: LpDisplayState,
 ): Promise<void> {
+  if (renderer.destroyed) return;
   if (state.presentationPromise) return state.presentationPromise;
 
   state.presentationPromise = (async () => {
@@ -490,7 +547,7 @@ async function runLpDamageQueue(
     await Promise.resolve();
 
     try {
-      while (state.queue.length > 0) {
+      while (!renderer.destroyed && state.queue.length > 0) {
         const entry = state.queue.shift()!;
         if (entry.holdFinalUntilReal === true) {
           state.holdFinalUntilReal = true;
@@ -508,7 +565,7 @@ async function runLpDamageQueue(
 
         if (prefersReducedMotion()) {
           renderer.setDisplayedLp(player, toLp);
-          playCounterFlash(getLpCounter(renderer, player), kind);
+          playCounterFlash(renderer, getLpCounter(renderer, player), kind);
           continue;
         }
 
@@ -518,6 +575,8 @@ async function runLpDamageQueue(
         ) {
           await entry.floatArrivalPromise.catch(() => {});
         }
+
+        if (renderer.destroyed) break;
 
         await renderer.animateLpOdometer(
           player,
@@ -534,7 +593,7 @@ async function runLpDamageQueue(
       state.presentationPromise = null;
       const realLp = Number(player?.lp);
       if (
-        !state.holdFinalUntilReal &&
+        !renderer.destroyed && !state.holdFinalUntilReal &&
         Number.isFinite(realLp) &&
         realLp !== state.displayed
       ) {
@@ -644,7 +703,7 @@ export function ensureLpDisplayState(
   this: Renderer,
   player: LpPlayer | null | undefined,
 ): LpDisplayState | null {
-  if (!player) return null;
+  if (this.destroyed || !player) return null;
   if (!this.lpDisplayState) {
     this.lpDisplayState = {};
   }
@@ -688,6 +747,7 @@ export function setDisplayedLp(
   player: LpPlayer | null | undefined,
   value: number,
 ): boolean {
+  if (this.destroyed) return false;
   const state = this.ensureLpDisplayState?.(player);
   if (!state) return false;
 
@@ -708,6 +768,7 @@ export function hasActiveLpPresentation(
   this: Renderer,
   player: LpPlayer | null | undefined,
 ): boolean {
+  if (this.destroyed) return false;
   const state = this.ensureLpDisplayState?.(player);
   return (
     !!state &&
@@ -725,6 +786,7 @@ export function waitForLpPresentation(
   this: Renderer,
   player: LpPlayer | null = null,
 ): Promise<boolean> {
+  if (this.destroyed) return Promise.resolve(false);
   const states: LpDisplayState[] = [];
   if (player) {
     const state = this.ensureLpDisplayState?.(player);
@@ -745,7 +807,7 @@ export function waitForLpPresentation(
     .filter((promise) => promise && typeof promise.then === "function");
 
   if (pending.length === 0) return Promise.resolve(false);
-  return Promise.allSettled(pending).then(() => true);
+  return Promise.allSettled(pending).then(() => !this.destroyed);
 }
 
 /**
@@ -757,7 +819,7 @@ export function showLpDamageSequence(
   amount: number,
   options: LpChangeOptions = {},
 ): boolean {
-  if (!player || !amount) return false;
+  if (this.destroyed || !player || !amount) return false;
   const value = Math.max(0, Number(amount || 0));
   if (!Number.isFinite(value) || value <= 0) return false;
 
@@ -818,6 +880,7 @@ export function animateLpOdometer(
   toLp: number,
   options: LpChangeOptions = {},
 ): Promise<boolean> {
+  if (this.destroyed) return Promise.resolve(false);
   const state = this.ensureLpDisplayState?.(player);
   if (!state) return Promise.resolve(false);
 
@@ -829,7 +892,7 @@ export function animateLpOdometer(
 
   if (prefersReducedMotion() || amount <= 0) {
     this.setDisplayedLp(player, to);
-    playCounterFlash(counter, kind);
+    playCounterFlash(this, counter, kind);
     return Promise.resolve(true);
   }
 
@@ -844,7 +907,25 @@ export function animateLpOdometer(
   counter?.classList.add("lp-odometer-active", `lp-odometer-${kind}`);
 
   return new Promise<boolean>((resolve) => {
+    let frame: number | null = null;
+    let settled = false;
+    const finish = (completed: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (frame !== null) cancelAnimationFrame(frame);
+      unregister();
+      counter?.classList.remove("lp-odometer-active", `lp-odometer-${kind}`);
+      if (completed) playCounterFlash(this, counter, kind);
+      resolve(completed);
+    };
+    const unregister = registerLpCancellation(this, () => finish(false));
     const step = (nowTime: number) => {
+      if (settled) return;
+      frame = null;
+      if (this.destroyed) {
+        finish(false);
+        return;
+      }
       const now = Number.isFinite(nowTime) ? nowTime : Date.now();
       const progress = clamp((now - startedAt) / duration, 0, 1);
       const eased = easeOutCubic(progress);
@@ -865,17 +946,15 @@ export function animateLpOdometer(
       this.setDisplayedLp(player, value);
 
       if (progress < 1) {
-        requestAnimationFrame(step);
+        frame = requestAnimationFrame(step);
         return;
       }
 
       this.setDisplayedLp(player, to);
-      counter?.classList.remove("lp-odometer-active", `lp-odometer-${kind}`);
-      playCounterFlash(counter, kind);
-      resolve(true);
+      finish(true);
     };
 
-    requestAnimationFrame(step);
+    frame = requestAnimationFrame(step);
   });
 }
 
@@ -888,6 +967,7 @@ export function showLpChange(
   amount: number,
   options: LpChangeOptions = {},
 ): boolean | void {
+  if (this.destroyed) return false;
   if (!player || !amount) return;
   const value = Number(amount);
   if (!Number.isFinite(value) || value === 0) return;
@@ -919,7 +999,7 @@ export function showLpChange(
   if (!container) return;
 
   const lpEl = getLpElement(this, player);
-  const counter = lpEl?.closest(".lp-counter");
+  const counter = lpEl?.closest<HTMLElement>(".lp-counter") ?? null;
 
   const float = document.createElement("div");
   float.className = [
@@ -930,20 +1010,14 @@ export function showLpChange(
   float.textContent = `${isHeal ? "+" : ""}${Math.abs(value)}`;
   (counter || container).appendChild(float);
 
-  requestAnimationFrame(() => {
-    float.classList.add("lp-float-animate");
+  let completed = false;
+  const frame = requestAnimationFrame(() => {
+    if (!completed && !this.destroyed) float.classList.add("lp-float-animate");
   });
-
-  if (counter) {
-    const flashClass = isHeal ? "lp-flash-heal" : "lp-flash-damage";
-    counter.classList.remove("lp-flash-heal", "lp-flash-damage");
-    counter.classList.add(flashClass);
-    setTimeout(() => {
-      counter.classList.remove(flashClass);
-    }, 420);
-  }
-
-  setTimeout(() => {
+  playCounterFlash(this, counter, isHeal ? "heal" : "damage");
+  scheduleLpCleanup(this, () => {
+    completed = true;
+    cancelAnimationFrame(frame);
     float.remove();
   }, 1100);
 }

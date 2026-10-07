@@ -65,3 +65,62 @@ for (const seat of ["player", "bot"] as const) {
     });
   }
 }
+
+for (const seat of ["player", "bot"] as const) {
+  test(`${seat} Tera records its public-information target and playback never consults AutoSelector`, async t => {
+    const live = createRuntimeGame({ captureReplay: true, randomSeed: 42, laboratoryMode: true,
+      laboratoryUseBot: false, chainResponseTimeoutMs: 0 });
+    const playback = createRuntimeGame({ captureReplay: false, replayMode: "playback", laboratoryMode: true,
+      laboratoryUseBot: false, chainResponseTimeoutMs: 0 });
+    t.after(() => { live.dispose(); playback.dispose(); });
+    for (const game of [live, playback]) {
+      const start = game.startWithDecks.bind(game);
+      game.startWithDecks = async options => {
+        await start(options);
+        game.turn = seat; game.turnCounter = 4; game.phase = "main1";
+        game.disablePresentationDelays = true;
+        game.waitForBoardPresentation = game.waitForPresentationDelay = game.waitForAiPresentationStep = async () => {};
+        game.player.controllerType = game.bot.controllerType = "ai";
+        for (const player of [game.player, game.bot]) {
+          player.deck = [...player.hand, ...player.deck]; player.hand = [];
+        }
+        const owner = game[seat], opponent = game.getOpponent(owner);
+        const tera = required(owner.deck.find(card => card.id === 306));
+        owner.deck.splice(owner.deck.indexOf(tera), 1);
+        placeFieldCards(owner.field, tera);
+        for (const id of [251, 257]) {
+          const hidden = required(opponent.deck.find(card => card.id === id));
+          opponent.deck.splice(opponent.deck.indexOf(hidden), 1);
+          hidden.isFacedown = true; hidden.position = "defense";
+          placeFieldCards(opponent.field, hidden);
+        }
+      };
+    }
+    live.ui.showChainResponseModal = async () => null;
+    playback.ui.showChainResponseModal = async () => assert.fail("Playback must use the recorded responses");
+    playback.autoSelector.select = () => assert.fail("Playback must use the recorded target");
+    const deck = [306, 251, 257, ...Array<number>(17).fill(3)];
+    await live.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true,
+      startAtDrawPhase: true, startingPlayer: seat, announceStartingPlayer: false,
+      playerDeck: deck, botDeck: deck, playerExtraDeck: [], botExtraDeck: [] });
+    const owner = live[seat], opponent = live.getOpponent(owner);
+    const chosen = required(opponent.field[0]);
+    const result = await live.tryActivateMonsterEffect(required(owner.field[0]), null, "field", owner, {
+      effectId: "tera_arcanist_earth_ignition", activationContext: { autoSelectTargets: true },
+    });
+    assert.equal(result.success, true);
+    assert.equal(chosen.isFacedown, false);
+    assert.equal(chosen.position, "attack");
+    assert.equal(opponent.field[1]?.isFacedown, true);
+    const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "public-target" }))));
+    assert.equal(replay.decisions.filter(decision => decision.kind === "target").length, 1);
+    const replayResult = await replayCanonicalDuel(replay, {
+      game: unsafeFixture<ReplayDriverGamePort>(playback, "Real Game with the identical prepared target board in both instances."),
+    });
+    assert.equal(replayResult.ok, true);
+    assert.equal(replayResult.finalStateHash, replay.result?.finalStateHash);
+    assert.equal(playback.decisionBroker.replayCursor, replay.decisions.length);
+    assert.deepEqual(playback.getRandomState(), live.getRandomState());
+    assert.equal(playback.getOpponent(playback[seat]).field[0]?.isFacedown, false);
+  });
+}

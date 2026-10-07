@@ -127,3 +127,106 @@ for (const actor of ['player', 'bot'] as const) for (const family of ['priestess
     });
   }
 }
+
+type AttackPresenceScenario = 'attacker_return' | 'defender_return' | 'sanctuary' | 'ambush' | 'stale_redirect';
+
+function installAttackPresenceSetup(game: RuntimeGame, scenario: AttackPresenceScenario) {
+  const start = game.startWithDecks.bind(game);
+  game.startWithDecks = async options => {
+    await start(options);
+    game.turn = 'player'; game.phase = 'battle'; game.battleStep = 'battle'; game.turnCounter = 4;
+    game.disablePresentationDelays = true;
+    game.waitForBoardPresentation = game.waitForPresentationDelay = game.waitForAiPresentationStep = async () => {};
+    game.player.controllerType = game.bot.controllerType = 'ai';
+    for (const owner of [game.player, game.bot]) owner.deck.push(...owner.hand.splice(0));
+    const take = (seat: Seat, id: number) => {
+      const owner = game[seat], card = required(owner.deck.find(entry => entry.id === id));
+      owner.deck.splice(owner.deck.indexOf(card), 1);
+      card.position = 'attack'; card.isFacedown = false;
+      return card;
+    };
+    const attacker = take('player', 1), defender = take('bot', 254);
+    attacker.effects = [];
+    attacker.atk = 3000;
+    defender.effects = [];
+    placeFieldCards(game.player.field, attacker);
+    placeFieldCards(game.bot.field, defender);
+    if (scenario === 'attacker_return' || scenario === 'defender_return') {
+      const recycled = scenario === 'attacker_return' ? attacker : defender;
+      recycled.effects = [{ id: 'replay_attack_presence_departure', timing: 'on_event', event: 'attack_declared',
+        ...(scenario === 'attacker_return' ? { requireSelfAsAttacker: true } : { requireDefenderIsSelf: true }),
+        triggerRequirement: 'mandatory', triggerTiming: 'if',
+        actions: [{ type: 'move', targetRef: 'self', player: 'self', fromZone: 'field', to: 'graveyard' }] },
+      { id: 'replay_attack_presence_return', timing: 'on_event', event: 'card_to_grave',
+        triggerRequirement: 'mandatory', triggerTiming: 'if',
+        actions: [{ type: 'special_summon_from_zone', zone: 'graveyard', requireSource: true, position: 'attack' }] }];
+    } else {
+      const trap = take('bot', scenario === 'sanctuary' ? 268 : 463);
+      trap.isFacedown = true; trap.turnSetOn = trap.setTurn = 1;
+      placeFieldCards(game.bot.spellTrap, trap);
+      if (scenario !== 'sanctuary') game.bot.hand.push(take('bot', 451));
+    }
+  };
+  if (scenario === 'stale_redirect') {
+    const check = game.checkAndOfferTraps.bind(game);
+    game.checkAndOfferTraps = async (event, payload) => {
+      const result = await check(event, payload);
+      if (event === 'attack_declared' && payload?.attackRedirect) {
+        const redirected = required(game.bot.field.find(card => card.id === 451));
+        assert.equal((await game.moveCard(redirected, game.bot, 'graveyard', { fromZone: 'field', awaitCardMovedEvent: true })).success, true);
+        assert.equal((await game.moveCard(redirected, game.bot, 'field', { fromZone: 'graveyard', position: 'attack',
+          isFacedown: false, summonMethod: 'special', summonOrigin: 'effect_resolution', resetAttackFlags: true,
+          awaitCardMovedEvent: true })).success, true);
+      }
+      return result;
+    };
+  }
+}
+
+for (const scenario of ['attacker_return', 'defender_return', 'sanctuary', 'ambush', 'stale_redirect'] as const) {
+  test(`attack presence runtime and canonical replay ${scenario}`, async t => {
+    const game = createRuntimeGame({ laboratoryMode: true, captureReplay: true, randomSeed: 42, chainResponseTimeoutMs: 0 });
+    const playback = createRuntimeGame({ laboratoryMode: true, captureReplay: false,
+      replayMode: 'playback', chainResponseTimeoutMs: 0 });
+    t.after(() => { game.dispose(); playback.dispose(); });
+    installAttackPresenceSetup(game, scenario);
+    installAttackPresenceSetup(playback, scenario);
+    const trapId = scenario === 'sanctuary' ? 268 : 463;
+    game.bot.strategy = { chooseChainResponse: ({ activatable }) =>
+      activatable.find(candidate => candidate.card?.id === trapId) || { pass: true } };
+    playback.ui.showChainResponseModal = async () => assert.fail('playback must use recorded responses');
+    playback.ui.showTargetSelection = () => assert.fail('playback must use recorded targets');
+    playback.autoSelector.select = () => assert.fail('playback must not recalculate target choices');
+    const deck = [1, 254, 268, 463, 451, 1, 1, 1, 1, 1];
+    await game.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true, startAtDrawPhase: true,
+      startingPlayer: 'player', announceStartingPlayer: false, playerDeck: deck, botDeck: deck,
+      playerExtraDeck: [], botExtraDeck: [] });
+    const attacker = required(game.player.field[0]), defender = required(game.bot.field[0]);
+    let damageSteps = 0, resolved = 0;
+    game.on('damage_step', () => { damageSteps++; });
+    game.on('combat_resolved', () => { resolved++; });
+    const oldVersion = scenario === 'attacker_return' ? attacker.locationVersion : defender.locationVersion;
+    assert.equal(required(await game.resolveCombat(attacker, defender)).ok, true);
+    if (scenario === 'ambush') {
+      assert.equal(damageSteps, 5); assert.equal(resolved, 1);
+      assert.ok(game.bot.field.includes(defender));
+      assert.ok(game.bot.graveyard.some(card => card.id === 451), 'redirected monster enters the actual battle');
+    } else {
+      assert.equal(damageSteps, 0); assert.equal(resolved, 0);
+      assert.deepEqual([game.player.lp, game.bot.lp], [8000, 8000]);
+      assert.ok(game.bot.field.includes(defender));
+      if (scenario !== 'stale_redirect') {
+        assert.ok((scenario === 'attacker_return' ? attacker : defender).locationVersion > oldVersion);
+      }
+    }
+    assert.equal(attacker.attacksUsedThisTurn, scenario === 'attacker_return' ? 0 : 1);
+    const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(game.finalizeReplay({ reason: `attack-presence-${scenario}` }))));
+    const played = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback,
+      'Concrete Game uses the identical deterministic presence fixture before live capture and playback.') });
+    assert.equal(played.ok, true);
+    assert.equal(played.finalStateHash, replay.result?.finalStateHash);
+    assert.equal(playback.decisionBroker.replayCursor, replay.decisions.length);
+    assert.deepEqual(createCanonicalStateSnapshot(playback), createCanonicalStateSnapshot(game));
+    assert.deepEqual(playback.getRandomState(), game.getRandomState());
+  });
+}

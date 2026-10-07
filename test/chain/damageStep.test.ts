@@ -5,6 +5,11 @@ import type {
   GameCard,
 } from "../../src/core/contracts/cards.js";
 import type { DamageStepTiming } from "../../src/core/contracts/effects.js";
+import type { EffectContext } from "../../src/core/contracts/actionRuntime.js";
+import type { EventPayloadBase } from "../../src/core/contracts/events.js";
+import { applySimulatedActions } from "../../src/core/ai/common/simulatedActions/index.js";
+import type { SimulatedActionContextData } from "../../src/core/ai/common/simulatedActions/shared.js";
+import { simulationCard, simulationState } from "../helpers/simulation.js";
 import type { DamageStepTransaction } from "../../src/core/contracts/gameRuntime.js";
 import type { GamePlayer } from "../../src/core/contracts/player.js";
 import type { PlayerId } from "../../src/core/contracts/primitives.js";
@@ -69,7 +74,7 @@ interface DamageHarnessOptions {
 import assert from "node:assert/strict";
 import test from "node:test";
 import { required } from "../helpers/fixtures.js";
-import { createRuntimeGame } from "../helpers/game.js";
+import { createRuntimeGame, placeFieldCards, runtimeCard } from "../helpers/game.js";
 
 import Card from "../../src/core/Card.js";
 import { selectCandidates } from "../../src/core/effects/targeting/selection.js";
@@ -973,4 +978,297 @@ test("Rainbow Cosmic Dragon cura pelo ATK original da carta destruída", async (
 test("Fire Extreme Dragon causa dano pelo ATK original da carta destruída", async (t) => {
   const game = await resolveBattleDestroyTrigger(t, "Fire Extreme Dragon");
   assert.equal(game.bot.lp, 7000);
+});
+
+function createAttackPresenceGame(t: TestContext, direct = false) {
+  const game = createBattleTriggerGame(t);
+  const attacker = runtimeCard({ name: "Presence attacker", cardKind: "monster",
+    atk: 2000, def: 1000, level: 4, position: "attack", effects: [] }, "player");
+  const defender = runtimeCard({ name: "Presence defender", cardKind: "monster",
+    atk: 1000, def: 500, level: 4, position: "attack", effects: [] }, "bot");
+  placeFieldCards(game.player.field, attacker);
+  if (!direct) placeFieldCards(game.bot.field, defender);
+  const observed = { declarations: 0, damageSteps: 0, resolved: 0, visualDamage: 0, impacts: 0 };
+  game.on("attack_declared", () => { observed.declarations++; });
+  game.on("damage_step", () => { observed.damageSteps++; });
+  game.on("combat_resolved", () => { observed.resolved++; });
+  game.ui.showLpDamageSequence = () => { observed.visualDamage++; return true; };
+  game.ui.playBattleImpactImmediate = () => { observed.impacts++; return true; };
+  const leaveAndReturn = async (card: Card) => {
+    const owner = card === attacker ? game.player : game.bot;
+    const departed = await game.moveCard(card, owner, "graveyard", { fromZone: "field", awaitCardMovedEvent: true });
+    assert.equal(departed.success, true);
+    const returned = await game.moveCard(card, owner, "field", { fromZone: "graveyard",
+      summonMethod: "special", summonOrigin: "effect_resolution", position: "attack",
+      isFacedown: false, resetAttackFlags: true, awaitCardMovedEvent: true });
+    assert.equal(returned.success, true);
+  };
+  return { game, attacker, defender, observed, leaveAndReturn };
+}
+
+for (const stage of ["before_declaration", "after_declaration", "presentation", "contact"] as const) {
+  for (const participant of ["attacker", "defender", "direct_attacker"] as const) {
+    test(`attack presence interrupts ${participant} leaving and returning at ${stage}`, async t => {
+      const direct = participant === "direct_attacker";
+      const { game, attacker, defender, observed, leaveAndReturn } = createAttackPresenceGame(t, direct);
+      const moved = participant === "defender" ? defender : attacker;
+      const originalVersion = moved.locationVersion;
+      if (stage === "contact" && !direct) {
+        defender.effects = [{ id: "presence_damage_step_marker", timing: "on_event", event: "damage_step",
+          damageStepTimings: [DAMAGE_STEP_TIMINGS.START], triggerRequirement: "mandatory", triggerTiming: "if",
+          actions: [{ type: "heal", amount: 0, player: "self" }] }];
+      }
+      if (stage === "before_declaration") {
+        const check = game.checkAndOfferTraps.bind(game);
+        let movedOnce = false;
+        game.checkAndOfferTraps = async (event, payload) => {
+          const result = await check(event, payload);
+          if (event === "battle_step_open" && !movedOnce) {
+            movedOnce = true;
+            await leaveAndReturn(moved);
+          }
+          return result;
+        };
+      } else if (stage === "after_declaration") {
+        const check = game.checkAndOfferTraps.bind(game);
+        game.checkAndOfferTraps = async (event, payload) => {
+          const result = await check(event, payload);
+          if (event === "attack_declared") await leaveAndReturn(moved);
+          return result;
+        };
+      } else {
+        game.ui.playAttackLunge = options => {
+          const contact = leaveAndReturn(moved).then(() => {
+            options?.onContact?.({});
+            return true;
+          });
+          return Object.assign(contact, { contact, finished: contact, cancel: async () => false });
+        };
+      }
+      assert.equal(required(await game.resolveCombat(attacker, direct ? null : defender)).ok, true);
+      assert.ok(moved.locationVersion > originalVersion, "the same object really leaves and returns");
+      assert.ok((moved === attacker ? game.player : game.bot).field.includes(moved));
+      assert.deepEqual([game.player.lp, game.bot.lp], [8000, 8000]);
+      assert.equal(observed.declarations, stage === "before_declaration" ? 0 : 1);
+      assert.equal(observed.damageSteps, 0, "interruption precedes Damage Step creation");
+      assert.equal(observed.resolved, 0);
+      assert.equal(observed.visualDamage, 0, "stale contact cannot preview LP damage");
+      assert.equal(observed.impacts, 0, "stale contact cannot publish an impact");
+      assert.equal(attacker.attacksUsedThisTurn,
+        participant === "defender" && stage !== "before_declaration" ? 1 : 0);
+      assert.equal(attacker.hasAttacked, participant === "defender" && stage !== "before_declaration");
+      assert.equal(game.getDamageStepState().active, false);
+      assert.equal(game.chainSystem.isOpenGameState(), true);
+    });
+  }
+}
+
+test("attack presence preserves fresh attacker counters after a real mandatory Chain summon", async t => {
+  const { game, attacker, observed } = createAttackPresenceGame(t, true);
+  attacker.effects = [{ id: "presence_chain_departure", timing: "on_event", event: "attack_declared",
+    requireSelfAsAttacker: true, triggerRequirement: "mandatory", triggerTiming: "if",
+    actions: [{ type: "move", targetRef: "self", player: "self", fromZone: "field", to: "graveyard" }] },
+  { id: "presence_chain_return", timing: "on_event", event: "card_to_grave",
+    triggerRequirement: "mandatory", triggerTiming: "if",
+    actions: [{ type: "special_summon_from_zone", zone: "graveyard", requireSource: true, position: "attack" }] }];
+  let resolvedLinks = 0;
+  game.on("chain_link_resolution", event => { if (event.stage === "completed") resolvedLinks++; });
+  await game.resolveCombat(attacker, null);
+  assert.ok(resolvedLinks >= 2, "both effects resolve through the real Chain");
+  assert.ok(game.player.field.includes(attacker));
+  assert.equal(game.bot.lp, 8000);
+  assert.equal(attacker.attacksUsedThisTurn, 0);
+  assert.equal(attacker.hasAttacked, false);
+  assert.equal(observed.damageSteps, 0);
+});
+
+for (const freshAttacker of [false, true]) {
+  test(`attack presence releases second-attack reservation only for the original presence (${freshAttacker})`, async t => {
+    const { game, attacker, defender, leaveAndReturn, observed } = createAttackPresenceGame(t);
+    attacker.attacksUsedThisTurn = 1;
+    attacker.hasAttacked = true;
+    attacker.canMakeSecondAttackThisTurn = true;
+    const check = game.checkAndOfferTraps.bind(game);
+    game.checkAndOfferTraps = async (event, payload) => {
+      const result = await check(event, payload);
+      if (event === "battle_step_open") {
+        await leaveAndReturn(freshAttacker ? attacker : defender);
+        if (freshAttacker) attacker.secondAttackUsedThisTurn = true;
+      }
+      return result;
+    };
+    await game.resolveCombat(attacker, defender);
+    assert.equal(observed.declarations, 0);
+    assert.equal(attacker.attacksUsedThisTurn, freshAttacker ? 0 : 1);
+    assert.equal(attacker.secondAttackUsedThisTurn, freshAttacker);
+  });
+}
+
+test("attack presence negation does not consume a newly summoned attacker", async t => {
+  const { game, attacker, defender, leaveAndReturn, observed } = createAttackPresenceGame(t);
+  const check = game.checkAndOfferTraps.bind(game);
+  game.checkAndOfferTraps = async (event, payload) => {
+    const result = await check(event, payload);
+    if (event === "attack_declared") {
+      await leaveAndReturn(attacker);
+      game.lastAttackNegated = true;
+    }
+    return result;
+  };
+  await game.resolveCombat(attacker, defender);
+  assert.equal(attacker.attacksUsedThisTurn, 0);
+  assert.equal(attacker.hasAttacked, false);
+  assert.equal(observed.damageSteps, 0);
+});
+
+for (const invalidation of ["return_before_read", "return_redirect_window", "legacy_only", "controller"] as const) {
+  test(`attack redirect presence rejects ${invalidation} without falling back to the original target`, async t => {
+    const { game, attacker, defender, observed, leaveAndReturn } = createAttackPresenceGame(t);
+    const redirect = runtimeCard({ name: "Redirect target", cardKind: "monster", atk: 500,
+      def: 500, level: 4, position: "attack", effects: [] }, "bot");
+    placeFieldCards(game.bot.field, redirect);
+    let windows = 0;
+    const check = game.checkAndOfferTraps.bind(game);
+    game.checkAndOfferTraps = async (event, payload) => {
+      const result = await check(event, payload);
+      if (event === "battle_step_open" && ++windows === 2 && invalidation === "return_redirect_window") {
+        await leaveAndReturn(redirect);
+      }
+      if (event === "attack_declared") {
+        const actionContext = unsafeFixture<NonNullable<EffectContext["actionContext"]>>(required(payload),
+          "The real attack response window carries the combat participant context consumed by the redirect action.");
+        const redirected = await game.effectEngine.applyActions(
+          [{ type: "redirect_current_attack_to_target", targetRef: "redirect" }],
+          { source: redirect, player: game.bot, opponent: game.player,
+            effect: { id: "presence_redirect", timing: "manual", activationZones: ["field"] }, actionContext }, { redirect: [redirect] });
+        assert.equal(redirected.success, true);
+        if (invalidation === "return_before_read") await leaveAndReturn(redirect);
+        if (invalidation === "legacy_only") delete required(payload).attackRedirect;
+        if (invalidation === "controller") assert.equal((await game.takeControl(redirect, game.player)).success, true);
+      }
+      return result;
+    };
+    await game.resolveCombat(attacker, defender);
+    assert.deepEqual([game.player.lp, game.bot.lp], [8000, 8000]);
+    assert.ok(game.bot.field.includes(defender));
+    assert.ok((invalidation === "controller" ? game.player : game.bot).field.includes(redirect));
+    assert.equal(observed.damageSteps, 0);
+    assert.equal(observed.resolved, 0);
+    assert.equal(attacker.attacksUsedThisTurn, 1);
+  });
+}
+
+test("attack presence permits a defender changing face without leaving the field", async t => {
+  const { game, attacker, defender, observed } = createAttackPresenceGame(t);
+  game.on("attack_declared", () => { defender.position = "defense"; defender.isFacedown = true; });
+  await game.resolveCombat(attacker, defender);
+  assert.ok(game.bot.graveyard.includes(defender));
+  assert.equal(observed.damageSteps, 5);
+  assert.equal(observed.resolved, 1);
+  assert.equal(attacker.attacksUsedThisTurn, 1);
+});
+
+test("attack redirect presence follows Ambush in Crash Town's newly summoned monster", async t => {
+  const { game, attacker, defender, observed } = createAttackPresenceGame(t);
+  attacker.atk = 3000;
+  const trap = createRuntimeCard(cardDatabaseByName.get("Ambush in Crash Town"), game.bot);
+  const replacement = createRuntimeCard(cardDatabaseByName.get("Gunslinger of the Burning West"), game.bot);
+  trap.isFacedown = true;
+  trap.setTurn = trap.turnSetOn = 1;
+  placeFieldCards(game.bot.spellTrap, trap);
+  game.bot.hand.push(replacement);
+  game.bot.strategy = { chooseChainResponse: ({ activatable }) =>
+    activatable.find(candidate => candidate.card === trap) || { pass: true } };
+  let selectedVersion: number | undefined;
+  const check = game.checkAndOfferTraps.bind(game);
+  game.checkAndOfferTraps = async (event, payload) => {
+    const result = await check(event, payload);
+    if (event === "attack_declared") {
+      const attackContext = unsafeFixture<EventPayloadBase>(required(payload),
+        "The real attack window exposes the typed mutable event redirect capability.");
+      assert.strictEqual(attackContext.attackRedirect?.target, replacement);
+      selectedVersion = attackContext.attackRedirect?.targetLocationVersion;
+      assert.equal(selectedVersion, replacement.locationVersion);
+    }
+    return result;
+  };
+  let battled: unknown = null;
+  game.on("combat_resolved", payload => { battled = payload.target; });
+  await game.resolveCombat(attacker, defender);
+  assert.ok(selectedVersion !== undefined && selectedVersion > 0, "redirect records the new summon presence");
+  assert.strictEqual(battled, replacement);
+  assert.ok(game.bot.field.includes(defender), "the original target is spared");
+  assert.ok(game.bot.graveyard.includes(trap));
+  assert.equal(observed.damageSteps, 5);
+  assert.equal(observed.resolved, 1);
+  assert.equal(attacker.attacksUsedThisTurn, 1);
+});
+
+test("attack redirect presence is captured by the simulation producer", () => {
+  const target = simulationCard({ id: 1, name: "Simulated redirect", cardKind: "monster",
+    owner: "bot", controller: "bot", atk: 1000, def: 1000, level: 4, locationVersion: 7 });
+  const state = simulationState({ bot: { field: [target] } });
+  const actionContext: SimulatedActionContextData = {};
+  assert.equal(applySimulatedActions({ state, selfId: "bot",
+    actions: [{ type: "redirect_current_attack_to_target", targetRef: "redirect" }],
+    selections: { redirect: [target] }, options: { actionContext } }), true);
+  assert.strictEqual(actionContext.attackRedirect?.target, target);
+  assert.equal(actionContext.attackRedirect?.targetLocationVersion, 7);
+  target.locationVersion = 8;
+  assert.equal(actionContext.attackRedirect?.targetLocationVersion, 7, "later movements do not recapture the redirect");
+});
+
+test("attack redirect presence can replace a departed original target through nested context roots", async t => {
+  const { game, attacker, defender, leaveAndReturn, observed } = createAttackPresenceGame(t);
+  const redirected = runtimeCard({ name: "Valid replacement", cardKind: "monster",
+    atk: 1500, def: 1000, level: 4, position: "attack", effects: [] }, "bot");
+  placeFieldCards(game.bot.field, redirected);
+  const check = game.checkAndOfferTraps.bind(game);
+  game.checkAndOfferTraps = async (event, payload) => {
+    const result = await check(event, payload);
+    if (event === "attack_declared") {
+      await leaveAndReturn(defender);
+      const root = required(payload);
+      // A cycle is deliberately included to prove bounded propagation through
+      // existing mutable runtime context links without touching participant data.
+      Object.assign(root, { _chainRootContext: root });
+      const context = { attacker, attackerOwner: game.player, _chainRootContext: { _chainRootContext: root } };
+      const actionContext = unsafeFixture<NonNullable<EffectContext["actionContext"]>>(context,
+        "The redirect action reads a narrow attack context retained through nested Chain response roots.");
+      assert.equal((await game.effectEngine.applyActions(
+        [{ type: "redirect_current_attack_to_target", targetRef: "redirect" }],
+        { source: redirected, player: game.bot, opponent: game.player,
+          effect: { id: "nested_presence_redirect", timing: "manual", activationZones: ["field"] }, actionContext },
+        { redirect: [redirected] })).success, true);
+    }
+    return result;
+  };
+  await game.resolveCombat(attacker, defender);
+  assert.equal(game.bot.lp, 7500);
+  assert.ok(game.bot.field.includes(defender));
+  assert.ok(game.bot.graveyard.includes(redirected));
+  assert.equal(attacker.attacksUsedThisTurn, 1);
+  assert.equal(observed.damageSteps, 5);
+  assert.equal(observed.resolved, 1);
+});
+
+test("attack redirect presence preserves the response window before consuming a valid negated attack", async t => {
+  const { game, attacker, defender, observed } = createAttackPresenceGame(t);
+  let openWindows = 0;
+  const check = game.checkAndOfferTraps.bind(game);
+  game.checkAndOfferTraps = async (event, payload) => {
+    const result = await check(event, payload);
+    if (event === "battle_step_open") openWindows++;
+    if (event === "attack_declared") {
+      Object.assign(required(payload), { attackRedirect: { target: defender,
+        targetOwner: game.bot, targetLocationVersion: defender.locationVersion } });
+      game.lastAttackNegated = true;
+    }
+    return result;
+  };
+  await game.resolveCombat(attacker, defender);
+  assert.equal(openWindows, 2);
+  assert.equal(attacker.attacksUsedThisTurn, 1);
+  assert.equal(observed.damageSteps, 0);
+  assert.deepEqual([game.player.lp, game.bot.lp], [8000, 8000]);
 });

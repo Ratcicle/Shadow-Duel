@@ -76,6 +76,7 @@ interface AutoSelectorGamePort {
 }
 
 type AutoSelectionCandidate = (RawSelectionCandidate | SelectionCandidate) & {
+  isFacedown?: boolean;
   cardRef?: AutoSelectorCard | null;
   card?: AutoSelectorCard | null;
   instanceId?: string | number;
@@ -231,7 +232,7 @@ function isAutoSelectionRequirementArray(
 function scoreTemporaryCombatDebuff(
   card: AutoSelectorScorableCard,
   options: {
-    attackers: AutoSelectorCard[];
+    attackers: AutoSelectorScorableCard[];
     opponentLp: number;
     atkReduction?: number | undefined;
     defReduction?: number | undefined;
@@ -251,7 +252,7 @@ function scoreOffensiveTemporaryBuff(
   card: AutoSelectorScorableCard,
   options: {
     atkBoost: number;
-    opponentField: AutoSelectorCard[];
+    opponentField: AutoSelectorScorableCard[];
     opponentLp: number;
   },
 ): number {
@@ -261,6 +262,33 @@ function scoreOffensiveTemporaryBuff(
     [card, options],
   );
   return typeof result === "number" ? result : 0;
+}
+
+function samePlayer(
+  left: AutoSelectorPlayer | null | undefined,
+  right: AutoSelectorPlayer | null | undefined,
+): boolean {
+  return !!left && !!right && (left === right || left.id === right.id);
+}
+
+function candidateController(candidate: AutoSelectionCandidate): string | null {
+  const card = candidate.cardRef ?? candidate.card;
+  return candidate.controller ?? card?.controller ?? card?.owner ?? null;
+}
+
+/** Scoring sees only public state when a facedown card is not proven to be ours. */
+function projectScoringCard(
+  card: AutoSelectorScorableCard,
+  isOwn: boolean,
+  zone?: AutoSelectionCandidate["zone"],
+): AutoSelectorScorableCard {
+  if (isOwn || !card.isFacedown) return card;
+  const publicState = { isFacedown: true, position: card.position };
+  const isMonster = zone === "field" ||
+    (zone !== "spellTrap" && zone !== "fieldSpell" && card.cardKind === "monster");
+  return isMonster
+    ? { ...publicState, cardKind: "monster", atk: 1500, def: 1500, level: 0 }
+    : publicState;
 }
 
 export default class AutoSelector {
@@ -412,17 +440,18 @@ export default class AutoSelector {
       selectionContractIntent(context) ||
       null;
 
-    if (strategy === "highest_atk") {
-      return candidates.slice().sort((a, b) => (b.atk || 0) - (a.atk || 0));
-    }
-    if (strategy === "lowest_atk") {
-      return candidates.slice().sort((a, b) => (a.atk || 0) - (b.atk || 0));
-    }
-    if (strategy === "highest_def") {
-      return candidates.slice().sort((a, b) => (b.def || 0) - (a.def || 0));
-    }
-    if (strategy === "lowest_def") {
-      return candidates.slice().sort((a, b) => (a.def || 0) - (b.def || 0));
+    if (strategy === "highest_atk" || strategy === "lowest_atk" ||
+        strategy === "highest_def" || strategy === "lowest_def") {
+      const stat = strategy.endsWith("_atk") ? "atk" : "def";
+      const direction = strategy.startsWith("highest_") ? -1 : 1;
+      return candidates.map(candidate => {
+        const card = this.getScoringCard(candidate, context);
+        const original = candidate.cardRef ?? candidate.card ?? candidate;
+        // Preserve explicit visible candidate stats; hidden rankings use only the projection.
+        const value = card === original ? candidate[stat] : card[stat];
+        return { candidate, value: value || 0 };
+      }).sort((left, right) => direction * (left.value - right.value))
+        .map(entry => entry.candidate);
     }
 
     const intent = this.getRequirementIntent(requirement, context, candidates);
@@ -531,14 +560,14 @@ export default class AutoSelector {
     if (requirement.owner === "player") return "benefit";
 
     if (Array.isArray(candidates) && candidates.length > 0) {
-      const owner = context?.owner || context?.player || null;
+      const owner = context.owner ?? context.player ?? null;
       const opponent =
         owner && typeof this.game?.getOpponent === "function"
           ? this.game.getOpponent(owner)
           : null;
       const hasOpponentCandidate = candidates.some((candidate) => {
         const ownerPlayer = this.resolveCandidateOwner(candidate, context);
-        return ownerPlayer && opponent && ownerPlayer === opponent;
+        return samePlayer(ownerPlayer, opponent);
       });
       if (hasOpponentCandidate) return "harm";
     }
@@ -551,10 +580,15 @@ export default class AutoSelector {
     context: AutoSelectorContext,
   ): AutoSelectorPlayer | null {
     if (!candidate) return null;
-    if (candidate.controller === "player") return this.game?.player || null;
-    if (candidate.controller === "bot") return this.game?.bot || null;
-
-    const owner = context?.owner || context?.player || null;
+    const owner = context.owner ?? context.player ?? null;
+    const controller = candidateController(candidate);
+    if (controller !== null) {
+      if (owner?.id === controller) return owner;
+      if (this.game.player?.id === controller) return this.game.player;
+      if (this.game.bot?.id === controller) return this.game.bot;
+      const opponent = owner ? this.game.getOpponent?.(owner) : null;
+      return opponent?.id === controller ? opponent : null;
+    }
     if (!owner) return null;
     if (candidate.owner === "player") return owner;
     if (candidate.owner === "opponent") {
@@ -565,33 +599,38 @@ export default class AutoSelector {
     return null;
   }
 
+  private getScoringCard(
+    candidate: AutoSelectionCandidate | undefined,
+    context: AutoSelectorContext,
+  ): AutoSelectorScorableCard {
+    if (!candidate) return {};
+    const actor = context.owner ?? context.player;
+    const card = candidate.cardRef ?? candidate.card ?? candidate;
+    const isOwn = !!actor && candidateController(candidate) === actor.id;
+    return projectScoringCard(card, isOwn, candidate.zone ?? candidate.zoneName);
+  }
+
+  private getScoringField(
+    player: AutoSelectorPlayer | null,
+    context: AutoSelectorContext,
+  ): AutoSelectorScorableCard[] {
+    const actor = context.owner ?? context.player;
+    return (player?.field || []).map(card => projectScoringCard(card, samePlayer(player, actor), "field"))
+      .filter(card => card.cardKind === "monster");
+  }
+
   getCandidateScore(
     candidate: AutoSelectionCandidate | undefined,
     intent: SelectionIntent,
     context: AutoSelectorContext,
   ): number {
     const ownerPlayer = this.resolveCandidateOwner(candidate, context);
-    const baseCard = candidate?.cardRef || {
-      name: candidate?.name,
-      cardKind: candidate?.cardKind,
-      atk: candidate?.atk,
-      def: candidate?.def,
-      level: candidate?.level,
-      position: candidate?.position,
-      archetype: candidate?.archetype,
-      archetypes: candidate?.archetypes,
-      goodDiscard: candidate?.goodDiscard,
-      cannotBeNormalSummonedOrSet: candidate?.cannotBeNormalSummonedOrSet,
-      usedEffectThisTurn: candidate?.usedEffectThisTurn,
-      hasAttacked: candidate?.hasAttacked,
-      mustBeAttacked: candidate?.mustBeAttacked,
-      tempAtkBoost: candidate?.tempAtkBoost,
-      equipAtkBonus: candidate?.equipAtkBonus,
-      tempDefBoost: candidate?.tempDefBoost,
-      equipDefBonus: candidate?.equipDefBonus,
-    };
+    const baseCard = this.getScoringCard(candidate, context);
+    const self = context.owner ?? context.player ?? null;
+    const isSelf = samePlayer(self, ownerPlayer);
+    const fieldSpell = ownerPlayer?.fieldSpell;
     const options = {
-      fieldSpell: ownerPlayer?.fieldSpell || null,
+      fieldSpell: fieldSpell ? projectScoringCard(fieldSpell, isSelf, "fieldSpell") : null,
       preferDefense: false,
     };
 
@@ -600,8 +639,6 @@ export default class AutoSelector {
         ? estimateMonsterValue(baseCard, options)
         : estimateCardValue(baseCard, options);
 
-    const self = context?.owner || context?.player || null;
-    const isSelf = self && ownerPlayer === self;
     if (intent === "harm") {
       const targetPreference = getTargetPreference(context);
       if (
@@ -620,7 +657,8 @@ export default class AutoSelector {
       ) {
         return (
           scoreTemporaryCombatDebuff(baseCard, {
-            attackers: targetPreference.attackers || [],
+            attackers: (targetPreference.attackers || []).map(card =>
+              this.getScoringCard({ cardRef: card }, context)),
             opponentLp:
               targetPreference.opponentLp ??
               this.resolveCandidateOwner(candidate, context)?.lp ??
@@ -746,6 +784,7 @@ export default class AutoSelector {
               ? configuredPayoffs
               : countAvailableOffensivePayoffs(
                   ownerPlayer,
+                  self,
                   costPreferences.offensivePayoffNames || [],
                 );
           if (availablePayoffs <= 1) costScore += 80;
@@ -766,6 +805,7 @@ export default class AutoSelector {
               ? configuredPayoffs
               : countAvailableOffensivePayoffs(
                   ownerPlayer,
+                  self,
                   offensivePayoffNames,
                 );
           if (availablePayoffs <= 1) costScore += 80;
@@ -812,14 +852,12 @@ export default class AutoSelector {
       return -40 + getEffectiveAtk(card) / 10000;
     }
 
-    const self = context?.owner || context?.player || null;
+    const self = context.owner ?? context.player ?? null;
     const opponent =
       self && typeof this.game?.getOpponent === "function"
         ? this.game.getOpponent(self)
         : null;
-    const opponentMonsters = (opponent?.field || []).filter(
-      (monster) => monster && monster.cardKind === "monster",
-    );
+    const opponentMonsters = this.getScoringField(opponent, context);
     return scoreOffensiveTemporaryBuff(card, {
       atkBoost,
       opponentField: opponentMonsters,
@@ -845,8 +883,8 @@ export default class AutoSelector {
       context?.selectionContract?.metadata?.sourceCardId;
     const isSource =
       sourceCardId != null &&
-      (candidate?.cardRef?.id === sourceCardId ||
-        candidate?.id === sourceCardId);
+      (card.id === sourceCardId ||
+        (card === (candidate?.cardRef ?? candidate?.card ?? candidate) && candidate?.id === sourceCardId));
     const expectedAtk = getEffectiveAtk(card) + atkBoost;
     let score = -10;
 
@@ -859,14 +897,12 @@ export default class AutoSelector {
     if (card.cannotAttackThisTurn && card.position !== "defense") score -= 30;
     if (card.hasAttacked) score -= 40;
 
-    const self = context?.owner || context?.player || null;
+    const self = context.owner ?? context.player ?? null;
     const opponent =
       self && typeof this.game?.getOpponent === "function"
         ? this.game.getOpponent(self)
         : null;
-    const opponentMonsters = (opponent?.field || []).filter(
-      (monster) => monster && monster.cardKind === "monster",
-    );
+    const opponentMonsters = this.getScoringField(opponent, context);
     const bestTargetStat = opponentMonsters.reduce((max, monster) => {
       const stat = monster.isFacedown
         ? 1500
@@ -949,9 +985,10 @@ function isOffensivePayoffCost(
 
 function countAvailableOffensivePayoffs(
   player: AutoSelectorPlayer | null | undefined,
+  actor: AutoSelectorPlayer | null | undefined,
   payoffNames: string[] = [],
 ): number {
-  if (!player) return 0;
+  if (!player || !samePlayer(player, actor)) return 0;
   return [...(player.hand || []), ...(player.deck || [])].filter((card) =>
     isOffensivePayoffCost(card, payoffNames),
   ).length;

@@ -1,4 +1,5 @@
 import { getEffectiveAtk } from "../cardStats.js";
+import { getCardLocationVersion } from "../../../Card.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
 import { estimateMonsterValue, hasArchetype } from "../cardValue.js";
 import {
@@ -170,6 +171,7 @@ export function applyRedirectCurrentAttackToTarget(
   }
   options.actionContext.attackRedirect = {
     target,
+    targetLocationVersion: getCardLocationVersion(target),
     reason: ctx.action?.contextLabel || "redirect_attack",
   };
   options.actionContext.redirectedTarget = target;

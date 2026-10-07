@@ -402,6 +402,10 @@ for (const seat of ["player", "bot"] as const) for (const event of ["attack", "e
       }
       if (scenario === "full") placeFieldCards(owner.field, ...Array.from({ length: 4 }, () => make(255)));
       let summons = 0, publishedTargets = 0, responsesDuringReturn = 0;
+      let damageSteps = 0, combatsResolved = 0;
+      const initialLp = owner.lp;
+      game.on("damage_step", () => { damageSteps++; });
+      game.on("combat_resolved", () => { combatsResolved++; });
       let returnInProgress = false;
       const activations: { inField: boolean; version: number; isTrapLink: boolean }[] = [];
       const choices: { inHand: boolean; level: number | undefined }[] = [];
@@ -448,6 +452,12 @@ for (const seat of ["player", "bot"] as const) for (const event of ["attack", "e
       assert.equal(publishedTargets, 0, "Sanctuary references the attacked/targeted Dragon without declaring a new target");
       assert.equal(responsesDuringReturn, 0, "return and summon share a single resolution");
       if (resolves) assert.ok(owner.field.includes(dragon), "the returned Dragon can be chosen again");
+      if (event === "attack" && resolves) {
+        assert.equal(owner.lp, initialLp);
+        assert.equal(damageSteps, 0, "Sanctuary ends the pending attack before Damage Step");
+        assert.equal(combatsResolved, 0);
+        assert.equal(attacker.attacksUsedThisTurn, 1, "the interrupted declared attack is consumed once");
+      }
     });
   }
 }

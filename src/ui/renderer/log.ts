@@ -176,6 +176,7 @@ function updateHudIdentity(hud: HTMLElement, player: GamePlayer): void {
  * @this {import('../Renderer.js').default}
  */
 export function updateLP(this: Renderer, player: GamePlayer): void {
+  if (this.destroyed) return;
   const el =
     player.id === "player" ? this.elements.playerLP : this.elements.botLP;
   if (!el) return;

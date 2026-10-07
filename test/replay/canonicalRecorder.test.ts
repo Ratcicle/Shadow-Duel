@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Card from "../../src/core/Card.js";
-import { cardDefinition } from "../helpers/fixtures.js";
+import { cardDefinition, required } from "../helpers/fixtures.js";
 import type { FieldPlacementResult } from "../../src/core/contracts/placement.js";
 import { createRuntimeGame, placeFieldCards } from "../helpers/game.js";
 
@@ -69,6 +69,70 @@ function recorderGame(): ReplayRecorderGamePort {
     finalizeReplay,
   };
 }
+
+for (const [field, changedValue] of [
+  ["positionChangedThisTurn", true],
+  ["summonedTurn", 4],
+  ["hasAttacked", true],
+  ["attacksUsedThisTurn", 1],
+] as const) {
+  test(`canonical hash distinguishes ${field} when action legality changes`, t => {
+    const game = createRuntimeGame({ captureReplay: false, randomSeed: 15, chainResponseTimeoutMs: 0 });
+    t.after(() => game.dispose());
+    game.turn = "player";
+    game.turnCounter = 4;
+    game.phase = "main1";
+    const card = new Card(cardDefinition(254), "player");
+    placeFieldCards(game.player.field, card);
+    Object.assign(card, { position: "attack", summonedTurn: 1, hasAttacked: false,
+      positionChangedThisTurn: false, attacksUsedThisTurn: 0 });
+    const snapshot = createCanonicalStateSnapshot(game);
+    const baseline = hashCanonicalGameState(game);
+    const legal = () => field === "attacksUsedThisTurn"
+      ? game.getAttackAvailability(card).ok : game.canChangePosition(card);
+    assert.equal(legal(), true);
+    const previous = card[field];
+    Reflect.set(card, field, changedValue);
+    assert.equal(legal(), false);
+    assert.notEqual(hashCanonicalGameState(game), baseline);
+    assert.equal(Reflect.get(required(snapshot.players.player.zones.field[0]), field), previous);
+    assert.equal(Reflect.get(required(createCanonicalStateSnapshot(game).players.player.zones.field[0]), field), changedValue);
+    Reflect.set(card, field, previous);
+    assert.equal(hashCanonicalGameState(game), baseline);
+  });
+}
+
+test("canonical card turn state defaults only absent values and preserves zero summon turn", () => {
+  const game = recorderGame();
+  const card: ReplayRuntimeCard = { id: cardDefinition(254).id };
+  required(game.player).hand.push(card);
+  const readCard = () => required(createCanonicalStateSnapshot(game).players.player.zones.hand[0]);
+  const empty = readCard();
+  assert.equal(empty.attacksUsedThisTurn, 0);
+  assert.equal(empty.hasAttacked, false);
+  assert.equal(empty.summonedTurn, null);
+  assert.equal(empty.positionChangedThisTurn, false);
+  const absentHash = hashCanonicalGameState(game);
+  card.hasAttacked = undefined;
+  assert.equal(readCard().hasAttacked, false, "simulation projections may explicitly forward an absent flag");
+  assert.equal(hashCanonicalGameState(game), absentHash);
+  Object.assign(card, { attacksUsedThisTurn: 0, hasAttacked: false, summonedTurn: null, positionChangedThisTurn: false });
+  assert.equal(hashCanonicalGameState(game), absentHash);
+  card.summonedTurn = 0;
+  assert.equal(readCard().summonedTurn, 0);
+  assert.notEqual(hashCanonicalGameState(game), absentHash);
+  card.attacksUsedThisTurn = 2;
+  assert.equal(readCard().hasAttacked, false, "the flag is not derived from attack usage");
+  card.hasAttacked = true;
+  card.attacksUsedThisTurn = 0;
+  assert.equal(readCard().hasAttacked, true, "a stored true flag remains independent of the counter");
+  for (const value of [-1, 0.5, Number.MAX_SAFE_INTEGER]) {
+    card.attacksUsedThisTurn = value;
+    card.summonedTurn = value;
+    assert.equal(readCard().attacksUsedThisTurn, value);
+    assert.equal(readCard().summonedTurn, value);
+  }
+});
 
 test("canonical hashes distinguish latent presence counters and detach their snapshot", t => {
   const game = createRuntimeGame({ disableChains: true, captureReplay: false, randomSeed: 15 });

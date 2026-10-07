@@ -41,12 +41,14 @@ test("frozen event references preserve Fast-window attack redirect feedback", as
   const payload: DuelEventMap["attack_declared"] = { attacker, attackerOwner: owner, defender: original,
     defenderOwner: opponent, target: original, targetOwner: opponent };
   game.checkAndOfferTraps = async (_eventName, context) => {
-    Object.assign(required(context), { attackRedirect: { target: redirected, targetOwner: opponent },
+    Object.assign(required(context), { attackRedirect: { target: redirected, targetOwner: opponent,
+      targetLocationVersion: redirected.locationVersion },
       redirectedTarget: redirected, redirectedTargetOwner: opponent });
     return { ok: true };
   };
   await game.emit("attack_declared", payload);
   assert.strictEqual(payload.attackRedirect?.target, redirected);
+  assert.equal(payload.attackRedirect?.targetLocationVersion, redirected.locationVersion);
   assert.strictEqual(payload.redirectedTarget, redirected);
   assert.strictEqual(payload.redirectedTargetOwner, opponent);
 });

@@ -24,7 +24,7 @@ export const CANONICAL_REPLAY_SCHEMA_VERSION = 2 as const;
  * Change only when existing replay interpretation becomes incompatible.
  * Card definition changes are tracked separately by cardDatabaseSignature.
  */
-export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v24" as const;
+export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v25" as const;
 
 export type SerializablePrimitive = string | number | boolean | null;
 
@@ -382,6 +382,10 @@ export interface CanonicalCardStateSnapshot {
   properSummonEstablished: boolean;
   properSummonProcedure: string | null;
   position: string | null;
+  attacksUsedThisTurn: number;
+  hasAttacked: boolean;
+  summonedTurn: number | null;
+  positionChangedThisTurn: boolean;
   fieldSlot: FieldSlot | null;
   fieldPresenceId: string | number | null;
   fieldPresenceState: Record<string, number>;
@@ -509,6 +513,10 @@ export interface ReplayRuntimeCard {
   properSummonEstablished?: boolean;
   properSummonProcedure?: string | null;
   position?: (string | null) | undefined;
+  attacksUsedThisTurn?: number;
+  hasAttacked?: boolean | undefined;
+  summonedTurn?: number | null;
+  positionChangedThisTurn?: boolean;
   fieldSlot?: FieldSlot | null;
   fieldPresenceId?: string | number | null;
   fieldPresenceState?: Readonly<Record<string, number>> | null;

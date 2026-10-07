@@ -170,6 +170,14 @@ pelo contrato. Referências runtime e IDs locais ao processo são tratados pelas
 projeções específicas de cartas, procedimentos e efeitos temporários.
 Campos com duração participam do hash conforme seu estado atual.
 
+Cada snapshot de carta também registra `attacksUsedThisTurn`, `hasAttacked`,
+`summonedTurn` e `positionChangedThisTurn`, inclusive fora do campo. Esses
+campos distinguem estados com legalidade diferente para ataques e mudanças
+de posição. A projeção copia os valores armazenados; quando ausentes, usa
+`0`, `false`, `null` e `false`, respectivamente. O turno de Invocação `0`
+permanece distinto de `null`, e `hasAttacked` não é derivado do contador de
+ataques. O lifecycle normal do duelo continua responsável pelos resets.
+
 O JSON canônico usa ordenação de chaves por code units, preservando a ordem
 dos arrays. O normalizador trata valores runtime da seguinte forma:
 
@@ -239,6 +247,12 @@ e crescentes, tipos e payloads de comandos, decisões compatíveis com seus
 kinds, eventos e snapshots. Campos opcionais são validados quando presentes.
 Os hashes devem ter oito caracteres hexadecimais lowercase.
 Propriedades extras também precisam ser serializáveis.
+
+Nos snapshots de carta, os quatro campos de estado de turno são obrigatórios.
+`attacksUsedThisTurn` deve ser um inteiro seguro não negativo;
+`summonedTurn` aceita esse mesmo domínio ou `null`, sem comparação com o
+turno atual. `hasAttacked` e `positionChangedThisTurn` exigem booleanos.
+A validação rejeita valores inválidos sem arredondar ou corrigir a entrada.
 
 O documento importado deve ser JSON estrito: ciclos, `undefined`, funções,
 symbols, `bigint`, números não finitos e arrays esparsos são rejeitados.

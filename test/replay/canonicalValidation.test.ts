@@ -43,6 +43,7 @@ function replay(overrides: MutableReplay = {}): MutableReplay {
 test("engine version is required and rejects recordings with previous semantics", () => {
   assert.equal(getCardDatabaseSignature(), "efa7767a");
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "feeb687b" })), /database signature/);
+  assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v24" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v23" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v22" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v18" })), /engineVersion/);
@@ -63,6 +64,40 @@ test("engine version is required and rejects recordings with previous semantics"
   delete missing.engineVersion;
   assert.throws(() => validateCanonicalReplay(missing), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "field-positions-v2" })), /engineVersion/);
+});
+
+test("canonical validation requires card turn counters and boolean flags without repairing input", t => {
+  const game = createRuntimeGame({ disableChains: true, captureReplay: false });
+  t.after(() => game.dispose());
+  game.player.hand.push(new Card(cardDefinition(254), "player"));
+  const snapshot = createCanonicalStateSnapshot(game);
+  const fields = ["attacksUsedThisTurn", "hasAttacked", "summonedTurn", "positionChangedThisTurn"] as const;
+  const validateCardValue = (field: typeof fields[number], value: unknown) => {
+    const changed = structuredClone(snapshot);
+    Reflect.set(required(changed.players.player.zones.hand[0]), field, value);
+    const input = replay({ result: { finalState: changed } });
+    const before = structuredClone(input);
+    try { return validateCanonicalReplay(input); }
+    finally { assert.deepEqual(input, before, "validation must not normalize or repair input"); }
+  };
+  for (const field of fields) {
+    const absent = structuredClone(snapshot);
+    Reflect.deleteProperty(required(absent.players.player.zones.hand[0]), field);
+    assert.throws(() => validateCanonicalReplay(replay({ result: { finalState: absent } })), new RegExp(field));
+    const numeric = field === "attacksUsedThisTurn" || field === "summonedTurn";
+    for (const invalid of numeric
+      ? [-1, 0.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, -Infinity, "1", true, {}, [], undefined]
+      : [0, 1, "false", null, {}, [], undefined]) {
+      assert.throws(() => validateCardValue(field, invalid), new RegExp(field));
+    }
+    if (numeric) {
+      for (const value of [0, 1, Number.MAX_SAFE_INTEGER]) assert.doesNotThrow(() => validateCardValue(field, value));
+    } else {
+      for (const value of [true, false]) assert.doesNotThrow(() => validateCardValue(field, value));
+    }
+  }
+  assert.throws(() => validateCardValue("attacksUsedThisTurn", null), /attacksUsedThisTurn/);
+  assert.doesNotThrow(() => validateCardValue("summonedTurn", null));
 });
 
 test("canonical validation requires a numeric presence-state map in card snapshots", t => {

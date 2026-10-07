@@ -260,6 +260,7 @@ export async function runFastEffectTiming(
   const actionPlayer = input.actionPlayer || input.context?.player || turnPlayer;
   const context: TimingContextDraft = {
     ...(input.context || {}),
+    _chainRootContext: input.context?._chainRootContext || input.context || null,
     timingOrigin: origin,
     turnPlayer,
     actionPlayer,

@@ -258,6 +258,7 @@ test("emit isolates listener errors and keeps the same mutable payload", async (
     received.attackRedirect = {
       target: redirected,
       targetOwner: defenderOwner,
+      targetLocationVersion: 7,
       reason: "test",
     };
     host.trace.push("second-listener");
@@ -276,6 +277,7 @@ test("emit isolates listener errors and keeps the same mutable payload", async (
   assert.equal(observedErrors.length, 1);
   assert.strictEqual(resolvedPayload, payload);
   assert.strictEqual(payload.attackRedirect?.target, redirected);
+  assert.equal(payload.attackRedirect?.targetLocationVersion, 7);
   assert.deepEqual(host.trace, [
     "replay",
     "arena",
@@ -465,6 +467,7 @@ test("resolveEventEntries copies attack redirects back to the original payload",
     trapPayload.attackRedirect = {
       target: redirected,
       targetOwner: defenderOwner,
+      targetLocationVersion: 9,
     };
     trapPayload.redirectedTarget = redirected;
     trapPayload.redirectedTargetOwner = defenderOwner;
@@ -479,6 +482,7 @@ test("resolveEventEntries copies attack redirects back to the original payload",
 
   assert.equal(result.ok, true);
   assert.strictEqual(payload.attackRedirect?.target, redirected);
+  assert.equal(payload.attackRedirect?.targetLocationVersion, 9);
   assert.strictEqual(payload.redirectedTarget, redirected);
   assert.strictEqual(payload.redirectedTargetOwner, defenderOwner);
 });
