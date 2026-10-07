@@ -7,13 +7,13 @@ import { unsafeFixture } from "../helpers/fixtures.js";
 import { createRuntimeGame } from "../helpers/game.js";
 
 test("P2 schema 2 rejects v15 and the old declaration signature independently before mutation", async t => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v24");
   const live = createRuntimeGame({ captureReplay: true, laboratoryMode: true });
   const playback = createRuntimeGame({ replayMode: "playback", laboratoryMode: true });
   t.after(() => { live.dispose(); playback.dispose(); });
   const valid = live.finalizeReplay({ reason: "p2-compatibility" });
   assert.ok(valid);
   assert.equal(valid.schemaVersion, 2);
+  assert.equal(valid.engineVersion, CANONICAL_REPLAY_ENGINE_VERSION);
   assert.equal(valid.cardDatabaseSignature, getCardDatabaseSignature());
   assert.notEqual(valid.cardDatabaseSignature, "0f2a7a85");
   const before = createCanonicalStateSnapshot(playback);

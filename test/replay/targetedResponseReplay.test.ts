@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
+import { CANONICAL_REPLAY_ENGINE_VERSION, type ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
 import { createCanonicalStateSnapshot, getCardDatabaseSignature, validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
 import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
 import { required, unsafeFixture } from "../helpers/fixtures.js";
@@ -226,7 +226,7 @@ for (const seat of ["player", "bot"] as const) for (const scenario of ["first-li
     playback.ui.showSpecialSummonPositionModal = () => assert.fail("playback must not ask position");
     playback.autoSelector.select = () => assert.fail("playback must not rerun AI");
     const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(game.finalizeReplay({ reason: "targeted-response-context" }))));
-    assert.equal(replay.engineVersion, "engine-rules-v24");
+    assert.equal(replay.engineVersion, CANONICAL_REPLAY_ENGINE_VERSION);
     assert.equal(replay.schemaVersion, 2);
     assert.equal(replay.cardDatabaseSignature, getCardDatabaseSignature());
     const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback,

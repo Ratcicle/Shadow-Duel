@@ -213,8 +213,11 @@ do construtor ou `game.setDevMode(true)`. Os launchers atuais passam
 
 **Sistema de Replays** — Captura e reprodução canônica:
 
+**Replay Canônico** é o registro executável e determinístico de uma partida do Shadow Duel. Contém setup inicial, RNG, Decks/Extra Decks, assinatura do banco de cartas (`cardDatabaseSignature`), comandos, decisões, eventos relevantes e hashes de estado necessários para reproduzir o duelo em outra instância de `Game`.
+
 - Duelos normais habilitam `captureReplay: true`. Arena e Laboratório não habilitam captura canônica por padrão; instâncias diretas de `Game` em testes podem solicitá-la com essa opção.
-- O formato serializa setup/RNG, comandos, decisões, eventos e hashes de estado.
+- `engineVersion` é versionamento de compatibilidade do replay, não número de revisão geral da engine. Não incremente por alterações de cartas, IA, UI ou refactors que preservem a interpretação de replays existentes. A versão atual fica somente em `CANONICAL_REPLAY_ENGINE_VERSION`, em [src/core/contracts/replay.ts](src/core/contracts/replay.ts); testes normais devem importá-la. Somente testes de compatibilidade histórica podem fixar versões antigas literalmente. Alterações nas definições de cartas são verificadas separadamente por `cardDatabaseSignature`.
+- [Replay canônico.md](docs/Replay%20can%C3%B4nico.md) documenta o contrato atual do sistema e as regras de compatibilidade. Não use esse documento como changelog ou diário de alterações da engine, das cartas ou da IA; não acrescente histórico de branches, lotes, entregas, resultados de testes ou goldens de desenvolvimento.
 - `Game.exportReplay` exporta o replay executável; o relatório estratégico da Arena é um artefato separado.
 - Execução canônica: [src/core/contracts/replay.ts](src/core/contracts/replay.ts) e [src/core/game/replay/](src/core/game/replay/) (`canonical.ts`, `validation.ts`, `recorder.ts`, `driver.ts`, `index.ts`)
 - Análise estratégica da Arena: [ArenaAnalytics.ts](src/core/ai/ArenaAnalytics.ts).

@@ -5,10 +5,11 @@ import { cardDefinition } from "../helpers/fixtures.js";
 import type { FieldPlacementResult } from "../../src/core/contracts/placement.js";
 import { createRuntimeGame, placeFieldCards } from "../helpers/game.js";
 
-import type {
-  ReplayRecorderGamePort,
-  ReplayRuntimeCard,
-  ReplayRuntimePlayer,
+import {
+  CANONICAL_REPLAY_ENGINE_VERSION,
+  type ReplayRecorderGamePort,
+  type ReplayRuntimeCard,
+  type ReplayRuntimePlayer,
 } from "../../src/core/contracts/replay.js";
 import {
   createCanonicalStateSnapshot,
@@ -202,9 +203,9 @@ test("recorder preserva key order, defaults e assinatura do formato", () => {
   ]);
   assert.equal(recording.format, "shadow-duel-canonical-replay");
   assert.equal(recording.schemaVersion, 2);
-  assert.equal(recording.engineVersion, "engine-rules-v24");
+  assert.equal(recording.engineVersion, CANONICAL_REPLAY_ENGINE_VERSION);
   assert.equal(recording.cardDatabaseSignature, getCardDatabaseSignature());
-  assert.equal(recording.cardDatabaseSignature, "feeb687b");
+  assert.equal(recording.cardDatabaseSignature, "efa7767a");
   assert.deepEqual(Object.keys(recording.setup), [
     "seed",
     "randomState",

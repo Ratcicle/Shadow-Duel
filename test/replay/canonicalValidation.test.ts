@@ -41,8 +41,8 @@ function replay(overrides: MutableReplay = {}): MutableReplay {
 }
 
 test("engine version is required and rejects recordings with previous semantics", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v24");
-  assert.equal(getCardDatabaseSignature(), "feeb687b");
+  assert.equal(getCardDatabaseSignature(), "efa7767a");
+  assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "feeb687b" })), /database signature/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v23" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v22" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v18" })), /engineVersion/);
@@ -106,7 +106,6 @@ test("replays com a assinatura parcial antiga são rejeitados antes da reproduç
 });
 
 test("Miragebound S02 integration rejects previous full signatures and uses schema 2 with the current engine", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v24");
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v14" })), /engineVersion/);
   assert.throws(
     () => validateCanonicalReplay(replay({ cardDatabaseSignature: "98009b78" })),
@@ -209,7 +208,6 @@ test("Tech-Zero procedure and resolution-choice alignment rejects the former dat
 });
 
 test("Ascension material editorial alignment rejects the former database signature with the same engine", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v24");
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "7e5d54cb" })), /card database signature does not match/);
   assert.equal(validateCanonicalReplay(replay()).schemaVersion, 2);
 });
@@ -668,21 +666,18 @@ test("paid reference snapshots are optional and deeply validated in serialized C
 });
 
 test("Tech-Zero P1 rejects old rules and old full signature independently", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v24");
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v19" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "c6aef06c" })), /database signature/);
   assert.equal(validateCanonicalReplay(replay()).schemaVersion, 2);
 });
 
 test("Tech-Zero P2 rejects the historical v20 envelope and signature independently", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v24");
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v20" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "f68bdfd5" })), /database signature/);
   assert.equal(validateCanonicalReplay(replay()).schemaVersion, 2);
 });
 
 test("Tech-Zero P3 rejects the historical v21 envelope and signature independently", () => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v24");
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v21" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "c0327049" })), /database signature/);
   assert.equal(validateCanonicalReplay(replay()).schemaVersion, 2);

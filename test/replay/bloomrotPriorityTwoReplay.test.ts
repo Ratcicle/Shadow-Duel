@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type Card from "../../src/core/Card.js";
 import { setLocale } from "../../src/core/i18n.js";
-import type { ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
+import { CANONICAL_REPLAY_ENGINE_VERSION, type ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
 import { createCanonicalStateSnapshot, hashCanonicalGameState, validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
 import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
 import { required, unsafeFixture } from "../helpers/fixtures.js";
@@ -183,7 +183,7 @@ for (const scenario of ["rootlings", "networks", "armors", "battle_attack", "bat
     for (const effect of ["bloomrot_rot_stag_attack_spore_boost", "bloomrot_rot_stag_defense_spore_boost", "bloomrot_mold_mender_attack_spores", "bloomrot_overgrowth_standby_spore_counter", "bloomrot_sudden_germination_attack", "bloomrot_rotting_ground_summon_spore_counter"])
       assert.equal(targeted.includes(effect), false, `${effect} must not declare a target`);
     const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "bloomrot-p2" }))));
-    assert.equal(replay.schemaVersion, 2); assert.equal(replay.engineVersion, "engine-rules-v24");
+    assert.equal(replay.schemaVersion, 2); assert.equal(replay.engineVersion, CANONICAL_REPLAY_ENGINE_VERSION);
     assert.ok(replay.commands.length > 0);
     setLocale("pt-br");
     const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback, "Concrete Game supplies identical real-card replay fixture.") });

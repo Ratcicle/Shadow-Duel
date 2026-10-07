@@ -2,7 +2,7 @@
 
 ## Resumo
 
-Shadow-Heart reúne 26 cartas com foco em pressão de batalha, reciclagem do Cemitério, Invocações por Tributo e progressão para monstros de Extra Deck.
+Shadow-Heart reúne 27 cartas com foco em pressão de batalha, reciclagem do Cemitério, Invocações por Tributo e progressão para monstros de Extra Deck.
 
 **Estilo de jogo:**
 
@@ -13,11 +13,11 @@ Shadow-Heart reúne 26 cartas com foco em pressão de batalha, reciclagem do Cem
 
 ---
 
-## Catálogo (26 cartas)
+## Catálogo (27 cartas)
 
-### Main Deck (22)
+### Main Deck (23)
 
-#### Monstros (12)
+#### Monstros (13)
 
 | ID | PT-BR | EN | Nível | Tipo | Atributo | ATK | DEF |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -33,6 +33,7 @@ Shadow-Heart reúne 26 cartas com foco em pressão de batalha, reciclagem do Cem
 | 117 | Leviatã do Coração Sombrio | Shadow-Heart Leviathan | 6 | Sea Serpent | Water | 2200 | 1800 |
 | 118 | Mago do Vazio do Coração Sombrio | Shadow-Heart Void Mage | 4 | Spellcaster | Dark | 1500 | 1500 |
 | 125 | Portador do Coração Sombrio | Shadow-Heart Heartbearer | 4 | Fiend | Dark | 1500 | 1500 |
+| 127 | Imperatriz do Ódio do Coração Sombrio | Shadow-Heart Hatred Empress | 8 | Warrior | Dark | 2800 | 1800 |
 
 #### Magias (9)
 
@@ -223,6 +224,16 @@ Nível 4, Fiend, Dark, 1500/1500.
 >
 > Você só pode usar este efeito de "Portador do Coração Sombrio" uma vez por turno.
 
+**127 — Imperatriz do Ódio do Coração Sombrio / Shadow-Heart Hatred Empress**
+
+Nível 8, Warrior, Dark, 2800/1800.
+
+> Você pode descartar 2 monstros "Coração Sombrio"; Invoque este card por Invocação-Especial da sua mão e, depois, você pode adicionar 1 monstro "Coração Sombrio" de Nível 8 do seu Deck à sua mão.
+>
+> Você pode oferecer este card como Tributo; negue os efeitos de todos os monstros com a face para cima que seu oponente controla até o final deste turno e, depois, todos os monstros "Coração Sombrio" que você controla ganham 300 de ATK para cada monstro cujos efeitos foram negados por este efeito.
+>
+> Você só pode usar cada efeito de "Imperatriz do Ódio do Coração Sombrio" uma vez por turno.
+
 ### Magias
 
 **103 — Purificação do Coração Sombrio / Shadow-Heart Purge**
@@ -366,8 +377,8 @@ Ascensão, Nível 10, Dragon, Dark, 3300/3000.
 
 ## Notas do Arquétipo
 
-- O catálogo possui 26 cartas: 22 no Main Deck e 4 no Extra Deck.
-- O Main Deck contém 12 monstros, 9 Magias e 1 Armadilha.
+- O catálogo possui 27 cartas: 23 no Main Deck e 4 no Extra Deck.
+- O Main Deck contém 13 monstros, 9 Magias e 1 Armadilha.
 - O Extra Deck contém 2 de Fusão, 2 de Ascensão.
 - Shadow-Heart Scale Dragon e Shadow-Heart Demon Arctroth são os materiais das duas linhas de Ascensão.
 - Shadow-Heart Scale Dragon também participa da Fusão de Shadow-Heart Demon Dragon.

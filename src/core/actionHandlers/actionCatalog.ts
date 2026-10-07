@@ -370,6 +370,7 @@ export const ACTION_CATALOG = {
       "remove",
       "untilEndOfTurn",
       "duration",
+      "storeResultAs",
     ],
     fields: {
       ...COMMON_TARGET_FIELDS,
@@ -379,10 +380,14 @@ export const ACTION_CATALOG = {
       remove: { type: "boolean" },
       untilEndOfTurn: { type: "boolean" },
       duration: { enum: ["until_end_turn", "while_faceup"] },
+      storeResultAs: { type: "string" },
     },
     targetRef: "optional",
     selection: "usesTargets",
     mutates: ["status"],
+    notes: [
+      "storeResultAs publishes cards whose public status changed; for effectsNegated, it includes only newly negated cards. Existing negations still receive independent contributions, and clearing negation does not enter the result.",
+    ],
     examples: [
       { type: "add_status", targetRef: "self", status: "battleIndestructible" },
       {

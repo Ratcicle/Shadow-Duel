@@ -818,6 +818,7 @@ export async function handleBuffStatsTemp(
     targetCards = engine.filterCardsListByImmunity(targetCards, ctx.player, {
       actionType: action.type,
       effectType:
+        statsAction.targetScope || !action.targetRef ||
         isNonTargetingEffectReference(ctx.effect, action.targetRef)
           ? null : statsAction.effectType || engine.inferEffectType?.(action.type),
       sourceCard: ctx?.source || null,
@@ -1669,13 +1670,22 @@ export async function handleAddStatus(
 
   const game = engine.game;
 
+  // Capture input references before publishing a result under the same key.
+  const referencedCards = action.targetScope ? [] : resolveTargetCards(action, ctx, targets, {
+    defaultRef: "self",
+  });
+  const changedCards: ActionRuntimeCard[] = [];
+  if (action.storeResultAs) {
+    ctx._actionTargets ??= {};
+    ctx._actionTargets[action.storeResultAs] = changedCards;
+    targets[action.storeResultAs] = changedCards;
+  }
+
   if (!player || !game) return false;
 
   let targetCards = action.targetScope
     ? resolveFieldScopeCards(action.targetScope, ctx, game, { engine })
-    : resolveTargetCards(action, ctx, targets, {
-        defaultRef: "self",
-      });
+    : referencedCards;
 
   const declaredTarget = Array.isArray(ctx?.effect?.targets)
     ? ctx.effect.targets.find((target) => target?.id === action.targetRef)
@@ -1742,6 +1752,9 @@ export async function handleAddStatus(
 
   for (const card of targetCards) {
     if (!card) continue;
+
+    const previousValue = status === "effectsNegated"
+      ? card.effectsNegated === true : readCardProperty(card, status);
 
     if (!remove && !untilEndOfTurn && status !== "effectsNegated") {
       trackFaceupStatus(card, status);
@@ -1837,6 +1850,11 @@ export async function handleAddStatus(
         tone: disablesStatus ? "red" : protective ? "blue" : "green",
       });
     }
+    const nextValue = status === "effectsNegated"
+      ? card.effectsNegated === true : readCardProperty(card, status);
+    const changed = status === "effectsNegated"
+      ? previousValue !== true && nextValue === true : !Object.is(previousValue, nextValue);
+    if (changed && !changedCards.includes(card)) changedCards.push(card);
   }
 
   if (modified && affectedCards.length > 0) {

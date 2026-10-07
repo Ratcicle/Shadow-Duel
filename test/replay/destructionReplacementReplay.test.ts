@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
+import { CANONICAL_REPLAY_ENGINE_VERSION, type ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
 import { createCanonicalStateSnapshot, validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
 import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
 import { required, unsafeFixture } from "../helpers/fixtures.js";
@@ -74,7 +74,7 @@ for (const scenario of ["negated", "redirected", "normal"] as const) {
         assert.equal(owner.field.includes(fodder), scenario === "negated");
         assert.equal(owner.banished.includes(fodder), scenario === "redirected");
         const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "destruction-replacement" }))));
-        assert.equal(replay.engineVersion, "engine-rules-v24");
+        assert.equal(replay.engineVersion, CANONICAL_REPLAY_ENGINE_VERSION);
         assert.equal(replay.schemaVersion, 2);
         assert.throws(() => validateCanonicalReplay({ ...replay, engineVersion: "engine-rules-v7" }), /engineVersion/);
         const played = await replayCanonicalDuel(replay, {

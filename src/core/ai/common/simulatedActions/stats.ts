@@ -42,6 +42,7 @@ import {
   resolveActionPlayer,
   resolveSimulatedLpCost,
   resolveTargetsForAction,
+  storeSimActionResult,
   STOP_SIMULATION,
 } from "./shared.js";
 import type { ActionTargetScope, ContextNumberSource } from "../../../contracts/actions.js";
@@ -290,7 +291,7 @@ function resolveStatBoostFromContext(
     }
     return value;
   };
-  const raw = readPath({ ...options, source: options.sourceCard, player: context.self, opponent: context.opponent }) ?? readPath(options.actionContext) ??
+  const raw = readPath({ ...options, _actionTargets: options.actionResults, source: options.sourceCard, player: context.self, opponent: context.opponent }) ?? readPath(options.actionContext) ??
     readPath(options.activationContext) ?? readPath(options.activationContext?.actionContext);
   let value = Number(raw ?? 0);
   if (!Number.isFinite(value)) value = 0;
@@ -432,13 +433,15 @@ export function applyBuffStatsTemp(
     ? getTargetScopeCards(action.targetScope as LegacyTargetScope, self, opponent)
     : targets;
   const changedCards: SimulatedCardState[] = [];
+  const effectType = action.targetScope || !action.targetRef || isNonTargetingEffectReference(options.effect, action.targetRef)
+    ? null : "target";
   recipients.forEach((card) => {
     if (card.cardKind !== "monster") return;
     if (getCardEffectImmunity({ game: {
       player: self.id === "player" ? self : opponent,
       bot: self.id === "bot" ? self : opponent,
       turnCounter: state.turnCounter,
-    } }, card, self, { sourceCard: options.sourceCard || null }).immune) return;
+    } }, card, self, { sourceCard: options.sourceCard || null, effectType }).immune) return;
     let changed = false;
     for (const [stat, boost] of [["atk", atkBoost], ["def", defBoost]] as const) {
       if (boost < 0 && !action.permanent && !isFaceupBuff && expiresOnTurn === null) {
@@ -903,6 +906,8 @@ export function applyAddStatus(
     opponent,
     applySimulatedActions,
   } = ctx;
+  const changedCards: SimulatedCardState[] = [];
+  storeSimActionResult(action, selections, options, changedCards);
   const recipients = action.targetScope
     ? getTargetScopeCards(action.targetScope as LegacyTargetScope, self, opponent)
     : action.targetRef ? targets : options.sourceCard ? [options.sourceCard] : [];
@@ -923,6 +928,8 @@ export function applyAddStatus(
     if (!card) return;
     const status = action.status;
     if (status) {
+      const previousValue = status === "effectsNegated"
+        ? card.effectsNegated === true : Reflect.get(card, status);
       if (!action.untilEndOfTurn && action.duration !== "until_end_turn" && status !== "effectsNegated" && action.remove !== true) {
         trackFaceupStatus(card, status);
         if (status === "piercing") trackFaceupStatus(card, "piercingGrantedByEffect");
@@ -976,7 +983,13 @@ export function applyAddStatus(
           state._simUnsupportedActions.push(`add_status:passive_recalculation:${passiveType || "unknown"}`);
         });
       }
+      const nextValue = status === "effectsNegated"
+        ? card.effectsNegated === true : Reflect.get(card, status);
+      const changed = status === "effectsNegated"
+        ? previousValue !== true && nextValue === true : !Object.is(previousValue, nextValue);
+      if (changed && !changedCards.includes(card)) changedCards.push(card);
     }
   });
+  storeSimActionResult(action, selections, options, changedCards);
   return;
 }

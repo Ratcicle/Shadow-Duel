@@ -287,6 +287,6 @@ test("walker inventories every declarative action in the live database", () => {
   }
 
   assert.deepEqual(diagnostics, []);
-  assert.equal(actionCount, 587); // Includes Scrapyard's approved post-effect conditional root.
+  assert.equal(actionCount, 590); // Includes Hatred Empress's two costs and four resolution actions.
   assert.equal(types.size, 96);
 });

@@ -705,6 +705,10 @@
       "name": "Portador do Coração Sombrio",
       "description": "Este card pode ser tratado como 2 Tributos para a Invocação-Tributo de um monstro \"Coração Sombrio\".\n\nSe outro monstro \"Coração Sombrio\" que você controla for destruído em batalha ou por efeito de card: você pode enviar este card para o Cemitério; Invoque por Invocação-Especial aquele monstro do seu Cemitério.\n\nVocê só pode usar este efeito de \"Portador do Coração Sombrio\" uma vez por turno."
     },
+    "127": {
+      "name": "Imperatriz do Ódio do Coração Sombrio",
+      "description": "Você pode descartar 2 monstros \"Coração Sombrio\"; Invoque este card por Invocação-Especial da sua mão e, depois, você pode adicionar 1 monstro \"Coração Sombrio\" de Nível 8 do seu Deck à sua mão.\n\nVocê pode oferecer este card como Tributo; negue os efeitos de todos os monstros com a face para cima que seu oponente controla até o final deste turno e, depois, todos os monstros \"Coração Sombrio\" que você controla ganham 300 de ATK para cada monstro cujos efeitos foram negados por este efeito.\n\nVocê só pode usar cada efeito de \"Imperatriz do Ódio do Coração Sombrio\" uma vez por turno."
+    },
     "151": {
       "name": "Luminarca Valente - Cavaleiro da Aurora",
       "description": "Se este card for Invocado por Invocação-Normal ou Especial: você pode adicionar 1 monstro \"Luminarca\" de Nível 4 ou menor do seu Deck à sua mão.\n\nSe este card batalhar com um monstro em Posição de Defesa, cause dano de batalha perfurante ao seu oponente."

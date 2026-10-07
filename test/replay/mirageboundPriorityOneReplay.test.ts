@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import Card from "../../src/core/Card.js";
 import type { PlayerId } from "../../src/core/contracts/primitives.js";
-import type { ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
+import { CANONICAL_REPLAY_ENGINE_VERSION, type ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
 import { createCanonicalStateSnapshot, validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
 import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
 import { chooseSpecialSummonPosition } from "../../src/core/effects/activation/positionChoice.js";
@@ -110,7 +110,7 @@ async function setup(t: TestContext, seat: PlayerId, controller: Controller, sce
   };
   const replay = async () => {
     const saved = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "miragebound-p1" }))));
-    assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, "engine-rules-v24");
+    assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, CANONICAL_REPLAY_ENGINE_VERSION);
     const result = await replayCanonicalDuel(saved, { game: unsafeFixture<ReplayDriverGamePort>(playback,
       "Both concrete Games receive the same deterministic fixture before replayed commands execute") });
     assert.equal(result.finalStateHash, saved.result?.finalStateHash);

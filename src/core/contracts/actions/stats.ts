@@ -4,7 +4,7 @@ export interface StatsActionMap {
   add_status: DefineAction<
     "add_status",
     "status",
-    "targetRef" | "targetScope" | "value" | "remove" | "untilEndOfTurn" | "duration"
+    "targetRef" | "targetScope" | "value" | "remove" | "untilEndOfTurn" | "duration" | "storeResultAs"
   >;
   banish_and_buff: DefineAction<
     "banish_and_buff",

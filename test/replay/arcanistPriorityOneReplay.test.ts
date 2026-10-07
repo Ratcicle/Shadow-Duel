@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import type { PlayerId } from "../../src/core/contracts/primitives.js";
-import type { ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
+import { CANONICAL_REPLAY_ENGINE_VERSION, type ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
 import { createCanonicalStateSnapshot, validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
 import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
 import { record, required, unsafeFixture } from "../helpers/fixtures.js";
@@ -151,7 +151,7 @@ async function setup(t: TestContext, seat: PlayerId, controller: Controller, sce
   const replay = async (commandCount = 1) => {
     const saved = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "arcanist-p1" }))));
     assert.equal(saved.schemaVersion, 2);
-    assert.equal(saved.engineVersion, "engine-rules-v24");
+    assert.equal(saved.engineVersion, CANONICAL_REPLAY_ENGINE_VERSION);
     assert.equal(saved.commands.length, commandCount);
     assert.equal(saved.commands[0]?.type, scenario === "tornado" ? "activate_card" : "activate_effect");
     const result = await replayCanonicalDuel(saved, { game: unsafeFixture<ReplayDriverGamePort>(playback,

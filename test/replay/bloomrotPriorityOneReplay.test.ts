@@ -61,12 +61,13 @@ async function drive(game: RuntimeGame, action: Promise<unknown>, mode: string |
   assert.ok(done && !game.targetSelection && !pending.size, "all choices must finish");
 }
 
-test("P1 requires current engine v16 and rejects v14 before playback mutates Game", async t => {
-  assert.equal(CANONICAL_REPLAY_ENGINE_VERSION, "engine-rules-v24");
+test("P1 requires the current engine and rejects v14 before playback mutates Game", async t => {
   const live = createRuntimeGame({ captureReplay: true, laboratoryMode: true });
   const playback = createRuntimeGame({ replayMode: "playback", laboratoryMode: true });
   t.after(() => { live.dispose(); playback.dispose(); });
-  const input = { ...live.finalizeReplay({ reason: "version-gate" }), engineVersion: "engine-rules-v14", cardDatabaseSignature: getCardDatabaseSignature() };
+  const valid = required(live.finalizeReplay({ reason: "version-gate" }));
+  assert.equal(valid.engineVersion, CANONICAL_REPLAY_ENGINE_VERSION);
+  const input = { ...valid, engineVersion: "engine-rules-v14", cardDatabaseSignature: getCardDatabaseSignature() };
   const before = createCanonicalStateSnapshot(playback);
   await assert.rejects(() => replayCanonicalDuel(input, { game: unsafeFixture<ReplayDriverGamePort>(playback, "Concrete Game implements canonical replay ports.") }), /engineVersion/);
   assert.deepEqual(createCanonicalStateSnapshot(playback), before);

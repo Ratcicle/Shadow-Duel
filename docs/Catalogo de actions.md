@@ -2198,6 +2198,7 @@ Adds a named status flag to target cards.
 | `remove` | nao | boolean |  |
 | `untilEndOfTurn` | nao | boolean |  |
 | `duration` | nao | enum: until_end_turn, while_faceup |  |
+| `storeResultAs` | nao | string |  |
 
 **Exemplos**
 
@@ -2224,7 +2225,7 @@ Adds a named status flag to target cards.
 
 **Notas**
 
-_Sem notas._
+- storeResultAs publishes cards whose public status changed; for effectsNegated, it includes only newly negated cards. Existing negations still receive independent contributions, and clearing negation does not enter the result.
 
 ### `banish_and_buff`
 

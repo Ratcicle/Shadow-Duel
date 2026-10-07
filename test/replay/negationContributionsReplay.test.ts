@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
+import { CANONICAL_REPLAY_ENGINE_VERSION, type ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
 import { createCanonicalStateSnapshot, hashCanonicalGameState, validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
 import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
 import { required, unsafeFixture } from "../helpers/fixtures.js";
@@ -46,7 +46,7 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
     assert.equal(result.success, true);
     assert.deepEqual(target.effectsNegationContributions, [{ duration: "until_end_turn", sourceDuelCardId: source.duelCardId, sourceEffectId: "darkness_dragon_negate" }]);
     const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "negation" }))));
-    assert.equal(replay.engineVersion, "engine-rules-v24");
+    assert.equal(replay.engineVersion, CANONICAL_REPLAY_ENGINE_VERSION);
     assert.equal(replay.schemaVersion, 2);
     for (const engineVersion of ["dragon-rules-v3", "engine-rules-v4", "dragon-rules-v5", "dragon-rules-v6", "engine-rules-v6", "engine-rules-v7"]) {
       assert.throws(() => validateCanonicalReplay({ ...replay, engineVersion }), /engineVersion/);

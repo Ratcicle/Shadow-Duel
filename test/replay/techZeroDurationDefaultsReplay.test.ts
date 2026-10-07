@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createCanonicalStateSnapshot, hashCanonicalGameState, validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
 import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
-import type { ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
+import { CANONICAL_REPLAY_ENGINE_VERSION, type ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
 import { setLocale } from "../../src/core/i18n.js";
 import { required, unsafeFixture } from "../helpers/fixtures.js";
 import { completeTestSelections, createRuntimeGame, placeFieldCards, type RuntimeGame } from "../helpers/game.js";
@@ -94,7 +94,7 @@ for (const seat of ["player", "bot"] as const) {
         else assert.equal(affected.effectsNegated, true);
         const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "techzero-duration-defaults" }))));
         assert.ok(replay.commands.some(command => command.type === "phase_intent"));
-        assert.equal(replay.engineVersion, "engine-rules-v24");
+        assert.equal(replay.engineVersion, CANONICAL_REPLAY_ENGINE_VERSION);
         if (controller === "ai") {
           const mode = required(replay.decisions.find(decision => decision.kind === "choice"));
           const target = required(replay.decisions.find(decision => decision.kind === "target"));

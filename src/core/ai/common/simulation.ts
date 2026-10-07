@@ -2536,7 +2536,8 @@ export function applyGenericSimulatedMainPhaseAction<
       )) break;
       const resolutionOptions: SimulatedActionOptions = {
         ...selectionOptions, sourceCard: card, effect,
-        referenceSnapshots: captureSimulatedReferences(effect, selections, player, state.player),
+        referenceSnapshots: captureSimulatedReferences(effect, selections, player, state.player,
+          effect.requiresSourceAtResolution === true ? { self: [card] } : {}),
         actionContext: selectionOptions.actionContext || {},
         costPayment: { status: "paid", actions: [], summonMarkers: [] },
         payingActivationCosts: true,
@@ -2604,7 +2605,8 @@ export function applyGenericSimulatedMainPhaseAction<
       )) break;
       const resolutionOptions: SimulatedActionOptions = {
         ...selectionOptions, sourceCard: card, effect,
-        referenceSnapshots: captureSimulatedReferences(effect, selections, player, state.player),
+        referenceSnapshots: captureSimulatedReferences(effect, selections, player, state.player,
+          effect.requiresSourceAtResolution === true ? { self: [card] } : {}),
         actionContext: selectionOptions.actionContext || {},
         costPayment: { status: "paid", actions: [], summonMarkers: [] },
         payingActivationCosts: true,

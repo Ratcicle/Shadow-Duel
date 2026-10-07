@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import type { PlayerId } from "../../src/core/contracts/primitives.js";
-import type { ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
+import { CANONICAL_REPLAY_ENGINE_VERSION, type ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
 import type { SelectionRequirement } from "../../src/core/contracts/selection.js";
 import { getLocale, setLocale } from "../../src/core/i18n.js";
 import {
@@ -139,7 +139,7 @@ async function setup(t: TestContext, seat: PlayerId, controller: Controller,
     { effectId: "miragebound_dancer_special_summon" }));
   const replay = async () => {
     const saved = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "miragebound-s02" }))));
-    assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, "engine-rules-v24");
+    assert.equal(saved.schemaVersion, 2); assert.equal(saved.engineVersion, CANONICAL_REPLAY_ENGINE_VERSION);
     assert.ok(saved.commands.every(command => typeof command.stateHash === "string"));
     setLocale("pt-br");
     const result = await replayCanonicalDuel(saved, { game: unsafeFixture<ReplayDriverGamePort>(playback,
