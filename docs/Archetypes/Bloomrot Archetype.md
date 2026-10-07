@@ -81,7 +81,7 @@ Tokens são gerados por efeitos e não entram na contagem de cartas do Main Deck
 
 > 1 monstro "Podriflora"
 >
-> Os efeitos do material devem ter sido ativados um total de pelo menos 2 vezes neste Duelo.
+> Os efeitos do material devem ter sido ativados pelo menos 2 vezes no total neste Duelo.
 
 **419 — Bloomrot Queen of the Hollow Grove**
 
@@ -119,7 +119,7 @@ Nível 3, Plant, Earth, 1400/1700.
 
 > Se este card for Invocado por Invocação-Normal ou Invocação-Especial: Invoque por Invocação-Especial 1 Ficha "Podriflora" (Planta/TERRA/Nível 1/ATK 0/DEF 0) em Posição de Defesa.
 >
-> Uma vez por turno: você pode enviar 1 monstro "Podriflora" que você controla para o Cemitério; escolha 1 card com a face para cima que seu oponente controla; coloque 3 Marcadores de Esporo nele.
+> Uma vez por turno: você pode enviar 1 monstro "Podriflora" que você controla para o Cemitério e, depois, escolha 1 card com a face para cima que seu oponente controla; coloque 3 Marcadores de Esporo nele.
 
 **404 — Podriflora Cervo-Pútrido / Bloomrot Rot-Stag**
 
@@ -157,9 +157,9 @@ Nível 6, Plant, Earth, 2100/2100.
 
 > Você pode Invocar este card por Invocação-Especial da sua mão ao remover 3 Marcadores de Esporo do campo. Você só pode Invocar por Invocação-Especial "Podriflora Viúva-Cogutumba" uma vez por turno desta forma.
 >
-> Se este card for Invocado: escolha 1 monstro que seu oponente controla com um Marcador de Esporo; destrua-o.
+> Se este card for Invocado: escolha 1 monstro com um Marcador de Esporo que seu oponente controla; destrua-o.
 >
-> Se um monstro que seu oponente controla com um Marcador de Esporo for destruído: coloque 1 Marcador de Esporo em 1 card com a face para cima que seu oponente controla.
+> Se um monstro com um Marcador de Esporo que seu oponente controla for destruído: coloque 1 Marcador de Esporo em 1 card com a face para cima que seu oponente controla.
 >
 > Você só pode usar cada efeito de "Podriflora Viúva-Cogutumba" uma vez por turno.
 
@@ -209,7 +209,7 @@ Magia Normal.
 
 Magia Contínua.
 
-> Monstros que seu oponente controla com 5 ou mais Marcadores de Esporo não podem declarar ataques.
+> Monstros com 5 ou mais Marcadores de Esporo que seu oponente controla não podem declarar ataques.
 >
 > Uma vez por turno: você pode ativar 1 destes efeitos:
 > ● Remova 2 Marcadores de Esporo do campo; adicione 1 monstro "Podriflora" de Nível 4 ou menor do seu Deck à sua mão.
@@ -223,7 +223,7 @@ Magia de Equipamento.
 >
 > O monstro equipado ganha 500 de DEF e 100 de ATK para cada Marcador de Esporo no campo.
 >
-> Uma vez por turno, se o monstro equipado seria destruído em batalha ou por um efeito de card, você pode remover 1 Marcador de Esporo do campo em vez disso.
+> Uma vez por turno, se o monstro equipado estiver para ser destruído em batalha ou por um efeito de card, você pode remover 1 Marcador de Esporo do campo em vez disso.
 >
 > Se este card for enviado do campo para o Cemitério: coloque 1 Marcador de Esporo em 1 monstro com a face para cima no campo.
 
@@ -261,9 +261,9 @@ Armadilha Contínua.
 
 > Cada vez que seu oponente Invocar um monstro: coloque 1 Marcador de Esporo nesse monstro.
 >
-> Monstros que seu oponente controla com um Marcador de Esporo não são afetados por efeitos de cards, exceto efeitos de cards "Podriflora".
+> Monstros com um Marcador de Esporo que seu oponente controla não são afetados por efeitos de cards, exceto efeitos de cards "Podriflora".
 >
-> Uma vez por turno: você pode escolher 1 monstro que seu oponente controla com 4 ou mais Marcadores de Esporo; negue os efeitos dele até o final deste turno.
+> Uma vez por turno: você pode escolher 1 monstro com 4 ou mais Marcadores de Esporo que seu oponente controla; negue os efeitos dele até o final deste turno.
 
 ### Extra Deck
 
@@ -273,11 +273,11 @@ Ascensão, Nível 6, Plant, Earth, 2100/2600.
 
 > 1 monstro "Podriflora"
 >
-> Os efeitos do material devem ter sido ativados um total de pelo menos 2 vezes neste Duelo.
+> Os efeitos do material devem ter sido ativados pelo menos 2 vezes no total neste Duelo.
 >
 > Se este card for Invocado por Invocação-Ascensão: coloque 1 Marcador de Esporo em todos os monstros com a face para cima que seu oponente controla.
 >
-> Uma vez por turno: você pode remover 2 Marcadores de Esporo do campo; escolha 1 monstro em Posição de Defesa que seu oponente controla; destrua-o.
+> Uma vez por turno: você pode remover 2 Marcadores de Esporo do campo e, depois, escolha 1 monstro em Posição de Defesa que seu oponente controla; destrua-o.
 
 **419 — Podriflora Rainha do Bosque Oco / Bloomrot Queen of the Hollow Grove**
 
@@ -303,7 +303,7 @@ Fusão, Nível 11, Plant, Dark, 0/3000.
 >
 > Se este card for Invocado por Invocação-Fusão: o ATK original deste card se torna igual ao número de Marcadores de Esporo no campo x500.
 >
-> Uma vez por turno: você pode destruir todos os monstros que seu oponente controla com Marcadores de Esporo.
+> Uma vez por turno: você pode destruir todos os monstros com Marcadores de Esporo que seu oponente controla.
 >
 > Se este card for destruído em batalha ou por um efeito de card: Invoque por Invocação-Especial até 2 monstros "Podriflora" do seu Cemitério, exceto "Podriflora Devorador de Raízes Mortas".
 

@@ -75,7 +75,7 @@ Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 
 **121 — Shadow-Heart Demon Dragon**
 
-> "Dragão de Escamas do Coração Sombrio" + 1 monstro de Nível 8 ou maior "Coração Sombrio"
+> "Dragão de Escamas do Coração Sombrio" + 1 monstro "Coração Sombrio" de Nível 8 ou maior
 >
 > Se este card for Invocado por Invocação-Fusão: escolha 1 card que seu oponente controla; destrua-o.
 >
@@ -85,9 +85,9 @@ Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 
 > 2 monstros "Coração Sombrio"
 >
-> Se este card seria destruído em batalha, você pode enviar 1 monstro "Coração Sombrio" que você controla para o Cemitério em vez disso.
+> Se este card estiver para ser destruído em batalha, você pode enviar 1 monstro "Coração Sombrio" que você controla para o Cemitério em vez disso.
 >
-> Se este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 monstro de Nível 4 ou menor "Coração Sombrio" do seu Cemitério, mas ele não pode atacar neste turno.
+> Se este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 monstro "Coração Sombrio" de Nível 4 ou menor do seu Cemitério, mas ele não pode atacar neste turno.
 >
 > Você só pode usar cada efeito de "Senhor da Guerra do Coração Sombrio" uma vez por turno.
 
@@ -107,7 +107,7 @@ Nenhuma carta auxiliar própria do arquétipo está listada neste catálogo.
 
 > "Dragão de Escamas do Coração Sombrio"
 >
-> O material deve ter ficado com a face para cima no campo por 3 turnos.
+> O material deve ter permanecido com a face para cima no campo por 3 turnos.
 
 ---
 
@@ -150,7 +150,7 @@ Novos aumentos de ATK/DEF ainda podem ser aplicados. O bônus temporário do Hip
 
 Nível 4, Fiend, Dark, 1500/800.
 
-> Quando este card for Invocado por Invocação-Normal: você pode Invocar por Invocação-Especial 1 monstro de Nível 4 ou menor "Coração Sombrio" da sua mão.
+> Quando este card for Invocado por Invocação-Normal: você pode Invocar por Invocação-Especial 1 monstro "Coração Sombrio" de Nível 4 ou menor da sua mão.
 >
 > Você só pode usar este efeito de "Imp do Coração Sombrio" uma vez por turno.
 
@@ -158,7 +158,7 @@ Nível 4, Fiend, Dark, 1500/800.
 
 Nível 3, Reptile, Dark, 1000/1000.
 
-> Se este card for Invocado por Invocação-Especial: você pode adicionar 1 monstro de Nível 8 "Coração Sombrio" do seu Deck à sua mão.
+> Se este card for Invocado por Invocação-Especial: você pode adicionar 1 monstro "Coração Sombrio" de Nível 8 do seu Deck à sua mão.
 >
 > Se este card for destruído em batalha: compre 1 card.
 >
@@ -229,16 +229,16 @@ Nível 4, Fiend, Dark, 1500/1500.
 
 Magia Normal.
 
-> Descarte 1 card "Coração Sombrio" e, depois, escolha 1 monstro com a face para cima que seu oponente controla; ele perde 1000 ATK.
+> Descarte 1 card "Coração Sombrio" e, depois, escolha 1 monstro com a face para cima que seu oponente controla; ele perde 1000 de ATK.
 >
-> Se um monstro cujo ATK foi reduzido por este efeito for destruído neste turno: todos os monstros que seu oponente controla perdem 1000 ATK.
+> Se um monstro cujo ATK foi reduzido por este efeito for destruído neste turno: todos os monstros que seu oponente controla perdem 1000 de ATK.
 >
 > Você só pode ativar 1 "Purificação do Coração Sombrio" por turno.
 **105 — Hino de Batalha do Coração Sombrio / Shadow-Heart Battle Hymn**
 
 Magia Normal.
 
-> Todos os monstros "Coração Sombrio" que você controla ganham 500 ATK até o final deste turno.
+> Todos os monstros "Coração Sombrio" que você controla ganham 500 de ATK até o final deste turno.
 
 **106 — Pacto do Coração Sombrio / Shadow-Heart Covenant**
 
@@ -260,7 +260,7 @@ Magia Normal.
 
 Magia Normal.
 
-> Escolha 1 monstro Dragão "Coração Sombrio" que você controla; ele ganha 700 ATK/DEF até o final deste turno e, além disso, pode realizar um segundo ataque durante a Fase de Batalha neste turno. Você não pode declarar um ataque direto no turno em que ativar este card.
+> Escolha 1 monstro Dragão "Coração Sombrio" que você controla; ele ganha 700 de ATK/DEF até o final deste turno e, além disso, pode realizar um segundo ataque durante a Fase de Batalha neste turno. Você não pode declarar um ataque direto no turno em que ativar este card.
 
 **113 — Escudo do Coração Sombrio / Shadow-Heart Shield**
 
@@ -268,7 +268,7 @@ Magia de Equipamento.
 
 > Equipe apenas a um monstro que você controla.
 >
-> O monstro equipado ganha 500 ATK/DEF e não pode ser destruído em batalha.
+> O monstro equipado ganha 500 de ATK/DEF e não pode ser destruído em batalha.
 >
 > Durante cada uma das suas Fases de Apoio: pague 800 PV ou envie este card para o Cemitério.
 
@@ -276,9 +276,9 @@ Magia de Equipamento.
 
 Magia de Campo.
 
-> Todos os monstros "Coração Sombrio" que você controla ganham 300 ATK.
+> Todos os monstros "Coração Sombrio" que você controla ganham 300 de ATK.
 >
-> Uma vez por turno, se um monstro de Nível 8 ou maior "Coração Sombrio" que você controla for destruído em batalha: destrua o monstro atacante.
+> Uma vez por turno, se um monstro "Coração Sombrio" de Nível 8 ou maior que você controla for destruído em batalha: destrua o monstro atacante.
 
 **119 — Catedral do Coração Sombrio / Shadow-Heart Cathedral**
 
@@ -318,7 +318,7 @@ O primeiro efeito pode resolver nos dois turnos. Cada novo turno renova a Invoca
 
 Fusão, Nível 10, Dragon, Dark, 3000/3000.
 
-> "Dragão de Escamas do Coração Sombrio" + 1 monstro de Nível 8 ou maior "Coração Sombrio"
+> "Dragão de Escamas do Coração Sombrio" + 1 monstro "Coração Sombrio" de Nível 8 ou maior
 >
 > Se este card for Invocado por Invocação-Fusão: escolha 1 card que seu oponente controla; destrua-o.
 >
@@ -330,9 +330,9 @@ Fusão, Nível 8, Warrior, Dark, 2300/1900.
 
 > 2 monstros "Coração Sombrio"
 >
-> Se este card seria destruído em batalha, você pode enviar 1 monstro "Coração Sombrio" que você controla para o Cemitério em vez disso.
+> Se este card estiver para ser destruído em batalha, você pode enviar 1 monstro "Coração Sombrio" que você controla para o Cemitério em vez disso.
 >
-> Se este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 monstro de Nível 4 ou menor "Coração Sombrio" do seu Cemitério, mas ele não pode atacar neste turno.
+> Se este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 monstro "Coração Sombrio" de Nível 4 ou menor do seu Cemitério, mas ele não pode atacar neste turno.
 >
 > Você só pode usar cada efeito de "Senhor da Guerra do Coração Sombrio" uma vez por turno.
 
@@ -354,9 +354,9 @@ Ascensão, Nível 10, Dragon, Dark, 3300/3000.
 
 > "Dragão de Escamas do Coração Sombrio"
 >
-> O material deve ter ficado com a face para cima no campo por 3 turnos.
+> O material deve ter permanecido com a face para cima no campo por 3 turnos.
 >
-> Se este card for Invocado por Invocação-Ascensão: este card ganha 700 ATK até o final deste turno.
+> Se este card for Invocado por Invocação-Ascensão: este card ganha 700 de ATK até o final deste turno.
 >
 > Enquanto este card estiver com a face para cima no campo, negue os efeitos de cards do seu oponente que impeçam monstros de serem destruídos em batalha.
 >

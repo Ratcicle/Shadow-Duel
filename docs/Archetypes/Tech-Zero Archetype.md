@@ -183,7 +183,7 @@ Nível 2, Machine, Light, 800/900.
 
 Nível 5, Dragon, Light, 1900/1500.
 
-> Enquanto este card estiver com a face para cima no campo, você pode realizar 1 Invocação-Normal/Baixar de 1 monstro "Tech-Zero" além da sua Invocação-Normal/Baixar.
+> Enquanto este card estiver com a face para cima no campo, você pode Invocar por Invocação-Normal ou Baixar 1 monstro "Tech-Zero", além da sua Invocação-Normal/Baixar.
 >
 > Se este card for enviado para o Cemitério como Matéria Sincro: você pode escolher 1 Magia/Armadilha "Tech-Zero" no seu Cemitério; adicione-a à sua mão.
 >
@@ -229,7 +229,7 @@ Magia Normal.
 
 Armadilha Normal.
 
-> Invoque por Invocação-Especial 1 Regulador "Tech-Zero" do seu Cemitério e, se isso acontecer, imediatamente após esse efeito resolver, Invoque por Invocação-Sincro 1 Monstro Sincro do seu Deck Adicional usando materiais que você controla.
+> Invoque por Invocação-Especial 1 Regulador "Tech-Zero" do seu Cemitério e, se isso acontecer, imediatamente após esse efeito resolver, Invoque por Invocação-Sincro 1 Monstro Sincro do seu Deck Adicional usando matérias que você controla.
 >
 > Você só pode ativar 1 "Ferro-Velho Tech-Zero" por turno.
 
@@ -311,7 +311,7 @@ Sincro, Nível 7, Winged Beast, Light, 2500/2000.
 >
 > Monstros "Tech-Zero" que você controla não podem ser banidos, exceto este card.
 >
-> Durante a Fase Final, se você recebeu dano neste turno: ganhe PV igual ao dano que você recebeu neste turno.
+> Durante a Fase Final, se você sofreu dano neste turno: ganhe PV igual ao dano que você sofreu neste turno.
 >
 > Se este card for destruído em batalha ou por um efeito de card: você pode Invocar este card por Invocação-Especial do Cemitério durante a Fase Final, mas bana-o quando ele deixar o campo.
 
@@ -335,7 +335,7 @@ Sincro, Nível 10, Warrior, Light, 3300/2500.
 
 > 1 Monstro Sincro Regulador + 1+ Monstros Sincro não-Reguladores
 >
-> Se este card for Invocado por Invocação-Sincro: você pode ativar este efeito; neste turno, este card pode declarar ataques até um número de vezes igual ao número de monstros Reguladores "Tech-Zero" no seu Cemitério.
+> Se este card for Invocado por Invocação-Sincro: você pode ativar este efeito; neste turno, o número máximo de ataques que este card pode declarar é igual ao número de monstros Reguladores "Tech-Zero" no seu Cemitério.
 >
 > Uma vez por turno, quando seu oponente ativar um card ou efeito que destruiria 1 ou mais cards no campo (Efeito Rápido): você pode negar a ativação e, se isso acontecer, destrua esse card.
 

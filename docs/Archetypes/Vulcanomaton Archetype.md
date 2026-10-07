@@ -79,9 +79,9 @@ Regulador, Nível 4, Machine, Earth, 1600/1800.
 
 Regulador, Nível 5, Machine, Earth, 1900/2100.
 
-> Você pode Invocar este card por Invocação-Especial da sua mão ao oferecer como Tributo 1 monstro de TERRA com a face para cima que você controla.
+> Você pode oferecer como Tributo 1 monstro de TERRA com a face para cima que você controla; Invoque este card por Invocação-Especial da sua mão.
 >
-> Uma vez por turno: você pode escolher 1 outro monstro Regulador com a face para cima que você controla; ele é considerado um monstro não Regulador até o final deste turno.
+> Uma vez por turno: você pode escolher 1 outro monstro Regulador com a face para cima que você controla; ele é considerado um monstro não-Regulador até o final deste turno.
 >
 > Se este card for enviado para o Cemitério como Matéria Sincro: você pode escolher 1 card que seu oponente controla; destrua-o.
 >

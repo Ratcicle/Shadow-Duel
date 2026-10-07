@@ -75,7 +75,7 @@ Nível 3, Spellcaster, Light, 1500/1000.
 >
 > Você só pode usar este efeito de "Aprendiz Arcanista" uma vez por turno.
 >
-> Enquanto este card com a face para cima estiver equipado com uma Magia de Equipamento "Arcanista", todos os monstros "Arcanista" que você controla ganham 300 ATK.
+> Enquanto este card com a face para cima estiver equipado com uma Magia de Equipamento "Arcanista", todos os monstros "Arcanista" que você controla ganham 300 de ATK.
 
 **305 — Viridis, Arcanista da Vida / Viridis, Arcanist of Life**
 
@@ -121,7 +121,7 @@ Nível 9, Spellcaster, Light, 2500/2400.
 
 > Não pode ser destruído por efeitos de card.
 >
-> Este card ganha 100 ATK para cada Magia "Arcanista" ativada neste turno.
+> Este card ganha 100 de ATK para cada Magia "Arcanista" ativada neste turno.
 >
 > Uma vez por turno, se este card estiver equipado com uma Magia de Equipamento "Arcanista": você pode escolher 1 monstro que seu oponente controla; destrua-o.
 
@@ -129,7 +129,7 @@ Nível 9, Spellcaster, Light, 2500/2400.
 
 Nível 4, Spellcaster, Dark, 1700/1400.
 
-> Cada vez que você ativar uma Magia "Arcanista" enquanto este card estiver com a face para cima no campo: todos os monstros que seu oponente controla nesse momento perdem 100 ATK/DEF até o final deste turno.
+> Cada vez que você ativar uma Magia "Arcanista" enquanto este card estiver com a face para cima no campo: todos os monstros que seu oponente controla nesse momento perdem 100 de ATK/DEF até o final deste turno.
 >
 > Se este card for equipado com uma Magia de Equipamento "Arcanista": escolha 1 monstro com a face para cima que seu oponente controla; reduza seu ATK/DEF pela metade até o final deste turno.
 >
@@ -159,7 +159,7 @@ Magia Normal.
 
 Magia Normal.
 
-> Escolha 1 monstro com a face para cima no campo; aplique o efeito apropriado, dependendo de quem controla esse alvo. Se for um monstro "Arcanista" que você controla: ele ganha 500 ATK até o final deste turno e, se ele batalhar com um monstro em Posição de Defesa neste turno, cause dano de batalha perfurante ao seu oponente. Se for um monstro que seu oponente controla: ele não pode declarar um ataque até o final do próximo turno do seu oponente.
+> Escolha 1 monstro com a face para cima no campo; aplique o efeito apropriado, dependendo de quem controla esse alvo. Se for um monstro "Arcanista" que você controla: ele ganha 500 de ATK até o final deste turno e, se ele batalhar com um monstro em Posição de Defesa neste turno, cause dano de batalha perfurante ao seu oponente. Se for um monstro que seu oponente controla: ele não pode declarar um ataque até o final do próximo turno do seu oponente.
 >
 > Você só pode ativar 1 "Lança Relâmpago Arcanista" por turno.
 

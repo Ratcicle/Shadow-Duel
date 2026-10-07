@@ -86,7 +86,7 @@ O Leviatã só pode ser Invocado por Fusão de contato, enviando os materiais do
 
 > "Explorador dos Vinculados à Miragem"
 >
-> Os efeitos do material devem ter sido ativados um total de pelo menos 2 vezes neste Duelo.
+> Os efeitos do material devem ter sido ativados pelo menos 2 vezes no total neste Duelo.
 
 ---
 
@@ -100,7 +100,7 @@ Nível 3, Spellcaster, Earth, 1400/1000.
 
 > Se este card for Invocado por Invocação-Normal: você pode adicionar 1 Magia/Armadilha "Vinculados à Miragem" do seu Deck à sua mão.
 >
-> Você pode escolher 1 monstro com a face para cima que seu oponente controla; mude a Posição de Batalha dele.
+> Você pode escolher 1 monstro com a face para cima que seu oponente controla; mude a posição de batalha dele.
 >
 > Você só pode usar cada efeito de "Explorador dos Vinculados à Miragem" uma vez por turno.
 
@@ -118,7 +118,7 @@ Nível 4, Spellcaster, Earth, 1600/1200.
 
 Nível 4, Beast, Earth, 1700/800.
 
-> Se um monstro que você controla for devolvido do campo para a sua mão (Efeito Rápido): você pode escolher 1 monstro que seu oponente controla; Invoque este card por Invocação-Especial da sua mão e, se isso acontecer, mude a Posição de Batalha desse alvo.
+> Se um monstro que você controla for devolvido do campo para a sua mão (Efeito Rápido): você pode escolher 1 monstro que seu oponente controla; Invoque este card por Invocação-Especial da sua mão e, se isso acontecer, mude a posição de batalha desse alvo.
 >
 > Você só pode usar este efeito de "Chacal dos Vinculados à Miragem" uma vez por turno.
 
@@ -138,7 +138,7 @@ Nível 4, Spellcaster, Earth, 1300/1800.
 
 > Se este card for devolvido do campo para a mão: você pode escolher 1 monstro "Vinculados à Miragem" no seu Cemitério; adicione-o à sua mão.
 >
-> Você pode escolher 1 monstro que seu oponente controla; mude a Posição de Batalha dele e, se isso acontecer, esse monstro perde 500 de ATK/DEF até o final do próximo turno.
+> Você pode escolher 1 monstro que seu oponente controla; mude a posição de batalha dele e, se isso acontecer, esse monstro perde 500 de ATK/DEF até o final do próximo turno.
 >
 > Você só pode usar cada efeito de "Sacerdotisa de Areia dos Vinculados à Miragem" uma vez por turno.
 
@@ -148,7 +148,7 @@ Nível 6, Fiend, Earth, 2200/1800.
 
 > Você pode Invocar este card por Invocação-Especial da sua mão ao devolver 1 monstro "Vinculados à Miragem" que você controla para a mão. Você só pode Invocar por Invocação-Especial "Falso Rei dos Vinculados à Miragem" uma vez por turno desta forma.
 >
-> Você pode escolher 1 monstro que seu oponente controla; mude a Posição de Batalha dele.
+> Você pode escolher 1 monstro que seu oponente controla; mude a posição de batalha dele.
 >
 > Você só pode usar este efeito de "Falso Rei dos Vinculados à Miragem" uma vez por turno.
 
@@ -156,7 +156,7 @@ Nível 6, Fiend, Earth, 2200/1800.
 
 Nível 7, Spellcaster, Earth, 2100/1200.
 
-> Se a Posição de Batalha de um monstro for alterada por um efeito de card (Efeito Rápido): você pode Invocar este card por Invocação-Especial da sua mão. Você só pode usar este efeito de "Rebelde dos Vinculados à Miragem" uma vez por turno.
+> Se a posição de batalha de um monstro for alterada por um efeito de card (Efeito Rápido): você pode Invocar este card por Invocação-Especial da sua mão. Você só pode usar este efeito de "Rebelde dos Vinculados à Miragem" uma vez por turno.
 >
 > Se este card atacar um monstro em Posição de Defesa, cause dano de batalha perfurante.
 >
@@ -168,17 +168,17 @@ Nível 7, Spellcaster, Earth, 2100/1200.
 
 Magia de Campo.
 
-> A primeira vez a cada turno que cada monstro com a face para cima que seu oponente controla mudar sua Posição de Batalha, ele perde 400 de ATK/DEF até o final do próximo turno.
+> A cada turno, na primeira vez em que cada monstro com a face para cima que seu oponente controla mudar sua posição de batalha, ele perde 400 de ATK/DEF até o final do próximo turno.
 >
 > Uma vez por turno: você pode escolher 1 destes efeitos:
 > ● Escolha 1 monstro "Vinculados à Miragem" que você controla e 1 monstro que seu oponente controla; devolva o primeiro alvo para a mão e, se isso acontecer, o segundo alvo perde 400 de ATK/DEF até o final deste turno.
-> ● Escolha 1 monstro com a face para cima que seu oponente controla; mude sua Posição de Batalha.
+> ● Escolha 1 monstro com a face para cima que seu oponente controla; mude sua posição de batalha.
 
 **359 — Caminho Espelhado dos Vinculados à Miragem / Miragebound Mirror Path**
 
 Magia Contínua.
 
-> A primeira vez a cada turno que um monstro "Vinculados à Miragem" que você controla seria destruído em batalha, você pode devolvê-lo para a mão em vez disso.
+> Na primeira vez a cada turno em que um monstro "Vinculados à Miragem" que você controla estiver para ser destruído em batalha, você pode devolvê-lo para a mão em vez disso.
 >
 > Uma vez por turno: você pode enviar este card com a face para cima do campo para o Cemitério e, depois, escolher 1 Magia/Armadilha que seu oponente controla; destrua-a.
 >
@@ -188,7 +188,7 @@ Magia Contínua.
 
 Magia Rápida.
 
-> Escolha 1 monstro "Vinculados à Miragem" que você controla e 1 monstro que seu oponente controla; devolva o primeiro alvo para a mão e, depois, mude a Posição de Batalha do segundo alvo e, se isso acontecer, ele perde 500 de ATK/DEF até o final deste turno.
+> Escolha 1 monstro "Vinculados à Miragem" que você controla e 1 monstro que seu oponente controla; devolva o primeiro alvo para a mão e, depois, mude a posição de batalha do segundo alvo e, se isso acontecer, ele perde 500 de ATK/DEF até o final deste turno.
 >
 > Você só pode ativar 1 "Passo Evanescente dos Vinculados à Miragem" por turno.
 
@@ -196,7 +196,7 @@ Magia Rápida.
 
 Magia Normal.
 
-> Se você controlar um monstro "Vinculados à Miragem": escolha 1 monstro que seu oponente controla; mude a Posição de Batalha dele. Depois, se esse monstro estiver em Posição de Defesa, você pode adicionar 1 monstro "Vinculados à Miragem" do seu Cemitério à sua mão.
+> Se você controlar um monstro "Vinculados à Miragem": escolha 1 monstro que seu oponente controla; mude a posição de batalha dele. Depois, se esse monstro estiver em Posição de Defesa, você pode adicionar 1 monstro "Vinculados à Miragem" do seu Cemitério à sua mão.
 >
 > Você só pode ativar 1 "Névoa de Calor dos Vinculados à Miragem" por turno.
 
@@ -206,7 +206,7 @@ Magia Normal.
 
 Armadilha Normal.
 
-> Quando um monstro do oponente declarar um ataque: escolha 1 monstro que seu oponente controla; mude a Posição de Batalha dele, depois você pode devolver 1 monstro "Vinculados à Miragem" que você controla para a mão.
+> Quando um monstro do oponente declarar um ataque: escolha 1 monstro que seu oponente controla; mude a posição de batalha dele e, depois, você pode devolver 1 monstro "Vinculados à Miragem" que você controla para a mão.
 >
 > Você só pode ativar 1 "Falso Horizonte dos Vinculados à Miragem" por turno.
 
@@ -218,9 +218,9 @@ Ascensão, Nível 7, Spellcaster, Earth, 2400/2200.
 
 > "Explorador dos Vinculados à Miragem"
 >
-> Os efeitos do material devem ter sido ativados um total de pelo menos 2 vezes neste Duelo.
+> Os efeitos do material devem ter sido ativados pelo menos 2 vezes no total neste Duelo.
 >
-> Se este card for Invocado por Invocação-Ascensão: você pode escolher até 2 monstros com a face para cima que seu oponente controla; mude as Posições de Batalha deles.
+> Se este card for Invocado por Invocação-Ascensão: você pode escolher até 2 monstros com a face para cima que seu oponente controla; mude as posições de batalha deles.
 >
 > Uma vez por turno: você pode escolher 1 outro monstro "Vinculados à Miragem" que você controla e 1 card que seu oponente controla; devolva-os para a mão.
 >
@@ -232,13 +232,13 @@ Fusão, Nível 8, Beast, Earth, 2400/2500.
 
 > "Víbora de Vidro dos Vinculados à Miragem" + 1 monstro "Vinculados à Miragem"
 >
-> Deve ser Invocado por Invocação-Fusão do seu Deck Adicional enviando os materiais acima que você controla para o Cemitério, e não pode ser Invocado por Invocação-Especial de outras formas.
+> Deve ser Invocado por Invocação-Fusão do seu Deck Adicional ao enviar as matérias acima que você controla para o Cemitério, e não pode ser Invocado por Invocação-Especial de outras formas.
 >
-> Se este card for Invocado por Invocação-Fusão: mude as Posições de Batalha de todos os monstros que seu oponente controla.
+> Se este card for Invocado por Invocação-Fusão: mude as posições de batalha de todos os monstros que seu oponente controla.
 >
-> Enquanto este card estiver com a face para cima no campo, cada vez que um monstro que seu oponente controla mudar sua Posição de Batalha por efeito de um card "Vinculados à Miragem", ele perde 300 de ATK/DEF até o final deste turno.
+> Enquanto este card estiver com a face para cima no campo, cada vez que um monstro que seu oponente controla mudar sua posição de batalha por efeito de um card "Vinculados à Miragem", ele perde 300 de ATK/DEF até o final deste turno.
 >
-> Se este card seria destruído em batalha: você pode devolvê-lo para o Deck Adicional em vez disso.
+> Se este card estiver para ser destruído em batalha: você pode devolvê-lo para o Deck Adicional em vez disso.
 
 ---
 

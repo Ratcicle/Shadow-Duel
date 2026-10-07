@@ -186,7 +186,7 @@ Nível 5, Fiend, Dark, 2000/1000.
 
 > Você pode enviar 1 monstro "Vazio" com a face para cima que você controla para o Cemitério; Invoque este card por Invocação-Especial da sua mão.
 >
-> Este card ganha 100 ATK para cada "Oco do Vazio" no seu Cemitério.
+> Este card ganha 100 de ATK para cada "Oco do Vazio" no seu Cemitério.
 >
 > Você pode banir este card do seu Cemitério e, depois, escolher 1 Magia/Armadilha com a face para cima que seu oponente controla; destrua-a.
 >
@@ -204,7 +204,7 @@ Nível 2, Winged Beast, Dark, 300/300.
 
 Nível 4, Fiend, Dark, 1500/800.
 
-> Este card ganha 100 ATK/DEF para cada monstro "Vazio" no seu campo e no seu Cemitério.
+> Este card ganha 100 de ATK/DEF para cada monstro "Vazio" no seu campo e no seu Cemitério.
 >
 > Se este card estiver no seu Cemitério e houver 2 ou mais "Oco do Vazio" no seu campo e/ou no seu Cemitério: você pode Invocar este card por Invocação-Especial.
 >
@@ -239,7 +239,7 @@ Nível 6, Fiend, Dark, 2100/1600.
 
 Nível 10, Warrior, Dark, 2800/2500.
 
-> Enquanto este card for o único monstro com a face para cima que você controla, ele ganha 100 ATK para cada monstro "Vazio" no seu Cemitério.
+> Enquanto este card for o único monstro com a face para cima que você controla, ele ganha 100 de ATK para cada monstro "Vazio" no seu Cemitério.
 >
 > Seu oponente não pode ativar cards ou efeitos durante a Fase de Batalha.
 >
@@ -251,7 +251,7 @@ Nível 10, Warrior, Dark, 2800/2500.
 
 Magia Normal.
 
-> Escolha 1 monstro "Vazio" com a face para cima que você controla; até o final deste turno, o ATK/DEF desse monstro se tornam 0 e seus efeitos são negados e, depois, você pode realizar 1 Invocação-Normal/Baixar neste turno em adição à sua Invocação-Normal/Baixar.
+> Escolha 1 monstro "Vazio" com a face para cima que você controla; até o final deste turno, o ATK/DEF desse monstro se tornam 0 e seus efeitos são negados e, depois, você pode Invocar por Invocação-Normal ou Baixar 1 monstro neste turno, em adição à sua Invocação-Normal/Baixar.
 >
 > Você só pode ativar 1 "Selando o Vazio" por turno.
 
@@ -301,7 +301,7 @@ Fusão, Nível 6, Fiend, Dark, 2500/1200.
 >
 > Se este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 "Oco do Vazio" do seu Cemitério.
 >
-> (Efeito Rápido): você pode enviar 1 "Oco do Vazio" com a face para cima que você controla para o Cemitério; este card ganha 1000 ATK até o final deste turno.
+> (Efeito Rápido): você pode enviar 1 "Oco do Vazio" com a face para cima que você controla para o Cemitério; este card ganha 1000 de ATK até o final deste turno.
 
 **213 — Berserker do Vazio / Void Berserker**
 
@@ -321,7 +321,7 @@ Fusão, Nível 10, Dragon, Dark, 4200/2900.
 >
 > Se este card for Invocado por Invocação-Fusão: destrua todas as Magias e Armadilhas que seu oponente controla e, se isso acontecer, compre 1 card para cada card destruído.
 >
-> Uma vez por turno, se este card estiver para ser destruído em batalha ou por um efeito de card: você pode fazer este card perder 700 ATK; ele não é destruído.
+> Uma vez por turno, se este card estiver para ser destruído em batalha ou por um efeito de card: você pode fazer este card perder 700 de ATK; ele não é destruído.
 
 **222 — Andarilho Cósmico do Vazio / Void Cosmic Walker**
 
@@ -377,7 +377,7 @@ Fusão, Nível 7, Fiend, Dark, 2400/1900.
 
 > "Chifre Tenebris do Vazio" + 1 monstro "Vazio"
 >
-> Cada vez que um monstro "Vazio" for enviado para o Cemitério: este card ganha 100 ATK/DEF até o final deste turno.
+> Cada vez que um monstro "Vazio" for enviado para o Cemitério: este card ganha 100 de ATK/DEF até o final deste turno.
 >
 > Se este card for enviado do campo para o Cemitério: você pode escolher 1 card com a face para cima que seu oponente controla; destrua-o.
 

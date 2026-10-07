@@ -141,7 +141,7 @@ Nível 4, Dragon, Earth, 1800/800.
 
 > Este card não pode atacar diretamente.
 >
-> Se este card for Invocado por Invocação-Especial: você pode escolher 1 outro monstro Dragão que você controla; ele ganha 500 ATK até o final deste turno.
+> Se este card for Invocado por Invocação-Especial: você pode escolher 1 outro monstro Dragão que você controla; ele ganha 500 de ATK até o final deste turno.
 >
 > Se este card estiver no seu Cemitério: você pode descartar 1 monstro Dragão; adicione este card à sua mão.
 
@@ -161,13 +161,13 @@ Nível 4, Dragon, Light, 1500/900.
 
 > Se este card for Invocado por Invocação-Normal: você pode escolher 1 monstro Dragão de Nível 4 ou menor no seu Cemitério; Invoque-o por Invocação-Especial.
 >
-> Você pode banir este card do seu Cemitério e, depois, escolher 1 monstro que seu oponente controla; ele perde 600 ATK/DEF até o final deste turno.
+> Você pode banir este card do seu Cemitério e, depois, escolher 1 monstro que seu oponente controla; ele perde 600 de ATK/DEF até o final deste turno.
 
 **257 — Dragão de Prata Majestoso / Majestic Silver Dragon**
 
 Nível 7, Dragon, Light, 2400/2300.
 
-> Você pode Invocar este card por Invocação-Tributo ao Tributar 1 monstro Dragão.
+> Você pode Invocar este card por Invocação-Tributo ao oferecer 1 monstro Dragão como Tributo.
 >
 > Uma vez por turno: você pode escolher 1 monstro com a face para cima que seu oponente controla; mude sua posição de batalha.
 
@@ -175,7 +175,7 @@ Nível 7, Dragon, Light, 2400/2300.
 
 Nível 5, Dragon, Dark, 2000/1700.
 
-> Se este card for Invocado por Invocação-Normal ou Especial: destrua todos os outros monstros Dragão que você controla e, se isso acontecer, este card ganha 300 ATK para cada monstro destruído por este efeito.
+> Se este card for Invocado por Invocação-Normal ou Especial: destrua todos os outros monstros Dragão que você controla e, se isso acontecer, este card ganha 300 de ATK para cada monstro destruído por este efeito.
 >
 > Uma vez por turno: você pode descartar 1 card e, depois, escolher 1 monstro que seu oponente controla; negue seus efeitos até o final deste turno.
 
@@ -201,7 +201,7 @@ Nível 7, Dragon, Fire, 2200/1900.
 
 Nível 7, Dragon, Water, 2200/1400.
 
-> Durante sua Fase Principal: você pode escolher 1 monstro que seu oponente controla; envie este card e esse alvo para o Cemitério e, depois, durante a próxima Fase de Espera do seu oponente, Invoque ambos por Invocação-Especial. Se o monstro escolhido como alvo era um Monstro de Fusão ou de Ascensão, este card ganha 800 ATK até o final do seu próximo turno.
+> Durante sua Fase Principal: você pode escolher 1 monstro que seu oponente controla; envie este card e esse alvo para o Cemitério e, depois, durante a próxima Fase de Apoio do seu oponente, Invoque ambos por Invocação-Especial. Se o monstro escolhido como alvo era um Monstro de Fusão ou de Ascensão, este card ganha 800 de ATK até o final do seu próximo turno.
 >
 > Você só pode usar este efeito de "Dragão Serpente Abissal" uma vez por turno.
 
@@ -225,7 +225,7 @@ Nível 3, Dragon, Dark, 0/0.
 >
 > Uma vez por turno, se este card estiver no seu Cemitério: você pode enviar 1 monstro Dragão que você controla para o Cemitério; Invoque este card por Invocação-Especial.
 >
-> Este card ganha 400 ATK para cada monstro Dragão no seu Cemitério.
+> Este card ganha 400 de ATK para cada monstro Dragão no seu Cemitério.
 
 **270 — Dragão Extremo de Fogo / Fire Extreme Dragon**
 
@@ -279,7 +279,7 @@ Nível 10, Dragon, Earth, 2500/2700.
 
 > Só pode haver 1 monstro "Dragão Extremo" com a face para cima no campo.
 >
-> Durante cada Fase de Espera: ganhe 200 PV para cada card que seu oponente controla e para cada card na mão do seu oponente.
+> Durante cada Fase de Apoio: ganhe 200 PV para cada card que seu oponente controla e para cada card na mão do seu oponente.
 >
 > Cada vez que seu oponente Invocar um monstro ou ativar um card ou efeito: ganhe 100 PV.
 >
@@ -291,7 +291,7 @@ Regulador, Nível 4, Dragon, Earth, 1700/1200.
 
 > Este card pode ser tratado como 2 Tributos para a Invocação-Tributo de um monstro Dragão.
 >
-> Você só pode usar 1 dos seguintes efeitos de "Stelya, Domadora de Dragões" por turno e apenas uma vez por turno.
+> Você só pode usar 1 dos seguintes efeitos de "Stelya, Domadora de Dragões" por turno e apenas uma vez naquele turno.
 > ● Você pode banir 1 monstro Dragão que você controla; Invoque este card por Invocação-Especial da sua mão ou do seu Cemitério.
 > ● Você pode descartar 2 cards, incluindo este card; adicione 1 monstro Dragão de Nível 5 ou maior do seu Deck à sua mão.
 
@@ -373,7 +373,7 @@ Ascensão, Nível 6, Dragon, Earth, 1600/2000.
 >
 > Enquanto estiver em Posição de Defesa, este card não pode ser destruído em batalha.
 >
-> Este card ganha 100 ATK/DEF para cada monstro Dragão Invocado por Invocação-Especial enquanto este card estiver com a face para cima no campo.
+> Este card ganha 100 de ATK/DEF para cada monstro Dragão Invocado por Invocação-Especial enquanto este card estiver com a face para cima no campo.
 
 **265 — Dragão Tecno-Vazio / Tech-Void Dragon**
 
