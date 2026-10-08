@@ -8,13 +8,12 @@ export const DEFAULT_TEST_GLOB = "test/**/*.test.ts";
 const TEST_DIRECTORY = "test";
 const TEST_FILE_SUFFIX = ".test.ts";
 
-// Node options that every run needs: tsx for the TypeScript sources and the
-// asset loader for SVG imports, matching the focused command in AGENTS.md.
-const BASE_NODE_ARGS = [
-  "--import=tsx",
-  "--import=./scripts/register_node_asset_loader.ts",
-  "--test",
-] as const;
+// Node options that every run needs: tsx for the TypeScript sources. The SVG
+// asset loader is not preloaded: it re-registers tsx in an off-thread hooks
+// worker and makes every test process several times slower. Test files that
+// import SVG modules register it themselves
+// (`import "../scripts/register_node_asset_loader.js"`).
+const BASE_NODE_ARGS = ["--import=tsx", "--test"] as const;
 
 // Only test-runner flags that select, schedule or report tests are forwarded.
 // Flags that change isolation or outcomes (--test-isolation, --test-only,

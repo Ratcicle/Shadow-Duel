@@ -13,11 +13,9 @@ import {
 } from "../../scripts/run_tests.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
-const BASE_ARGS = [
-  "--import=tsx",
-  "--import=./scripts/register_node_asset_loader.ts",
-  "--test",
-];
+// The asset loader is deliberately not preloaded (it slows every test process
+// several times); SVG-importing test files register it themselves.
+const BASE_ARGS = ["--import=tsx", "--test"];
 
 function argsOf(invocation: TestRunnerInvocation): string[] {
   assert.equal(invocation.ok, true, invocation.ok ? "" : invocation.message);
@@ -29,7 +27,7 @@ function messageOf(invocation: TestRunnerInvocation): string {
   return invocation.ok ? "" : invocation.message;
 }
 
-test("default invocation loads tsx and the asset loader and passes the glob to node", () => {
+test("default invocation loads tsx without preloading the asset loader and passes the glob to node", () => {
   const args = argsOf(createTestRunnerInvocation([], root));
   assert.deepEqual(args, [
     ...BASE_ARGS,
@@ -163,8 +161,9 @@ function environmentWithoutTestContext(): NodeJS.ProcessEnv {
 const LP_TEST_NAME = "LP counters and reduced-motion payment animations retain fractions";
 const LP_FILTER = ["test/lpPresentation.test.ts", "--test-name-pattern=LP counters", "--test-reporter=tap"];
 
-// lpPresentation.test.ts registers the asset loader itself, so these cases cover
-// the spawn, filtering and exit code; the loader flag is pinned by the exact-args cases above.
+// lpPresentation.test.ts imports SVG modules through Renderer and registers the
+// asset loader itself, so these cases also prove that a self-loading file runs
+// under the runner without a preloaded loader, besides spawn, filtering and exit code.
 test("the runner executes a filtered real test file", () => {
   const child = runRunner(LP_FILTER, environmentWithoutTestContext());
   const output = child.stdout + child.stderr;
