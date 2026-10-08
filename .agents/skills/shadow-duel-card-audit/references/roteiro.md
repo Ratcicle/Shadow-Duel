@@ -62,7 +62,7 @@ ID da definição, identidade da cópia (`instanceId`), identidade do duelo (`du
 5. Confira `package.json` e `scripts/run_tests.ts` antes de escolher comandos. O runner npm pode percorrer toda a suíte mesmo com argumentos extras. Exemplo de execução focada, a adaptar aos arquivos existentes:
 
    ```powershell
-   node --import=tsx --import=./scripts/register_node_asset_loader.ts --test --test-concurrency=1 test/chain/costsTargetsAndCleanup.test.ts
+   node --import=tsx --test --test-concurrency=1 test/chain/costsTargetsAndCleanup.test.ts
    ```
 
 Grave sondagens/logs/replays em uma subpasta própria de `.cache/`. O relatório deve permitir reconstruir a evidência se o cache desaparecer. Execute somente testes diretamente ligados aos arquivos/caminhos investigados ou alterados, inclusive no encerramento, conforme `AGENTS.md`. Não execute `npm test`, `npm run check` ou outra suíte global automaticamente. Declare o alcance e as verificações não executadas. Não regenere catálogo ou outros artefatos durante o diagnóstico.

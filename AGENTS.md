@@ -173,8 +173,10 @@ npm run preview               # Serve o build de produção localmente
 Durante todo o trabalho, inclusive no encerramento e antes de commit/PR, execute somente testes diretamente relacionados aos arquivos e caminhos alterados. Inclua dependências compartilhadas e consumidores diretos (Chain, decisões, replay, simulação e IA) conforme o impacto e justifique o alcance escolhido. Não execute `npm test`, `npm run check` ou outra suíte global automaticamente, mesmo em mudanças que afetem múltiplos subsistemas; uma solicitação explícita futura do usuário pode autorizar execução global. Confira o runner: argumentos extras de `npm test` podem não filtrar os arquivos. Para testes focados, use o Node diretamente com os arquivos selecionados:
 
 ```bash
-node --import=tsx --import=./scripts/register_node_asset_loader.ts --test --test-concurrency=1 test/caminho/arquivo.test.ts
+node --import=tsx --test --test-concurrency=1 test/caminho/arquivo.test.ts
 ```
+
+O loader de assets não é pré-carregado nos testes. Ele registra o `tsx` de novo numa thread de hooks e deixa cada processo várias vezes mais lento. Arquivos de teste que importam SVG, por exemplo pelo `Renderer`, registram o loader por conta própria com `import "../scripts/register_node_asset_loader.js"`, como o `npm test` espera. Scripts que carregam a UI, como `scripts/run_bot_arena_smoke.ts`, continuam usando `--import=./scripts/register_node_asset_loader.ts`.
 
 Typecheck, auditorias, validação estrutural e build continuam sendo executados separadamente quando pertinentes. Smokes também devem ter relação direta com a mudança; não há smoke global obrigatório. Em alterações exclusivamente documentais, confira texto, links e consistência das instruções.
 

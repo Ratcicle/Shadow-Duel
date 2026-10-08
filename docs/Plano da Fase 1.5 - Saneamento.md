@@ -31,7 +31,7 @@ As Etapas 0–3 levam o CI ao verde e já têm todas as decisões necessárias (
 
 - Testes focados são executados com Git Bash, um processo por vez:
   ```bash
-  T='node --import=tsx --import=./scripts/register_node_asset_loader.ts --test --test-concurrency=1'
+  T='node --import=tsx --test --test-concurrency=1'   # arquivos que importam SVG registram o loader por conta própria
   $T test/arquivo.test.ts
   $T --test-name-pattern="<regex>" test/arquivo.test.ts
   ```
@@ -123,7 +123,7 @@ As Etapas 0–3 levam o CI ao verde e já têm todas as decisões necessárias (
 
 - [x] **`tests-ci:1`: reescrever `scripts/run_tests.ts`**, separando um construtor puro de argumentos de um `main` protegido.
   - Exportar `DEFAULT_TEST_GLOB = "test/**/*.test.ts"` e `createTestRunnerInvocation(argv, cwd)`.
-  - `args` = `--import=tsx`, `--import=./scripts/register_node_asset_loader.ts`, `--test`, flags, positionais ou glob. O `node --test` expande o glob sozinho, então a linha de comando cai de 26.037 caracteres para algumas centenas.
+  - `args` = `--import=tsx`, `--test`, flags, positionais ou glob. O loader de assets **não** é pré-carregado: no CI isso custou cerca de 300 s (`e392efa`). Arquivos que importam SVG o registram por conta própria. O `node --test` expande o glob sozinho, então a linha de comando cai de 26.037 caracteres para algumas centenas.
   - **Allowlist** de flags no formato `--flag=valor`: `--test-name-pattern`, `--test-skip-pattern`, `--test-concurrency`, `--test-timeout`, `--test-reporter`, `--test-reporter-destination` e `--test-shard`. Todo o resto é rejeitado, incluindo `--test-isolation=none`, `--test-only`, `--test-force-exit`, `--test-update-snapshots` e o formato com espaço.
   - Positionais: normalizar `\` para `/`, aceitar o prefixo `./test/`, resolver o caminho e **verificar contenção** em `test/`, rejeitando `test/../src/x.test.ts`. Exigir ao menos 1 `*.test.ts` via `fs.globSync`; sem correspondência, imprimir `No test files match <p>` e sair com exit 1.
   - Defaults `--test-concurrency=1` e `--test-timeout=120000` (D10), aplicados só quando a flag não vier. Documentar o limite: o timeout vale por teste e não mata um arquivo travado no topo do módulo ou com handles abertos. No CI, quem cobre esse caso é o `timeout-minutes`.
