@@ -14,9 +14,9 @@ import { evaluateActivationPreviewConditions } from "../src/core/effects/conditi
 import { cardDatabaseByName } from "./helpers/fixtures.js";
 
 const EXPECTED_EN =
-  'When your opponent activates a card or effect that would banish one or more cards from your field and/or GY (Quick Effect): you can Special Summon this card from your hand, and if you do, negate that effect.\n\nYou can only use this effect of "Guardian Deity Visas" once per turn.';
+  'When your opponent activates a card or effect that would banish 1 or more cards from your field and/or GY (Quick Effect): You can Special Summon this card from your hand, and if you do, negate that effect.\n\nYou can only use this effect of "Guardian Deity Visas" once per turn.';
 const EXPECTED_PT_BR =
-  "Quando seu oponente ativar um card ou efeito que baniria um ou mais cards do seu campo e/ou Cemitério (Efeito Rápido): você pode Invocar este card por Invocação-Especial da sua mão e, se isso acontecer, negue esse efeito.\n\nVocê só pode usar este efeito de “Divindade Guardiã Visas” uma vez por turno.";
+  'Quando seu oponente ativar um card ou efeito que baniria 1 ou mais cards do seu campo e/ou Cemitério (Efeito Rápido): você pode Invocar este card por Invocação-Especial da sua mão e, se isso acontecer, negue esse efeito.\n\nVocê só pode usar este efeito de "Divindade Guardiã Visas" uma vez por turno.';
 
 function createCard(data: CardConstructorData | undefined, player: GamePlayer) {
   assert.ok(data, "Card fixture must exist.");

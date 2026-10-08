@@ -13,9 +13,9 @@ import Card from "../src/core/Card.js";
 import { cardDatabaseByName } from "./helpers/fixtures.js";
 
 const EXPECTED_EN =
-  'If this card is Normal Summoned: You can send 1 Tuner monster from your Deck to the Graveyard.\n\nYou can banish this card from your Graveyard, then target 1 Level 4 or lower Tuner monster in your Graveyard; Special Summon it.\n\nYou can only use each effect of "Misty Katana Ghost Samurai" once per turn.';
+  'If this card is Normal Summoned: You can send 1 Tuner monster from your Deck to the GY.\n\nYou can banish this card from your GY, then target 1 Level 4 or lower Tuner monster in your GY; Special Summon it.\n\nYou can only use each effect of "Misty Katana Ghost Samurai" once per turn.';
 const EXPECTED_PT_BR =
-  "Se este card for Invocado por Invocação-Normal: você pode enviar 1 monstro Regulador do seu Deck para o Cemitério.\n\nVocê pode banir este card do seu Cemitério e, depois, escolher 1 monstro Regulador de Nível 4 ou menor no seu Cemitério; Invoque-o por Invocação-Especial.\n\nVocê só pode usar cada efeito de “Samurai Fantasma da Katana Nebulosa” uma vez por turno.";
+  'Se este card for Invocado por Invocação-Normal: você pode enviar 1 monstro Regulador do seu Deck para o Cemitério.\n\nVocê pode banir este card do seu Cemitério e, depois, escolher 1 monstro Regulador de Nível 4 ou menor no seu Cemitério; Invoque-o por Invocação-Especial.\n\nVocê só pode usar cada efeito de "Samurai Fantasma da Katana Nebulosa" uma vez por turno.';
 
 function createGame(t: TestContext) {
   const game = createRuntimeGame({

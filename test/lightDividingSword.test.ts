@@ -89,7 +89,7 @@ test("Light-Dividing Sword declares the corrected target and text", () => {
   assert.ok(card);
   assert.equal(
     card.description,
-    "Equip only to a monster you control.\n\nIf the equipped monster destroys an opponent's monster by battle: gain 500 LP.\n\nIf this card is sent to the Graveyard: target 1 Spell/Trap your opponent controls; destroy that target.",
+    "Equip only to a monster you control.\n\nIf the equipped monster destroys an opponent's monster by battle: Gain 500 LP.\n\nIf this card is sent to the GY: Target 1 Spell/Trap your opponent controls; destroy that target.",
   );
 
   const effect = required(card.effects).find(

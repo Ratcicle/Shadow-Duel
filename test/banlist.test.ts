@@ -274,11 +274,11 @@ test("Monster Reborn locale and restricted badge styles are updated", () => {
   );
   assert.equal(
     locale.cards[String(MONSTER_REBORN_ID)].description,
-    "Escolha 1 monstro em qualquer Cemitério; Invoque-o por Invocação-Especial no seu campo.",
+    "Escolha 1 monstro em qualquer um dos Cemitérios; Invoque-o por Invocação-Especial no seu campo.",
   );
   assert.equal(
     required(cardDatabaseById.get(MONSTER_REBORN_ID)).description,
-    "Target 1 monster in any Graveyard; Special Summon it to your field.",
+    "Target 1 monster in either GY; Special Summon it to your field.",
   );
 
   const css = readFileSync(new URL("../style.css", import.meta.url), "utf8");

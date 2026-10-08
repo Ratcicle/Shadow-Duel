@@ -179,7 +179,7 @@ test("Stelya declara o novo texto e um único limite compartilhado", () => {
   assert.equal(locale.cards[STELYA_ID].name, "Stelya, Domadora de Dragões");
   assert.match(
     locale.cards[STELYA_ID].description,
-    /só pode usar 1 dos seguintes efeitos[\s\S]*apenas uma vez por turno/,
+    /só pode usar 1 dos seguintes efeitos[\s\S]*por turno e apenas uma vez naquele turno/,
   );
   assert.equal(
     (locale.cards[STELYA_ID].description.match(/●/g) || []).length,

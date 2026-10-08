@@ -8,7 +8,7 @@ import { cardDatabaseByName } from "./helpers/fixtures.js";
 const EXPECTED_EN =
   'Discard 1 card, then target 1 face-up card your opponent controls; destroy it.\n\nYou can only activate 1 "Natural Selection" per turn.';
 const EXPECTED_PT_BR =
-  "Descarte 1 card e, depois, escolha 1 card com a face para cima que seu oponente controla; destrua-o.\n\nVocê só pode ativar 1 “Seleção Natural” por turno.";
+  'Descarte 1 card e, depois, escolha 1 card com a face para cima que seu oponente controla; destrua-o.\n\nVocê só pode ativar 1 "Seleção Natural" por turno.';
 
 test("Natural Selection declares its compact text and canonical transaction", async () => {
   const card = cardDatabaseByName.get("Natural Selection");

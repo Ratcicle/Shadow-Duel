@@ -84,7 +84,7 @@ test("Cheap Necromancy declara a nova Ficha e a localização PT-BR", () => {
   assert.deepEqual(locale.cards[String(card.id)], {
     name: "Necromancia Barata",
     description:
-      "Invoque por Invocação-Especial 1 “Ficha de Esqueleto Invocado” (Zumbi/TREVAS/Nível 1/ATK 500/DEF 500).",
+      'Invoque por Invocação-Especial 1 "Ficha de Esqueleto Invocado" (Zumbi/TREVAS/Nível 1/ATK 500/DEF 500).',
   });
   assert.deepEqual(action, {
     type: "special_summon_token",

@@ -60,7 +60,7 @@ test("Ancient Tree Spirit declares the separated text and Trap Monster contract"
   assert.ok(card);
   assert.equal(
     card.description,
-    "Special Summon this card in Defense Position as an Effect Monster (Spirit/DARK/Level 4/ATK 1700/DEF 1900). This card is still treated as a Trap.\n\nIf this card Special Summoned this way is destroyed by battle: inflict 500 damage to your opponent.",
+    "Special Summon this card in Defense Position as an Effect Monster (Spirit/DARK/Level 4/ATK 1700/DEF 1900). This card is still treated as a Trap.\n\nIf this card is destroyed by battle after being Special Summoned this way: Inflict 500 damage to your opponent.",
   );
 
   const summonEffect = required(
@@ -100,7 +100,7 @@ test("Ancient Tree Spirit declares the separated text and Trap Monster contract"
   );
   assert.equal(
     locale.cards["16"].description,
-    "Invoque este card por Invocação-Especial em Posição de Defesa como um Monstro de Efeito (Espírito/TREVAS/Nível 4/ATK 1700/DEF 1900). Este card ainda é considerado uma Armadilha.\n\nSe este card Invocado desta forma for destruído em batalha: cause 500 de dano ao seu oponente.",
+    "Invoque este card por Invocação-Especial em Posição de Defesa como um Monstro de Efeito (Espírito/TREVAS/Nível 4/ATK 1700/DEF 1900). Este card ainda é considerado uma Armadilha.\n\nSe este card for destruído em batalha depois de ter sido Invocado por Invocação-Especial desta forma: cause 500 de dano ao seu oponente.",
   );
 
   const validation = validateCardDatabase();

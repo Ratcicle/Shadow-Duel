@@ -13,7 +13,7 @@ import { cardDatabaseByName } from "./helpers/fixtures.js";
 const EXPECTED_EN =
   'Special Summon 1 Level 4 or lower LIGHT or DARK monster from your Deck, but negate its effects. For the rest of this turn after this effect resolves, you cannot activate monster effects, except monster effects with the same Attribute as the monster Summoned by this effect.\n\nYou can only activate 1 "Battle Between Good and Evil" per turn.';
 const EXPECTED_PT_BR =
-  "Invoque por Invocação-Especial 1 monstro de LUZ ou de TREVAS de Nível 4 ou menor do seu Deck, mas negue seus efeitos. Pelo resto deste turno depois que este efeito resolver, você não pode ativar efeitos de monstros, exceto efeitos de monstros com o mesmo Atributo que o monstro Invocado por este efeito.\n\nVocê só pode ativar 1 “Batalha Entre o Bem e o Mal” por turno.";
+  'Invoque por Invocação-Especial 1 monstro de LUZ ou de TREVAS de Nível 4 ou menor do seu Deck, mas negue seus efeitos. Pelo resto deste turno depois que este efeito resolver, você não pode ativar efeitos de monstros, exceto efeitos de monstros com o mesmo Atributo que o monstro Invocado por este efeito.\n\nVocê só pode ativar 1 "Batalha Entre o Bem e o Mal" por turno.';
 
 function createCard(data: CardConstructorData | undefined, player: GamePlayer) {
   assert.ok(data, "Card fixture must exist.");

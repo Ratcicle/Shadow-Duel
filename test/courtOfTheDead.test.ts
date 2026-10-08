@@ -88,7 +88,7 @@ test("Court of the Dead declares separated text and pays counters before targeti
   assert.ok(card);
   assert.equal(
     card.description,
-    "Each time a monster is sent to either Graveyard: place 1 Funeral Counter on this card.\n\nOnce per turn: You can remove 8 Funeral Counters from this card, then target 1 monster in either Graveyard; Special Summon it to your field.",
+    "Each time a monster is sent to either GY: Place 1 Funeral Counter on this card.\n\nOnce per turn: You can remove 8 Funeral Counters from this card, then target 1 monster in either GY; Special Summon it to your field.",
   );
 
   const counterEffect = required(
@@ -134,7 +134,7 @@ test("Court of the Dead declares separated text and pays counters before targeti
   );
   assert.equal(
     locale.cards["17"].description,
-    "Cada vez que um monstro for enviado para qualquer Cemitério: coloque 1 Marcador Fúnebre neste card.\n\nUma vez por turno: você pode remover 8 Marcadores Fúnebres deste card e, depois, escolher 1 monstro em qualquer Cemitério; Invoque-o por Invocação-Especial no seu campo.",
+    "Cada vez que um monstro for enviado para qualquer um dos Cemitérios: coloque 1 Marcador Fúnebre neste card.\n\nUma vez por turno: você pode remover 8 Marcadores Fúnebres deste card e, depois, escolher 1 monstro em qualquer um dos Cemitérios; Invoque-o por Invocação-Especial no seu campo.",
   );
 
   const validation = validateCardDatabase();

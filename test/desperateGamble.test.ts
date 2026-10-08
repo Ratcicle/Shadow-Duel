@@ -15,7 +15,7 @@ import type { CardAction } from "../src/core/contracts/actions.js";
 const EXPECTED_EN =
   'Pay half your LP; draw 2 cards. For the rest of this turn, you cannot activate effects of cards with the same names as the cards drawn by this effect.\n\nYou can only activate 1 "Desperate Gamble" per turn.';
 const EXPECTED_PT_BR =
-  "Pague metade dos seus PV; compre 2 cards. Pelo resto deste turno, você não pode ativar efeitos de cards com o mesmo nome dos cards comprados por este efeito.\n\nVocê só pode ativar 1 “Aposta Desesperada” por turno.";
+  'Pague metade dos seus PV; compre 2 cards. Pelo resto deste turno, você não pode ativar efeitos de cards com o mesmo nome dos cards comprados por este efeito.\n\nVocê só pode ativar 1 "Aposta Desesperada" por turno.';
 
 function createCard(data: CardConstructorData | undefined, player: GamePlayer) {
   assert.ok(data, "Card fixture must exist.");

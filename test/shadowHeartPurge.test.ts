@@ -38,7 +38,7 @@ test("Purge describes the replacement effect in three synchronized paragraphs", 
     'Discard 1 "Shadow-Heart" card, then target 1 face-up monster your opponent controls; it loses 1000 ATK.\n\nIf a monster whose ATK was reduced by this effect is destroyed this turn: All monsters your opponent controls lose 1000 ATK.\n\nYou can only activate 1 "Shadow-Heart Purge" per turn.');
   const locale = JSON.parse(readFileSync(new URL("../public/locales/pt-br.json", import.meta.url), "utf8"));
   assert.equal(locale.cards["103"].description,
-    'Descarte 1 card "Coração Sombrio" e, depois, escolha 1 monstro com a face para cima que seu oponente controla; ele perde 1000 ATK.\n\nSe um monstro cujo ATK foi reduzido por este efeito for destruído neste turno: todos os monstros que seu oponente controla perdem 1000 ATK.\n\nVocê só pode ativar 1 "Purificação do Coração Sombrio" por turno.');
+    'Descarte 1 card "Coração Sombrio" e, depois, escolha 1 monstro com a face para cima que seu oponente controla; ele perde 1000 de ATK.\n\nSe um monstro cujo ATK foi reduzido por este efeito for destruído neste turno: todos os monstros que seu oponente controla perdem 1000 de ATK.\n\nVocê só pode ativar 1 "Purificação do Coração Sombrio" por turno.');
 });
 
 test("Purge pays discard and declares its monster before responses, even if negated", async t => {

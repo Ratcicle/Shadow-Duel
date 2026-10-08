@@ -113,7 +113,7 @@ test("Sword of Two Darks declares its effects and control limit", () => {
   assert.ok(card);
   assert.equal(
     card.description,
-    'Equip only to a monster you control.\n\nThe equipped monster can make 1 additional attack during each Battle Phase.\n\nIf this card is sent to the Graveyard: target 1 Spell/Trap your opponent controls; destroy that target.\n\nYou can only control 1 "Sword of Two Darks".',
+    'Equip only to a monster you control.\n\nThe equipped monster can make 1 additional attack during each Battle Phase.\n\nIf this card is sent to the GY: Target 1 Spell/Trap your opponent controls; destroy that target.\n\nYou can only control 1 "Sword of Two Darks".',
   );
 
   const equipEffect = required(
@@ -149,7 +149,7 @@ test("Sword of Two Darks declares its effects and control limit", () => {
   );
   assert.equal(
     locale.cards["11"].description,
-    "Equipe apenas a um monstro que você controla.\n\nO monstro equipado pode realizar 1 ataque adicional durante cada Fase de Batalha.\n\nSe este card for enviado para o Cemitério: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a.\n\nVocê só pode controlar 1 “Espada das Duas Trevas”.",
+    'Equipe apenas a um monstro que você controla.\n\nO monstro equipado pode realizar 1 ataque adicional durante cada Fase de Batalha.\n\nSe este card for enviado para o Cemitério: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a.\n\nVocê só pode controlar 1 "Espada das Duas Trevas".',
   );
 
   const validation = validateCardDatabase();

@@ -10,9 +10,9 @@ import Card from "../src/core/Card.js";
 import { cardDatabaseByName } from "./helpers/fixtures.js";
 
 const EXPECTED_EN =
-  "You can Special Summon this card from your hand by banishing 5 LIGHT monsters from your field and/or GY. If Summoned this way, this card cannot be destroyed by your opponent's card effects.\n\nDuring damage calculation, if this card battles an opponent's DARK monster: it gains 1000 ATK/DEF during that damage calculation only.";
+  "You can Special Summon this card (from your hand) by banishing 5 LIGHT monsters from your field and/or GY.\n\nIf this card is Special Summoned this way, it cannot be destroyed by your opponent's card effects.\n\nDuring damage calculation, if this card battles an opponent's DARK monster: This card gains 1000 ATK/DEF during that damage calculation only.";
 const EXPECTED_PT_BR =
-  "Você pode Invocar este card por Invocação-Especial da sua mão ao banir 5 monstros de LUZ do seu campo e/ou Cemitério. Se Invocado desta forma, este card não pode ser destruído por efeitos de cards do oponente.\n\nDurante o cálculo de dano, se este card batalhar contra um monstro de TREVAS do oponente: ele ganha 1000 ATK/DEF apenas durante esse cálculo de dano.";
+  "Você pode Invocar este card por Invocação-Especial (da sua mão) ao banir 5 monstros de LUZ do seu campo e/ou Cemitério.\n\nSe este card for Invocado por Invocação-Especial desta forma, ele não pode ser destruído por efeitos de cards do seu oponente.\n\nDurante o cálculo de dano, se este card batalhar contra um monstro de TREVAS do oponente: este card ganha 1000 de ATK/DEF apenas durante esse cálculo de dano.";
 
 function createCard(data: CardConstructorData | undefined, player: GamePlayer) {
   assert.ok(data, "Card fixture must exist.");
