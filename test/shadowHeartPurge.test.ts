@@ -43,18 +43,30 @@ test("Purge describes the replacement effect in three synchronized paragraphs", 
 
 test("Purge pays discard and declares its monster before responses, even if negated", async t => {
   const { game, purge, cost, target, activate } = setup(t);
-  let offered = false;
-  game.chainSystem.offerChainResponses = async () => {
-    offered = true;
+  // The mock is offered the CL1 window and the post-Chain open window; only
+  // CL1 responds. A throw inside the mock becomes the activation result, so
+  // the counter proves the CL1 checks completed.
+  const windows: Array<string | null> = [];
+  let responsesCompleted = 0;
+  game.chainSystem.offerChainResponses = async (_first, _second, context) => {
+    windows.push(context.type ?? null);
+    const link = game.chainSystem.getLastChainLink();
+    if (link?.effectId !== "shadow_heart_purge_debuff" || responsesCompleted > 0) {
+      return { lastActivator: null, chainBuilt: false, consecutivePasses: 2, offers: 1, activations: 0 };
+    }
     assert.ok(game.player.graveyard.includes(cost));
     assert.equal(target.atk, 2500);
-    const link = required(game.chainSystem.getLastChainLink());
     assert.deepEqual(selectedCards(link.targetSelections, "purge_target_monster"), [target]);
     game.chainSystem.markChainLinkEffectNegated(link.linkId);
+    responsesCompleted += 1;
     return { lastActivator: null, chainBuilt: false, consecutivePasses: 2, offers: 1, activations: 0 };
   };
-  await activate();
-  assert.equal(offered, true);
+  const result = await activate();
+  assert.deepEqual(windows, ["effect_targeted", "post_chain"]);
+  assert.equal(responsesCompleted, 1, "the CL1 response ran exactly once");
+  assert.equal(result.success, true);
+  assert.ok("effectNegated" in result, "the Chain outcome reports the negation");
+  assert.equal(result.effectNegated, true);
   assert.ok(game.player.graveyard.includes(cost));
   assert.ok(game.player.graveyard.includes(purge));
   assert.equal(target.atk, 2500);
@@ -118,11 +130,25 @@ test("Purge forgets a monster that leaves without destruction, including after i
 
 test("Purge does not retarget when the declared target leaves in response", async t => {
   const { game, target, other, cost, activate } = setup(t);
-  game.chainSystem.offerChainResponses = async () => {
-    await game.moveCard(target, game.bot, "hand", { fromZone: "field", awaitEvents: true });
+  const windows: Array<string | null> = [];
+  let responsesCompleted = 0;
+  game.chainSystem.offerChainResponses = async (_first, _second, context) => {
+    windows.push(context.type ?? null);
+    const link = game.chainSystem.getLastChainLink();
+    if (link?.effectId === "shadow_heart_purge_debuff" && responsesCompleted === 0) {
+      const moved = await game.moveCard(target, game.bot, "hand", { fromZone: "field", awaitEvents: true });
+      assert.equal(moved.success, true);
+      responsesCompleted += 1;
+    }
     return { lastActivator: null, chainBuilt: false, consecutivePasses: 2, offers: 1, activations: 0 };
   };
-  await activate();
+  const result = await activate();
+  assert.deepEqual(windows, ["effect_targeted", "post_chain"]);
+  assert.equal(responsesCompleted, 1, "the CL1 response ran exactly once");
+  assert.equal(result.success, false);
+  assert.ok("resolvedWithoutEffect" in result, "the Chain outcome reports the lost target");
+  assert.equal(result.resolvedWithoutEffect, true);
+  assert.ok(game.bot.hand.includes(target));
   assert.ok(game.player.graveyard.includes(cost));
   assert.equal(other.atk, 2800);
   assert.equal(game.temporaryEventEffects.length, 0);

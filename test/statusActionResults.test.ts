@@ -244,7 +244,8 @@ for (const presence of ["unchanged", "left", "left and returned"] as const) {
       bot: { hand: [source, payment] } });
     let committedCostEvents = 0;
     applyGenericSimulatedMainPhaseAction(state, { type: "handIgnition", index: 0, cardId: 501, effectId: effect.id }, {
-      emitSimulatedEvent: (event, payload) => {
+      enableSimulatedEvents: true,
+      onSimulatedEvent: (event, payload) => {
         if (event !== "card_to_grave" || Reflect.get(payload, "card") !== payment) return;
         committedCostEvents++;
         if (presence === "unchanged") return;

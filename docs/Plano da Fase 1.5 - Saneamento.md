@@ -16,7 +16,7 @@
 | --- | --- | --- | --- |
 | 0 | ✅ Runner confiável e rápido (loader, glob, filtro, timeout, delays de IA) | — | S |
 | 1 | ✅ 20 testes de texto alinhados ao texto atual das cartas | — | S |
-| 2 | 28 testes desatualizados alinhados às mudanças intencionais | Etapa 0 | M |
+| 2 | ✅ 28 testes desatualizados alinhados às mudanças intencionais | Etapa 0 | M |
 | 3 | 3 regressões corrigidas, Regra B de ativação de Magias (bump `engine-rules-v26`), D2 na simulação, **CI verde** | Etapas 0–2 | M |
 | 4 | Pipeline único `verify` → `deploy-pages`, ruleset em `main`, **Pages atualizado** | Etapa 3, D6–D8 | S |
 | 5 | Determinismo sem bump (RNG da IA, invariantes, Tech-Zero, Arena) | Etapa 4, D3, D4 | M |
@@ -259,14 +259,14 @@ O CI global de branch deve mostrar 39 falhas restantes.
 
 **Tarefas**
 
-- [ ] **`techzero-ai:P3`** (4 testes, `9a94d94`).
+- [x] **`techzero-ai:P3`** (4 testes, `9a94d94`).
   - Editar o bloco `test/ai/techZeroPriorityThreeSimulation.test.ts:90-100`. Atenção: o bloco não é `88-99`; editar essas linhas literalmente quebraria a estrutura do arquivo.
   - Importar `clearSimulatedDamageCalculationBuffs` e `clearSimulatedEndOfDamageStepBuffs` de `../../src/core/ai/common/simulatedActions/stats.js` depois da linha 5.
   - Renomear para "P3 battle-duration buffs are tracked and expire at their Damage Step boundary (${seat}/${direction})".
   - Em `:97-98`: `ghost.atk === 2400`, `_simUnsupportedActions` vazio e exatamente 1 entrada rastreada (`damageCalculationTempBuffs` ou `endOfDamageStepTempBuffs`) apontando para o ghost; depois o clear e `ghost.atk === 1900`.
   - O valor 2400 = 1900 + 500 confere com Ghost Samurai (`src/data/cards/techZero.ts:926,937-938`).
-- [ ] **`techzero-ai:scrapyard`** (2 testes, `9a94d94`): em `test/ai/techZeroPriorityTwoSimulation.test.ts:244`, acrescentar `source.turnSetOn = 2;`. Motivo: `canActivateTrap` lê só `turnSetOn` (`src/core/game/spellTrap/verification.ts:41-43`).
-- [ ] **`bloomrot:B07`** (4 testes, `baddeee`, D05-B), em `test/replay/bloomrotPriorityOneAttackLockReplay.test.ts`:
+- [x] **`techzero-ai:scrapyard`** (2 testes, `9a94d94`): em `test/ai/techZeroPriorityTwoSimulation.test.ts:244`, acrescentar `source.turnSetOn = 2;`. Motivo: `canActivateTrap` lê só `turnSetOn` (`src/core/game/spellTrap/verification.ts:41-43`).
+- [x] **`bloomrot:B07`** (4 testes, `baddeee`, D05-B), em `test/replay/bloomrotPriorityOneAttackLockReplay.test.ts`:
   - `:71`: duração `"while_faceup"`.
   - `:84`: `network.effectsNegated === true`.
   - `:85`: contribuição `[{ duration: "while_faceup", sourceDuelCardId: singularity.duelCardId, sourceEffectId: "tech_zero_final_singularity_synchro_negate_all" }]`.
@@ -274,28 +274,28 @@ O CI global de branch deve mostrar 39 falhas restantes.
   - `:102`: o mesmo no playback, mais `effectsNegated` do 412 no playback.
   - Opcional: trocar "expiration" por "persistence" no título (`:37`).
   - A citação correta da carta 517 é `src/data/cards/techZero.ts:1643-1652`.
-- [ ] **`ai-misc:arena-parcial`** (2 testes, `baddeee`), em `test/ai/arenaChainOutcomes.test.ts`. Aplica-se a correção da verificação adversarial:
+- [x] **`ai-misc:arena-parcial`** (2 testes, `baddeee`), em `test/ai/arenaChainOutcomes.test.ts`. Aplica-se a correção da verificação adversarial:
   - (a) Asserir `result.resolutionResult?.linkResults` do CL2: `linkId 2`, `success false`, `failedAction "conditional_actions"` e `reason` casando `/synchro_summon_from_extra_deck/`.
   - (b) Asserir as contagens da Arena (`succeeded 3`, `partialFailures 0` e o mesclado `partialFailures 0` em `:85`) **como comportamento atual**, não como semântica desejada. Um comentário aponta a lacuna de visibilidade pós-efeito (fase 2).
   - (c) **Novo caso de `partial_failure`**, com um efeito local de teste de duas ações primárias: a primeira executa e a segunda falha (padrão `add()` de `test/chain/afterEffectResolution.test.ts`). O objetivo é cobrir as contagens e amostras do `DuelTracker` (`src/core/ai/ArenaAnalytics.ts:2838`).
   - Renomear o teste em `:24`.
-- [ ] **`ai-misc:arena-antes`** (2 testes, `baddeee`): em `test/ai/arenaChainOutcomes.test.ts:140`, trocar o `/target/i` por `failedAction === "special_summon_from_zone"` e `reason` casando `/special_summon_from_zone/`.
-- [ ] **`ai-misc:B27`** (2 testes, `baddeee`): em `test/ai/negatedAuraSimulation.test.ts:157`, `duration: "until_end_turn"`. Opcional: uma asserção do default sem duração (`target.atk` continua 3000 depois do cleanup).
-- [ ] **`ai-misc:raven`** (1 teste, `9a94d94`), em `test/ai/fusionDispatcherConsumers.test.ts`: renomear em `:153`; em `:162`, `assert.deepEqual(state._simUnsupportedActions ?? [], [])` e `assert.equal(fusion.immuneToOpponentEffectsUntilTurn, 4)`.
-- [ ] **`engine:chain-publico`** (1 teste, `2224ef2`).
+- [x] **`ai-misc:arena-antes`** (2 testes, `baddeee`): em `test/ai/arenaChainOutcomes.test.ts:140`, trocar o `/target/i` por `failedAction === "special_summon_from_zone"` e `reason` casando `/special_summon_from_zone/`.
+- [x] **`ai-misc:B27`** (2 testes, `baddeee`): em `test/ai/negatedAuraSimulation.test.ts:157`, `duration: "until_end_turn"`. Opcional: uma asserção do default sem duração (`target.atk` continua 3000 depois do cleanup).
+- [x] **`ai-misc:raven`** (1 teste, `9a94d94`), em `test/ai/fusionDispatcherConsumers.test.ts`: renomear em `:153`; em `:162`, `assert.deepEqual(state._simUnsupportedActions ?? [], [])` e `assert.equal(fusion.immuneToOpponentEffectsUntilTurn, 4)`.
+- [x] **`engine:chain-publico`** (1 teste, `2224ef2`).
   - `test/chain/integration.test.ts:231`: `triggers` = projeção `{ opportunityId, pendingOccurrenceCount, selecting, occurrenceIds, groups }` de `chain.getTriggerState()`.
   - Acrescentar um caso com ocorrência pendente ou ativa de fonte oculta, que apareça em `chain.getTriggerState()` e **não** em `game.getPublicState().chain.triggers`. A fixture atual não tem ocorrências, então `Reflect.get(...) === undefined` sozinho não prova nada.
-- [ ] **`engine:hand-ignition`** (3 testes, `9a94d94`): em `test/statusActionResults.test.ts:247-255`, trocar `emitSimulatedEvent` por `enableSimulatedEvents: true, onSimulatedEvent: (event, payload) => {…}`. Sem `any` e sem cast: os campos existem em `src/core/ai/common/simulatedActions/shared.ts:332,389`.
+- [x] **`engine:hand-ignition`** (3 testes, `9a94d94`): em `test/statusActionResults.test.ts:247-255`, trocar `emitSimulatedEvent` por `enableSimulatedEvents: true, onSimulatedEvent: (event, payload) => {…}`. Sem `any` e sem cast: os campos existem em `src/core/ai/common/simulatedActions/shared.ts:332,389`.
   - `test/ai/bloomrotDevourerFusion.test.ts:180` continua asserindo de propósito a flag `deferred_event_frame:custom_emitter`, que esta correção deixa de usar em `statusActionResults`. Essa linha **não muda**.
-- [ ] **`engine:boneflame`** (1 teste, `9a94d94`), em `test/temporaryStatAura.test.ts`:
+- [x] **`engine:boneflame`** (1 teste, `9a94d94`), em `test/temporaryStatAura.test.ts`:
   - `:192`: renomear para "…is modeled after temporary half".
   - `:200-201`: `const copy = createPlanningCopy(); const target = copy.cloneCardForSim(boneflame);` e GY clonado com `owner.graveyard.map(copy.cloneCardForSim)`.
   - `:207`: `[]`. `:208`: `false`. `:213`: `800`.
-- [ ] **`engine:metal`** (6 testes, `9a94d94`), em `test/fieldPresencePassives.test.ts`:
+- [x] **`engine:metal`** (6 testes, `9a94d94`), em `test/fieldPresencePassives.test.ts`:
   - `:551`: `summonedTurn: 2` no material.
   - `:565`: manter os efeitos reais apenas quando `mode === "dragon" && rejected === "nondragon"`. É preferível à ternária só por `rejected`, que deixaria o caso comum inalterado.
   - `:599`: remover `effects: []` do Voltaic Dragon.
-- [ ] **`tests:mocks-engolidos`** (higiene de teste; **não conta nas 60**): asserções dentro de mocks de `offerChainResponses` que lançam numa janela posterior são engolidas, provavelmente por `src/core/game/events/eventResolver.ts:199` ou `eventBus.ts:79-83`. Casos: `test/transmutate.test.ts:328` (teste "não é substituído"), `test/shadowHeartPurge.test.ts:51` e `test/mistyKatanaGhostSamurai.test.ts:152`. Proteger os mocks contra chamadas repetidas (contador ou retorno antecipado sem chain link).
+- [x] **`tests:mocks-engolidos`** (higiene de teste; **não conta nas 60**): asserções dentro de mocks de `offerChainResponses` que lançam numa janela posterior são engolidas pelo `catch` de `runFastEffectTiming` (`src/core/chain/timing.ts:592-611`), e não por `eventResolver.ts:199`. A origem foi confirmada na execução da Etapa 2. Casos: `test/transmutate.test.ts:328` (teste "não é substituído"), `test/shadowHeartPurge.test.ts:51` e `test/mistyKatanaGhostSamurai.test.ts:152`. Proteger os mocks contra chamadas repetidas (contador ou retorno antecipado sem chain link).
   - **`INV-2`:** `transmutate.test.ts:328` registra `index === -1`, e `splice(-1,1)` remove a última carta do GY. Antes de "consertar" o mock, verificar se isso esconde um bug real do teste ou da engine.
   - Depois, a política de falhas (`engine-bugs:2`/`:9`) tornará essas asserções visíveis em modo estrito.
 
@@ -640,6 +640,9 @@ O portão global é o PR com `verify`.
     - `src/core/game/summon/transaction.ts:609-611`: reportar e continuar devolvendo `null`, porque a liberação do guard precisa ser preservada
     - `src/core/chain/segoc.ts:946-957`: precisa receber o host do Chain como parâmetro
     - `src/core/chain/activation.ts:728-741`
+    - `src/core/chain/timing.ts:592-611` (`runFastEffectTiming`), encontrado na Etapa 2:
+      - hoje engole qualquer exceção sem log;
+      - quando o erro ocorre na janela `post_chain` depois da resolução do CL1, descarta `rootResolutionResult` e relata como falha uma Chain que resolveu.
   - Sem rollback em `applyActions`.
   - **Baseline:** rodar `test/chain/integration.test.ts` antes da mudança.
 - [ ] **`engine-bugs:2`**: em `src/core/game/events/eventResolver.ts`, aplicar a política em `:151-154`, `:199-201` e `:523-525`.

@@ -34,7 +34,7 @@ function install(game: RuntimeGame, seat: "player" | "bot", controller: "human" 
 }
 
 for (const seat of ["player", "bot"] as const) for (const controller of ["human", "ai"] as const) {
-  test(`B07 real-card negation, attack and expiration replay (${seat}, ${controller})`, async t => {
+  test(`B07 real-card negation, attack and persistence replay (${seat}, ${controller})`, async t => {
     setLocale("en");
     const live = createRuntimeGame({ captureReplay: true, randomSeed: 412517, laboratoryMode: true, laboratoryUseBot: false });
     const playback = createRuntimeGame({ captureReplay: false, replayMode: "playback", laboratoryMode: true, laboratoryUseBot: false });
@@ -68,8 +68,10 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
     await completeTestSelections(live, summon);
     assert.equal((await summon).success, true);
     assert.equal(network.effectsNegated, true);
-    assert.deepEqual(network.effectsNegationContributions, [{ duration: "until_end_turn",
-      sourceDuelCardId: singularity.duelCardId, sourceEffectId: "tech_zero_final_singularity_synchro_negate_all" }]);
+    // D05-B: 517 declares no duration, so its negation lasts while 412 stays face-up.
+    const contributions = [{ duration: "while_faceup",
+      sourceDuelCardId: singularity.duelCardId, sourceEffectId: "tech_zero_final_singularity_synchro_negate_all" }];
+    assert.deepEqual(network.effectsNegationContributions, contributions);
     assert.equal(live.getAttackAvailability(attacker).ok, true);
     await completeTestSelections(live, live.nextPhase());
     assert.equal(live.phase, "battle");
@@ -81,9 +83,10 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
     assert.equal(attacker.getCounter("spore"), 5);
     for (let step = 0; step < 4 && live.turn === seat; step++) await completeTestSelections(live, live.nextPhase());
     assert.notEqual(live.turn, seat, "the public phase flow completes the turn cleanup");
-    assert.equal(network.effectsNegated, false);
-    assert.deepEqual(network.effectsNegationContributions, []);
-    assert.deepEqual(live.getAttackAvailability(attacker), { ok: false, reason });
+    assert.equal(network.effectsNegated, true, "the turn cleanup does not end a while_faceup negation");
+    assert.deepEqual(network.effectsNegationContributions, contributions);
+    // Off-turn the attacker reports its spent attack; the lock check runs first, so its reason would win if active.
+    assert.notEqual(live.getAttackAvailability(attacker).reason, reason);
     const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "bloomrot-p1-attack-lock" }))));
     assert.equal(replay.schemaVersion, 2);
     assert.deepEqual(replay.commands.map(command => command.type), [
@@ -99,6 +102,8 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
     assert.deepEqual(createCanonicalStateSnapshot(playback), createCanonicalStateSnapshot(live));
     assert.equal(hashCanonicalGameState(playback), hashCanonicalGameState(live));
     const restoredAttacker = required(playback[seat].field.find(card => card.id === 1));
-    assert.deepEqual(playback.getAttackAvailability(restoredAttacker), { ok: false, reason });
+    const restoredNetwork = required(playback.getOpponent(playback[seat]).spellTrap.find(card => card.id === 412));
+    assert.equal(restoredNetwork.effectsNegated, true);
+    assert.notEqual(playback.getAttackAvailability(restoredAttacker).reason, reason);
   });
 }

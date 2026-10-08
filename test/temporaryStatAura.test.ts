@@ -189,7 +189,7 @@ test("B27 snapshots without origin proof and mixed unknown contributions remain 
   assert.equal(hasPendingPassiveRestoration(simulationState({ player: { field: [copy] } })), true);
 });
 
-test("B27 Boneflame graveyard aura stays unsupported after temporary half", async t => {
+test("B27 Boneflame graveyard aura is modeled after temporary half", async t => {
   const { game, owner, opponent, spear } = scenario(t, "player");
   const boneflame = new Card(cardDefinition(269), "player");
   owner.field = []; owner.fieldSpell = null;
@@ -197,18 +197,19 @@ test("B27 Boneflame graveyard aura stays unsupported after temporary half", asyn
   owner.graveyard.push(new Card(cardDefinition("Grey Dragon"), "player"), new Card(cardDefinition("Grey Dragon"), "player"));
   game.effectEngine.updatePassiveBuffs();
   assert.equal(boneflame.atk, 800);
-  const target = createPlanningCopy().cloneCardForSim(boneflame);
-  const state = simulationState({ player: { field: [target] } });
+  const copy = createPlanningCopy();
+  const target = copy.cloneCardForSim(boneflame);
+  const state = simulationState({ player: { field: [target], graveyard: owner.graveyard.map(copy.cloneCardForSim) } });
   const action: ActionOf<"modify_stats_temp"> = { type: "modify_stats_temp", targetRef: "target", atkFactor: 0.5 };
   await game.effectEngine.applyActions([action], { player: opponent, opponent: owner, source: spear }, { target: [boneflame] });
   applySimulatedActions({ state, selfId: "bot", actions: [action], selections: { target: [target] } });
   assert.equal(boneflame.atk, 400);
   assert.equal(target.atk, 400);
-  assert.deepEqual(state._simUnsupportedActions, ["modify_stats_temp:passive_recalculation"]);
-  assert.equal(hasPendingPassiveRestoration(state), true);
+  assert.deepEqual(state._simUnsupportedActions ?? [], []);
+  assert.equal(hasPendingPassiveRestoration(state), false);
   game.effectEngine.updatePassiveBuffs();
   cleanupTempBoosts(owner); game.effectEngine.updatePassiveBuffs();
   cleanupSimulatedEndTurn(state);
   assert.equal(boneflame.atk, 800);
-  assert.equal(target.atk, 0, "unsupported graveyard family remains deliberately unmodeled");
+  assert.equal(target.atk, 800, "modeled graveyard family restores in parity with the runtime");
 });

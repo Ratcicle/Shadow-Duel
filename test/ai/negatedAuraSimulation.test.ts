@@ -154,7 +154,7 @@ for (const seat of ["bot", "player"] as const) {
       assert.equal(witness.atk, 3300);
       const action: ActionOf<"set_facedown_defense"> | ActionOf<"add_status"> | ActionOf<"take_control"> = change === "face"
         ? { type: "set_facedown_defense", targetRef: "source" } : change === "negation"
-          ? { type: "add_status", targetRef: "source", status: "effectsNegated" }
+          ? { type: "add_status", targetRef: "source", status: "effectsNegated", duration: "until_end_turn" }
           : { type: "take_control", targetRef: "source" };
       const events: string[] = [];
       applySimulatedActions({ state, selfId: seat === "bot" ? "player" : "bot", actions: [action], selections: { source: [source] },
@@ -171,6 +171,27 @@ for (const seat of ["bot", "player"] as const) {
       assert.equal(target.atk, change === "negation" ? 3300 : 3000);
     });
   }
+
+  test(`B27 a negation without declared duration keeps the aura suppressed after cleanup (${seat})`, () => {
+    const copy = createPlanningCopy();
+    const source = copy.cloneCardForSim(new Card({ ...cardDefinition("Shadow-Heart Void Mage"), effects: [{
+      id: "b27_visible_aura", timing: "passive", requireZone: "field", passive: {
+        type: "field_archetype_aura_buff", archetype: "Shadow-Heart", amount: 300, stats: ["atk"], targetOwners: ["self"],
+      },
+    }] }, seat));
+    const target = copy.cloneCardForSim(new Card(cardDefinition("Shadow-Heart Scale Dragon"), seat));
+    const state = simulationState({ [seat]: { field: [source, target] } });
+    refreshSimulatedFieldAuras(state);
+    assert.equal(target.atk, 3300);
+    applySimulatedActions({ state, selfId: seat === "bot" ? "player" : "bot", selections: { source: [source] },
+      actions: [{ type: "add_status", targetRef: "source", status: "effectsNegated" }] });
+    assert.equal(target.atk, 3000);
+    assert.deepEqual(state._simUnsupportedActions || [], []);
+    cleanupSimulatedEndTurn(state);
+    // D05-B: without a declared duration the negation lasts while the source stays face-up.
+    assert.equal(source.effectsNegated, true);
+    assert.equal(target.atk, 3000);
+  });
 }
 
 test("B27 removes a proven stale contribution after its source identity was cleared", () => {

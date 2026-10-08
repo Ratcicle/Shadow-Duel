@@ -150,7 +150,7 @@ for (const seat of ["player", "bot"] as const) {
   });
 }
 
-test("the shared Fusion dispatcher keeps unsupported Raven immunity explicit", () => {
+test("the shared Fusion dispatcher applies Raven immunity through the shared runtime rule", () => {
   const fusion = make("Void Hollow King"), spell = make("Polymerization"), raven = make("Void Raven");
   const state = simulationState({ _isPerspectiveState: true, turn: "bot", phase: "main1", turnCounter: 3,
     bot: { hand: [spell, material("Void Hollow"), material("Void Hollow"), material("Void Hollow"), raven], extraDeck: [fusion],
@@ -159,6 +159,8 @@ test("the shared Fusion dispatcher keeps unsupported Raven immunity explicit", (
     "The supplied Fusion projection does not access a live strategy actor")).simulateMainPhaseAction(state,
       { type: "spell", index: 0, cardId: spell.id });
   assert.ok(state.bot.field.includes(fusion));
-  assert.ok(state._simUnsupportedActions?.includes("grant_void_fusion_immunity"));
+  assert.deepEqual(state._simUnsupportedActions ?? [], []);
+  // Void Raven grants immunity until the end of the next turn: turnCounter 3 + durationTurns 1.
+  assert.equal(fusion.immuneToOpponentEffectsUntilTurn, 4);
   assert.equal(state.bot.graveyard.filter(card => card === raven).length, 1);
 });

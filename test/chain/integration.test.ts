@@ -5,6 +5,7 @@ import type {
   ChainPlayer,
   ChainSourceZone,
   ChainTriggerEntry,
+  ChainTriggerState,
 } from "../../src/core/contracts/chainRuntime.js";
 import { required, unsafeFixture } from "../helpers/fixtures.js";
 import type { TestCard } from "./helpers/chainHarness.js";
@@ -21,6 +22,25 @@ import {
 
 // Official baseline: complete chain construction and resolution flow, Rulebook v10.
 // https://img.yugioh-card.com/en/downloads/rulebook/SD_RuleBook_EN_10.pdf
+
+const PUBLIC_TRIGGER_FIELDS = [
+  "opportunityId",
+  "pendingOccurrenceCount",
+  "selecting",
+  "occurrenceIds",
+  "groups",
+] as const;
+
+/** Public state publishes only opportunity facts; occurrence facts stay canonical. */
+function publicTriggerProjection({
+  opportunityId,
+  pendingOccurrenceCount,
+  selecting,
+  occurrenceIds,
+  groups,
+}: ChainTriggerState) {
+  return { opportunityId, pendingOccurrenceCount, selecting, occurrenceIds, groups };
+}
 
 test("dois harnesses consecutivos não compartilham estado", () => {
   const first = createChainHarness();
@@ -228,9 +248,78 @@ test("resumo e estado público expõem somente o contrato serializável", () => 
     resolving: false,
     links: summary,
     timing: chain.getFastEffectState(),
-    triggers: chain.getTriggerState(),
+    triggers: publicTriggerProjection(chain.getTriggerState()),
     finalization: chain.getChainFinalizationState(),
   });
+});
+
+test("estado público omite ocorrências de trigger cuja fonte está oculta", () => {
+  const { chain, game, player, bot } = createChainHarness();
+  const effect = createTestEffect({
+    id: "hidden_trigger_effect",
+    timing: "on_event",
+    event: "card_to_grave",
+    speed: 1,
+  });
+  const hidden = placeCard(
+    bot,
+    "hand",
+    createTestCard({
+      id: 4242,
+      instanceId: "hidden_trigger_instance",
+      name: "Hidden trigger source",
+      effects: [effect],
+    }),
+  );
+  hidden.duelCardId = 9173;
+  const sourceAtTrigger = captureSourceSnapshot(hidden, bot, "hand");
+  const entry: ChainTriggerEntry = {
+    card: hidden,
+    effect,
+    owner: bot,
+    sourceAtTrigger,
+    config: {
+      card: hidden,
+      effect,
+      owner: bot,
+      activationZone: "hand",
+      selectionKind: "triggered",
+      activationContext: { activationZone: "hand", sourceAtTrigger },
+      async activate() {
+        return { success: true, effect, targets: {} };
+      },
+    },
+  };
+  const occurrence = required(
+    chain.createTriggerOccurrence(
+      "card_to_grave",
+      { player: bot, opponent: player },
+      { entries: [entry], entriesProvided: true },
+    ),
+  );
+  chain.queueTriggerOccurrence(occurrence);
+  required(chain.buildTriggerOpportunity([occurrence]));
+
+  const triggers = chain.getTriggerState();
+  for (const occurrences of [triggers.pendingOccurrences, triggers.activeOccurrences]) {
+    assert.equal(occurrences.length, 1);
+    const captured = required(required(occurrences[0]).entries[0]);
+    assert.equal(captured.cardId, 4242);
+    assert.equal(captured.duelCardId, 9173);
+    assert.equal(required(captured.sourceAtTrigger).zone, "hand");
+  }
+
+  const publicTriggers = required(game.getPublicState!(player.id).chain.triggers);
+  assert.deepEqual(publicTriggers, publicTriggerProjection(triggers));
+  assert.deepEqual(Object.keys(publicTriggers).sort(), [...PUBLIC_TRIGGER_FIELDS].sort());
+  assert.equal(publicTriggers.pendingOccurrenceCount, 1);
+  assert.deepEqual(publicTriggers.occurrenceIds, [occurrence.occurrenceId]);
+  for (const key of ["pendingOccurrences", "activeOccurrences", "lastRelevantAtomicGroupId"]) {
+    assert.equal(Object.hasOwn(publicTriggers, key), false, key);
+  }
+  const serialized = JSON.stringify(publicTriggers);
+  assert.equal(serialized.includes("4242"), false);
+  assert.equal(serialized.includes("9173"), false);
 });
 
 test("addToChain rejeita a assinatura posicional removida", () => {

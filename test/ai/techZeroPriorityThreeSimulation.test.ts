@@ -3,6 +3,7 @@ import test from "node:test";
 import Card from "../../src/core/Card.js";
 import { selectSimulatedTargets } from "../../src/core/ai/common/targetSelection.js";
 import { applySimulatedActions } from "../../src/core/ai/common/simulatedActions/index.js";
+import { clearSimulatedDamageCalculationBuffs, clearSimulatedEndOfDamageStepBuffs } from "../../src/core/ai/common/simulatedActions/stats.js";
 import { areRequiredContextualReferencesValid, captureSimulatedReferences, type SimulatedActionOptions } from "../../src/core/ai/common/simulatedActions/shared.js";
 import { evaluateTechZeroVisibleBattle } from "../../src/core/ai/techzero/battle.js";
 import { buildTechZeroActivationContext } from "../../src/core/ai/techzero/priorities.js";
@@ -61,7 +62,7 @@ for (const seat of ["player", "bot"] as const) for (const direction of ["attack"
     assert.equal(areRequiredContextualReferencesValid(options, state.bot, state.player), false);
     assert.equal(applySimulatedActions({ actions: effect.actions || [], selections: selected, state, options }), false);
     assert.equal(ghost.atk, 1900);
-    assert.deepEqual(state._simUnsupportedActions || [], [], "preflight stops before projecting an unsupported buff");
+    assert.deepEqual(state._simUnsupportedActions || [], [], "preflight stops before projecting the buff");
   });
   test(`P3 Ghost never replaces its Normal Summoned battle participant with a Special Summoned bystander (${seat}/${direction})`, () => {
     const { state, ghost, opponent, effect, options } = setup();
@@ -87,15 +88,23 @@ for (const seat of ["player", "bot"] as const) for (const direction of ["attack"
       assert.equal(ghost.atk, 1900);
     });
   }
-  test(`P3 battle-duration buffs remain explicitly unsupported by shared simulation (${seat}/${direction})`, () => {
+  test(`P3 battle-duration buffs are tracked and expire at their Damage Step boundary (${seat}/${direction})`, () => {
     for (const duration of ["end_of_damage_step", "damage_calculation"] as const) {
       const { state, ghost, effect, selections, options } = setup();
       const action = required(effect.actions?.find(entry => entry.type === "buff_stats_temp"));
       assert.equal(action.type, "buff_stats_temp");
       if (action.type !== "buff_stats_temp") return;
       assert.equal(applySimulatedActions({ actions: [{ ...action, duration }], selections, state, options }), true);
+      assert.equal(ghost.atk, 2400);
+      assert.deepEqual(state._simUnsupportedActions || [], []);
+      const tracked = duration === "damage_calculation" ? state.damageCalculationTempBuffs : state.endOfDamageStepTempBuffs;
+      const otherBoundary = duration === "damage_calculation" ? state.endOfDamageStepTempBuffs : state.damageCalculationTempBuffs;
+      assert.equal(tracked?.length, 1);
+      assert.equal(tracked?.[0]?.card, ghost);
+      assert.equal(otherBoundary?.length ?? 0, 0, "the buff is tracked only at its own Damage Step boundary");
+      if (duration === "damage_calculation") clearSimulatedDamageCalculationBuffs(state);
+      else clearSimulatedEndOfDamageStepBuffs(state);
       assert.equal(ghost.atk, 1900);
-      assert.ok(state._simUnsupportedActions?.includes("buff_stats_temp"));
     }
   });
 }

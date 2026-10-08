@@ -323,11 +323,22 @@ test("um alvo que sai do Cemitério não é substituído e o custo não é devol
   placeFieldCards(game.player.field, cost);
   game.player.graveyard.push(declared, replacement);
 
-  game.chainSystem.offerChainResponses = async () => {
-    const index = game.player.graveyard.indexOf(declared);
-    assert.notEqual(index, -1);
-    game.player.graveyard.splice(index, 1);
-    game.player.banished.push(declared);
+  // The mock is offered every response window of the activation: the CL1
+  // window and the post-Chain open window. Only the CL1 window responds.
+  // A throw inside the mock is converted into the activation result by the
+  // Fast Effect Timing cleanup, so the checks below must prove it completed.
+  const windows: Array<string | null> = [];
+  let responsesCompleted = 0;
+  game.chainSystem.offerChainResponses = async (_first, _second, context) => {
+    windows.push(context.type ?? null);
+    const link = game.chainSystem.getLastChainLink();
+    if (link?.effectId === EFFECT_ID && responsesCompleted === 0) {
+      const index = game.player.graveyard.indexOf(declared);
+      assert.notEqual(index, -1);
+      game.player.graveyard.splice(index, 1);
+      game.player.banished.push(declared);
+      responsesCompleted += 1;
+    }
     return {
       lastActivator: null,
       chainBuilt: false,
@@ -337,11 +348,20 @@ test("um alvo que sai do Cemitério não é substituído e o custo não é devol
     };
   };
 
-  await game.tryActivateSpell(spell, 0, {
+  const result = await game.tryActivateSpell(spell, 0, {
     [COST_REF]: [cost],
     [TARGET_REF]: [declared],
   });
 
+  assert.deepEqual(windows, ["effect_targeted", "post_chain"]);
+  assert.equal(responsesCompleted, 1, "the CL1 response ran exactly once");
+  assert.equal(result.success, false);
+  // Runtime fields of the Chain outcome; the public result type omits them.
+  assert.ok("chainBuilt" in result && "resolvedWithoutEffect" in result);
+  assert.equal(result.chainBuilt, true);
+  assert.equal(result.resolvedWithoutEffect, true);
+  assert.equal(game.player.graveyard.includes(spell), true);
+  assert.equal(game.player.banished.filter((card) => card === declared).length, 1);
   assert.equal(game.player.graveyard.includes(cost), true);
   assert.equal(game.player.banished.includes(declared), true);
   assert.equal(game.player.graveyard.includes(replacement), true);

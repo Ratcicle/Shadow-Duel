@@ -53,6 +53,35 @@ async function waitForSelection(game: RuntimeGame, attempts = 500) {
   assert.fail("Expected a target selection session.");
 }
 
+type ChainLinkView = NonNullable<ReturnType<ChainSystem["getLastChainLink"]>>;
+
+/**
+ * Replaces the response negotiation for one activation of the revival effect.
+ * Every window the engine offers is recorded, but only the first window whose
+ * last link is the revival responds. A throw inside `respond` is turned into
+ * the activation result by the Fast Effect Timing cleanup, so callers must
+ * check `completed()` to prove that the response actually finished.
+ */
+function respondOnlyInRevivalWindow(
+  game: RuntimeGame,
+  respond: (link: ChainLinkView) => void | Promise<void>,
+) {
+  const windows: Array<string | null> = [];
+  let completed = 0;
+  const chain = game.chainSystem;
+  assert.ok(chain instanceof ChainSystem);
+  chain.offerChainResponses = async (_first, _second, context) => {
+    windows.push(context.type ?? null);
+    const link = chain.getLastChainLink();
+    if (link?.effectId === "misty_katana_ghost_samurai_revive_tuner" && completed === 0) {
+      await respond(link);
+      completed += 1;
+    }
+    return { lastActivator: null, chainBuilt: false, consecutivePasses: 2, offers: 1, activations: 0 };
+  };
+  return { windows, completed: () => completed };
+}
+
 async function resolveFirstSelectionCandidate(game: RuntimeGame) {
   const session = await waitForSelection(game);
   const requirement = session.requirements?.[0];
@@ -148,23 +177,30 @@ for (const negation of ["activation", "effect"] as const) {
     const tuner = createCard(cardDatabaseByName.get("Tech-Zero Energy Core"), game.player);
     game.player.graveyard.push(samurai, tuner);
     assert.ok(game.chainSystem instanceof ChainSystem);
-    game.chainSystem.offerChainResponses = async () => {
-      const link = required(game.chainSystem.getLastChainLink());
+    const probe = respondOnlyInRevivalWindow(game, (link) => {
       assert.equal(game.player.banished.includes(samurai), true);
       if (negation === "activation") {
         game.chainSystem.markChainLinkActivationNegated(link.linkId, { negatedBy: tuner });
       } else {
         game.chainSystem.markChainLinkEffectNegated(link.linkId, { negatedBy: tuner });
       }
-      return { lastActivator: null, chainBuilt: false, consecutivePasses: 2, offers: 1, activations: 0 };
-    };
-    await game.tryActivateMonsterEffect(
+    });
+    const result = await game.tryActivateMonsterEffect(
       samurai,
       { misty_katana_ghost_samurai_revive_target: [tuner] },
       "graveyard",
       game.player,
       { effectId: "misty_katana_ghost_samurai_revive_tuner" },
     );
+    // Either negation still resolves CL1, so the post-Chain open window follows.
+    assert.deepEqual(probe.windows, ["effect_targeted", "post_chain"]);
+    assert.equal(probe.completed(), 1, "the CL1 response ran exactly once");
+    assert.equal(result.success, negation === "effect");
+    assert.equal(result.activationNegated, negation === "activation");
+    if (negation === "effect") {
+      assert.ok("effectNegated" in result, "the Chain outcome reports the negation");
+      assert.equal(result.effectNegated, true);
+    }
     assert.equal(game.player.banished.includes(samurai), true);
     assert.equal(game.player.graveyard.includes(tuner), true);
     assert.equal(game.player.field.includes(tuner), false);
@@ -179,18 +215,22 @@ test("Samurai não redireciona a Invocação quando o alvo deixa o Cemitério", 
   const alternate = createCard(cardDatabaseByName.get("Tech-Zero Energy Core"), game.player);
   game.player.graveyard.push(samurai, chosen, alternate);
   assert.ok(game.chainSystem instanceof ChainSystem);
-  game.chainSystem.offerChainResponses = async () => {
+  const probe = respondOnlyInRevivalWindow(game, async () => {
     const moved = await game.moveCard(chosen, game.player, "banished", { fromZone: "graveyard" });
     assert.equal(moved.success, true);
-    return { lastActivator: null, chainBuilt: false, consecutivePasses: 2, offers: 1, activations: 0 };
-  };
-  await game.tryActivateMonsterEffect(
+  });
+  const result = await game.tryActivateMonsterEffect(
     samurai,
     { misty_katana_ghost_samurai_revive_target: [chosen] },
     "graveyard",
     game.player,
     { effectId: "misty_katana_ghost_samurai_revive_tuner" },
   );
+  assert.deepEqual(probe.windows, ["effect_targeted", "post_chain"]);
+  assert.equal(probe.completed(), 1, "the CL1 response ran exactly once");
+  assert.equal(result.success, false);
+  assert.ok("resolvedWithoutEffect" in result, "the Chain outcome reports the lost target");
+  assert.equal(result.resolvedWithoutEffect, true);
   assert.equal(game.player.banished.includes(samurai), true);
   assert.equal(game.player.banished.includes(chosen), true);
   assert.equal(game.player.graveyard.includes(alternate), true);
@@ -205,17 +245,21 @@ test("Samurai não Invoca nem troca o alvo se ele ultrapassar o Nível 4 durante
   const alternate = createCard(cardDatabaseByName.get("Tech-Zero Energy Core"), game.player);
   game.player.graveyard.push(samurai, chosen, alternate);
   assert.ok(game.chainSystem instanceof ChainSystem);
-  game.chainSystem.offerChainResponses = async () => {
+  const probe = respondOnlyInRevivalWindow(game, () => {
     chosen.level = 5;
-    return { lastActivator: null, chainBuilt: false, consecutivePasses: 2, offers: 1, activations: 0 };
-  };
-  await game.tryActivateMonsterEffect(
+  });
+  const result = await game.tryActivateMonsterEffect(
     samurai,
     { misty_katana_ghost_samurai_revive_target: [chosen] },
     "graveyard",
     game.player,
     { effectId: "misty_katana_ghost_samurai_revive_tuner" },
   );
+  assert.deepEqual(probe.windows, ["effect_targeted", "post_chain"]);
+  assert.equal(probe.completed(), 1, "the CL1 response ran exactly once");
+  assert.equal(result.success, false);
+  assert.ok("resolvedWithoutEffect" in result, "the Chain outcome reports the lost target");
+  assert.equal(result.resolvedWithoutEffect, true);
   assert.equal(game.player.banished.includes(samurai), true);
   assert.equal(game.player.graveyard.includes(chosen), true);
   assert.equal(game.player.graveyard.includes(alternate), true);

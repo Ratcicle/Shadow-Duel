@@ -241,7 +241,7 @@ for (const actor of ["player", "bot"] as const) {
     const { state, make } = scenario(actor);
     const source = make(520), core = make(501), prism = make(506), machine = make(503);
     prism.fieldSlot = 0; state.bot.field.push(prism); state.bot.graveyard.push(core); state.bot.extraDeck.push(machine);
-    source.isFacedown = true; source.setTurn = 2; source.fieldSlot = 0; state.bot.spellTrap.push(source);
+    source.isFacedown = true; source.setTurn = 2; source.turnSetOn = 2; source.fieldSlot = 0; state.bot.spellTrap.push(source);
     const effect = required(source.effects?.[0]);
     const activationContext = buildTechZeroActivationContext(source, effect, { player: state.bot, opponent: state.player });
     applyGenericSimulatedMainPhaseAction(state, { type: "spellTrapEffect", cardId: 520, zoneIndex: 0,

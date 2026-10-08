@@ -548,7 +548,7 @@ for (const enabled of [false, true]) {
 for (const mode of ["common", "dragon"] as const) {
   test(`${mode} Metal counts an Ascension and excludes the arriving source's own entry`, () => {
     const { state, source } = simulatedMetal();
-    const material = simulationCard({ ...cardDefinition(252), effects: [], instanceId: "ascension-material", isFacedown: false });
+    const material = simulationCard({ ...cardDefinition(252), effects: [], instanceId: "ascension-material", isFacedown: false, summonedTurn: 2 });
     const arriving = simulationCard({ ...cardDefinition(253), instanceId: "arriving-metal" });
     placeFieldCards(state.bot.field, material); state.bot.extraDeck.push(arriving);
     const action = { type: "ascension" as const, materialIndex: 0, ascensionCard: arriving };
@@ -562,7 +562,8 @@ for (const mode of ["common", "dragon"] as const) {
   for (const rejected of ["normal", "set", "flip", "nondragon"] as const) {
     test(`${mode} Metal excludes ${rejected} entries from its counter`, () => {
       const { state, source } = simulatedMetal();
-      const incoming = simulationCard({ ...cardDefinition(rejected === "nondragon" ? 255 : 252), effects: [],
+      const incoming = simulationCard({ ...cardDefinition(rejected === "nondragon" ? 255 : 252),
+        ...(mode === "dragon" && rejected === "nondragon" ? {} : { effects: [] }),
         level: 4, instanceId: "excluded-incoming", type: rejected === "nondragon" ? "Warrior" : "Dragon" });
       if (rejected === "flip") {
         incoming.isFacedown = true; incoming.position = "defense"; incoming.fieldPresenceId = "set-presence";
@@ -596,7 +597,7 @@ for (const sourceStatus of ["active", "negated", "facedown"] as const) {
   test(`Dragon Metal records a private Special Summon while its source is ${sourceStatus}`, () => {
     const { state, source } = simulatedMetal();
     source.effectsNegated = sourceStatus === "negated"; source.isFacedown = sourceStatus === "facedown";
-    const incoming = simulationCard({ ...cardDefinition(255), effects: [], instanceId: "private-voltaic" });
+    const incoming = simulationCard({ ...cardDefinition(255), instanceId: "private-voltaic" });
     placeFieldCards(state.bot.field, simulationCard({ ...cardDefinition(252), effects: [], isFacedown: false }));
     state.bot.hand.push(incoming);
     simulateDragonAction(state, { type: "handIgnition", index: 0 });
