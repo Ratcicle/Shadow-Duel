@@ -12,18 +12,14 @@ import type {
   GameTreeSimulatedPlayerState,
 } from "../../contracts/aiState.js";
 
-// These existing simulator fields belong to the current bot, unlike Dragon /
-// material / passive ledgers, whose keys already identify physical players.
+// These simulator fields belong to the current bot; canonical material and
+// passive ledgers already identify physical players in their keys.
 export const GAME_TREE_ACTOR_FIELDS = [
   "_simOptUsed",
   "_simArcanistOptUsed",
   "_simLuminarch",
-  "_simBurningWest",
-  "_simGrandLibraryBattleRewardUsed",
   "_simArcanistApprenticeSearchUsed",
   "_simArcanistSpellActivations",
-  "_simVoidBeastSearchUsed",
-  "_simVoidHollowRecruitUsed",
 ] as const satisfies readonly (keyof GameTreeActorState)[];
 
 /** GameTree's own profile; shared graph copying does not select Beam's fields. */

@@ -1,3 +1,4 @@
+import { ARCHETYPE, BW, getDeclaredType, describeBattlePairs, hasPeacemakerAttachment } from "./knowledge.js";
 import type { AIState, AIStrategyBotPort } from "../../contracts/ai.js";
 import type { SimulatedCardShape, SimulatedPlayerState } from "../../contracts/aiState.js";
 import type { CardDeclaredValueDetail } from "../../contracts/cards.js";
@@ -57,26 +58,7 @@ import {
 } from "../common/cardStats.js";
 import { scoreProtectedCard } from "./defense.js";
 
-const ARCHETYPE = "Burning West";
 
-const BW = Object.freeze({
-  GUNSLINGER: "Gunslinger of the Burning West",
-  WANTED: "Wanted in the Burning West",
-  UNDERTAKER: "Undertaker of the Burning West",
-  BUTCHER: "Butcher of the Burning West",
-  SPECIALIST: "Specialist of the Burning West",
-  PEACEMAKER: "Burning Peacemaker",
-  QUICK_DRAW: "Quick Draw in the Burning West",
-  FUNERAL: "Funeral at Sunset",
-  DEADEYE: "Deadeye of the Burning West",
-  PREACHER: "Preacher of the Burning West",
-  SHERIFF: "Sheriff of the Burning West",
-  CRASH_TOWN: "Crash Town, the Burning City",
-  AMBUSH: "Ambush in Crash Town",
-  REWARD: "Burning Reward",
-  LAW: "Law in the Burning West",
-  EXECUTIONER: "Executioner of the Burning West",
-});
 
 const BASE_STRATEGY = new BaseStrategy(null);
 
@@ -169,15 +151,8 @@ function sameCard(left: ScoringCard | string | number | null | undefined, right:
 }
 
 function hasPeacemakerEquipped(card: ScoringCard, player: ScoringPlayer = {}) {
-  return (
-    asArray(card?.equips).some((equip) => equip?.name === BW.PEACEMAKER) ||
-    asArray(card?.equippedCards).some((equip) => equip?.name === BW.PEACEMAKER) ||
-    getCards(player, "spellTrap").some(
-      (equip) =>
-        equip?.name === BW.PEACEMAKER &&
-        (sameCard(equip.equippedTo, card) || sameCard(equip.equipTarget, card)),
-    )
-  );
+  return hasPeacemakerAttachment([...asArray(card?.equips), ...asArray(card?.equippedCards)], getCards(player, "spellTrap"),
+    equip => sameCard(equip.equippedTo, card) || sameCard(equip.equipTarget, card), equip => equip?.name);
 }
 
 function canAttack(card: ScoringCard = {}) {
@@ -210,64 +185,24 @@ function targetThreat(card: ScoringCard = {}) {
   );
 }
 
+function battlePairFacts(attackers: ScoringCard[], targets: ScoringCard[]) {
+  return describeBattlePairs<ScoringCard>(attackers, targets, { canAttack: card => !!canAttack(card), targetVisible: target => !!target && !!isFaceUp(target),
+    canBeat: (attacker, target) => !!canDestroyByBattle(attacker, target), atk: getEffectiveAtk, threat: targetThreat, extraDeck: isExtraDeckMonster });
+}
+
 function buildBattlePlans(attackers: ScoringCard[] = [], targets: ScoringCard[] = []) {
-  const plans: BattlePlan[] = [];
-  for (const attacker of attackers.filter(canAttack)) {
-    for (const target of targets) {
-      if (!target || !isFaceUp(target)) continue;
-      if (!canDestroyByBattle(attacker, target)) continue;
-      plans.push({
-        attacker,
-        target,
-        type: target.type || null,
-        score:
-          targetThreat(target) +
-          getEffectiveAtk(attacker) / 10 +
-          (isExtraDeckMonster(target) ? 500 : 0),
-      });
-    }
-  }
-  return plans.sort((a, b) => b.score - a.score);
+  return battlePairFacts(attackers, targets).filter(pair => !pair.cannotBeatNormally).map(({ attacker, target }) => ({
+    attacker, target, type: target.type || null,
+    score: targetThreat(target) + getEffectiveAtk(attacker) / 10 + (isExtraDeckMonster(target) ? 500 : 0),
+  })).sort((a, b) => b.score - a.score);
 }
 
 function buildQuickDrawPairs(attackers: ScoringCard[] = [], targets: ScoringCard[] = []) {
-  const pairs: QuickDrawPair[] = [];
-  for (const attacker of attackers.filter(canAttack)) {
-    for (const target of targets) {
-      if (!target || !isFaceUp(target)) continue;
-      const diff = Math.abs(getEffectiveAtk(attacker) - getEffectiveAtk(target));
-      const cannotBeatNormally = !canDestroyByBattle(attacker, target);
-      const resetFriendly = diff <= 500;
-      const valuableThreat = targetThreat(target) >= 1800 || isExtraDeckMonster(target);
-      if (!cannotBeatNormally && !resetFriendly && !valuableThreat) continue;
-      pairs.push({
-        attacker,
-        target,
-        diff,
-        cannotBeatNormally,
-        resetFriendly,
-        score:
-          targetThreat(target) +
-          (cannotBeatNormally ? 600 : 0) +
-          (resetFriendly ? 300 : 0) -
-          diff / 4,
-      });
-    }
-  }
-  return pairs.sort((a, b) => b.score - a.score);
-}
-
-function getDeclaredType(card: ScoringCard = {}, stateKey: string, turnCounter = 0) {
-  const declaration = card?.declaredValues?.[stateKey] as Partial<CardDeclaredValueDetail> | undefined;
-  if (!declaration?.value) return null;
-  if (
-    declaration.expiresOnTurn !== null &&
-    declaration.expiresOnTurn !== undefined &&
-    Number(declaration.expiresOnTurn) < Number(turnCounter || 0)
-  ) {
-    return null;
-  }
-  return declaration.value;
+  return battlePairFacts(attackers, targets)
+    .filter(pair => pair.cannotBeatNormally || pair.resetFriendly || pair.valuableThreat)
+    .map(({ attacker, target, diff, cannotBeatNormally, resetFriendly }) => ({ attacker, target, diff, cannotBeatNormally, resetFriendly,
+      score: targetThreat(target) + (cannotBeatNormally ? 600 : 0) + (resetFriendly ? 300 : 0) - diff / 4,
+    })).sort((a, b) => b.score - a.score);
 }
 
 function collectDeclaredTypes(cards: ScoringCard[] = [], turnCounter = 0) {

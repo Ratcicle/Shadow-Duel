@@ -1,9 +1,13 @@
 import { appendSimulatedZoneCard } from "./common/zones.js";
 import { createPlanningCopy, hasPendingPassiveRestoration, projectRuntimeEffectUsage, projectRuntimeReplacementEffects } from "./common/planningCopy.js";
 import { PLANNING_PLAYER_FIELDS, PLANNING_STATE_FIELDS, PLANNING_ZONES } from "./common/stateFingerprint.js";
-import { isSimulatedMainPhaseActionSupported } from "./common/simulation.js";
+import { applySimulatedFieldSpellBattleDrawRewards, isSimulatedMainPhaseActionSupported } from "./common/simulation.js";
 import { hasSimulatedProtection } from "./common/simulatedActions/lifecycle.js";
 import { replaceSimulatedBattleDestruction } from "./common/simulatedActions/destruction.js";
+import {
+  clearSimulatedDamageCalculationBuffs,
+  clearSimulatedEndOfDamageStepBuffs,
+} from "./common/simulatedActions/stats.js";
 import {
   getBattleStatForAttackTarget,
   getEffectiveAtk,
@@ -124,7 +128,6 @@ type PlanningGameInput = Omit<AiStateInput, "player" | "bot" | "opponent"> & {
   opponent?: PlannerPlayerInput | null;
   _simOncePerTurn?: unknown;
   _simLuminarch?: unknown;
-  _simBurningWest?: unknown;
   temporaryBattlePairEffects?: readonly TemporaryBattleEffectView[];
   temporaryEventEffects?: readonly TemporaryBattleEffectView[];
   temporaryControlEffects?: readonly SimulatedTemporaryControlEffect[];
@@ -132,6 +135,8 @@ type PlanningGameInput = Omit<AiStateInput, "player" | "bot" | "opponent"> & {
 };
 
 interface DestroyedCardSummary {
+  card?: PlannerCard;
+  position?: string | null;
   id?: PlannerCard["id"];
   name?: string | undefined;
   owner: string;
@@ -714,7 +719,6 @@ function getPlanningStateHash(state: PlanningState): string {
     playerSummary(bot),
     playerSummary(opponent),
     summarizeSimOpt(state?._simOncePerTurn),
-    summarizeSimOpt(state?._simBurningWest),
     summarizeTemporaryEffects(state?.temporaryBattlePairEffects),
     summarizeTemporaryEffects(state?.temporaryEventEffects),
     JSON.stringify(state?.temporaryControlEffects || []),
@@ -1031,6 +1035,8 @@ function recordDestroyedCard(
   if (!summary || !card) return;
   summary.destroyedNames.push(card.name || "card");
   summary.destroyedCards.push({
+    card,
+    position: card.position || null,
     id: card.id,
     name: card.name,
     owner,
@@ -1102,36 +1108,6 @@ function preventsBattleDamageToController(
   card: PlannerCard | null | undefined,
 ): boolean {
   return card?.preventsBattleDamageToController === true;
-}
-
-function isArcanistMonster(card: PlannerCard | null | undefined): boolean {
-  if (!card || card.cardKind !== "monster") return false;
-  if (card.archetype === "Arcanist") return true;
-  return Array.isArray(card.archetypes) && card.archetypes.includes("Arcanist");
-}
-
-function applyGrandLibraryBattleReward(
-  state: PlanningState,
-  battlePlan: PlannerBattlePlan,
-): string[] {
-  const bot = state?.bot;
-  if (!bot || bot.fieldSpell?.name !== "Arcanist Grand Library") return [];
-  if (state._simGrandLibraryBattleRewardUsed) return [];
-  const destroyedOpponentMonster = (battlePlan.destroyedCards || []).some(
-    (entry) =>
-      entry?.owner === "opponent" &&
-      entry?.cardKind === "monster" &&
-      entry.destroyedBy !== "effect",
-  );
-  if (!destroyedOpponentMonster) return [];
-  const attacker = battlePlan.attackerCard || bot.field?.[battlePlan.attackerIndex];
-  if (!isArcanistMonster(attacker)) return [];
-  const drawn = bot.deck?.shift?.();
-  if (!drawn) return [];
-  if (!Array.isArray(bot.hand)) bot.hand = [];
-  appendSimulatedZoneCard(bot.hand, drawn);
-  state._simGrandLibraryBattleRewardUsed = true;
-  return [drawn.name || "drawn card"];
 }
 
 function applyStrategyBattleRewards(
@@ -1344,6 +1320,10 @@ function applySimulatedBattle(
   const prepareRewards = prepareStrategyBattle(state, battlePlan, strategy, options);
   summary.rewardNames.push(...prepareRewards);
   const attackStat = getEffectiveAtk(attacker);
+  const targetStat = target ? getBattleStatForAttackTarget(target) : 0;
+  // Runtime snapshots the battle values, then expires calculation-only buffs
+  // before damage, destruction and their resulting effects resolve.
+  clearSimulatedDamageCalculationBuffs(state);
   const inflictDamage = (
     recipient: PlannerPlayer,
     amount: number,
@@ -1389,7 +1369,6 @@ function applySimulatedBattle(
   if (!target) {
     summary.damage = inflictDamage(opponent, attackStat, null);
   } else {
-    const targetStat = getBattleStatForAttackTarget(target);
     if (target.position === "attack") {
       if (attackStat > targetStat) {
         summary.damage = inflictDamage(opponent, attackStat - targetStat, target);
@@ -1419,13 +1398,9 @@ function applySimulatedBattle(
   }
 
   markSimulatedAttackUsed(bot, attacker, state, usedAttacks);
-  summary.rewardNames.push(
-    ...applyGrandLibraryBattleReward(state, {
-      ...battlePlan,
-      attackerCard: attacker,
-      destroyedCards: summary.destroyedCards,
-    }),
-  );
+  summary.rewardNames.push(...applySimulatedFieldSpellBattleDrawRewards(state, {
+    ...battlePlan, attackerCard: attacker, destroyedCards: summary.destroyedCards,
+  }));
   summary.rewardNames.push(
     ...applyStrategyBattleRewards(
       state,
@@ -1439,6 +1414,7 @@ function applySimulatedBattle(
       options,
     ),
   );
+  clearSimulatedEndOfDamageStepBuffs(state);
   return summary;
 }
 
@@ -1498,6 +1474,10 @@ function chooseBestSingleSimulatedBattle(
     const wasSecondAttack =
       Number(originalAttacker?.attacksUsedThisTurn || 0) > 0;
     const candidateState = clonePlanningState(state, strategy);
+    const candidateAttacker = candidateState.bot.field[plan.attackerIndex];
+    const candidateTarget = Number.isInteger(plan.targetIndex)
+      ? candidateState.player.field[plan.targetIndex!]
+      : null;
     const summary = applySimulatedBattle(candidateState, plan, strategy, options);
     if (!summary || candidateState._simUnsupportedActions?.length) return;
     const destroyedOpponent = summary.destroyedNames.filter(
@@ -1514,14 +1494,12 @@ function chooseBestSingleSimulatedBattle(
     score -= destroyedSelf * 4;
     score += (summary.rewardNames || []).length * 2.5;
     if (typeof strategy?.scoreBattleAttackCandidate === "function") {
-      const attackerAfter = (candidateState.bot?.field || []).find(
-        (card) => card?.name === summary.attackerName,
-      );
-      const targetAfter = originalTarget
-        ? (candidateState.player?.field || []).find(
-            (card) => card?.name === originalTarget.name,
-          )
-        : null;
+      const attackerAfter = candidateAttacker &&
+        candidateState.bot.field.includes(candidateAttacker)
+        ? candidateAttacker : null;
+      const targetAfter = candidateTarget &&
+        candidateState.player.field.includes(candidateTarget)
+        ? candidateTarget : null;
       const hookDelta = strategy.scoreBattleAttackCandidate({
         attacker: attackerAfter || originalAttacker,
         target: originalTarget,

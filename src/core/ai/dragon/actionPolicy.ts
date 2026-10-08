@@ -5,7 +5,7 @@ import type {
   DragonPolicyContext,
 } from "./contracts.js";
 
-import { CARD_KNOWLEDGE, isExtremeDragon } from "./knowledge.js";
+import { getDragonStrategicCardValue, isExtremeDragon } from "./knowledge.js";
 import { analyzeDragonState } from "./stateAnalysis.js";
 import { rankDragonSearchCandidates } from "./searchPolicy.js";
 import {
@@ -92,9 +92,16 @@ function unique<Value>(values: Value[] = []) {
   return [...new Set((values || []).filter(Boolean))] as NonNullable<Value>[];
 }
 
+function getPolicyGame(context: DragonPolicyContext = {}) {
+  // A planning photograph owns its zones and usage evidence. Runtime wrappers
+  // may still delegate to their live Game when no simulation is requested.
+  return context.isSimulatedState === true || context.game?._isPerspectiveState === true
+    ? context.game || null : context.game?._gameRef || context.game || null;
+}
+
 function getOpponent(context: DragonPolicyContext = {}, player: DragonPlayer | null = null) {
   if (context.opponent) return context.opponent;
-  const game = context.game?._gameRef || context.game;
+  const game = getPolicyGame(context);
   if (!game || !player) return {};
   if (game.bot === player) return game.player || {};
   if (game.player === player) return game.bot || {};
@@ -103,14 +110,7 @@ function getOpponent(context: DragonPolicyContext = {}, player: DragonPlayer | n
 
 function cardStrategicValue(card: DragonCard, fallbackValue: ((card: DragonCard) => number) | null = null) {
   if (typeof fallbackValue === "function") return Number(fallbackValue(card)) || 0;
-  const knowledge = CARD_KNOWLEDGE[card?.name!] || {};
-  return (
-    (knowledge.value || knowledge.priority || 0) +
-    (card?.level || 0) * 0.25 +
-    Math.max(card?.atk || 0, card?.def || 0) / 1000 +
-    (isExtremeDragon(card) ? 4 : 0) +
-    (card?.monsterType === "fusion" || card?.monsterType === "ascension" ? 5 : 0)
-  );
+  return getDragonStrategicCardValue(card);
 }
 
 function getEffectId(context: DragonPolicyContext = {}) {
@@ -126,7 +126,7 @@ function getEffectId(context: DragonPolicyContext = {}) {
 function makeContext(context: DragonPolicyContext = {}) {
   const player = context.player || context.bot || context.owner || context.game?.bot || {};
   const opponent = getOpponent(context, player);
-  const game = context.game?._gameRef || context.game || null;
+  const game = getPolicyGame(context);
   const dragonState =
     context.dragonState ||
     context.analysis?.dragonState ||

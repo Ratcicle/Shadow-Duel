@@ -50,26 +50,7 @@ import {
 import { evaluateBurningWestBoardBonus } from "./burningwest/scoring.js";
 import { getMonsterTypeLabel } from "../i18n.js";
 
-const ARCHETYPE = "Burning West";
-
-const BW = {
-  GUNSLINGER: "Gunslinger of the Burning West",
-  WANTED: "Wanted in the Burning West",
-  UNDERTAKER: "Undertaker of the Burning West",
-  BUTCHER: "Butcher of the Burning West",
-  SPECIALIST: "Specialist of the Burning West",
-  PEACEMAKER: "Burning Peacemaker",
-  QUICK_DRAW: "Quick Draw in the Burning West",
-  FUNERAL: "Funeral at Sunset",
-  DEADEYE: "Deadeye of the Burning West",
-  PREACHER: "Preacher of the Burning West",
-  SHERIFF: "Sheriff of the Burning West",
-  CRASH_TOWN: "Crash Town, the Burning City",
-  AMBUSH: "Ambush in Crash Town",
-  REWARD: "Burning Reward",
-  LAW: "Law in the Burning West",
-  EXECUTIONER: "Executioner of the Burning West",
-};
+import { ARCHETYPE, BW, describeBattlePairs } from "./burningwest/knowledge.js";
 
 const PEACEMAKER_TARGET_ORDER = [
   BW.SPECIALIST,
@@ -272,51 +253,26 @@ function getSortedTypesByScore(scores: Map<string, number>) {
     .map(([type]) => type);
 }
 
+function battlePairFacts(attackers: BurningWestCard[], targets: BurningWestCard[]) {
+  return describeBattlePairs<BurningWestCard>(attackers, targets, { canAttack: canBattleThisTurn,
+    targetVisible: target => !!target && !target.isFacedown, canBeat: canBeatMonster,
+    atk: getEffectiveAtk, threat: getThreatScore, extraDeck: isExtraDeckMonster });
+}
+
 function buildBattlePlans(attackers: BurningWestCard[] = [], targets: BurningWestCard[] = []) {
-  const plans: BurningWestBattlePlan[] = [];
-  for (const attacker of attackers.filter(canBattleThisTurn)) {
-    for (const target of targets || []) {
-      if (!target || target.isFacedown) continue;
-      if (!canBeatMonster(attacker, target)) continue;
-      plans.push({
-        attacker,
-        target,
-        type: target.type || null,
-        score:
-          getThreatScore(target) +
-          getEffectiveAtk(attacker) / 10 +
-          (isExtraDeckMonster(target) ? 500 : 0),
-      });
-    }
-  }
-  return plans.sort((a, b) => b.score - a.score);
+  return battlePairFacts(attackers, targets).filter(pair => !pair.cannotBeatNormally).map(({ attacker, target }) => ({
+    attacker, target, type: target.type || null,
+    score: getThreatScore(target) + getEffectiveAtk(attacker) / 10 + (isExtraDeckMonster(target) ? 500 : 0),
+  })).sort((a, b) => b.score - a.score);
 }
 
 function buildQuickDrawPairs(attackers: BurningWestCard[] = [], targets: BurningWestCard[] = []) {
-  const pairs: BurningWestQuickDrawPair[] = [];
-  for (const attacker of attackers.filter(canBattleThisTurn)) {
-    for (const target of targets || []) {
-      if (!target || target.isFacedown) continue;
-      const diff = Math.abs(getEffectiveAtk(attacker) - getEffectiveAtk(target));
-      const cannotBeatNormally = !canBeatMonster(attacker, target);
-      const resetFriendly = diff <= 500;
-      const valuableThreat =
-        getThreatScore(target) >= 1800 || isExtraDeckMonster(target);
-      if (!cannotBeatNormally && !resetFriendly && !valuableThreat) continue;
-      pairs.push({
-        attacker,
-        target,
-        diff,
-        score:
-          getThreatScore(target) +
-          (cannotBeatNormally ? 650 : 0) +
-          (resetFriendly ? 350 : 0) +
-          (isExtraDeckMonster(target) ? 500 : 0) -
-          diff / 4,
-      });
-    }
-  }
-  return pairs.sort((a, b) => b.score - a.score);
+  return battlePairFacts(attackers, targets)
+    .filter(pair => pair.cannotBeatNormally || pair.resetFriendly || pair.valuableThreat)
+    .map(({ attacker, target, diff, cannotBeatNormally, resetFriendly }) => ({ attacker, target, diff,
+      score: getThreatScore(target) + (cannotBeatNormally ? 650 : 0) + (resetFriendly ? 350 : 0) +
+        (isExtraDeckMonster(target) ? 500 : 0) - diff / 4,
+    })).sort((a, b) => b.score - a.score);
 }
 
 function cardMentionsBurningWest(card: BurningWestCard | null | undefined) {

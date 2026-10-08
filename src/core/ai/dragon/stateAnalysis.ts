@@ -19,6 +19,7 @@ import type {
 } from "./contracts.js";
 
 import { isExtremeDragon } from "./knowledge.js";
+import { canUseSimulatedEffectUsage } from "../common/simStateUtils.js";
 
 export const DRAGON_OPT_NAMES = {
   solarHand: "solar_eclipse_discard_summon_lunar",
@@ -51,7 +52,7 @@ const USEFUL_DISCARD_REASONS: Record<string, string> = {
   "Purified Crystal Dragon": "revive/protection payoff",
 };
 
-function zoneCards(player: DragonPlayer, zone: DragonZone) {
+function zoneCards(player: DragonPlayer, zone: DragonZone): DragonCard[] {
   if (!player) return [];
   if (zone === "fieldSpell") return player.fieldSpell ? [player.fieldSpell] : [];
   return Array.isArray(player[zone]) ? player[zone].filter(Boolean) : [];
@@ -119,15 +120,14 @@ function getOptStatus(game: DragonGame | null, player: DragonPlayer, optName: st
   const currentTurn = game?.turnCounter;
 
   if (isSimulatedState) {
-    const playerId = player?.id || "bot";
-    const used = (game?._dragonSimOnce as Partial<Record<string, Partial<Record<string, unknown>>>> | undefined)?.[playerId]?.[optName] === true;
-    return {
-      name: optName,
-      used,
-      canUse: !used,
-      assumed: false,
-      source: "simulation._dragonSimOnce",
-    };
+    const declared = (["hand", "field", "graveyard", "deck", "extraDeck", "banished", "spellTrap", "fieldSpell"] as const)
+      .flatMap(zone => zoneCards(player, zone).flatMap(card => (card.effects || [])
+        .filter(effect => (effect.oncePerTurnName || effect.id) === optName)
+        .map(effect => ({ card, effect }))));
+    const used = declared.length > 0 && declared.every(({ card, effect }) =>
+      !canUseSimulatedEffectUsage(game, effect, card, player.id || "bot", true));
+    return { name: optName, used, canUse: !used, assumed: false,
+      source: "simulation.canonical_usage" };
   }
 
   if (!game || currentTurn === undefined || currentTurn === null) {

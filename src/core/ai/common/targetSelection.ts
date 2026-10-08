@@ -1,3 +1,6 @@
+import type { AiCardInput, AiPlayerInput } from "../../contracts/aiState.js";
+import type { EffectTarget } from "../../contracts/effects.js";
+import type { CanonicalZone } from "../../contracts/zones.js";
 import { requiresUnnegatedTarget } from "../../effects/negation.js";
 import { getPaidCostReferenceValues } from "../../effects/targeting/references.js";
 import type { ChainCostPayment, PaidCostReferenceValues } from "../../contracts/chainRuntime.js";
@@ -9,7 +12,7 @@ import {
   getPiercingDamage,
 } from "./cardStats.js";
 import { getCardComparableAttribute } from "../../Card.js";
-import { resolveExactInstanceSelection } from "../../AutoSelector.js";
+import AutoSelector, { resolveExactInstanceSelection } from "../../AutoSelector.js";
 import { getCounterValue } from "./counters.js";
 import type { AIDecisionPlan } from "../../contracts/ai.js";
 import { cardMatchesFilter } from "./cardFilters.js";
@@ -76,6 +79,8 @@ interface ActionPreferenceContext {
 }
 
 interface TargetSelectionOptions {
+  /** Opt-in runtime optional-selection policy; absence preserves legacy planning refusal. */
+  useRuntimeOptionalTargets?: boolean;
   costPayment?: ChainCostPayment;
   referenceSnapshots?: Record<string, SimulatedReferenceSnapshot[]>;
   targetPreferences?: TargetPreferenceMap | null;
@@ -683,6 +688,35 @@ export function estimateTemporaryCombatDebuffTargetValue(
   return bestScore;
 }
 
+/** Public scoring view only; optionality is decided by the real AutoSelector. */
+function selectRuntimeOptionalCount(
+  target: EffectTarget, ordered: SimulatedCardState[], count: NormalizedCount,
+  self: SimulatedPlayerState, opponent: SimulatedPlayerState, intent: TargetIntent,
+): number {
+  const scoringCard = (card: SimulatedCardState) => ({
+    name: card.name || "", ...(card.id === undefined ? {} : { id: card.id }),
+    ...(card.cardKind == null ? {} : { cardKind: card.cardKind }),
+    ...(card.controller == null ? {} : { controller: card.controller }),
+    ...(card.owner == null ? {} : { owner: card.owner }),
+    ...(card.position == null ? {} : { position: card.position }),
+    ...(card.isFacedown === undefined ? {} : { isFacedown: card.isFacedown }),
+    ...(card.atk == null ? {} : { atk: card.atk }), ...(card.def == null ? {} : { def: card.def }),
+    ...(card.level == null ? {} : { level: card.level }),
+    ...(card.archetype == null ? {} : { archetype: card.archetype }),
+    ...(card.archetypes ? { archetypes: [...card.archetypes] } : {}),
+    ...(typeof card.instanceId === "number" ? { instanceId: card.instanceId } : {}),
+  });
+  const scoringOwner = (owner: SimulatedPlayerState) => ({ id: owner.id, lp: owner.lp,
+    field: owner.field.map(scoringCard), hand: owner.hand.map(scoringCard), deck: owner.deck.map(scoringCard) });
+  const actor = scoringOwner(self), other = scoringOwner(opponent);
+  const selector = new AutoSelector({ bot: actor, player: other,
+    getOpponent: owner => owner.id === actor.id ? other : actor });
+  const candidates = ordered.map(card => ({ ...scoringCard(card), controller: card.controller || self.id }));
+  const selectionIntent = intent === "reference" ? "benefit" : intent;
+  return selector.getDesiredCount({ id: target.id, intent: selectionIntent }, candidates, count,
+    { owner: actor });
+}
+
 export function selectSimulatedTargets({
   effect,
   targets,
@@ -921,7 +955,9 @@ export function selectSimulatedTargets({
     const min = count.min;
     const max = count.max;
     let pickCount = intent === "cost" ? min : max;
-    if (min === 0 && intent !== "cost") {
+    if (options.useRuntimeOptionalTargets && intent !== "cost") {
+      pickCount = selectRuntimeOptionalCount(target, ordered, count, self, opponent, intent);
+    } else if (min === 0 && intent !== "cost") {
       pickCount = 0;
     }
     const exact = exactSelection(target.id, filtered, count);
@@ -940,5 +976,46 @@ export function selectSimulatedTargets({
     result[target.id] = exact ?? ordered.slice(0, Math.min(pickCount, ordered.length));
   });
 
+  return result;
+}
+
+function zoneCards(player: AiPlayerInput | undefined, zone: CanonicalZone): readonly AiCardInput[] {
+  if (!player) return [];
+  if (zone === "fieldSpell") return player.fieldSpell ? [player.fieldSpell] : [];
+  return player[zone] || [];
+}
+
+/** Ordered exact-instance candidates for policies compiling decision plans. */
+export function collectExactTargetCandidates(target: EffectTarget, source: AiCardInput, ctx: { player: AiPlayerInput; opponent?: AiPlayerInput },
+  selections: Readonly<Record<string, readonly (number | string)[]>>): AiCardInput[] {
+  const allZones: readonly CanonicalZone[] = ["field", "hand", "deck", "graveyard", "banished", "extraDeck", "spellTrap", "fieldSpell"];
+  const fromZones = (spec: { owner?: EffectOwner; zone?: EffectZone; zones?: readonly EffectZone[] }) => {
+    const roles = spec.owner === "opponent" ? ["opponent"] as const :
+      spec.owner === "any" ? ["self", "opponent"] as const : ["self"] as const;
+    const zones = (spec.zones || [spec.zone || "field"]).flatMap<CanonicalZone>(zone =>
+      zone === "any" ? allZones : [zone === "removed" ? "banished" : zone]);
+    return roles.flatMap(role => zones.flatMap(zone =>
+      zoneCards(role === "self" ? ctx.player : ctx.opponent, zone).map(card => ({ card, role }))));
+  };
+  const references = (ref: string | undefined): AiCardInput[] => {
+    if (!ref) return [];
+    const ids = selections[ref] || [];
+    return fromZones({ owner: "any", zones: allZones })
+      .map(entry => entry.card).filter(card => card.instanceId != null && ids.includes(card.instanceId));
+  };
+  const excluded = target.excludeTargetRef ? selections[target.excludeTargetRef] || [] : [];
+  const excludedNames = references(target.excludeNameRef).map(card => card.name);
+  const pair = target.pairedTarget;
+  const result: AiCardInput[] = [];
+  for (const { card, role } of fromZones(target)) {
+    if (card.instanceId == null || excluded.includes(card.instanceId) || result.some(other => card.instanceId === other.instanceId)) continue;
+    if (excludedNames.includes(card.name) || !matchesTargetFilters(card, target, source, role)) continue;
+    if (target.compareAttribute && !matchesTargetAttributeComparison(card, references(target.compareAttribute.ref)[0], target.compareAttribute)) continue;
+    if (pair && !fromZones(pair).some(({ card: paired, role: pairedRole }) =>
+      card.instanceId !== paired.instanceId && !(pair.excludeSameName && paired.name === card.name) &&
+      matchesTargetFilters(paired, pair, card, pairedRole) &&
+      (!pair.compareAttribute || matchesTargetAttributeComparison(paired, card, pair.compareAttribute)))) continue;
+    result.push(card);
+  }
   return result;
 }

@@ -1,5 +1,9 @@
 import { addEffectNegation, normalizeNegationDuration as normalizeNegateEffectsDuration } from "../../../effects/negation.js";
 import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../simStateUtils.js";
+import type { SimulatedUsageCard, SimulatedUsageState } from "../simStateUtils.js";
+import { projectRuntimeCardEffectUsage } from "../planningCopy.js";
+import { projectOncePerTurnUsage } from "../../../game/turn/oncePerTurn.js";
+import { getBaseLpCost } from "../../../effects/costs/lpCost.js";
 import {
   asArray,
   buildActionFilter,
@@ -30,6 +34,8 @@ import type {
 } from "../../../contracts/ai.js";
 import type {
   AiStateShape,
+  AiCardInput,
+  AiStateInput,
   PerspectiveGameState,
   SimulatedCardState,
   SimulatedPlayerState,
@@ -43,12 +49,31 @@ import type {
   EffectTarget,
 } from "../../../contracts/effects.js";
 import type { PlayerId } from "../../../contracts/primitives.js";
+import type { ChainSourceSnapshot } from "../../../contracts/chainRuntime.js";
+import { captureSourceSnapshot } from "../../../chain/link.js";
+
+/** Capture the canonical activation evidence from the simulator's read view. */
+export function captureSimulatedSourceSnapshot(
+  source: SimulatedCardState,
+  player: SimulatedPlayerState,
+  zone: ChainSourceSnapshot["zone"],
+): ChainSourceSnapshot | null {
+  return captureSourceSnapshot({
+    name: source.name || "",
+    controller: player.id,
+    instanceId: getSimCardInstanceId(source) ?? null,
+    isFacedown: source.isFacedown === true,
+    locationVersion: Number(source.locationVersion || 0),
+    ...(source.counters ? { counters: source.counters } : {}),
+  }, null, zone);
+}
 import type {
   CanonicalSelectionMap,
 } from "../../../contracts/selection.js";
 import type { CanonicalZone, ZoneInput } from "../../../contracts/zones.js";
 
 export interface SimulatedActionContextData {
+  sourceAtActivation?: ChainSourceSnapshot | null;
   host?: SimulatedCardState | null;
   player?: SimulatedPlayerState | null;
   opponent?: SimulatedPlayerState | null;
@@ -240,6 +265,8 @@ export function isSimulatedSourcePresenceValid(
 }
 
 export interface SimulatedActionOptions {
+  /** Reuse runtime optional-target policy only for explicitly migrated consumers. */
+  useRuntimeOptionalTargets?: boolean;
   /** Nested continuation batches share the already completed preflight. */
   _contextualReferencePreflight?: {
     readonly effect: EffectDefinition | null | undefined;
@@ -247,11 +274,24 @@ export interface SimulatedActionOptions {
   };
   costPayment?: import("../../../contracts/chainRuntime.js").ChainCostPayment;
   payingActivationCosts?: boolean;
+  onLpPayment?(payload: {
+    state: SimulatedRuntimeState;
+    player: SimulatedPlayerState;
+    sourceCard: SimulatedCardState | null;
+    effect: EffectDefinition | null;
+    before: number;
+    after: number;
+    amount: number;
+    payingActivationCosts: boolean;
+  }): void;
+  /** Enrich observations after the outer resolution and its trigger queue settle. */
+  onSimulatedResolutionComplete?(payload: { state: SimulatedRuntimeState }): void;
   referenceSnapshots?: Record<string, SimulatedReferenceSnapshot[]>;
   sourceCard?: SimulatedCardState | null | undefined;
   sourceAction?: object | null;
   effect?: EffectDefinition | null;
   activationContext?: AIActivationContext & {
+    sourceAtActivation?: ChainSourceSnapshot | null;
     actionContext?: SimulatedActionContextData;
     costPreferences?: object;
     context?: SimulatedActionContextData;
@@ -290,6 +330,12 @@ export interface SimulatedActionOptions {
   emitSimulatedEvent?: (event: string, payload: object) => void;
   emitSimulatedEvents?: (events: readonly SimulatedEventOccurrence[]) => void;
   onSimulatedEvent?: (event: string, payload: object) => void;
+  chooseFusionSummon?: (input: {
+    candidates: readonly { fusionCard: SimulatedCardState; materials: SimulatedCardState[] }[];
+    state: SimulatedRuntimeState;
+    player: SimulatedPlayerState;
+    opponent: SimulatedPlayerState;
+  }) => { fusionCard: SimulatedCardState; materials: SimulatedCardState[] } | null;
   chooseSynchroMaterials?: (input: {
     candidates: readonly { card: SimulatedCardState; combos: readonly (readonly SimulatedCardState[])[] }[];
     state: SimulatedRuntimeState;
@@ -358,28 +404,45 @@ export interface SimulatedOwnerPolicy extends SimulatedActionOptions {
   onEffectActivated?(payload: object): void;
 }
 
-interface SimulatedLpReducer {
-  board: SimulatedPlayerState;
-  card: SimulatedCardState;
+export type LpQuoteCard = Readonly<AiCardInput & SimulatedUsageCard>;
+export interface LpQuotePlayer<Card extends LpQuoteCard = LpQuoteCard> {
+  readonly id?: string | null;
+  readonly lp?: number;
+  readonly field?: readonly Card[];
+  readonly spellTrap?: readonly Card[];
+  readonly fieldSpell?: Card | null;
+  readonly oncePerTurnUsageByName?: SimulatedPlayerState["oncePerTurnUsageByName"];
+}
+export type LpQuoteState<Card extends LpQuoteCard = LpQuoteCard, Player extends LpQuotePlayer<Card> = LpQuotePlayer<Card>> =
+  Readonly<Pick<AiStateInput, "turnCounter" | "oncePerTurnUsage" | "oncePerTurnTurnCounter">> &
+  Readonly<Pick<SimulatedUsageState, "_simOncePerTurn" | "_simOncePerTurnTurn">> & {
+    readonly bot?: Player | null;
+    readonly player?: Player | null;
+  };
+
+interface SimulatedLpReducer<Card extends LpQuoteCard, Player extends LpQuotePlayer<Card>> {
+  board: Player;
+  card: Card;
   effect: EffectDefinition;
   reduction: number;
   stackMode: "max" | "sum";
   minFinalAmount: number;
 }
 
-interface SimulatedLpCostResolution {
+interface SimulatedLpCostResolution<Card extends LpQuoteCard, Player extends LpQuotePlayer<Card>> {
   finalAmount: number;
-  appliedReducers: SimulatedLpReducer[];
+  appliedReducers: SimulatedLpReducer<Card, Player>[];
 }
 
-interface SimulatedLpCostInput {
+interface SimulatedLpCostInput<Card extends LpQuoteCard, Player extends LpQuotePlayer<Card>> {
   action: CardAction;
-  targetPlayer: SimulatedPlayerState | null | undefined;
-  self: SimulatedPlayerState | null | undefined;
-  opponent: SimulatedPlayerState | null | undefined;
-  state: SimulatedRuntimeState;
-  options: SimulatedActionOptions;
+  targetPlayer: Player | null | undefined;
+  self: Player | null | undefined;
+  opponent: Player | null | undefined;
+  state: Readonly<SimulatedUsageState>;
+  options: { readonly sourceCard?: Card | null | undefined };
   baseAmount: number;
+  usageCard?(card: Card): SimulatedUsageCard;
 }
 
 type LegacyEffectDefinition = EffectDefinition & {
@@ -592,24 +655,24 @@ export function getSimulatedOncePerTurnKey(
 }
 
 export function canUseSimulatedPassive(
-  state: SimulatedRuntimeState,
-  player: SimulatedPlayerState,
-  card: SimulatedCardState,
+  state: Readonly<SimulatedUsageState>,
+  player: Pick<LpQuotePlayer, "id">,
+  card: SimulatedUsageCard,
   effect: EffectDefinition,
 ): boolean {
-  return canUseSimulatedEffectUsage(state, effect, card, player.id, true);
+  return canUseSimulatedEffectUsage(state, effect, card, player.id || "bot", true);
 }
 
 export function markSimulatedPassiveUsed(
-  state: SimulatedRuntimeState,
-  player: SimulatedPlayerState,
-  card: SimulatedCardState,
+  state: SimulatedUsageState,
+  player: Pick<LpQuotePlayer, "id">,
+  card: SimulatedUsageCard,
   effect: EffectDefinition,
 ): void {
-  markSimulatedEffectUsage(state, effect, card, player.id, true);
+  markSimulatedEffectUsage(state, effect, card, player.id || "bot", true);
 }
 
-export function resolveSimulatedLpCost({
+export function resolveSimulatedLpCost<Card extends LpQuoteCard, Player extends LpQuotePlayer<Card>>({
   action,
   targetPlayer,
   self,
@@ -617,23 +680,24 @@ export function resolveSimulatedLpCost({
   state,
   options,
   baseAmount,
-}: SimulatedLpCostInput): SimulatedLpCostResolution {
-  const result: SimulatedLpCostResolution = {
+  usageCard,
+}: SimulatedLpCostInput<Card, Player>): SimulatedLpCostResolution<Card, Player> {
+  const result: SimulatedLpCostResolution<Card, Player> = {
     finalAmount: baseAmount,
     appliedReducers: [],
   };
   if (!state || !targetPlayer || baseAmount <= 0) return result;
 
   const source = options.sourceCard || null;
-  const boards = [self, opponent].filter(Boolean) as SimulatedPlayerState[];
-  const reducers: SimulatedLpReducer[] = [];
+  const boards = [self, opponent].filter((board): board is Player => board != null);
+  const reducers: SimulatedLpReducer<Card, Player>[] = [];
 
   boards.forEach((board) => {
     const zoneCards = [
       ...(board.field || []),
       ...(board.spellTrap || []),
       board.fieldSpell,
-    ].filter(Boolean) as SimulatedCardState[];
+    ].filter((card): card is Card => card != null);
 
     zoneCards.forEach((card) => {
       (card.effects || []).forEach((effect: LegacyEffectDefinition) => {
@@ -671,7 +735,7 @@ export function resolveSimulatedLpCost({
           }
         }
 
-        if (!canUseSimulatedPassive(state, board, card, effect)) return;
+        if (!canUseSimulatedPassive(state, board, usageCard?.(card) || card, effect)) return;
         const reduction = Number(
           passive.amount ?? passive.reduction ?? passive.value ?? 0,
         );
@@ -713,6 +777,66 @@ export function resolveSimulatedLpCost({
     result.appliedReducers = appliedReducers;
   }
   return result;
+}
+
+/** A caller-owned OPT ledger for one turn's hypothetical sequential payments. */
+export function createLpQuoteLedger(state: LpQuoteState): SimulatedUsageState {
+  const currentRuntime = state.oncePerTurnTurnCounter === undefined || state.oncePerTurnTurnCounter === state.turnCounter;
+  const projectPlayer = (player: LpQuotePlayer | null | undefined) => player ? {
+    ...(player.id !== undefined ? { id: player.id } : {}),
+    oncePerTurnUsageByName: {
+      ...player.oncePerTurnUsageByName,
+      ...(currentRuntime ? projectOncePerTurnUsage(player.id === "player" ? state.oncePerTurnUsage?.player : state.oncePerTurnUsage?.bot, "", state.turnCounter) : {}),
+    },
+  } : null;
+  return {
+    ...(state.turnCounter !== undefined ? { turnCounter: state.turnCounter } : {}),
+    ...(state._simOncePerTurnTurn !== undefined ? { _simOncePerTurnTurn: state._simOncePerTurnTurn } : {}),
+    ...(state._simOncePerTurn ? { _simOncePerTurn: structuredClone(state._simOncePerTurn) } : {}),
+    bot: projectPlayer(state.bot),
+    player: projectPlayer(state.player),
+  };
+}
+
+/**
+ * Pure quote: reads public board/OPT views and keeps physical reducer refs.
+ * The owner is one of the supplied state views, including rotated AI views.
+ * Reuse a local ledger only within that turn's hypothetical payment sequence.
+ */
+export function quoteLpCost<Card extends LpQuoteCard, Player extends LpQuotePlayer<Card>>({
+  action, sourceCard, owner, state, ledger,
+}: {
+  readonly action: ActionOf<"pay_lp">;
+  readonly sourceCard?: Card | null;
+  readonly owner: Player;
+  readonly state: LpQuoteState<Card, Player>;
+  readonly ledger?: SimulatedUsageState;
+}) {
+  const opponent = state.bot === owner ? state.player : state.bot;
+  const targetPlayer = action.player === "opponent" ? opponent : owner;
+  const baseAmount = getBaseLpCost(action, targetPlayer?.lp || 0);
+  const usage = ledger || createLpQuoteLedger(state);
+  const resolved = resolveSimulatedLpCost<Card, Player>({
+    action, baseAmount, targetPlayer, self: owner, opponent, state: usage,
+    options: sourceCard ? { sourceCard } : {},
+    usageCard: card => ({
+      ...(card.name !== undefined ? { name: card.name } : {}),
+      ...(card.id !== undefined ? { id: card.id } : {}),
+      ...(card.instanceId !== undefined ? { instanceId: card.instanceId } : {}),
+      ...(card.duelCardId !== undefined ? { duelCardId: card.duelCardId } : {}),
+      ...(card.oncePerTurnResetVersion !== undefined ? { oncePerTurnResetVersion: card.oncePerTurnResetVersion } : {}),
+      oncePerTurnUsageByName: { ...card.oncePerTurnUsageByName, ...projectRuntimeCardEffectUsage(state, card) },
+    }),
+  });
+  return { baseAmount, ...resolved };
+}
+
+/** Explicitly advance only a hypothetical ledger after accepting a payment. */
+export function consumeLpQuoteReducers<Card extends LpQuoteCard, Player extends LpQuotePlayer<Card>>(
+  ledger: SimulatedUsageState,
+  quote: SimulatedLpCostResolution<Card, Player>,
+): void {
+  for (const reducer of quote.appliedReducers) markSimulatedPassiveUsed(ledger, reducer.board, reducer.card, reducer.effect);
 }
 
 export function resolveTargetsForAction(
@@ -994,6 +1118,7 @@ export function chooseRankedCards(
     source: options.sourceCard,
     action,
     activationContext: options.activationContext,
+    ...(options.effect ? { effect: options.effect, effectId: options.effect.id } : {}),
   };
 
   if (intent === "summon") {

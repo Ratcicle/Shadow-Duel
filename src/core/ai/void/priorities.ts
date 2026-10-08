@@ -2,6 +2,9 @@ import type { AIStrategyBotPort } from "../../contracts/ai.js";
 import type { AiStateShape, SimulatedCardState } from "../../contracts/aiState.js";
 import type { GameCard } from "../../contracts/cards.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
+import type { NormalSummonPlayerReadView, NormalSummonGameReadView } from "../../contracts/player.js";
+import { canUseNormalSummonForCard } from "../../Player.js";
+import { getNormalSummonTributeOptions } from "../../game/summon/tributeValue.js";
 import type { buildStrategyAnalysis } from "../common/analysis.js";
 type StrategyCard = (GameCard | SimulatedCardState) & { usedEffectThisTurn?: boolean };
 type Player = Partial<Omit<AIStrategyBotPort, "field">> & { field?: StrategyCard[]; game?: Game };
@@ -91,17 +94,41 @@ const VOID_ENGINE_SUMMON_IDS = new Set([
   VOID_IDS.THOUSAND_ARMS,
 ]);
 
-function getTributeNeedForNormalSummon(card: StrategyCard) {
-  if (!card || card.cardKind !== "monster") return Infinity;
-  if (card.cannotBeNormalSummonedOrSet) return Infinity;
-  const level = Number(card.level || 0);
-  if (level >= 7) return 2;
-  if (level >= 5) return 1;
-  return 0;
-}
-
-function canNormalSummonWithCurrentField(card: StrategyCard, fieldCount: number) {
-  return getTributeNeedForNormalSummon(card) <= fieldCount;
+function createNormalSummonQueryView(bot: Player, opponent: Player | null, additional = 0) {
+  const createView = (owner: Player): Omit<NormalSummonPlayerReadView, "game" | "field"> & {
+    hand: readonly StrategyCard[];
+    field: readonly StrategyCard[];
+    additionalNormalSummons: number;
+    game?: NormalSummonGameReadView;
+  } => ({
+    ...(owner.id !== undefined ? { id: owner.id } : {}),
+    hand: owner.hand || [],
+    field: owner.field || [],
+    spellTrap: owner.spellTrap || [],
+    fieldSpell: owner.fieldSpell || null,
+    summonCount: owner.summonCount || 0,
+    additionalNormalSummons: owner.additionalNormalSummons || 0,
+    additionalNormalSummonPermissions: owner.additionalNormalSummonPermissions || [],
+    normalSummonsThisTurn: owner.normalSummonsThisTurn || [],
+  });
+  const ownView = createView(bot);
+  const otherOwner = opponent || bot.game?.getOpponent?.(bot) ||
+    (bot.game?.bot === bot ? bot.game.player : bot.game?.player === bot ? bot.game.bot : null);
+  const otherView = otherOwner ? createView(otherOwner) : null;
+  // The game and owners belong to the same hypothetical view. The cards,
+  // zones and records retain their physical references; only the grant differs.
+  const queryGame: NormalSummonGameReadView = {
+    ...(bot.id === "player"
+      ? { player: ownView, ...(otherView ? { bot: otherView } : {}) }
+      : { bot: ownView, ...(otherView ? { player: otherView } : {}) }),
+    getOpponent(owner: NormalSummonPlayerReadView | null) {
+      return owner === ownView ? otherView : owner === otherView ? ownView : null;
+    },
+  };
+  ownView.game = queryGame;
+  if (otherView) otherView.game = queryGame;
+  ownView.additionalNormalSummons += additional;
+  return ownView;
 }
 
 function getFieldIgnitions(monster: StrategyCard) {
@@ -205,15 +232,18 @@ export function shouldPlayVoidSpell(card: StrategyCard, game: Game | null, bot: 
       };
     }
 
-    const summonLimit = 1 + (bot?.additionalNormalSummons || 0);
-    const normalAvailable = (bot?.summonCount || 0) < summonLimit;
+    const currentNormalView = createNormalSummonQueryView(bot, opponent);
+    const futureNormalView = createNormalSummonQueryView(bot, opponent, 1);
     const immediateNormalTargets = (bot?.hand || []).filter(
       (candidate) =>
         candidate?.cardKind === "monster" &&
         isVoid(candidate) &&
         candidate.id !== VOID_IDS.RAVEN &&
         candidate.id !== VOID_IDS.HOLLOW &&
-        canNormalSummonWithCurrentField(candidate, fieldVoids.length),
+        getNormalSummonTributeOptions(futureNormalView, candidate).length > 0,
+    );
+    const normalAvailable = immediateNormalTargets.some((candidate) =>
+      canUseNormalSummonForCard(currentNormalView, candidate),
     );
     if (immediateNormalTargets.length === 0) {
       return {
@@ -737,8 +767,8 @@ export function evaluateVoidFinisherPlans(bot: Player, opponent: Player | null, 
   const plans = [];
 
   if (
-    hasCardId(hand, VOID_IDS.ARCTURUS) &&
-    (bot?.summonCount || 0) < 1 + (bot?.additionalNormalSummons || 0) &&
+    hand.some((card) => card?.id === VOID_IDS.ARCTURUS &&
+      canUseNormalSummonForCard(createNormalSummonQueryView(bot, resolvedOpponent), card)) &&
     field.filter((card) => card?.cardKind === "monster").length >= 2
   ) {
     const fieldMonsters = field.filter((card) => card?.cardKind === "monster");

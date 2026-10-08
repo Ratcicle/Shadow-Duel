@@ -254,7 +254,7 @@ físicos TypeScript, importados por specifiers `.js`. Os quatro perfis de clone
 
 ### Pacotes Por Arquétipo
 
-Os pacotes [shadowheart/](../src/core/ai/shadowheart/), [luminarch/](../src/core/ai/luminarch/), [void/](../src/core/ai/void/), [dragon/](../src/core/ai/dragon/), [arcanist/](../src/core/ai/arcanist/), [miragebound/](../src/core/ai/miragebound/), [bloomrot/](../src/core/ai/bloomrot/), [burningwest/](../src/core/ai/burningwest/) e [techzero/](../src/core/ai/techzero/) concentram knowledge bases, prioridades, combos, scoring, simulação e planejamento específicos de cada deck.
+Os pacotes [shadowheart/](../src/core/ai/shadowheart/), [luminarch/](../src/core/ai/luminarch/), [void/](../src/core/ai/void/), [dragon/](../src/core/ai/dragon/), [arcanist/](../src/core/ai/arcanist/), [miragebound/](../src/core/ai/miragebound/), [bloomrot/](../src/core/ai/bloomrot/), [burningwest/](../src/core/ai/burningwest/) e [techzero/](../src/core/ai/techzero/) conservam conhecimento, prioridades, escolhas e avaliação estratégica. As Strategies compõem esses módulos; geração e resolução simulada reutilizam capacidades compartilhadas. A organização por domínio pode variar entre os decks.
 
 Padrões comuns:
 
@@ -263,15 +263,18 @@ Padrões comuns:
 - `combos.ts` - detecção de linhas e sinergias.
 - `scoring.ts` - avaliação específica de board.
 - `linePlanning.ts` - ordenação e bônus/penalidades de linhas.
-- `simulation.ts` - simulação específica para Shadow-Heart, Luminarch e Dragon.
+- `simulation.ts` - configuração do simulador comum, seleção de capacidades declarativas e observação de resultados para o arquétipo. Overrides remanescentes precisam de cobertura antes de serem substituídos.
 
 Pacotes com módulos extras relevantes:
 
 - [luminarch/](../src/core/ai/luminarch/) possui módulos dedicados para defesa, economia de recursos, fusão, spells, summons, Lancer, Moonlit e tribute policy.
-- [dragon/](../src/core/ai/dragon/) possui política específica para Boneflame, combos, prioridades, simulação e planejamento de linha.
+- [shadowheart/](../src/core/ai/shadowheart/) separa geração, políticas de summon e Cathedral, targeting e planejamento ofensivo; `priorities.ts` mantém a interface composta.
+- [void/](../src/core/ai/void/) separa análise e geração da Strategy; economia Hollow, condições solo e marcos de Ascensão permanecem específicos.
+- [dragon/](../src/core/ai/dragon/) conserva políticas de custos, busca, banimento, bosses, Extra Deck e retenção de linhas. `generation.ts` configura generators comuns e `simulation.ts` delega a execução declarativa, sem manter um segundo interpretador de efeitos.
+- [arcanist/](../src/core/ai/arcanist/) separa a configuração e os observadores de simulação da fachada; casos de ativação, equipamentos e blueprints usam as decisões e os efeitos compartilhados.
 - [bloomrot/](../src/core/ai/bloomrot/) possui análise, batalha, defesa, extra deck, resource policy, targeting, scoring e planejamento de linha.
-- [miragebound/](../src/core/ai/miragebound/) possui planejamento de linha próprio.
-- [burningwest/](../src/core/ai/burningwest/) possui módulos dedicados de batalha, defesa, Extra Deck, scoring e planejamento de linha.
+- [miragebound/](../src/core/ai/miragebound/) separa conhecimento, análise, geração, recursos, targeting, defesa/Chain, Extra Deck, scoring e planejamento. A Strategy preserva a interface pública e delega aos módulos; preferências de bounce e materiais continuam locais.
+- [burningwest/](../src/core/ai/burningwest/) possui conhecimento factual de cartas/equipamentos e módulos de batalha, defesa, Extra Deck, scoring e planejamento. Avaliadores com pesos diferentes permanecem separados.
 - [techzero/](../src/core/ai/techzero/) concentra papéis, prioridades de recursos, decisões exatas, configuração da simulação compartilhada e [linePlanning.ts](../src/core/ai/techzero/linePlanning.ts). A busca usa `TurnLineSearch` em `mainOnly`, preserva marcos de combo e pode manter o campo atual. A avaliação terminal usa recursos próprios e informação pública; compras encerram a expansão para replanejamento após a revelação. [battle.ts](../src/core/ai/techzero/battle.ts) compara sequências de ataques, sem certificar letal diante de interações não resolvidas. [responses.ts](../src/core/ai/techzero/responses.ts) escolhe entre candidatos legais da Chain e prepara escolhas exatas para Scrapyard.
 
 ### `src/core/ai/common/`
@@ -282,14 +285,19 @@ TypeScript; imports relativos continuam usando `.js`:
 - Geração e execução planejada: `actionGeneration.ts`, `actionSequencing.ts`, `actionValidation.ts`, `effectDiscovery.ts`.
 - Contexto de execução e políticas por dono: `planningExecution.ts`, `planningOwner.ts`.
 - Análise e perspectiva: `analysis.ts`, `perspective.ts`, `planningDiagnostics.ts`.
-- Cópia e identidade do estado de planejamento: `planningCopy.ts`, `gameTreeSimulation.ts`, `stateFingerprint.ts`.
+- Cópia e identidade do estado de planejamento: `planningCopy.ts`, `gameTreeSimulation.ts`, `stateFingerprint.ts`, `actionIdentity.ts`. Planos vinculam presença física e revalidam fonte, alvo e materiais; uma cópia ausente não é substituída por outra de mesmo nome.
 - Filtros e stats: `cardFilters.ts`, `cardStats.ts`, `cardValue.ts`, `zones.ts`.
 - Combos e counters: `comboDetection.ts`, `counters.ts`.
 - Planejamento: `ascensionPlanning.ts`, `backrowPlanning.ts`, `finisherPlans.ts`, `fusionPlanning.ts`, `summonAssessment.ts`.
 - Legalidade e oportunidade por fase: `phaseTiming.ts`.
 - Recursos e preferências: `resourceEconomy.ts`, `resourcePolicy.ts`, `preferencePolicy.ts`, `tributePolicy.ts`.
 - Targeting e simulação: `targetAvailability.ts`, `targetSelection.ts`, `simulation.ts`, `simStateUtils.ts`, `simulatedConditions.ts`, `previewGuards.ts`.
+- Projeção pública de sequências de ataque: `battleProjection.ts`, com limites de busca, incerteza e necessidade de replanejamento preservados pelo consumidor.
 - Simuladores declarativos: [simulatedActions/](../src/core/ai/common/simulatedActions/) contém 12 arquivos `.ts`: `combat`, `counters`, `destruction`, `equip`, `flow`, `index`, `lifecycle`, `movement`, `resources`, `shared`, `stats` e `summon`.
+
+Normal Summon, Tributos, Ascensão e usos de efeitos consultam helpers canônicos do runtime através de projeções locais. Previews de custo não consomem recursos. A simulação preserva movimentos e eventos sequenciais, histórico de materiais, usos por instância/nome e políticas por dono; compras futuras são desconhecidas e encerram a linha para replanejamento. Observadores de resultados recebem a resolução concluída, inclusive triggers encadeados.
+
+`TurnLineSearch` coordena a busca e a ponte de batalha sem regras por nome de carta. Capacidades de efeitos são declarativas; pesos, reservas e preferências permanecem nos arquétipos. `BaseStrategy` continua responsável pela avaliação básica, sem absorver esses domínios. O [plano de atualização das IAs](Plano%20de%20Atualiza%C3%A7%C3%A3o%20das%20IAs.md) registra a migração, os critérios de paridade e as limitações observadas.
 
 ---
 

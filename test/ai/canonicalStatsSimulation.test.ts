@@ -83,7 +83,7 @@ test("Luminarch Sickle boosts canonical stats without duplicate effective bonuse
   assert.equal(state.bot.hand.length, 0);
 });
 
-test("Sunforged stat growth is stored on its equip and reverses on detach", () => {
+test("Sunforged stat growth is stored as its declared passive and reverses on detach", () => {
   const host = make("Luminarch Valiant - Knight of the Dawn");
   const blade = make("Luminarch Sunforged Blade");
   host.equips = [blade];
@@ -92,8 +92,7 @@ test("Sunforged stat growth is stored on its equip and reverses on detach", () =
   applyLuminarchSimulatedBattleRewards({ state, summary: { lpGains: [{ playerId: "bot", amount: 500 }] } });
   assert.equal(host.atk, required(host.baseAtk) + 200);
   assert.equal(host.def, required(host.baseDef) + 200);
-  assert.equal(blade.equipAtkBonus, 200);
-  assert.equal(blade.equipDefBonus, 200);
+  assert.deepEqual(getModeledPassiveContributions(host), [["luminarch_sunforged_blade_counter_buff", "equipped_counter_buff"]]);
   assert.equal(getEffectiveAtk(host), host.atk);
   moveCardToZone(state.bot, blade, "graveyard");
   assert.equal(host.atk, host.baseAtk);

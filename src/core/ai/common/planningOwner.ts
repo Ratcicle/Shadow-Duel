@@ -64,7 +64,7 @@ export function createPlanningOwnerPolicy(
   const view = ownerView(state, owner);
   const strategy = model.create(view);
   const policy = normalizePlanningOwnerPolicy(strategy.getPlanningSimulationOptions?.(view) || {});
-  const context = (input: object) => ({ ...input, state: view, game: view, selfId: "bot" });
+  const context = <Input extends object>(input: Input) => ({ ...input, state: view, game: view, selfId: "bot" });
   const result = { ...policy };
   if (policy.rankSearchCandidates) result.rankSearchCandidates = (cards, action, ctx) => policy.rankSearchCandidates!(cards, action, context(ctx));
   if (policy.evaluateRecruitCandidate) result.evaluateRecruitCandidate = (cards, ctx) => policy.evaluateRecruitCandidate!(cards, context(ctx));
@@ -74,6 +74,8 @@ export function createPlanningOwnerPolicy(
   if (policy.onEffectActivated) result.onEffectActivated = payload => policy.onEffectActivated!(context(payload));
   if (policy.onAfterSpecialSummon) result.onAfterSpecialSummon = payload => policy.onAfterSpecialSummon!(context(payload));
   if (policy.onFusionSummon) result.onFusionSummon = payload => policy.onFusionSummon!(context(payload));
+  if (policy.onLpPayment) result.onLpPayment = payload => policy.onLpPayment!(context(payload));
+  if (policy.onSimulatedResolutionComplete) result.onSimulatedResolutionComplete = payload => policy.onSimulatedResolutionComplete!(context(payload));
   if (policy.buildActivationContextForEffect) result.buildActivationContextForEffect = input => policy.buildActivationContextForEffect!({ ...input, game: view, player: view.bot });
   return result;
 }

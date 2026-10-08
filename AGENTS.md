@@ -464,7 +464,7 @@ registerStrategy("my_archetype", MyStrategy);
 - `BeamSearch` / `GameTreeSearch` exploram árvore de jogadas
 - Os quatro perfis de clone — Bot, Beam/Greedy, GameTree e TurnLine — permanecem separados e têm contratos explícitos em `contracts/aiState.ts`
 - `common/` e `common/simulatedActions/` são TypeScript físico; preserve `.js` nos imports relativos
-- Knowledge bases em subpastas definem prioridades e combos (ex.: `luminarch/fusionPriority.ts`)
+- Knowledge bases em subpastas definem prioridades e combos (ex.: `luminarch/spellPriority.ts`)
 - AI usa `game.autoSelector` ([AutoSelector.ts](src/core/AutoSelector.ts)) para escolhas automáticas em targeting — **nunca** para automatizar decisões de jogadores humanos
 
 ---

@@ -205,7 +205,7 @@ for (const actor of ["player", "bot"] as const) {
         if (change === "other_modifiers") {
           permanent(77, 33, "after_half");
           applySimulatedActions({ state, selfId: "player", selections: { target: [enemy] },
-            actions: [{ type: "buff_stats_temp", targetRef: "target", atkBoost: 101, defBoost: 51 }] });
+            actions: [{ type: "buff_stats_temp", targetRef: "target", atkBoost: 101, defBoost: 51, duration: "end_of_turn" }] });
         }
         if (change === "source_exit") {
           moveCardToZone(state.bot, host, "graveyard", state.bot, { state });

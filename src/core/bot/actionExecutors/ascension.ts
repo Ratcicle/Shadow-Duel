@@ -1,16 +1,17 @@
+import { resolveAscensionActionForCurrentState } from "../actionValidation.js";
 import type { BotRuntimePort, BotGamePort } from "../../contracts/bot.js";
-import type { AIActionOf, ExtraDeckMaterialHint, AIActivationContext } from "../../contracts/ai.js";
-import type { GameCard } from "../../contracts/cards.js";
+import type { AIActionOf } from "../../contracts/ai.js";
 export async function executeAscensionAction(bot: BotRuntimePort, game: BotGamePort, action: AIActionOf<"ascension">): Promise<boolean> {
   try {
-    const material = bot.field[action.materialIndex!];
-    if (!material) {
+    const resolved = resolveAscensionActionForCurrentState(bot, action);
+    if (!resolved) {
       console.log(
         `[Bot.executeMainPhaseAction] ❌ Ascension: material not found at index ${action.materialIndex}`,
       );
       return false;
     }
 
+    const { material, card } = resolved;
     console.log(
       `[Bot.executeMainPhaseAction] 🔥 Attempting Ascension: ${material.name} → ${action.ascensionCard!.name}`,
     );
@@ -18,12 +19,12 @@ export async function executeAscensionAction(bot: BotRuntimePort, game: BotGameP
     const result = await game.performAscensionSummon(
       bot,
       material,
-      action.ascensionCard! as GameCard,
+      card,
       {
         position:
           action.position ||
           bot.getAscensionPositionPreference(
-            action.ascensionCard! as GameCard,
+            card,
             material,
             game,
           ),

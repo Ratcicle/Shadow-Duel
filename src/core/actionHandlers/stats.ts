@@ -1,4 +1,5 @@
 import { addEffectNegation, clearEffectNegation, expireEffectNegation } from "../effects/negation.js";
+import { consumeTrackedDamageStepBuffs } from "../game/combat/damageStep.js";
 /**
  * stats.ts
  *
@@ -410,16 +411,8 @@ function consumeTrackedStatIncrease(
     // These entries are expiry bookkeeping for the same temporary modifier.
     // Retire the consumed amount so expiry cannot subtract it a second time
     // or consume a later, independently applied buff.
-    let remaining = actual;
-    for (const buffs of [game.damageCalculationTempBuffs, game.endOfDamageStepTempBuffs]) {
-      for (const buff of buffs || []) {
-        if (!sameCardReference(buff.card, card) || remaining <= 0) continue;
-        const tracked = Math.max(0, Number(buff[stat] || 0));
-        const consumed = Math.min(tracked, remaining);
-        buff[stat] = Number(buff[stat] || 0) - consumed;
-        remaining -= consumed;
-      }
-    }
+    consumeTrackedDamageStepBuffs([game.damageCalculationTempBuffs, game.endOfDamageStepTempBuffs],
+      card, stat, actual, sameCardReference);
   }
 
   if (Array.isArray(card.turnBasedBuffs)) {

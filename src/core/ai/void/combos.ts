@@ -1,4 +1,5 @@
 import type { buildStrategyAnalysis } from "../common/analysis.js";
+import { canUseNormalSummonForCard } from "../../Player.js";
 
 type Analysis = Omit<Partial<ReturnType<typeof buildStrategyAnalysis>>, "phase" | "fieldSpell"> & { fieldSpell?: ReturnType<typeof buildStrategyAnalysis>["fieldSpell"] | undefined; phase?: string | null | undefined } & { oppFieldCount?: number; oppStrongestAtk?: number };
 
@@ -460,6 +461,10 @@ export function detectAvailableCombos(analysis: Analysis) {
   const { hand, field, graveyard, extraDeck, fieldSpell, summonAvailable } =
     analysis;
   const deck = analysis.deck || [];
+  const normalSummonPlayer = analysis.player || analysis.bot;
+  const canNormalSummonId = (id: number) => normalSummonPlayer
+    ? (hand || []).some((card) => card?.id === id && canUseNormalSummonForCard(normalSummonPlayer, card))
+    : !!summonAvailable;
   const detected: Array<Omit<DetectedCombo, "combo"> & { combo?: typeof COMBO_DATABASE[number] | null | undefined; projectedDraws?: number; projectedAtk?: number }> = [];
 
   const zoneIndex = createZoneIndex({
@@ -502,7 +507,7 @@ export function detectAvailableCombos(analysis: Analysis) {
   if (
     hasInHand(VOID_IDS.CONJURER) &&
     hasInHand(VOID_IDS.HOLLOW) &&
-    summonAvailable
+    canNormalSummonId(VOID_IDS.CONJURER)
   ) {
     addCombo("Conjurer Walker Hollow Pipeline", {
       ready: true,
@@ -517,7 +522,7 @@ export function detectAvailableCombos(analysis: Analysis) {
   if (
     hasInHand(VOID_IDS.CONJURER) &&
     !hasInHand(VOID_IDS.HOLLOW) &&
-    summonAvailable
+    canNormalSummonId(VOID_IDS.CONJURER)
   ) {
     addCombo("Conjurer Basic", {
       ready: true,
@@ -529,7 +534,7 @@ export function detectAvailableCombos(analysis: Analysis) {
   // Beast Search Hollow (starter secundario quando Conjurer/Lost Throne nao lideram)
   if (
     hasInHand(VOID_IDS.BEAST) &&
-    summonAvailable &&
+    canNormalSummonId(VOID_IDS.BEAST) &&
     !hasInHand(VOID_IDS.HOLLOW) &&
     hasInDeck(VOID_IDS.HOLLOW)
   ) {
@@ -684,7 +689,7 @@ export function detectAvailableCombos(analysis: Analysis) {
   if (
     hasInHand(VOID_IDS.CONJURER) &&
     hasInHand(VOID_IDS.HAUNTER) &&
-    summonAvailable
+    canNormalSummonId(VOID_IDS.CONJURER)
   ) {
     addCombo("Conjurer to Haunter Pipeline", {
       ready: true,
@@ -749,7 +754,7 @@ export function detectAvailableCombos(analysis: Analysis) {
   }
 
   // Arcturus Tribute Summon (precisa 2 monstros no campo + Normal Summon disponível)
-  if (hasInHand(VOID_IDS.ARCTURUS) && summonAvailable) {
+  if (hasInHand(VOID_IDS.ARCTURUS) && canNormalSummonId(VOID_IDS.ARCTURUS)) {
     const monstersOnField = (field || []).filter(
       (m) => m && m.cardKind === "monster",
     ).length;
@@ -772,7 +777,7 @@ export function detectAvailableCombos(analysis: Analysis) {
 
   if (
     hasInHand(VOID_IDS.ARCTURUS) &&
-    summonAvailable &&
+    canNormalSummonId(VOID_IDS.ARCTURUS) &&
     countVoidsInGY() + Math.min(countVoidsOnField(), 2) >= 3
   ) {
     const monstersOnField = (field || []).filter(

@@ -2,7 +2,7 @@ import type { TributeValueDefinition } from "../../contracts/cards.js";
 import type { CardFilter } from "../../contracts/effects.js";
 import type { SummonMethod } from "../../contracts/summon.js";
 import type { AlternateTributeDefinition } from "../../contracts/cards.js";
-import type { NormalSummonCardView, NormalSummonPlayerView } from "../../contracts/player.js";
+import type { NormalSummonCardView, NormalSummonPlayerReadView } from "../../contracts/player.js";
 import { canUseNormalSummonForCard } from "../../Player.js";
 
 export interface NormalSummonCandidate extends NormalSummonCardView {
@@ -42,7 +42,7 @@ export function getNormalTributeRequirement(
 
 /** Enumerate legal physical costs (at most five field cards), shared by preview, resolution and AI. */
 export function getNormalSummonTributeOptions<Card extends NormalSummonCandidate>(
-  player: Omit<NormalSummonPlayerView, "field"> & { hand: Card[]; field: Card[] },
+  player: Omit<NormalSummonPlayerReadView, "field"> & { hand: readonly Card[]; field: readonly Card[] },
   card: Card,
   canPlace: (tributes: Card[]) => boolean = () => true,
 ): Card[][] {

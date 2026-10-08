@@ -424,7 +424,7 @@ for (const id of [212, 214] as const) {
     assert.ok(state.bot.hand.includes(simSource));
     assert.equal(state.bot.field.includes(simSource), false);
     assert.equal(state.materialDuelStats?.bot?.activatedEffectIdsByMaterialId?.has(id) ?? false, false);
-    assert.deepEqual(state._simMaterialEffectActivationsByMaterialId?.bot || {}, {});
+    assert.equal(Reflect.get(state, "_simMaterialEffectActivationsByMaterialId"), undefined);
     assert.equal(simSource.effectMarkers?.void_slayer_brute_hollow_cost, undefined);
   });
 }

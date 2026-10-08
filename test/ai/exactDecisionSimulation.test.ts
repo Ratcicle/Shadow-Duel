@@ -153,12 +153,19 @@ test("exact case and target choose a legal decrease instead of the first case", 
   const core = make(501), first = make(502), selected = make(502);
   for (const card of [core, first, selected]) appendSimulatedFieldCard(state.bot.field, card);
   const effect = required(core.effects?.find(item => item.id === "tech_zero_energy_core_level_mod"));
-  applySimulatedActions({ state, actions: effect.actions, options: { sourceCard: core, effect,
+  const targetRef = required(effect.targets?.[0]).id;
+  const options = { sourceCard: core, effect,
     activationContext: { decisions: { cases: { tech_zero_energy_core_level_mod: "decrease" },
-      selections: { tech_zero_energy_core_level_down_target: [required(selected.instanceId)] } } } } });
+      selections: { [targetRef]: [required(selected.instanceId)] } } } };
+  // Current declaration selects its parent target before choosing the case;
+  // direct action execution receives the same resolved selection as runtime.
+  const selections = selectSimulatedTargets({ state, targets: effect.targets, actions: effect.actions,
+    sourceCard: core, options });
+  applySimulatedActions({ state, actions: effect.actions, selections, options });
   assert.equal(selected.level, 2);
   assert.equal(first.level, 3);
   assert.equal(core.level, 1);
+  assert.deepEqual(state._simUnsupportedActions || [], []);
 });
 
 test("an invalid exact case cannot use the first available case", () => {
@@ -307,16 +314,17 @@ for (const stale of [false, true]) {
 for (const actor of ["player", "bot"] as const) {
   test(`event strategy decisions override the initiating action's decisions (${actor})`, () => {
     const { state, make } = scenario(actor);
-    const core = make(501), selected = make(502);
-    for (const card of [core, selected]) appendSimulatedFieldCard(state.bot.field, card);
+    const core = make(501), first = make(502), selected = make(502);
+    for (const card of [core, first, selected]) appendSimulatedFieldCard(state.bot.field, card);
     const decisions: AIDecisionPlan = { cases: { tech_zero_energy_core_level_mod: "decrease" },
-      selections: { tech_zero_energy_core_level_down_target: [required(selected.instanceId)] } };
+      selections: { tech_zero_energy_core_level_target: [required(selected.instanceId)] } };
     const options = attachSimulatedEventEmitter(state, { enableSimulatedEvents: true,
       activationContext: { decisions: { cases: { tech_zero_energy_core_level_mod: "increase" } } },
       strategy: { buildActivationContextForEffect: () => ({ decisions }) },
     });
     options.emitSimulatedEvent?.("after_summon", { card: core, player: state.bot, method: "special", fromZone: "hand" });
     assert.equal(selected.level, 2);
+    assert.equal(first.level, 3);
     assert.equal(core.level, 1);
     assert.deepEqual(state._simUnsupportedActions || [], []);
   });

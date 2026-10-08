@@ -13,7 +13,6 @@ import type {
 } from "../contracts/ai.js";
 import type { GameCard, CardKind } from "../contracts/cards.js";
 import type { GamePlayer } from "../contracts/player.js";
-import type { SimulatedCardShape } from "../contracts/aiState.js";
 import type { CardAction } from "../contracts/actions.js";
 import type { EffectDefinition } from "../contracts/effects.js";
 import type { CanonicalZone } from "../contracts/zones.js";
@@ -28,15 +27,21 @@ import { canSetReactiveBackrowNow } from "../ai/common/phaseTiming.js";
 import { getCanonicalEffectActivationZones } from "../chain/legality.js";
 import { canMoveCardToZone } from "../ai/common/zones.js";
 import { hasActionZoneCandidates } from "../ai/common/actionValidation.js";
+import { bindPlanningActionPresence, getPlanningActionPresence, isPlanningActionPresenceCurrent, resolvePlanningCard, resolvePlanningMaterialIds, resolvePlanningSourceIndex } from "../ai/common/actionIdentity.js";
 import { selectPayableTributes } from "../ai/common/tributePolicy.js";
 
 export function resolveHandIndexForAction(
-  bot: Pick<BotRuntimePort, "hand">,
+  bot: Pick<BotRuntimePort, "hand" | "id">,
   action: BotHandActionHint,
   expectedKind?: ExpectedBotHandKind,
 ): number {
   if (!action) return -1;
   const hand = bot.hand || [];
+  const bound = resolvePlanningCard<GameCard>(hand, action.card, bot.id, "hand", action);
+  if (bound.explicit) {
+    if (!bound.card || (expectedKind && !(Array.isArray(expectedKind) ? expectedKind : [expectedKind]).includes(bound.card.cardKind))) return -1;
+    return hand.indexOf(bound.card);
+  }
   const idHint = action.cardId ?? action.card?.id ?? null;
   const nameHint = action.cardName || action.card?.name || null;
   const expectedKinds: readonly CardKind[] | null = Array.isArray(expectedKind)
@@ -96,14 +101,16 @@ export function resolveHandIndexForAction(
 export function resolveHandProcedureMaterials(
   bot: BotRuntimePort,
   hints: readonly HandProcedureMaterialHint[],
+  action?: object,
 ): GameCard[] | null {
   const materials: GameCard[] = [];
-  for (const hint of hints) {
+  for (const [offset, hint] of hints.entries()) {
     const zone = bot[hint.zone];
+    const bound = resolvePlanningCard<GameCard>(zone, { instanceId: hint.instanceId }, bot.id, hint.zone, action, offset);
     const atIndex = zone[hint.index];
     const matches = (card: GameCard) =>
       card.id === hint.cardId && card.instanceId === hint.instanceId;
-    const material = atIndex && matches(atIndex) ? atIndex : zone.find(matches);
+    const material = bound.explicit ? bound.card : atIndex && matches(atIndex) ? atIndex : zone.find(matches);
     if (!material || materials.includes(material)) return null;
     materials.push(material);
   }
@@ -125,11 +132,11 @@ export function collectHandSummonProcedureActions(
       const zone = bot.field.includes(material) ? "field" as const : "graveyard" as const;
       return { zone, index: bot[zone].indexOf(material), cardId: material.id, instanceId: material.instanceId };
     });
-    return [{
+    return [bindPlanningActionPresence({
       type: "handSummonProcedure" as const,
       card, cardId: card.id, cardName: card.name, index, materials,
       priority: (card.atk || 0) / 500 + 1,
-    }];
+    }, card, bot.id, "hand", game, chosen.map(material => ({ card: material, zone: bot.field.includes(material) ? "field" : "graveyard" })))];
   });
 }
 
@@ -143,7 +150,7 @@ export function canResolveHandSummonProcedureActionForCurrentState(
   if (!card?.handSummonProcedure) return false;
   const check = game.canSummonFromHandByProcedure(card, bot);
   if (!check.ok || action.materials.length !== (card.handSummonProcedure.cost?.count || 0)) return false;
-  const materials = resolveHandProcedureMaterials(bot, action.materials);
+  const materials = resolveHandProcedureMaterials(bot, action.materials, action);
   if (!materials || materials.some((material) => !check.candidates.includes(material))) return false;
   if (bot.field.length - materials.filter((material) => bot.field.includes(material)).length >= 5) return false;
   return game.canPlaceCardOnField(card, bot, {
@@ -252,20 +259,6 @@ export function canResolveSummonActionForCurrentState(
   }
 
   return true;
-}
-
-function getCardInstanceIds(
-  card: GameCard &
-    Pick<SimulatedCardShape, "_instanceId" | "uid" | "uuid" | "simInstanceId">,
-) {
-  return [
-    card?.instanceId,
-    card?._instanceId,
-    card?.uid,
-    card?.uuid,
-    card?.simInstanceId,
-    card?.fieldPresenceId,
-  ].filter((id) => id !== null && id !== undefined);
 }
 
 function zoneCards(player: GamePlayer, zoneName: CanonicalZone): GameCard[] {
@@ -412,11 +405,13 @@ function needsCounterRemovedSummonZoneReserve(
   return controlsCounterRemovedSelfSummonTrigger(bot);
 }
 
-function findExtraDeckCardForAction(
+export function findExtraDeckCardForAction(
   bot: BotRuntimePort,
   action: AIActionOf<"extraDeckProcedure">,
 ) {
   const extraDeck = bot?.extraDeck || [];
+  const bound = resolvePlanningCard<GameCard>(extraDeck, action.extraDeckCard, bot.id, "extraDeck", action);
+  if (bound.explicit) return bound.card;
   if (Number.isInteger(action.extraDeckIndex)) {
     const direct = extraDeck[action.extraDeckIndex!];
     if (
@@ -443,11 +438,7 @@ function findFieldMaterialForHint(
 ) {
   const ids = Array.isArray(hint.instanceIds) ? hint.instanceIds : [];
   if (ids.length > 0) {
-    const byInstance = field.find((card) => {
-      const cardIds = getCardInstanceIds(card);
-      return cardIds.some((id) => ids.includes(id));
-    });
-    if (byInstance) return byInstance;
+    return resolvePlanningMaterialIds<GameCard>(field, ids);
   }
 
   if (Number.isInteger(hint.index)) {
@@ -469,7 +460,7 @@ function findFieldMaterialForHint(
   );
 }
 
-function resolveExtraDeckProcedureMaterials(
+export function resolveExtraDeckProcedureMaterials(
   bot: BotRuntimePort,
   action: AIActionOf<"extraDeckProcedure">,
 ) {
@@ -483,8 +474,9 @@ function resolveExtraDeckProcedureMaterials(
         instanceIds: action.materialInstanceIds?.[offset],
       }));
   const materials: GameCard[] = [];
-  for (const hint of hints) {
-    const material = findFieldMaterialForHint(field, hint);
+  for (const [offset, hint] of hints.entries()) {
+    const bound = resolvePlanningCard<GameCard>(field, undefined, bot.id, "field", action, offset);
+    const material = bound.explicit ? bound.card : findFieldMaterialForHint(field, hint);
     if (!material || materials.includes(material)) return [];
     materials.push(material);
   }
@@ -507,6 +499,53 @@ function materialSelectionMatchesCombo(
     }
     return true;
   });
+}
+
+export function resolveAscensionActionForCurrentState(
+  bot: BotRuntimePort, action: AIActionOf<"ascension">,
+): { material: GameCard; card: GameCard } | null {
+  const boundMaterial = resolvePlanningCard<GameCard>(bot.field, action.material, bot.id, "field", action, 0);
+  const material = boundMaterial.explicit ? boundMaterial.card : bot.field[action.materialIndex!];
+  const boundSource = resolvePlanningCard<GameCard>(bot.extraDeck, action.ascensionCard, bot.id, "extraDeck", action);
+  const card = boundSource.explicit ? boundSource.card : bot.extraDeck.find(candidate =>
+    candidate.id === action.ascensionCard?.id || candidate.name === action.cardName || candidate.name === action.ascensionCard?.name);
+  return material && card ? { material, card } : null;
+}
+
+/** Bind a newly generated runtime command before its mutable references move. */
+export function bindGeneratedMainPhaseAction(
+  bot: BotRuntimePort, game: BotGamePort, action: AIAction,
+): AIAction {
+  if (getPlanningActionPresence(action)) return action;
+  let source: GameCard | undefined | null;
+  let zone: CanonicalZone;
+  switch (action.type) {
+    case "summon": case "spell": case "set_spell_trap":
+    case "handIgnition": case "handSummonProcedure": case "special_summon_sanctum_protector":
+      zone = "hand";
+      source = bot.hand[resolveHandIndexForAction(bot, action)];
+      break;
+    case "monsterEffect": case "position_change":
+      zone = "field"; source = bot.field[resolvePlanningSourceIndex(bot.field, action, bot.id, zone, action.card) ?? action.fieldIndex!]; break;
+    case "graveyardMonsterEffect": case "graveyardSpellEffect":
+      zone = "graveyard"; source = bot.graveyard[resolvePlanningSourceIndex(bot.graveyard, action, bot.id, zone, action.card) ?? action.graveyardIndex!]; break;
+    case "spellTrapEffect":
+      zone = "spellTrap"; source = bot.spellTrap[resolvePlanningSourceIndex(bot.spellTrap, action, bot.id, zone, action.card) ?? action.zoneIndex ?? action.index!]; break;
+    case "fieldEffect": zone = "fieldSpell"; source = bot.fieldSpell; break;
+    case "ascension": {
+      const resolved = resolveAscensionActionForCurrentState(bot, action);
+      return resolved ? bindPlanningActionPresence(action, resolved.card, bot.id, "extraDeck", game,
+        [{ card: resolved.material, zone: "field" }]) : action;
+    }
+    case "extraDeckProcedure": {
+      source = findExtraDeckCardForAction(bot, action);
+      const materials = resolveExtraDeckProcedureMaterials(bot, action);
+      return source ? bindPlanningActionPresence(action, source, bot.id, "extraDeck", game,
+        materials.map(card => ({ card, zone: "field" }))) : action;
+    }
+    case "synchro": return action; // Its existing ordered instance contract is authoritative.
+  }
+  return source ? bindPlanningActionPresence(action, source, bot.id, zone, game) : action;
 }
 
 export function canResolveExtraDeckProcedureActionForCurrentState(
@@ -548,6 +587,7 @@ export function filterValidActionsForCurrentState(
   if (!Array.isArray(actions)) return [];
   return actions.filter((action) => {
     if (!action || !action.type) return false;
+    if (!isPlanningActionPresenceCurrent(action, bot)) return false;
     if (action.type === "synchro") {
       return resolveSynchroActionForCurrentState(bot, action, game) !== null;
     }
@@ -583,9 +623,7 @@ export function filterValidActionsForCurrentState(
       return canSetReactiveBackrowNow(card, game);
     }
     if (action.type === "spellTrapEffect") {
-      const zoneIndex = Number.isInteger(action.zoneIndex)
-        ? action.zoneIndex
-        : action.index;
+      const zoneIndex = resolvePlanningSourceIndex(bot.spellTrap, action, bot.id, "spellTrap", action.card) ?? (Number.isInteger(action.zoneIndex) ? action.zoneIndex : action.index);
       const card = bot.spellTrap?.[zoneIndex!];
       if (!card || (card.cardKind !== "spell" && card.cardKind !== "trap"))
         return false;
@@ -612,14 +650,14 @@ export function filterValidActionsForCurrentState(
       return preview ? preview.ok !== false : true;
     }
     if (action.type === "graveyardSpellEffect") {
-      const graveyardIndex = Number.isInteger(action.graveyardIndex)
+      const graveyardIndex = resolvePlanningSourceIndex(bot.graveyard, action, bot.id, "graveyard", action.card) ?? (Number.isInteger(action.graveyardIndex)
         ? action.graveyardIndex
         : bot.graveyard.findIndex(
             (c) =>
               c &&
               (c.id === action.cardId ||
                 (!action.cardId && c.name === action.cardName)),
-          );
+          ));
       const card = bot.graveyard?.[graveyardIndex!];
       if (!card || (card.cardKind !== "spell" && card.cardKind !== "trap")) return false;
       const activationContext: AIActivationContext = {
@@ -682,14 +720,14 @@ export function filterValidActionsForCurrentState(
       return preview ? preview.ok !== false : true;
     }
     if (action.type === "graveyardMonsterEffect") {
-      const graveyardIndex = Number.isInteger(action.graveyardIndex)
+      const graveyardIndex = resolvePlanningSourceIndex(bot.graveyard, action, bot.id, "graveyard", action.card) ?? (Number.isInteger(action.graveyardIndex)
         ? action.graveyardIndex
         : bot.graveyard.findIndex(
             (c) =>
               c &&
               (c.id === action.cardId ||
                 (!action.cardId && c.name === action.cardName)),
-          );
+          ));
       const card = bot.graveyard?.[graveyardIndex!];
       if (!card || card.cardKind !== "monster") return false;
       const preview = game?.effectEngine?.canActivateMonsterEffectPreview?.(
@@ -711,14 +749,14 @@ export function filterValidActionsForCurrentState(
       return preview ? preview.ok !== false : true;
     }
     if (action.type === "monsterEffect") {
-      const fieldIndex = Number.isInteger(action.fieldIndex)
+      const fieldIndex = resolvePlanningSourceIndex(bot.field, action, bot.id, "field", action.card) ?? (Number.isInteger(action.fieldIndex)
         ? action.fieldIndex
         : bot.field.findIndex(
             (c) =>
               c &&
               (c.id === action.cardId ||
                 (!action.cardId && c.name === action.cardName)),
-          );
+          ));
       const card = bot.field?.[fieldIndex!];
       if (!card || card.cardKind !== "monster" || card.isFacedown) {
         return false;
@@ -745,8 +783,9 @@ export function filterValidActionsForCurrentState(
       return preview ? preview.ok !== false : true;
     }
     if (action.type === "ascension") {
-      const material = bot.field[action.materialIndex!];
-      if (!material) return false;
+      const resolved = resolveAscensionActionForCurrentState(bot, action);
+      if (!resolved) return false;
+      const { material, card } = resolved;
       if (game?.canUseAsAscensionMaterial) {
         const check = game.canUseAsAscensionMaterial(bot, material);
         if (check && check.ok === false) return false;
@@ -757,7 +796,7 @@ export function filterValidActionsForCurrentState(
       ) {
         const requirementCheck = game.checkAscensionRequirements(
           bot,
-          action.ascensionCard as GameCard,
+          card,
           material,
         );
         if (requirementCheck && requirementCheck.ok === false) return false;
@@ -767,7 +806,7 @@ export function filterValidActionsForCurrentState(
         typeof game?.canPlaceCardOnField === "function"
       ) {
         const placeCheck = game.canPlaceCardOnField(
-          action.ascensionCard as GameCard,
+          card,
           bot,
           {
             isFacedown: false,
@@ -805,7 +844,8 @@ export function filterValidActionsForCurrentState(
       return preview ? preview.ok !== false : true;
     }
     if (action.type === "position_change") {
-      const target = Number.isInteger(action.fieldIndex)
+      const boundIndex = resolvePlanningSourceIndex(bot.field, action, bot.id, "field", action.card);
+      const target = boundIndex !== null ? bot.field[boundIndex] : Number.isInteger(action.fieldIndex)
         ? bot.field?.[action.fieldIndex!]
         : (bot.field || []).find(
             (c) =>

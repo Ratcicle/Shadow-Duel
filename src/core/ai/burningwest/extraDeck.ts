@@ -1,3 +1,4 @@
+import { ARCHETYPE, BW, getDeclaredType, hasPeacemakerAttachment } from "./knowledge.js";
 import type { BurningWestAnalysis, BurningWestActivationContext, BurningWestActivationOptions } from "./contracts.js";
 import type { AIStrategyBotPort } from "../../contracts/ai.js";
 import type { SimulatedCardState } from "../../contracts/aiState.js";
@@ -15,26 +16,7 @@ type AutomaticContext<Choice extends { ascensionCard: Card; material: Card }> = 
 import { getGenericAscensionActions } from "../common/ascensionPlanning.js";
 import { ascensionMaterialMatches } from "../../game/summon/ascension.js";
 
-const ARCHETYPE = "Burning West";
 
-const BW = {
-  GUNSLINGER: "Gunslinger of the Burning West",
-  WANTED: "Wanted in the Burning West",
-  UNDERTAKER: "Undertaker of the Burning West",
-  BUTCHER: "Butcher of the Burning West",
-  SPECIALIST: "Specialist of the Burning West",
-  PEACEMAKER: "Burning Peacemaker",
-  QUICK_DRAW: "Quick Draw in the Burning West",
-  FUNERAL: "Funeral at Sunset",
-  DEADEYE: "Deadeye of the Burning West",
-  PREACHER: "Preacher of the Burning West",
-  SHERIFF: "Sheriff of the Burning West",
-  CRASH_TOWN: "Crash Town, the Burning City",
-  AMBUSH: "Ambush in Crash Town",
-  REWARD: "Burning Reward",
-  LAW: "Law in the Burning West",
-  EXECUTIONER: "Executioner of the Burning West",
-};
 
 function asArray<Value>(value: readonly Value[] | null | undefined): Value[] {
   return Array.isArray(value) ? value.filter(Boolean) : [];
@@ -136,14 +118,8 @@ function sameCard(left: ReadCard | null | undefined, right: ReadCard | null | un
 }
 
 function hasPeacemakerEquipped(card: ReadCard | null | undefined, player: Player | null = {}) {
-  return (
-    asArray<Card>(card?.equips).some((equip) => equip?.name === BW.PEACEMAKER) ||
-    getCards(player, "spellTrap").some(
-      (equip) =>
-        equip?.name === BW.PEACEMAKER &&
-        (sameCard(equip.equippedTo, card) || sameCard(equip.equipTarget as ReadCard | null | undefined, card)),
-    )
-  );
+  return hasPeacemakerAttachment(asArray<Card>(card?.equips), getCards(player, "spellTrap"),
+    equip => sameCard(equip.equippedTo, card) || sameCard(equip.equipTarget as ReadCard | null | undefined, card), equip => equip?.name);
 }
 
 function hasFaceUpWanted(player: Player | null = {}) {
@@ -165,18 +141,6 @@ function hasWantedDeclaration(player: Player | null = {}, analysis: Analysis = {
   });
 }
 
-function getDeclaredType(card: ReadCard | null | undefined, stateKey: string, turnCounter = 0) {
-  const declaration = card?.declaredValues?.[stateKey] as CardDeclaredValueDetail | undefined;
-  if (!declaration?.value) return null;
-  if (
-    declaration.expiresOnTurn !== null &&
-    declaration.expiresOnTurn !== undefined &&
-    Number(declaration.expiresOnTurn) < Number(turnCounter || 0)
-  ) {
-    return null;
-  }
-  return declaration.value;
-}
 
 function getEnteredTurn(material: ReadCard) {
   const values = [material?.revealedTurn, material?.summonedTurn].filter((value) =>

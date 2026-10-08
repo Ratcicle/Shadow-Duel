@@ -1,8 +1,10 @@
 import {
   fieldHasTributeValue,
+  getNormalTributeRequirement,
   selectTributeIndicesByValue,
 } from "../../game/summon/tributeValue.js";
 import type { TributeCardView } from "../../game/summon/tributeValue.js";
+import type { AlternateTributeDefinition } from "../../contracts/cards.js";
 import type { AiCardInput, AiPlayerInput, AiStateInput } from "../../contracts/aiState.js";
 import { canMoveCardToZone } from "./zones.js";
 
@@ -21,14 +23,9 @@ export function selectPayableTributes<Card extends AiCardInput>(
   return { candidates, indices };
 }
 
-interface TributeAlternative {
-  type?: string;
-  requiresName?: string | null;
-  tributes?: number;
-}
-
 interface TributeSummonCard extends TributeCardView {
-  altTribute?: TributeAlternative | null;
+  requiredTributes?: number | null;
+  altTribute?: AlternateTributeDefinition | null;
 }
 
 interface TributePlayerState {
@@ -72,31 +69,18 @@ export function getTributeRequirementFor<Card extends TributeSummonCard>(
   card: Card,
   playerState: TributePlayerState,
 ) {
-  let tributesNeeded = 0;
-  if ((card.level as number) >= 5 && (card.level as number) <= 6) tributesNeeded = 1;
-  else if ((card.level as number) >= 7) tributesNeeded = 2;
-
-  let usingAlt = false;
-  const alt: Card["altTribute"] | undefined = card.altTribute;
-  if (
-    alt?.type === "no_tribute_if_empty_field" &&
-    (playerState.field?.length || 0) === 0 &&
-    tributesNeeded > 0
-  ) {
-    tributesNeeded = 0;
-    usingAlt = true;
-  }
-  if (
-    alt &&
-    playerState.field?.some((c) => c && c.name === alt.requiresName)
-  ) {
-    if (alt.tributes! < tributesNeeded) {
-      tributesNeeded = alt.tributes!;
-      usingAlt = true;
-    }
-  }
-
-  return { tributesNeeded, usingAlt, alt };
+  // Preserve the broad read-only policy views while asking the runtime's
+  // canonical query for the requirement; no summon or material choice occurs.
+  return getNormalTributeRequirement({
+    level: card.level,
+    altTribute: card.altTribute ?? null,
+    ...(card.requiredTributes !== undefined ? { requiredTributes: card.requiredTributes } : {}),
+  }, (playerState.field || []).map(monster => ({
+    name: monster.name,
+    type: monster.type,
+    isFacedown: monster.isFacedown,
+    ...(monster.types ? { types: [...monster.types] } : {}),
+  })));
 }
 
 export function selectBestTributes<Card extends TributeSummonCard, Evaluation extends object = object>(

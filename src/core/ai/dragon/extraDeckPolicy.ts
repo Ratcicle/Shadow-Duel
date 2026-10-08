@@ -10,7 +10,7 @@ import type {
   DragonFusionPlan,
 } from "./contracts.js";
 
-import { CARD_KNOWLEDGE, isExtremeDragon } from "./knowledge.js";
+import { getDragonBaseCardValue, isExtremeDragon } from "./knowledge.js";
 import { analyzeDragonState } from "./stateAnalysis.js";
 import { getEffectiveAtk } from "../common/cardStats.js";
 
@@ -107,11 +107,7 @@ function getDragonState(context: DragonPolicyContext = {}, player: DragonPlayer 
 }
 
 function cardValue(card: DragonCard, zone: string = "") {
-  const knowledge = CARD_KNOWLEDGE[card?.name!] || {};
-  let value =
-    (knowledge.value || knowledge.priority || 0) +
-    (card?.level || 0) * 0.25 +
-    Math.max(card?.atk || 0, card?.def || 0) / 1000;
+  let value = getDragonBaseCardValue(card);
 
   if (zone === "field") value += 1.5;
   if (CRITICAL_FOLLOW_UP_NAMES.has(card?.name!)) value += 8;
@@ -597,13 +593,8 @@ export function buildDragonExtraDeckActionContext(context: DragonPolicyContext =
 
 function materialEffectActivationCount(game: DragonGame | null, player: DragonPlayer, material: DragonCard) {
   const playerId = player?.id || material?.controller || material?.owner || "bot";
-  const map =
-    (game?.materialDuelStats as Partial<Record<string, { effectActivationsByMaterialId?: { get?(id: number): number | undefined } }>> | undefined)?.[playerId]?.effectActivationsByMaterialId ||
-    (game?._gameRef?.materialDuelStats as Partial<Record<string, { effectActivationsByMaterialId?: { get?(id: number): number | undefined } }>> | undefined)?.[playerId]?.effectActivationsByMaterialId;
-  if (map?.get && Number.isFinite(material?.id)) return map.get(material.id!) || 0;
-  const simMap = player?._simMaterialEffectActivationsByMaterialId as { get?(id: number): number | undefined } | undefined;
-  if (simMap?.get && Number.isFinite(material?.id)) return simMap.get(material.id!) || 0;
-  return Number(material?.effectActivations || material?.simEffectActivations || 0);
+  if ((playerId !== "bot" && playerId !== "player") || material.id === undefined) return 0;
+  return game?.materialDuelStats?.[playerId]?.effectActivationsByMaterialId.get(material.id) || 0;
 }
 
 function scoreAscensionChoice<Card extends DragonCard>(choice: DragonAscensionChoice<Card> = {}, context: DragonPolicyContext = {}) {

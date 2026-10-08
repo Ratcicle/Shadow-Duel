@@ -1,3 +1,4 @@
+import { getEffectiveAtk as effectiveAtk, getEffectiveDef as effectiveDef } from "../common/cardStats.js";
 import type { BloomrotCard, BloomrotAnalysis } from "./analysis.js";
 
 
@@ -61,18 +62,6 @@ function getInstanceId(card: BloomrotCard | null | undefined) {
 
 function instanceIds(cards: BloomrotCard[] = []) {
   return cards.map(getInstanceId).filter((id) => id !== null && id !== undefined);
-}
-
-function effectiveAtk(card: BloomrotCard | null | undefined) {
-  return (
-    Number(card?.atk || 0)
-  );
-}
-
-function effectiveDef(card: BloomrotCard | null | undefined) {
-  return (
-    Number(card?.def || 0)
-  );
 }
 
 function battleStat(card: BloomrotCard | null | undefined) {

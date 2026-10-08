@@ -1,7 +1,8 @@
+import { getEffectiveAtk as effectiveAtk, getEffectiveDef as effectiveDef } from "../common/cardStats.js";
 import type { AIState, AIPlanningProfile, AIStrategyBotPort } from "../../contracts/ai.js";
 import type { GameCard } from "../../contracts/cards.js";
 import type { SimulatedCardState } from "../../contracts/aiState.js";
-export type BloomrotCard = (GameCard | SimulatedCardState) & { status?: { effectsNegated?: boolean; piercingDamage?: boolean }; ownerId?: string; controllerId?: string; addCounter?(type: string, amount: number): void; currentController?: string | { id?: string; name?: string }; faceDown?: boolean; faceUp?: boolean; _instanceId?: string | number | null; simInstanceId?: string | number | null; uid?: string | number | null; _simBloomrotRotStagBattleBoost?: boolean; _simBloomrotCarrioncapMarkedBattle?: boolean };
+export type BloomrotCard = (GameCard | SimulatedCardState) & { status?: { effectsNegated?: boolean; piercingDamage?: boolean }; ownerId?: string; controllerId?: string; addCounter?(type: string, amount: number): void; currentController?: string | { id?: string; name?: string }; faceDown?: boolean; faceUp?: boolean; _instanceId?: string | number | null; simInstanceId?: string | number | null; uid?: string | number | null };
 export type BloomrotPlayer = Omit<Partial<AIStrategyBotPort>, "field"> & { field?: BloomrotCard[] };
 export type BloomrotZone = "hand" | "field" | "graveyard" | "deck" | "extraDeck" | "spellTrap" | "fieldSpell";
 type BaseAnalysis = Omit<Partial<ReturnType<typeof buildStrategyAnalysis>>, "opponent"> & { opponent?: AIStrategyBotPort | null | undefined };
@@ -67,18 +68,6 @@ function fieldCounterCards(player: BloomrotPlayer | null | undefined) {
 
 function countSporesOnCards(cards: BloomrotCard[] = []) {
   return cards.reduce((sum, card) => sum + getSporeCount(card), 0);
-}
-
-function effectiveAtk(card: BloomrotCard | null | undefined) {
-  return (
-    Number(card?.atk || 0)
-  );
-}
-
-function effectiveDef(card: BloomrotCard | null | undefined) {
-  return (
-    Number(card?.def || 0)
-  );
 }
 
 function threatScore(card: BloomrotCard | null | undefined) {

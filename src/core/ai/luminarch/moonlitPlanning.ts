@@ -1,6 +1,8 @@
 import type { SimulatedCardState } from "../../contracts/aiState.js";
 import { hasActivePiercing } from "../../game/combat/availability.js";
 import type { LuminarchAnalysis } from "./contracts.js";
+import { forecastLuminarchEffectLpCost, getLuminarchLpQuoteContext } from "./resourceEconomy.js";
+import { createLpQuoteLedger } from "../common/simulatedActions/shared.js";
 // Moonlit Blessing target and revive planning.
 
 import {
@@ -34,15 +36,11 @@ function getSelfLuminarchTargetIds(effect: import("../../contracts/effects.js").
   );
 }
 
-function getStatBuffOptionsFromEffect(source: SimulatedCardState, effect: import("../../contracts/effects.js").EffectDefinition, sourceZone: string) {
+function getStatBuffOptionsFromEffect(source: SimulatedCardState, effect: import("../../contracts/effects.js").EffectDefinition, sourceZone: string, analysis: LuminarchAnalysis) {
   const targetIds = getSelfLuminarchTargetIds(effect);
   if (targetIds.size === 0) return [];
 
-  const lpCost = (effect.actions || []).reduce(
-    (sum, action) =>
-      action?.type === "pay_lp" ? sum + (action.amount || 0) : sum,
-    0
-  );
+  const lpCost = forecastLuminarchEffectLpCost(analysis, source, effect).finalAmount;
   const options: BuffOption[] = [];
   (effect.actions || []).forEach((action) => {
     if (action.type === "pay_lp") return;
@@ -52,6 +50,7 @@ function getStatBuffOptionsFromEffect(source: SimulatedCardState, effect: import
       options.push({
         sourceName: source?.name || effect.id || "stat buff",
         sourceZone,
+        sourceCard: source, effect,
         atkBoost: action.atkBoost || 0,
         defBoost: action.defBoost || 0,
         lpCost,
@@ -61,6 +60,7 @@ function getStatBuffOptionsFromEffect(source: SimulatedCardState, effect: import
       options.push({
         sourceName: source?.name || effect.id || "equip",
         sourceZone,
+        sourceCard: source, effect,
         atkBoost: action.atkBonus || 0,
         defBoost: action.defBonus || 0,
         lpCost,
@@ -78,7 +78,7 @@ function getMoonlitBuffOptions(analysis: LuminarchAnalysis) {
     (effect) => effect && effect.timing === "on_field_activate"
   );
   if (fieldSpell?.name?.includes("Citadel") && fieldEffect) {
-    options.push(...getStatBuffOptionsFromEffect(fieldSpell, fieldEffect, "fieldSpell"));
+    options.push(...getStatBuffOptionsFromEffect(fieldSpell, fieldEffect, "fieldSpell", analysis));
   }
 
   (analysis.hand || [])
@@ -92,14 +92,14 @@ function getMoonlitBuffOptions(analysis: LuminarchAnalysis) {
       (card.effects || [])
         .filter((effect) => effect && effect.timing === "on_play")
         .forEach((effect) => {
-          options.push(...getStatBuffOptionsFromEffect(card, effect, "hand"));
+          options.push(...getStatBuffOptionsFromEffect(card, effect, "hand", analysis));
         });
     });
 
   return options;
 }
 
-function chooseBestBuffPackage(options: BuffOption[], lp: number, purpose: string) {
+function chooseBestBuffPackage(options: BuffOption[], lp: number, purpose: string, analysis: LuminarchAnalysis) {
   const usable = (options || []).filter((option) => (option.lpCost || 0) <= lp);
   const limit = Math.min(usable.length, 8);
   let best = {
@@ -114,6 +114,9 @@ function chooseBestBuffPackage(options: BuffOption[], lp: number, purpose: strin
     let atkBoost = 0;
     let defBoost = 0;
     let lpCost = 0;
+    let remainingLp = lp;
+    let payable = true;
+    const ledger = createLpQuoteLedger(getLuminarchLpQuoteContext(analysis).state);
     for (let i = 0; i < limit; i += 1) {
       if ((mask & (1 << i)) === 0) continue;
       const option = usable[i];
@@ -121,9 +124,12 @@ function chooseBestBuffPackage(options: BuffOption[], lp: number, purpose: strin
       selected.push(option);
       atkBoost += option.atkBoost || 0;
       defBoost += option.defBoost || 0;
-      lpCost += option.lpCost || 0;
+      const forecast = forecastLuminarchEffectLpCost(analysis, option.sourceCard, option.effect, ledger, remainingLp);
+      lpCost += forecast.finalAmount;
+      remainingLp = forecast.remainingLp;
+      if (!forecast.payable) { payable = false; break; }
     }
-    if (lpCost > lp) continue;
+    if (!payable || lpCost > lp) continue;
 
     const score =
       purpose === "defense"
@@ -188,8 +194,8 @@ export function evaluateMoonlitReviveCandidate(card: SimulatedCardState, analysi
     (oppStrongestAtk >= 2200 && !hasTank);
 
   const buffOptions = getMoonlitBuffOptions(analysis);
-  const attackBuff = chooseBestBuffPackage(buffOptions, analysis.lp || 0, "attack");
-  const defenseBuff = chooseBestBuffPackage(buffOptions, analysis.lp || 0, "defense");
+  const attackBuff = chooseBestBuffPackage(buffOptions, analysis.lp || 0, "attack", analysis);
+  const defenseBuff = chooseBestBuffPackage(buffOptions, analysis.lp || 0, "defense", analysis);
   const atk = getVisibleAtk(card);
   const def = getVisibleDef(card);
   const projectedAtk = atk + attackBuff.atkBoost;
@@ -280,7 +286,7 @@ export function getMoonlitTargetPlan(analysis: LuminarchAnalysis): MoonlitTarget
   };
 }
 
-interface BuffOption {sourceName: string; sourceZone: string; atkBoost: number; defBoost: number; lpCost: number}
+interface BuffOption {sourceName: string; sourceZone: string; sourceCard: SimulatedCardState; effect: import("../../contracts/effects.js").EffectDefinition; atkBoost: number; defBoost: number; lpCost: number}
 interface MoonlitTargetPlan {target: SimulatedCardState | null; score: number; purpose: string; position: "attack" | "defense"; candidatePlans?: MoonlitCandidate[]; projectedAtk?: number; projectedDef?: number; attackBuffSources?: string[]; defenseBuffSources?: string[]; attackLine?: ReturnType<typeof getBestAttackLine>; pressure?: boolean; canCounterattack?: boolean; blocksBestThreat?: boolean; reason?: string}
 
 type MoonlitCandidate = Omit<MoonlitTargetPlan, "candidatePlans" | "target"> & {target: SimulatedCardState};

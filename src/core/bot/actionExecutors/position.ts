@@ -1,8 +1,10 @@
+import { resolvePlanningSourceIndex } from "../../ai/common/actionIdentity.js";
 import type { BotRuntimePort, BotGamePort } from "../../contracts/bot.js";
 import type { AIActionOf, ExtraDeckMaterialHint, AIActivationContext } from "../../contracts/ai.js";
 import type { GameCard } from "../../contracts/cards.js";
 export async function executePositionChangeAction(bot: BotRuntimePort, game: BotGamePort, action: AIActionOf<"position_change">): Promise<boolean> {
-  const target = Number.isInteger(action.fieldIndex)
+  const boundIndex = resolvePlanningSourceIndex(bot.field, action, bot.id, "field", action.card);
+  const target = boundIndex !== null ? bot.field[boundIndex] : Number.isInteger(action.fieldIndex)
     ? bot.field?.[action.fieldIndex!]
     : (bot.field || []).find(
         (c) =>

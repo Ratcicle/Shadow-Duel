@@ -211,10 +211,10 @@ test(`Void owner special-summon followup respects declarative usage (already use
   });
   assert.equal(state.player.field.filter(card => card.name === "Void Hollow").length, alreadyUsed ? 1 : 2);
   assert.equal(state.player.deck.length, alreadyUsed ? 2 : 1);
-  assert.equal(state._gameTreeActors?.player?._simVoidHollowRecruitUsed, alreadyUsed ? undefined : true);
+  assert.deepEqual(state.player.field.filter(card => card.name === "Void Hollow").map(card => card.instanceId),
+    alreadyUsed ? [99303] : [99303, 99304]);
   assert.equal(canUseSimOncePerTurn(state, "void_hollow_summon", 1, state.player.id, true), false);
   assert.equal(canUseSimOncePerTurn(state, "void_hollow_summon", 1, state.bot.id, true), true);
-  assert.equal(state._simVoidHollowRecruitUsed, undefined);
 });
 
 test(`Luminarch owner special-summon followup respects declarative usage (already used: ${alreadyUsed})`, () => {

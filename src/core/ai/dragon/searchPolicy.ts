@@ -7,7 +7,7 @@ import type {
 } from "./contracts.js";
 
 import {
-  CARD_KNOWLEDGE,
+  getDragonStrategicCardValue,
   CURRENT_AWAKENING_TARGET_NAMES,
   isExtremeDragon,
   isOutOfPlanDragonCardName,
@@ -92,17 +92,8 @@ function getDragonState(context: DragonPolicyContext = {}, player: DragonPlayer 
 }
 
 function cardStrategicValue(card: DragonCard, fallbackValue: ((card: DragonCard) => number) | null = null) {
-  if (typeof fallbackValue === "function") {
-    return Number(fallbackValue(card)) || 0;
-  }
-  const knowledge = CARD_KNOWLEDGE[card?.name!] || {};
-  return (
-    (knowledge.value || knowledge.priority || 0) +
-    (card?.level || 0) * 0.25 +
-    Math.max(card?.atk || 0, card?.def || 0) / 1000 +
-    (isExtremeDragon(card) ? 4 : 0) +
-    (card?.monsterType === "fusion" || card?.monsterType === "ascension" ? 5 : 0)
-  );
+  if (typeof fallbackValue === "function") return Number(fallbackValue(card)) || 0;
+  return getDragonStrategicCardValue(card);
 }
 
 function isCurrentDragonListMode(context: DragonPolicyContext = {}) {

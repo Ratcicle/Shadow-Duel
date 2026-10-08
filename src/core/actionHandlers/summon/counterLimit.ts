@@ -1,5 +1,6 @@
 import { getUIText } from "../../i18n.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
+import type { SpecialSummonEligibilityCard } from "../../game/summon/eligibility.js";
 import { isAI } from "../../Player.js";
 import { assignAutomaticFieldSlot, clearFieldSlot } from "../../game/zones/placement.js";
 import type { ActionOf } from "../../contracts/actions.js";
@@ -24,11 +25,45 @@ type CounterLimitAction = ActionOf<
   readonly cannotAttackThisTurn?: boolean;
 };
 
-/** Read-only query shared by activation preview and resolution. */
+interface CounterLimitCardView extends SpecialSummonEligibilityCard {
+  cardKind?: string | null | undefined;
+  atk?: number | null | undefined;
+  archetype?: string | null | undefined;
+  archetypes?: readonly string[] | undefined;
+}
+interface CounterLimitSourceView {
+  getCounter?(counterType: string): number;
+  counters?: Map<string, number> | Readonly<Record<string, number>>;
+}
+interface CounterLimitPlayerView<Card> {
+  field: readonly Card[];
+  deck: readonly Card[];
+}
+type CounterLimitSnapshot = { counters?: Readonly<Record<string, number>> };
+interface CounterLimitQueryContext<Player> {
+  player?: Player | null | undefined;
+  source?: CounterLimitSourceView | null | undefined;
+  activationContext?: { sourceAtActivation?: CounterLimitSnapshot | null } | null | undefined;
+  actionContext?: { sourceAtActivation?: CounterLimitSnapshot | null } | null | undefined;
+}
+type CounterLimitQueryGame<Card, Player> = {
+  canSpecialSummonUnderRestrictions?(card: Card, player: Player, options: { summonMethod: "special"; fromZone: "deck"; silent: boolean }): { ok: boolean } | null;
+  canPlaceCardOnField?(card: Card, player: Player, options: { isFacedown: false; silent: boolean }): { ok: boolean } | null;
+};
+
+/** Read-only query shared by runtime activation/resolution and AI projections. */
 export function getCounterLimitSummonOptions(
+  action: CounterLimitAction, ctx: EffectContext,
+  engine: { game: Pick<ActionHandlerEnginePort["game"], "canSpecialSummonUnderRestrictions" | "canPlaceCardOnField"> }, preview?: boolean,
+): { counterCount: number; maxAtk: number; candidates: ActionRuntimeCard[] };
+export function getCounterLimitSummonOptions<Card extends CounterLimitCardView, Player extends CounterLimitPlayerView<Card>>(
+  action: CounterLimitAction, ctx: CounterLimitQueryContext<Player>,
+  engine: { game: CounterLimitQueryGame<Card, Player> }, preview?: boolean,
+): { counterCount: number; maxAtk: number; candidates: Card[] };
+export function getCounterLimitSummonOptions<Card extends CounterLimitCardView, Player extends CounterLimitPlayerView<Card>>(
   action: CounterLimitAction,
-  ctx: EffectContext,
-  engine: { game: Pick<ActionHandlerEnginePort["game"], "canSpecialSummonUnderRestrictions" | "canPlaceCardOnField"> },
+  ctx: CounterLimitQueryContext<Player>,
+  engine: { game: CounterLimitQueryGame<Card, Player> },
   preview = false,
 ) {
   const { player, source } = ctx;

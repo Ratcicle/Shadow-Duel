@@ -1,9 +1,8 @@
 import { appendSimulatedZoneCard } from "../common/zones.js";
-import { appendSimulatedFieldCard } from "../common/zones.js";
 import { estimateCardValue } from "../StrategyUtils.js";
 import { hasActivePiercing } from "../../game/combat/availability.js";
 import { buildStrategyAnalysis } from "../common/analysis.js";
-import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../common/simStateUtils.js";
+import { resolvePerspectiveSlotForPlayer } from "../common/perspective.js";
 import {
   getBattleStatForAttackTarget,
   getEffectiveAtk,
@@ -12,8 +11,11 @@ import {
 } from "../common/cardStats.js";
 import {
   applyGenericSimulatedMainPhaseAction,
+  attachSimulatedEventEmitter,
   simulateGenericSpellEffect,
 } from "../common/simulation.js";
+import { applySimulatedActions } from "../common/simulatedActions/index.js";
+import { canUseSimulatedPassive, type SimulatedActionOptions } from "../common/simulatedActions/shared.js";
 import { isLuminarch } from "./knowledge.js";
 import { shouldPlaySpell } from "./priorities.js";
 import type {
@@ -89,14 +91,13 @@ interface LuminarchStrategyContext {
   bot?: AIStrategyBotPort;
 }
 
-interface LuminarchSimulationOptions extends Pick<NonNullable<Parameters<typeof applyGenericSimulatedMainPhaseAction>[2]>, "getTributeRequirementFor" | "selectBestTributes" | "placeSpellCard"> {
+interface LuminarchSimulationOptions extends Pick<NonNullable<Parameters<typeof applyGenericSimulatedMainPhaseAction>[2]>, "getTributeRequirementFor" | "selectBestTributes" | "placeSpellCard" | "onLpPayment"> {
   chooseSummonPosition?(card: SimulatedCardState, game: LuminarchState): "attack" | "defense";
   strategy?: LuminarchStrategyContext;
   getOpponent?: (
     state: LuminarchState,
     player: SimulatedPlayerState,
   ) => SimulatedPlayerState | null | undefined;
-  barbariasStanceDance?: { atkBoost: number };
   citadelTempBuff?: unknown;
   sourceAction?: LuminarchAction;
   activationContext?: LuminarchActivationContext;
@@ -150,21 +151,6 @@ interface LuminarchActionOverrideInput {
   ): number;
 }
 
-interface LuminarchCounterObject {
-  solar?: number;
-}
-
-type WithoutCounters<Value> = Value extends unknown
-  ? Omit<Value, "counters">
-  : never;
-type LuminarchCounterCard = WithoutCounters<
-  GameCard | SimulatedCardState
-> & {
-  counters?: Map<string, number> | LuminarchCounterObject;
-  getCounter?(counterType: "solar"): number;
-  setCounter?(counterType: "solar", value: number): void;
-};
-
 interface LuminarchBattleEvent {
   tag?: string;
   type?: string;
@@ -213,6 +199,7 @@ interface LuminarchBattleSummary {
   rewardNames?: string[];
   lpGains?: LuminarchLpGain[];
   destroyedCards?: Array<{
+    card?: SimulatedCardState;
     owner?: "self" | "opponent" | string;
     cardKind?: string;
     name?: string;
@@ -225,13 +212,6 @@ interface LuminarchBattlePlan {
   attackerCard?: SimulatedCardState;
 }
 
-interface LuminarchSummonExtra {
-  cannotAttackThisTurn?: boolean;
-  _simulatedMoonbladeRevive?: boolean;
-  _simulatedHalberdFollowUp?: boolean;
-  _simulatedHalberdReason?: string;
-  _simulatedMarshalSelfSummon?: boolean;
-}
 
 interface LuminarchLpPaymentInput {
   cardName: string;
@@ -439,93 +419,25 @@ export function simulateLuminarchSearch(
   state: LuminarchState,
   options: LuminarchSimulationOptions = {},
 ): SimulatedCardState | null {
-  if (!player || !Array.isArray(player.deck) || player.deck.length === 0) {
-    return null;
-  }
-  const isValiant =
-    sourceCard?.name === "Luminarch Valiant - Knight of the Dawn";
-  const isArbiter = sourceCard?.name === "Luminarch Sanctified Arbiter";
-  if (!isValiant && !isArbiter) return null;
-
-  const candidates = player.deck.filter((card) => {
-    if (!card || !isLuminarch(card)) return false;
-    if (isValiant) {
-      return card.cardKind === "monster" && (card.level || 0) <= 4;
-    }
-    return card.cardKind === "spell" || card.cardKind === "trap";
-  });
-  const ranked = rankLuminarchSearchCandidates(candidates, action, {
-    player,
-    opponent: state?.player,
-    game: state,
-    source: sourceCard,
-    strategy: options.strategy,
-    getOpponent: options.getOpponent,
-  });
-  const chosen = ranked[0];
-  if (!chosen) return null;
-  const deckIndex = player.deck.indexOf(chosen);
-  if (deckIndex < 0) return null;
-  const [moved] = player.deck.splice(deckIndex, 1);
-  if (!moved) return null;
-  appendSimulatedZoneCard(player.hand, { ...moved });
-  return moved;
-}
-
-function handleLuminarchAfterSummon({
-  state,
-  action,
-  player,
-  card,
-  newCard,
-  options,
-}: {
-  state: LuminarchState;
-  action: LuminarchAction;
-  player: SimulatedPlayerState;
-  card: SimulatedCardState;
-  newCard: SimulatedCardState;
-  options: LuminarchSimulationOptions;
-}): void {
-  if (
-    card.name === "Luminarch Valiant - Knight of the Dawn" &&
-    !action.facedown
-  ) {
-    const searched = simulateLuminarchSearch(
-      player,
-      newCard,
-      action,
-      state,
-      options,
-    );
-    if (searched) {
-      newCard._searchedAegis = true;
-    }
-  }
-
-  if (card.name === "Luminarch Sanctified Arbiter" && !action.facedown) {
-    const searched = simulateLuminarchSearch(
-      player,
-      newCard,
-      action,
-      state,
-      options,
-    );
-    if (searched) {
-      newCard._searchedSpell = true;
-    }
-  }
-
-  if (card.name === MOONBLADE_CAPTAIN_NAME && !action.facedown) {
-    simulateMoonbladeCaptainRevive(state, player, newCard, action, options);
-  }
+  const effect = sourceCard.effects?.find(effect => effect.actions?.some(action => action.type === "search_any"));
+  const search = effect?.actions?.find(action => action.type === "search_any");
+  if (!effect || !search) return null;
+  const before = new Set(player.hand);
+  applySimulatedActions({ state, selfId: resolvePerspectiveSlotForPlayer(state, player) || "bot", actions: [search], options: {
+    ...buildLuminarchSimulationOptions(state, null, options), activationContext: {}, strategy: {}, sourceCard, effect,
+    rankSearchCandidates: (cards, searchAction, context) => rankLuminarchSearchCandidates(cards, action, {
+      ...context, player, opponent: state.player, game: state,
+      source: sourceCard, strategy: options.strategy, getOpponent: options.getOpponent,
+    }),
+  } });
+  return player.hand.find(card => !before.has(card)) || null;
 }
 
 function handleSanctumProtectorShortcut({
   state,
   action,
+  options,
   resolveSimulatedHandIndex,
-  resolveSimulatedFieldIndex,
 }: LuminarchActionOverrideInput): true {
   const player = state.bot;
   const handIndex = resolveSimulatedHandIndex(
@@ -537,35 +449,25 @@ function handleSanctumProtectorShortcut({
     "monster",
   );
   if (handIndex < 0) return true;
-  const materialIndex = resolveSimulatedFieldIndex(
-    player,
-    { materialIndex: action.materialIndex },
-    (card) => card.name === "Luminarch Aegisbearer" && !card.isFacedown,
-  );
+  const materialIndex = Number.isInteger(action.materialIndex) ? action.materialIndex! :
+    player.field.findIndex(card => card.name === AEGISBEARER_NAME && !card.isFacedown);
   if (materialIndex < 0) return true;
-
   const material = player.field[materialIndex];
-  if (material) {
-    player.field.splice(materialIndex, 1);
-    appendSimulatedZoneCard(player.graveyard, material);
-  }
-
   const protector = player.hand[handIndex];
-  if (!protector) return true;
-  player.hand.splice(handIndex, 1);
-  const newCard = { ...protector };
-  newCard.position = (action.position || "defense") as "attack" | "defense";
-  newCard.isFacedown = false;
-  newCard.hasAttacked = false;
-  newCard.attacksUsedThisTurn = 0;
-  if (newCard.cardKind !== "monster") {
-    console.error(
-      `[LuminarchStrategy] BLOCKED sim protector: ${newCard.cardKind} "${newCard.name}" tried to enter field!`,
-    );
-    appendSimulatedZoneCard(player.graveyard, newCard);
-  } else {
-    appendSimulatedFieldCard(player.field, newCard);
-  }
+  if (!protector || protector.name !== "Luminarch Sanctum Protector" || !material ||
+    material.name !== AEGISBEARER_NAME || material.isFacedown || material.instanceId === undefined) return true;
+  const effect = protector.effects?.find(effect => effect.timing === "ignition" && effect.activationZones?.includes("hand"));
+  const costTarget = effect?.targets?.find(target => target.intent === "cost");
+  if (!effect || !costTarget) return true;
+  applyGenericSimulatedMainPhaseAction(state, {
+    type: "handIgnition", index: handIndex, cardName: protector.name, effectId: effect.id, priority: 0,
+    activationContext: {
+      decisions: { selections: { [costTarget.id]: [material.instanceId] } },
+      actionContext: { specialSummonPositions: {
+        byName: { [protector.name]: action.position === "attack" ? "attack" : "defense" },
+      } },
+    },
+  }, options);
   return true;
 }
 
@@ -619,97 +521,12 @@ function isLuminarchMonster(
   return card?.cardKind === "monster" && isLuminarch(card);
 }
 
-function getCounterValue(
-  card: LuminarchCounterCard | null | undefined,
-  counterType: "solar",
-): number {
-  if (!card || !counterType) return 0;
-  if (typeof card.getCounter === "function") {
-    return Number(card.getCounter(counterType) || 0);
-  }
-  if (card.counters instanceof Map) {
-    return Number(card.counters.get(counterType) || 0);
-  }
-  if (card.counters && typeof card.counters === "object") {
-    return Number(
-      (card.counters as LuminarchCounterObject)[counterType] || 0,
-    );
-  }
-  return 0;
-}
-
-function setCounterValue(
-  card: LuminarchCounterCard | null | undefined,
-  counterType: "solar",
-  value: number,
-): void {
-  if (!card || !counterType) return;
-  const next = Math.max(0, Number(value || 0));
-  if (typeof card.setCounter === "function") {
-    card.setCounter(counterType, next);
-    return;
-  }
-  if (card.counters instanceof Map) {
-    card.counters.set(counterType, next);
-    return;
-  }
-  if (!card.counters || typeof card.counters !== "object") card.counters = {};
-  (card.counters as LuminarchCounterObject)[counterType] = next;
-}
-
-function addCounterValue(
-  card: LuminarchCounterCard | null | undefined,
-  counterType: "solar",
-  amount = 1,
-): number {
-  const next = getCounterValue(card, counterType) + Math.max(0, Number(amount || 0));
-  setCounterValue(card, counterType, next);
-  return next;
-}
-
 function hasFaceupBarbarias(
   player: Partial<SimulatedPlayerState> = {},
 ): boolean {
   return (player.field || []).some(
     (card) => card?.name === BARBARIAS_NAME && !card.isFacedown,
   );
-}
-
-function collectSunforgedBlades(
-  player: Partial<SimulatedPlayerState> = {},
-): SimulatedCardState[] {
-  return (player.spellTrap || []).filter(
-    (card) => card?.name === SUNFORGED_BLADE_NAME && !card.isFacedown && !card.effectsNegated,
-  );
-}
-
-function applySunforgedLpGainEvent(
-  state: LuminarchState,
-  player: Partial<SimulatedPlayerState> = {},
-  rewards: string[] = [],
-): number {
-  let counterEvents = 0;
-  collectSunforgedBlades(player).forEach((blade) => {
-    addCounterValue(blade, "solar", 1);
-    const host = (blade.equippedTo ||
-      blade.equipTarget ||
-      null) as GameCard | SimulatedCardState | null;
-    if (host && [...state.bot.field, ...state.player.field].includes(host as SimulatedCardState)) {
-      host.atk = (host.atk || 0) + 200;
-      host.def = (host.def || 0) + 200;
-      blade.equipAtkBonus = (blade.equipAtkBonus || 0) + 200;
-      blade.equipDefBonus = (blade.equipDefBonus || 0) + 200;
-    }
-    counterEvents += 1;
-    recordLuminarchBattleEvent(state, {
-      tag: "sunforgedCounter",
-      cardName: SUNFORGED_BLADE_NAME,
-      hostName: host?.name || null,
-      counterType: "solar",
-    });
-    rewards.push("Sunforged Blade gained a Solar Counter");
-  });
-  return counterEvents;
 }
 
 function applyNewLuminarchLpGain(
@@ -719,12 +536,22 @@ function applyNewLuminarchLpGain(
   sourceName: string,
   summary: LuminarchBattleSummary | null | undefined,
   rewards: string[],
+  sourceCard: SimulatedCardState | null = null,
 ): number {
   const base = Math.max(0, Math.floor(Number(amount || 0)));
   if (!player || base <= 0) return 0;
-  const doubled = hasFaceupBarbarias(player);
-  const gained = doubled ? base * 2 : base;
-  player.lp = Number(player.lp || 0) + gained;
+  const before = player.lp;
+  const eventsBefore = ensureLuminarchSimMeta(state).battleEvents.length;
+  // Battle dispatch remains scoped to the existing Luminarch reward adapter.
+  // Healing and its LP triggers use the same actions as main-phase effects.
+  applySimulatedActions({ state, selfId: resolvePerspectiveSlotForPlayer(state, player) || "bot", actions: [{ type: "heal", amount: base }],
+    options: attachSimulatedEventEmitter(state, { enableSimulatedEvents: true, sourceCard,
+      onEffectActivated: handleLuminarchEffectActivated }) });
+  const gained = player.lp - before;
+  const doubled = hasFaceupBarbarias(player) && gained === base * 2;
+  for (const event of ensureLuminarchSimMeta(state).battleEvents.slice(eventsBefore)) {
+    if (event.tag === "sunforgedCounter") rewards.push("Sunforged Blade gained a Solar Counter");
+  }
   if (summary) {
     if (!Array.isArray(summary.lpGains)) summary.lpGains = [];
     summary.lpGains.push({
@@ -751,50 +578,30 @@ function applyNewLuminarchLpGain(
     });
     rewards.push("Barbarias doubled LP gain");
   }
-  applySunforgedLpGainEvent(state, player, rewards);
   ensureLuminarchSimMeta(state).milestones.push("luminarch_battle_lp_gain");
   return gained;
 }
 
 function finalizeExistingLuminarchLpGains(
-  state: LuminarchState,
-  player: SimulatedPlayerState,
-  summary: LuminarchBattleSummary,
-  rewards: string[],
+  state: LuminarchState, player: SimulatedPlayerState, summary: LuminarchBattleSummary,
+  rewards: string[], sourceCard: SimulatedCardState | null,
 ): void {
-  const gains = Array.isArray(summary?.lpGains) ? summary.lpGains : [];
-  gains
-    .filter((gain) => !gain._luminarchProcessed)
-    .filter((gain) => !gain.playerId || gain.playerId === player?.id)
-    .forEach((gain) => {
-      const amount = Math.max(0, Number(gain.amount || 0));
-      if (amount <= 0) return;
-      if (hasFaceupBarbarias(player)) {
-        player.lp = Number(player.lp || 0) + amount;
-        gain.amount += amount;
-        gain.barbariasDoubled = true;
-        recordLuminarchBattleEvent(state, {
-          tag: "barbariasDoubledHeal",
-          sourceName: gain.sourceName || null,
-          amount: gain.amount,
-          baseAmount: amount,
-        });
-        rewards.push("Barbarias doubled LP gain");
-      }
-      recordLuminarchBattleEvent(state, {
-        tag:
-          gain.reason === "battle_damage_heal"
-            ? "holyShieldDamageHealed"
-            : "luminarchLpGain",
-        sourceName: gain.sourceName || null,
-        amount: gain.amount,
-        baseAmount: amount,
-        barbariasDoubled: gain.barbariasDoubled === true,
-      });
-      applySunforgedLpGainEvent(state, player, rewards);
-      gain._luminarchProcessed = true;
-      ensureLuminarchSimMeta(state).milestones.push("luminarch_battle_lp_gain");
+  // The battle bridge records a base heal instead of damage. Reconcile that
+  // one receipt through common heal; emit precisely one gain event.
+  for (const gain of summary.lpGains || []) {
+    if (gain._luminarchProcessed || (gain.playerId && gain.playerId !== player.id)) continue;
+    const base = Math.max(0, Number(gain.amount || 0));
+    if (!base) continue;
+    player.lp -= base;
+    gain.amount = applyNewLuminarchLpGain(state, player, base, gain.sourceName || "", null, rewards, sourceCard);
+    gain.baseAmount = base;
+    gain.barbariasDoubled = hasFaceupBarbarias(player) && gain.amount === base * 2;
+    if (gain.reason === "battle_damage_heal") recordLuminarchBattleEvent(state, {
+      tag: "holyShieldDamageHealed", sourceName: gain.sourceName || null, amount: gain.amount,
+      baseAmount: base, barbariasDoubled: gain.barbariasDoubled,
     });
+    gain._luminarchProcessed = true;
+  }
 }
 
 function hasOpenMonsterZone(
@@ -908,124 +715,6 @@ export function chooseLuminarchSpecialSummonPosition(
   return "attack";
 }
 
-function pushSimulatedFieldMonster(
-  player: SimulatedPlayerState,
-  card: SimulatedCardState,
-  position: "attack" | "defense",
-  extra: LuminarchSummonExtra = {},
-): SimulatedCardState {
-  const newCard = {
-    ...card,
-    position,
-    isFacedown: false,
-    hasAttacked: false,
-    attacksUsedThisTurn: 0,
-    ...extra,
-  };
-  appendSimulatedFieldCard(player.field, newCard);
-  return newCard;
-}
-
-function simulateMoonbladeCaptainRevive(
-  state: LuminarchState,
-  player: SimulatedPlayerState,
-  sourceCard: SimulatedCardState,
-  action: LuminarchAction,
-  options: LuminarchSimulationOptions,
-): SimulatedCardState | null {
-  if (!player || !hasOpenMonsterZone(player)) return null;
-  const candidates = (player.graveyard || []).filter(
-    (card) =>
-      card &&
-      card.cardKind === "monster" &&
-      isLuminarch(card) &&
-      (card.level || 0) <= 4,
-  );
-  if (candidates.length === 0) return null;
-
-  const ranked = rankLuminarchSearchCandidates(
-    candidates,
-    {
-      type: "special_summon_from_zone",
-      targetRef: "moonblade_revive_target",
-      zone: "graveyard",
-    },
-    {
-      player,
-      opponent: state?.player,
-      game: state,
-      source: sourceCard,
-      strategy: options.strategy,
-      getOpponent: options.getOpponent,
-      activationContext: action.activationContext,
-    },
-  );
-  const target = ranked[0];
-  if (!target) return null;
-  const graveyardIndex = player.graveyard.indexOf(target);
-  if (graveyardIndex < 0) return null;
-  player.graveyard.splice(graveyardIndex, 1);
-
-  const position = chooseLuminarchSpecialSummonPosition(target, {
-    state,
-    game: state,
-    player,
-    opponent: state?.player,
-    action: {
-      type: "special_summon_from_zone",
-      targetRef: "moonblade_revive_target",
-      position: "choice",
-    },
-    sourceAction: action,
-    options,
-    activationContext: action.activationContext,
-  });
-  const summoned = pushSimulatedFieldMonster(player, target, position, {
-    _simulatedMoonbladeRevive: true,
-  });
-  ensureLuminarchSimMeta(state).milestones.push("moonblade_revive");
-  handleLuminarchAfterSpecialSummon({
-    state,
-    player,
-    card: summoned,
-    sourceCard,
-  });
-  return summoned;
-}
-
-function simulateEnchantedHalberdFollowUp(
-  state: LuminarchState,
-  player: SimulatedPlayerState,
-  reason = "special_summon",
-): SimulatedCardState | null {
-  const meta = ensureLuminarchSimMeta(state);
-  if (!hasOpenMonsterZone(player)) return null;
-
-  const halberdIndex = (player.hand || []).findIndex(
-    (card) => {
-      if (card?.name !== ENCHANTED_HALBERD_NAME) return false;
-      const effect = card.effects?.find(entry => entry.id === "luminarch_enchanted_halberd_conditional_summon");
-      return !!effect && canUseSimulatedEffectUsage(state, effect, card, player.id, true);
-    },
-  );
-  if (halberdIndex < 0) return null;
-
-  const [halberd] = player.hand.splice(halberdIndex, 1);
-  if (!halberd) return null;
-  const effect = halberd.effects?.find(entry => entry.id === "luminarch_enchanted_halberd_conditional_summon");
-  // Consume the same per-copy key as declarative event dispatch, before moving.
-  markSimulatedEffectUsage(state, effect, halberd, player.id, true);
-  const summoned = pushSimulatedFieldMonster(player, halberd, "defense", {
-    cannotAttackThisTurn: true,
-    _simulatedHalberdFollowUp: true,
-    _simulatedHalberdReason: reason,
-  });
-  meta.halberdSummonedThisTurn = true;
-  meta.milestones.push("halberd_followup");
-  simulateEnchantedHalberdFollowUp(state, player, "special_summon");
-  return summoned;
-}
-
 function recordLuminarchLpPayment(
   state: LuminarchState,
   {
@@ -1036,7 +725,7 @@ function recordLuminarchLpPayment(
     createsWall = false,
     createsPayoff = false,
   }: LuminarchLpPaymentInput,
-): void {
+): LuminarchLpPaymentInput {
   const meta = ensureLuminarchSimMeta(state);
   const opponentThreat = getOpponentStrongestAttack(state);
   const risky =
@@ -1044,7 +733,7 @@ function recordLuminarchLpPayment(
     opponentThreat >= afterLp &&
     createsWall !== true &&
     createsPayoff !== true;
-  meta.lpPayments.push({
+  const payment = {
     cardName,
     cost,
     beforeLp,
@@ -1053,95 +742,9 @@ function recordLuminarchLpPayment(
     createsWall,
     createsPayoff,
     risky,
-  });
-  if (risky) meta.milestones.push("risky_lp_payment");
-  else if (createsWall) meta.milestones.push("lp_payment_created_wall");
-  else if (createsPayoff) meta.milestones.push("lp_payment_created_payoff");
-}
-
-function simulateCelestialMarshalHandIgnition({
-  state,
-  action,
-  options,
-  resolveSimulatedHandIndex,
-}: LuminarchActionOverrideInput): false | { handled: true } {
-  const player = state.bot;
-  if (!player || !hasOpenMonsterZone(player)) return { handled: true };
-
-  const handIndex = resolveSimulatedHandIndex(player, action, "monster");
-  const marshal = player.hand?.[handIndex];
-  if (!marshal || marshal.name !== CELESTIAL_MARSHAL_NAME) return false;
-
-  const beforeLp = player.lp || 0;
-  if (beforeLp <= 2000) return { handled: true };
-
-  player.lp = Math.max(0, beforeLp - 2000);
-  player.hand.splice(handIndex, 1);
-
-  const position = chooseLuminarchSpecialSummonPosition(marshal, {
-    state,
-    game: state,
-    action,
-    sourceAction: action,
-    options,
-    activationContext: action.activationContext,
-  });
-  const summoned = pushSimulatedFieldMonster(player, marshal, position, {
-    _simulatedMarshalSelfSummon: true,
-  });
-
-  const opponentStrongest = getOpponentStrongestAttack(state);
-  const createsWall =
-    summoned.position === "defense" &&
-    ((summoned.def || 0) >= opponentStrongest ||
-      summoned.battleIndestructibleOncePerTurn === true);
-  const createsPayoff = simulateEnchantedHalberdFollowUp(
-    state,
-    player,
-    "marshal_self_summon",
-  );
-
-  recordLuminarchLpPayment(state, {
-    cardName: CELESTIAL_MARSHAL_NAME,
-    cost: 2000,
-    beforeLp,
-    afterLp: player.lp || 0,
-    createsWall,
-    createsPayoff: !!createsPayoff,
-  });
-  ensureLuminarchSimMeta(state).milestones.push("marshal_self_summon");
-  return { handled: true };
-}
-
-function handleLuminarchHandIgnitionOverride(
-  args: LuminarchActionOverrideInput,
-): false | { handled: true } {
-  const player = args.state?.bot;
-  const handIndex = args.resolveSimulatedHandIndex(player, args.action, "monster");
-  const card = player?.hand?.[handIndex];
-  if (card?.name === CELESTIAL_MARSHAL_NAME) {
-    return simulateCelestialMarshalHandIgnition(args);
-  }
-  return false;
-}
-
-function handleLuminarchMonsterEffect({
-  card,
-  options,
-}: {
-  card: SimulatedCardState;
-  options: LuminarchSimulationOptions;
-}): boolean {
-  if (card.name !== BARBARIAS_NAME) return false;
-  const target = card.position === "defense" ? card : null;
-  if (!target) return true;
-  const stanceDance = options.barbariasStanceDance || { atkBoost: 800 };
-  target.position = "attack";
-  target.cannotAttackThisTurn = false;
-  target.tempAtkBoost = (target.tempAtkBoost || 0) + stanceDance.atkBoost;
-  target.atk = (target.atk || 0) + stanceDance.atkBoost;
-  target._simulatedBarbariasBoost = true;
-  return true;
+  };
+  meta.lpPayments.push(payment);
+  return payment;
 }
 
 function handleLuminarchFusionSummon({
@@ -1160,16 +763,16 @@ function handleLuminarchFusionSummon({
 
   const meta = ensureLuminarchSimMeta(state);
   if (fusionCard.name === PURE_KNIGHT_NAME) {
-    const searchedCitadel = fusionCard._simulatedCitadelSearch === true;
+    const reducer = fusionCard.effects?.find(effect => effect.timing === "passive" &&
+      "passive" in effect && effect.passive?.type === "lp_cost_reduction");
+    const discountAvailable = !!reducer && canUseSimulatedPassive(state, player, fusionCard, reducer);
     fusionCard._simulatedRole = "citadel_access";
-    fusionCard._simulatedLpCostReductionAvailable = true;
+    fusionCard._simulatedLpCostReductionAvailable = discountAvailable;
     fusionCard._simulatedMaterialsUsed = (materials || []).map(
       (card) => card?.name as string,
     );
-    meta.pureKnightDiscountAvailable = true;
+    meta.pureKnightDiscountAvailable = discountAvailable;
     meta.milestones.push("pure_knight_fusion");
-    if (searchedCitadel) meta.milestones.push("citadel_access");
-    simulateEnchantedHalberdFollowUp(state, player, "fusion_summon");
     return;
   }
 
@@ -1181,7 +784,6 @@ function handleLuminarchFusionSummon({
     );
     meta.barbariasLpPayoff = true;
     meta.milestones.push("barbarias_fusion_wall");
-    simulateEnchantedHalberdFollowUp(state, player, "fusion_summon");
   }
 }
 
@@ -1196,21 +798,10 @@ function handleLuminarchAfterSpecialSummon({
   card: SimulatedCardState;
   sourceCard?: SimulatedCardState | null;
 }): void {
-  if (!isLuminarchMonster(card)) return;
-  if (!card || !isLuminarch(card)) return;
-  if (
-    card.name === AEGISBEARER_NAME &&
-    card._simulatedAegisSpecialDefApplied !== true
-  ) {
-    card.def = (card.def || 0) + 500;
-    card._simulatedAegisSpecialDefApplied = true;
+  if (sourceCard?.name === MOONBLADE_CAPTAIN_NAME && sourceCard !== card) {
+    card._simulatedMoonbladeRevive = true;
+    ensureLuminarchSimMeta(state).milestones.push("moonblade_revive");
   }
-  if (card.name === ENCHANTED_HALBERD_NAME) return;
-  simulateEnchantedHalberdFollowUp(
-    state,
-    player,
-    sourceCard?.name === FORTRESS_AEGIS_NAME ? "fortress_revive" : "special_summon",
-  );
 }
 
 function handleLuminarchEffectActivated({
@@ -1218,28 +809,59 @@ function handleLuminarchEffectActivated({
   player,
   card,
   effect,
+  options,
 }: {
   state: LuminarchState;
   player: SimulatedPlayerState;
   card: SimulatedCardState;
   effect: EffectDefinition;
+  options?: SimulatedActionOptions;
 }): void {
   if (!card || !effect || !player) return;
+  if (player.field.includes(card) && effect.id === "luminarch_celestial_marshal_hand_summon") {
+    card._simulatedMarshalSelfSummon = true;
+    ensureLuminarchSimMeta(state).milestones.push("marshal_self_summon");
+  }
+  if (player.field.includes(card) && effect.id === "luminarch_enchanted_halberd_conditional_summon") {
+    card._simulatedHalberdFollowUp = true;
+    card._simulatedHalberdReason = "special_summon";
+    ensureLuminarchSimMeta(state).halberdSummonedThisTurn = true;
+    ensureLuminarchSimMeta(state).milestones.push("halberd_followup");
+  }
+  const searched = options?.lastAddedToHandCard || options?.actionContext?.lastAddedToHandCard ||
+    options?.activationContext?.actionContext?.lastAddedToHandCard;
+  if (searched && player.hand.includes(searched)) {
+    if (effect.id === "luminarch_valiant_search") card._searchedAegis = true;
+    if (effect.id === "luminarch_sanctified_arbiter_search") card._searchedSpell = true;
+  }
   if (card.name === PURE_KNIGHT_NAME && effect.id === "luminarch_pure_knight_fusion_search") {
-    card._simulatedCitadelSearch = player.hand.some(candidate => candidate.name === CITADEL_NAME);
+    card._simulatedCitadelSearch = searched?.name === CITADEL_NAME && player.hand.includes(searched);
+    if (card._simulatedCitadelSearch) ensureLuminarchSimMeta(state).milestones.push("citadel_access");
   }
   if (card.name === MAGIC_SICKLE_NAME) {
     ensureLuminarchSimMeta(state).milestones.push("sickle_spell_recovery");
   }
+  if (effect.id === "luminarch_sunforged_blade_solar_counter") {
+    const host = card.equippedTo || card.equipTarget;
+    recordLuminarchBattleEvent(state, { tag: "sunforgedCounter", cardName: card.name || "",
+      hostName: host && typeof host === "object" ? host.name || null : null, counterType: "solar" });
+  }
 
-  const lpCost = (effect.actions || []).reduce((sum, action) => {
-    if (action?.type !== "pay_lp") return sum;
-    return sum + (Number.isFinite(action.amount) ? action.amount as number : 0);
-  }, 0);
-  if (lpCost <= 0) return;
+}
 
-  const beforeLp = (player.lp || 0) + lpCost;
-  const hasWall = (player.field || []).some(
+type LuminarchPaymentFact = Parameters<NonNullable<SimulatedActionOptions["onLpPayment"]>>[0];
+interface LuminarchPaymentReceipt extends LuminarchPaymentFact {
+  fieldBefore: ReadonlySet<SimulatedCardState>;
+  payment: LuminarchLpPaymentInput;
+}
+
+function observeLuminarchLpPayment({ state, player, sourceCard: card, amount: lpCost,
+  before: beforeLp, after: afterLp, fieldBefore, payment }: LuminarchPaymentReceipt): void {
+  if (!card || player !== state.bot) return;
+  const hasWall = card.name === CELESTIAL_MARSHAL_NAME
+    ? player.field.includes(card) && card.position === "defense" &&
+      ((card.def || 0) >= getOpponentStrongestAttack(state) || card.battleIndestructibleOncePerTurn === true)
+    : (player.field || []).some(
     (entry) =>
       entry &&
       entry.cardKind === "monster" &&
@@ -1248,20 +870,22 @@ function handleLuminarchEffectActivated({
         entry.battleIndestructibleOncePerTurn ||
         (entry.position === "defense" && (entry.def || 0) >= getOpponentStrongestAttack(state))),
   );
-  const createsPayoff =
-    card.name === FORTRESS_AEGIS_NAME ||
+  const createsPayoff = card.name === CELESTIAL_MARSHAL_NAME
+    ? player.field.some(entry => entry.name === ENCHANTED_HALBERD_NAME && !fieldBefore.has(entry))
+    : card.name === FORTRESS_AEGIS_NAME ||
     card.name === MAGIC_SICKLE_NAME ||
     card.name === BARBARIAS_NAME ||
     card.name === PURE_KNIGHT_NAME;
 
-  recordLuminarchLpPayment(state, {
-    cardName: card.name as string,
-    cost: lpCost,
-    beforeLp,
-    afterLp: player.lp || 0,
-    createsWall: hasWall,
-    createsPayoff,
-  });
+  const meta = ensureLuminarchSimMeta(state);
+  const opponentThreat = getOpponentStrongestAttack(state);
+  // Enrich the factual record after resolution without recording/paying it
+  // again. If resolution stops, the receipt already retains the actual cost.
+  Object.assign(payment, { opponentThreat, createsWall: hasWall, createsPayoff,
+    risky: afterLp > 0 && opponentThreat >= afterLp && !hasWall && !createsPayoff });
+  if (payment.risky) meta.milestones.push("risky_lp_payment");
+  else if (hasWall) meta.milestones.push("lp_payment_created_wall");
+  else if (createsPayoff) meta.milestones.push("lp_payment_created_payoff");
   if (card.name === FORTRESS_AEGIS_NAME) {
     ensureLuminarchSimMeta(state).milestones.push("fortress_revive");
   }
@@ -1401,11 +1025,12 @@ export function applyLuminarchSimulatedBattleRewards({
   const rewards: string[] = [];
   if (!summary) return rewards;
 
-  finalizeExistingLuminarchLpGains(state, player, summary, rewards);
+
 
   const attacker =
     battlePlan?.attackerCard ||
     (player.field || []).find((card) => card?.name === summary.attackerName);
+  finalizeExistingLuminarchLpGains(state, player, summary, rewards, attacker || null);
   const attackerSurvived = !!attacker && (player.field || []).includes(attacker);
   const destroyedOpponentMonsters = (summary.destroyedCards || []).filter(
     (entry) => entry?.owner === "opponent" && entry?.cardKind === "monster",
@@ -1457,6 +1082,7 @@ export function applyLuminarchSimulatedBattleRewards({
         "Luminarch Aurora Seraph",
         summary,
         rewards,
+        attacker,
       );
       if (gained > 0) rewards.push("Aurora Seraph gained LP");
     }
@@ -1472,6 +1098,7 @@ export function applyLuminarchSimulatedBattleRewards({
       CELESTIAL_MARSHAL_NAME,
       summary,
       rewards,
+      destroyedOwnMonsters.find(entry => entry.name === CELESTIAL_MARSHAL_NAME)?.card || null,
     );
     if (gained > 0) {
       recordLuminarchBattleEvent(state, {
@@ -1730,11 +1357,14 @@ export function simulateLuminarchMainPhaseAction(
   const preparedAction = prepareLuminarchAction(action);
   // Preserve the legacy planner no-op for `simulatedBattle` without making it
   // part of the generic dispatcher's public executable union.
-  return applyGenericSimulatedMainPhaseAction(
+  const simulationOptions = planningOptions || buildLuminarchSimulationOptions(state, preparedAction, options);
+  applyGenericSimulatedMainPhaseAction(
     state,
     preparedAction as AIAction,
-    planningOptions || buildLuminarchSimulationOptions(state, preparedAction, options),
+    simulationOptions,
   );
+  simulationOptions.finalizeLpPayments();
+  return state;
 }
 
 export function buildLuminarchSimulationOptions(
@@ -1743,20 +1373,37 @@ export function buildLuminarchSimulationOptions(
   options: LuminarchSimulationOptions = {},
 ) {
   const preparedAction = prepareLuminarchAction(action);
+  const pendingPayments: LuminarchPaymentReceipt[] = [];
+  const finalizeLpPayments = (card?: SimulatedCardState, effect?: EffectDefinition) => {
+    for (let index = 0; index < pendingPayments.length;) {
+      const receipt = pendingPayments[index]!;
+      if (card && (receipt.sourceCard !== card || receipt.effect !== effect)) { index++; continue; }
+      pendingPayments.splice(index, 1);
+      observeLuminarchLpPayment(receipt);
+    }
+  };
   return {
+      finalizeLpPayments,
       archetype: "Luminarch",
       preferDefense: true,
       selfId: "bot",
       guardLabel: "LuminarchStrategy.simulateMainPhaseAction",
       ...options,
-      onAfterSummon: handleLuminarchAfterSummon,
+      enableSimulatedEvents: true,
       onAfterSpecialSummon: handleLuminarchAfterSpecialSummon,
-      onLpGain: ({ state: gainState, player }: Parameters<NonNullable<import("../common/simulatedActions/shared.js").SimulatedActionOptions["onLpGain"]>>[0]) => {
-        applySunforgedLpGainEvent(gainState, player);
+      onLpPayment: (fact: LuminarchPaymentFact) => {
+        if (fact.sourceCard && fact.player === fact.state.bot) {
+          const payment = recordLuminarchLpPayment(fact.state, { cardName: fact.sourceCard.name || "",
+            cost: fact.amount, beforeLp: fact.before, afterLp: fact.after });
+          pendingPayments.push({ ...fact, fieldBefore: new Set(fact.player.field), payment });
+        }
+        options.onLpPayment?.(fact);
       },
-      onEffectActivated: handleLuminarchEffectActivated,
+      onEffectActivated: (payload: Parameters<typeof handleLuminarchEffectActivated>[0]) => {
+        handleLuminarchEffectActivated(payload);
+      },
+      onSimulatedResolutionComplete: () => { finalizeLpPayments(); },
       onFusionSummon: handleLuminarchFusionSummon,
-      onMonsterEffect: handleLuminarchMonsterEffect,
       getFieldEffectTargetPreference: getLuminarchFieldEffectTargetPreference,
       chooseSpecialSummonPosition: (
         card: SimulatedCardState,
@@ -1772,7 +1419,6 @@ export function buildLuminarchSimulationOptions(
         }),
       actionOverrides: {
         ...(options.actionOverrides || {}),
-        handIgnition: handleLuminarchHandIgnitionOverride,
         special_summon_sanctum_protector: handleSanctumProtectorShortcut,
       },
     };
@@ -1783,7 +1429,9 @@ export function simulateLuminarchSpellEffect(
   card: SimulatedCardState,
   options: LuminarchSimulationOptions = {},
 ): void {
-  return simulateGenericSpellEffect(state, card, buildLuminarchSimulationOptions(state, null, options));
+  const simulationOptions = buildLuminarchSimulationOptions(state, null, options);
+  simulateGenericSpellEffect(state, card, simulationOptions);
+  simulationOptions.finalizeLpPayments();
 }
 
 type LuminarchBattleReadCard = Pick<import("../../contracts/aiState.js").SimulatedCardShape,"name"|"archetype"|"archetypes"|"cardKind"|"atk"|"def"|"level"|"position"|"isFacedown"|"tempAtkBoost"|"tempDefBoost"|"equipAtkBonus"|"equipDefBonus"|"piercing"|"piercingDamageMultiplier"|"piercingGrantedByEffect"|"effectsNegated"|"mustBeAttacked"|"instanceId">;

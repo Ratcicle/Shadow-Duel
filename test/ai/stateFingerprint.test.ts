@@ -1,3 +1,4 @@
+import { createMaterialDuelStats } from "../../src/core/game/summon/materialStats.js";
 import { registerModeledPassiveContribution, getModeledPassiveContributions, pruneModeledPassiveContributions } from "../../src/core/effects/passives/passiveBuffs.js";
 import { createPlanningCopy } from "../../src/core/ai/common/planningCopy.js";
 import assert from "node:assert/strict";
@@ -33,7 +34,7 @@ function fixture(): AiStateShape {
     }
   }
   required(opponent.fieldSpell).instanceId = 111;
-  return { bot, player: opponent, phase: "main1", turn: "bot", turnCounter: 3, _isPerspectiveState: true };
+  return { bot, player: opponent, phase: "main1", turn: "bot", turnCounter: 3, _isPerspectiveState: true, materialDuelStats: createMaterialDuelStats() };
 }
 
 const changes: Array<[string, (state: AiStateShape, host: SimulatedCardState) => void]> = [
@@ -62,7 +63,7 @@ const changes: Array<[string, (state: AiStateShape, host: SimulatedCardState) =>
   ["simulated OPT", s => { s._simOncePerTurn = { bot: new Map([["effect", 1]]) }; }],
   ["Arcanist OPT", s => { s._simArcanistOptUsed = new Set(["effect"]); }],
   ["passive OPT", s => { s._simPassiveOncePerTurn = new Map([["effect", 1]]); }],
-  ["Dragon usage", s => { s._dragonSimOnce = { bot: { effect: true } }; }],
+  ["resolved material activation count", s => { s.materialDuelStats = createMaterialDuelStats(); s.materialDuelStats.bot.effectActivationsByMaterialId.set(42, 1); }],
   ["usage snapshot", s => { s.usedThisTurn = new Map([["effect", 3]]); }],
   ["effect negation", (_, c) => { c.effectsNegated = true; }],
   ["external piercing", (_, c) => { c.piercingGrantedByEffect = true; }],
@@ -85,7 +86,7 @@ const changes: Array<[string, (state: AiStateShape, host: SimulatedCardState) =>
   ["winner", s => { Object.assign(s, { winner: "player" }); }],
   ["blueprint", (_, c) => { c.state = { blueprintStorage: { storedBlueprints: [{ blueprintId: "stored", shortRulesText: "Draw", effectSnapshot: { id: "stored-effect", timing: "ignition", activationZones: ["field"], actions: [{ type: "draw", amount: 1 }] }, _simStoredByGrimoire: true }] } }; }],
   ["Luminarch resource", s => { s._simLuminarch = { pureKnightDiscountAvailable: true }; }],
-  ["Burning West resource", s => { s._simBurningWest = { wantedRewardUsed: true }; }],
+  ["distinct material activation IDs", s => { s.materialDuelStats = createMaterialDuelStats(); s.materialDuelStats.bot.activatedEffectIdsByMaterialId.set(42, new Set(["effect"])); }],
 ];
 
 for (const [name, change] of changes) {
@@ -305,4 +306,32 @@ test("opaque card projections cannot carry hidden passive proof", () => {
   const visible = createPlanningCopy(true);
   visible.registerCardProjection(host, { dynamicBuffs: { hidden: { value: 200 } } });
   assert.deepEqual(getModeledPassiveContributions(visible.cloneCardForSim(host)), [["hidden", "field_archetype_aura_buff"]]);
+});
+
+// Removed mirrors are deliberately injected through the runtime boundary, not AI contracts.
+test("obsolete ledgers do not split otherwise identical planning states", () => {
+  const state = fixture(), before = fingerprint(state);
+  for (const key of ["_simGrandLibraryBattleRewardUsed", "_simBurningWest", "_dragonSimOnce", "_simMaterialEffectActivationsByMaterialId"]) {
+    Reflect.set(state, key, { legacy: true });
+    Reflect.set(state.bot, key, { legacy: true });
+  }
+  assert.equal(fingerprint(state), before);
+});
+
+test("canonical activation count and distinct IDs remain separate mutable fingerprint inputs", () => {
+  const state = fixture();
+  state.materialDuelStats = createMaterialDuelStats();
+  const history = state.materialDuelStats.bot;
+  history.effectActivationsByMaterialId.set(42, 1);
+  history.activatedEffectIdsByMaterialId.set(42, new Set(["first"]));
+  const first = fingerprint(state);
+  assert.equal(fingerprint(structuredClone(state)), first);
+  history.effectActivationsByMaterialId.set(42, 2);
+  const repeated = fingerprint(state);
+  assert.notEqual(repeated, first);
+  required(history.activatedEffectIdsByMaterialId.get(42)).add("second");
+  assert.notEqual(fingerprint(state), repeated);
+  const copy = structuredClone(state);
+  required(copy.materialDuelStats).bot.activatedEffectIdsByMaterialId.set(42, new Set(["second", "first"]));
+  assert.equal(fingerprint(copy), fingerprint(state));
 });

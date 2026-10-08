@@ -21,7 +21,7 @@ export const PLANNING_PLAYER_FIELDS = [
   "specialSummonRestrictions", "effectActivationRestrictions",
   "forbidDirectAttacksThisTurn", "oncePerTurnUsageByName", "usedEffects",
   "directAttacksDeclaredThisTurn",
-  "_simMaterialEffectActivationsByMaterialId", "oncePerDuelUsageByName",
+  "oncePerDuelUsageByName",
   "lpGainMultiplier", "lpGainedThisTurn", "damageReceivedThisTurn",
 ] as const satisfies readonly (keyof SimulatedPlayerState | keyof GamePlayer)[];
 
@@ -34,18 +34,17 @@ export const PLANNING_PLAYER_FIELDS = [
 export const PLANNING_STATE_FIELDS = [
   "turn", "phase", "turnCounter", "_isPerspectiveState", "gameOver", "winner",
   "cardActivationHistory",
-  "usedThisTurn", "_simOncePerTurn", "_dragonSimOnce", "_simOptUsed",
+  "usedThisTurn", "_simOncePerTurn", "_simOptUsed",
   "_simOncePerTurnTurn",
   "_simArcanistOptUsed", "_simPassiveOncePerTurn", "_simReplacementEffects",
   "_simTemporaryControlCounter", "_simFieldPresenceSeq", "_simEventDepth",
   "_simGeneratedInstanceCounter", "_simRequiresReplan", "_simUnknownDrawCount",
   "pendingSynchroMaterialFollowups", "delayedActions",
-  "_simPlanningBattleDone", "_simGrandLibraryBattleRewardUsed",
+  "_simPlanningBattleDone",
   "_simArcanistApprenticeSearchUsed", "_simArcanistSpellActivations",
-  "_simBurningWest", "_simMaterialEffectActivationsByMaterialId",
   "materialDuelStats",
-  "_simVoidBeastSearchUsed", "_simVoidHollowRecruitUsed",
   "temporaryEventEffects", "temporaryControlEffects", "temporaryBattlePairEffects",
+  "damageCalculationTempBuffs", "endOfDamageStepTempBuffs",
 ] as const satisfies readonly (keyof AiStateShape | keyof GameRuntimeState)[];
 
 export const PLANNING_CARD_LINKS = [
@@ -57,7 +56,7 @@ export const PLANNING_CARD_LINKS = [
 export const PLANNING_CARD_FIELDS = [
   "id", "duelCardId", "instanceId", "_instanceId", "uid", "uuid", "simInstanceId",
   "_simUnknownDraw", "_simUnknownCard",
-  "name", "cardKind", "originalCardKind", "treatedAsCardKinds", "subtype",
+  "name", "description", "cardKind", "originalCardKind", "treatedAsCardKinds", "subtype",
   "monsterType", "isTuner", "synchroMaterialRoles", "archetypes", "archetype",
   "baseAtk", "baseDef", "atk", "def", "type", "types", "attribute", "level",
   "baseLevel", "originalLevel", "levelModificationContributions", "position", "fieldSlot", "previousPosition",
@@ -103,12 +102,11 @@ export const PLANNING_CARD_FIELDS = [
   "_simArcanistAzrathHalvedByEquip", "_simArcanistAzrathSpellDebuffAtk",
   "_simArcanistAzrathSpellDebuffDef", "_simArcanistElementalistSpellBuffAtk",
   "_simArcanistLightningAtkBoost", "_simArcanistLightningAttackLock",
-  "_simArcanistLightningPiercing", "_simBloomrotCarrioncapMarkedBattle",
-  "_simBloomrotRotStagBattleBoost", "_simBurningWestSheriffDamageStepBoost",
+  "_simArcanistLightningPiercing", "_simBurningWestSheriffDamageStepBoost",
   "_simCannotAttackByEffect", "_simDarknessValleyBuff", "_simEffectDestructionProtected",
   "_simEffectDestructionProtectedFromOpponent", "_simEffectDestructionProtectedFromSelf",
   "_simElementalistDestroyedOnEquip", "_simMagicSickleBattleBoost",
-  "_simMasterMirrorsShuffleDraw", "_simMasterRevivedOnEquip", "_simProtectedByRaven",
+  "_simMasterMirrorsShuffleDraw", "_simMasterRevivedOnEquip",
   "_simProtection", "_simProtectionEffects", "_simRecoveredOnEquip",
   "_simReplacementProtection", "_simStoredBlueprintSource", "_simStoredByGrimoire",
   "_simBattleDestructionProtected", "_simulatedAegisSpecialDefApplied",

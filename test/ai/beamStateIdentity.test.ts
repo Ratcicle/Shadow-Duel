@@ -1,3 +1,4 @@
+import { createMaterialDuelStats, recordMaterialEffectActivationInStats } from "../../src/core/game/summon/materialStats.js";
 import { placeSimulationCards } from "../helpers/simulation.js";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -167,8 +168,8 @@ test("Beam copies mutable resources through depths without changing original or 
   const input = game();
   input.usedThisTurn = new Map([["effect", 1]]);
   input._simArcanistOptUsed = new Set(["prior"]);
-  input._dragonSimOnce = { bot: { prior: true } };
-  input._simBurningWest = { wantedRewardUsed: false };
+  input.materialDuelStats = createMaterialDuelStats();
+  recordMaterialEffectActivationInStats(input.materialDuelStats, "bot", { id: 42, cardKind: "monster" }, "prior");
   input.bot.oncePerTurnUsageByName = { effect: { turn: 1, count: 1 } };
   input.bot.additionalNormalSummonPermissions = [{ count: 1, filters: { level: 4 } }];
   const host = required(input.bot.field[0]);
@@ -190,8 +191,9 @@ test("Beam copies mutable resources through depths without changing original or 
       const clonedHost = required(state.bot.field[0]);
       assert.equal(state.usedThisTurn?.get("effect"), expected);
       assert.equal(state._simArcanistOptUsed?.has("new"), expected === 2);
-      assert.equal(state._simBurningWest?.wantedRewardUsed, expected === 2);
-      assert.deepEqual(state._dragonSimOnce?.bot, expected === 1 ? { prior: true } : { prior: true, next: true });
+      const history = required(state.materialDuelStats).bot;
+      assert.equal(history.effectActivationsByMaterialId.get(42), expected);
+      assert.deepEqual([...required(history.activatedEffectIdsByMaterialId.get(42))], expected === 1 ? ["prior"] : ["prior", "next"]);
       assert.equal(required(state.bot.additionalNormalSummonPermissions?.[0]).count, expected);
       assert.deepEqual(state.bot.oncePerTurnUsageByName?.effect, { turn: 1, count: expected });
       assert.equal(clonedHost.protectionEffects?.[0]?.expiresOnTurn, expected);
@@ -200,8 +202,7 @@ test("Beam copies mutable resources through depths without changing original or 
       assert.equal(clonedHost.state?.blueprintStorage?.storedBlueprints.length, expected - 1);
       state.usedThisTurn?.set("effect", 2);
       state._simArcanistOptUsed?.add("new");
-      required(state._simBurningWest).wantedRewardUsed = true;
-      Object.assign(required(state._dragonSimOnce?.bot), { next: true });
+      if (expected === 1) recordMaterialEffectActivationInStats(state.materialDuelStats, "bot", { id: 42, cardKind: "monster" }, "next");
       required(state.bot.additionalNormalSummonPermissions?.[0]).count = 2;
       required(state.bot.oncePerTurnUsageByName).effect = { turn: 1, count: 2 };
       required(clonedHost.protectionEffects?.[0]).expiresOnTurn = 2;

@@ -1,5 +1,10 @@
 import type { SimulatedCardState } from "../../contracts/aiState.js";
 import type { LuminarchAnalysis } from "./contracts.js";
+import type { ActionOf } from "../../contracts/actions.js";
+import type { EffectDefinition } from "../../contracts/effects.js";
+import { quoteLpCost, createLpQuoteLedger, consumeLpQuoteReducers } from "../common/simulatedActions/shared.js";
+import type { LpQuoteCard, LpQuotePlayer } from "../common/simulatedActions/shared.js";
+import type { SimulatedUsageState } from "../common/simStateUtils.js";
 import { analyzeResourceEconomy } from "../common/resourceEconomy.js";
 import {
   assessResourceRecovery,
@@ -7,6 +12,73 @@ import {
   scoreResourcePressure,
 } from "../common/resourcePolicy.js";
 import { isLuminarch } from "./knowledge.js";
+
+/** Public board references and OPT data, with no runtime capability access. */
+export function getLuminarchLpQuoteContext(analysis: LuminarchAnalysis = {}) {
+  const owner = analysis.bot || analysis.player || {
+    id: "bot" as const, lp: analysis.lp ?? 0, field: analysis.field || [],
+    spellTrap: analysis.spellTrap || [], fieldSpell: analysis.fieldSpell || null,
+  };
+  const opponent = analysis.opponent || {
+    id: owner.id === "bot" ? "player" as const : "bot" as const,
+    lp: analysis.oppLp ?? analysis.oppLP ?? 0,
+    field: analysis.oppField || [], spellTrap: analysis.oppSpellTrap || [],
+    fieldSpell: analysis.oppFieldSpell || null,
+  };
+  const game = analysis.game;
+  const state = { bot: owner, player: opponent,
+    turnCounter: analysis.currentTurn ?? game?.turnCounter ?? 0,
+    ...(game && "oncePerTurnUsage" in game && game.oncePerTurnUsage ? { oncePerTurnUsage: game.oncePerTurnUsage } : {}),
+    ...(game && "oncePerTurnTurnCounter" in game && game.oncePerTurnTurnCounter !== undefined ? { oncePerTurnTurnCounter: game.oncePerTurnTurnCounter } : {}),
+    ...(game && "_simOncePerTurn" in game && game._simOncePerTurn ? { _simOncePerTurn: game._simOncePerTurn } : {}),
+    ...(game && "_simOncePerTurnTurn" in game && game._simOncePerTurnTurn !== undefined ? { _simOncePerTurnTurn: game._simOncePerTurnTurn } : {}),
+  };
+  return { owner, state };
+}
+
+export function quoteLuminarchLpCost(
+  analysis: LuminarchAnalysis,
+  sourceCard: LpQuoteCard,
+  action: ActionOf<"pay_lp">,
+  ledger?: SimulatedUsageState,
+  remainingLp?: number,
+) {
+  const context = getLuminarchLpQuoteContext(analysis);
+  const owner = remainingLp === undefined ? context.owner : {
+    id: context.owner.id, lp: remainingLp, field: context.owner.field,
+    spellTrap: context.owner.spellTrap, fieldSpell: context.owner.fieldSpell,
+    ...("oncePerTurnUsageByName" in context.owner && context.owner.oncePerTurnUsageByName ? { oncePerTurnUsageByName: context.owner.oncePerTurnUsageByName } : {}),
+  };
+  return quoteLpCost<LpQuoteCard, LpQuotePlayer>({ action, sourceCard, owner,
+    state: { ...context.state, bot: owner }, ...(ledger ? { ledger } : {}) });
+}
+
+/** Ordered explicit LP payments used by the current tactical effect forecasts. */
+export function getLuminarchEffectLpPayments(effect: EffectDefinition): ActionOf<"pay_lp">[] {
+  return [...(effect.activationCosts || []), ...(effect.actions || [])].filter(action => action.type === "pay_lp");
+}
+
+/** Advance only a caller-owned hypothetical ledger, never the duel's budget. */
+export function forecastLuminarchEffectLpCost(
+  analysis: LuminarchAnalysis,
+  sourceCard: LpQuoteCard,
+  effect: EffectDefinition,
+  ledger = createLpQuoteLedger(getLuminarchLpQuoteContext(analysis).state),
+  remainingLp = analysis.lp ?? getLuminarchLpQuoteContext(analysis).owner.lp ?? 0,
+) {
+  let baseAmount = 0;
+  let finalAmount = 0;
+  let payable = true;
+  for (const action of getLuminarchEffectLpPayments(effect)) {
+    const quote = quoteLuminarchLpCost(analysis, sourceCard, action, ledger, remainingLp);
+    baseAmount += quote.baseAmount;
+    finalAmount += quote.finalAmount;
+    if (quote.finalAmount > remainingLp) { payable = false; break; }
+    remainingLp -= quote.finalAmount;
+    consumeLpQuoteReducers(ledger, quote);
+  }
+  return { baseAmount, finalAmount, remainingLp, payable };
+}
 
 const LUMINARCH = {
   aegisbearer: "Luminarch Aegisbearer",

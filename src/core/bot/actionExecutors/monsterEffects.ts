@@ -1,3 +1,4 @@
+import { resolvePlanningSourceIndex } from "../../ai/common/actionIdentity.js";
 import type { BotRuntimePort, BotGamePort } from "../../contracts/bot.js";
 import type {
   AIActionOf,
@@ -12,14 +13,14 @@ export async function executeMonsterEffectAction(
   game: BotGamePort,
   action: AIActionOf<"monsterEffect">,
 ): Promise<boolean> {
-  const fieldIndex = Number.isInteger(action.fieldIndex)
+  const fieldIndex = resolvePlanningSourceIndex(bot.field, action, bot.id, "field", action.card) ?? (Number.isInteger(action.fieldIndex)
     ? action.fieldIndex
     : bot.field.findIndex(
         (c) =>
           c &&
           (c.id === action.cardId ||
             (!action.cardId && c.name === action.cardName)),
-      );
+      ));
   const card = bot.field?.[fieldIndex!];
   if (!card || card.cardKind !== "monster" || card.isFacedown) {
     console.log(
@@ -97,14 +98,14 @@ export async function executeGraveyardMonsterEffectAction(
   game: BotGamePort,
   action: AIActionOf<"graveyardMonsterEffect">,
 ): Promise<boolean> {
-  const graveyardIndex = Number.isInteger(action.graveyardIndex)
+  const graveyardIndex = resolvePlanningSourceIndex(bot.graveyard, action, bot.id, "graveyard", action.card) ?? (Number.isInteger(action.graveyardIndex)
     ? action.graveyardIndex
     : bot.graveyard.findIndex(
         (c) =>
           c &&
           (c.id === action.cardId ||
             (!action.cardId && c.name === action.cardName)),
-      );
+      ));
   const card = bot.graveyard?.[graveyardIndex!];
   if (!card || card.cardKind !== "monster") {
     console.log(

@@ -11,6 +11,7 @@ import {
   LUMINARCH_PACKAGE_STATUS,
 } from "./knowledge.js";
 import { getTotalAttackThreat } from "../common/cardStats.js";
+import { forecastLuminarchEffectLpCost } from "./resourceEconomy.js";
 import {
   createAvailableCombo,
   createZoneIndex,
@@ -767,7 +768,15 @@ export function canAttemptLethal(analysis: LuminarchAnalysis = {}) {
   );
   if (state.oppMonsters.length === 0 && totalAtk >= state.oppLp) return true;
 
-  const canPayForBuff = state.lp >= 1000;
+  const buffSources = [
+    ...state.hand.filter(card => card.name === NAMES.holyAscension || card.name === NAMES.magicSickle),
+    ...(state.hasCitadelActive && state.fieldSpell ? [state.fieldSpell] : []),
+  ];
+  const canPayForBuff = buffSources.some(source => {
+    const timing = source === state.fieldSpell ? "on_field_activate" : "on_play";
+    const effect = source.effects?.find(entry => entry.timing === timing);
+    return !!effect && forecastLuminarchEffectLpCost(analysis, source, effect).payable;
+  });
   const hasBuff =
     hasName(state.hand, NAMES.holyAscension) ||
     state.hasCitadelActive ||

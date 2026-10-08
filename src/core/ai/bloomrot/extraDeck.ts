@@ -1,3 +1,4 @@
+import { getEffectiveAtk as effectiveAtk, getEffectiveDef as effectiveDef } from "../common/cardStats.js";
 import type { BloomrotCard, BloomrotPlayer, BloomrotAnalysis } from "./analysis.js";
 import type { AIAction, AIActivationContext, AIStrategyBotPort } from "../../contracts/ai.js";
 import type { buildBloomrotActivationContext } from "./priorities.js";
@@ -46,18 +47,6 @@ function asArray<Value>(value: readonly Value[] | null | undefined): Value[] {
 
 function isFaceup(card: BloomrotCard | null | undefined) {
   return card && card.isFacedown !== true;
-}
-
-function effectiveAtk(card: BloomrotCard | null | undefined) {
-  return (
-    Number(card?.atk || 0)
-  );
-}
-
-function effectiveDef(card: BloomrotCard | null | undefined) {
-  return (
-    Number(card?.def || 0)
-  );
 }
 
 function monsterThreat(card: BloomrotCard | null | undefined) {

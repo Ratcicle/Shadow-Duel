@@ -1,3 +1,4 @@
+import { BW, hasPeacemakerAttachment } from "./knowledge.js";
 import type { AIState } from "../../contracts/ai.js";
 import type { BurningWestActivationContext, BurningWestActivationOptions } from "./contracts.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
@@ -44,24 +45,7 @@ type DefenseResponse<Candidate extends Option> = Evaluation & { option: Candidat
 type ActionContext = NonNullable<BurningWestActivationContext["actionContext"]>;
 type BuilderInput = { option?: Option; analysis?: Analysis; context?: Context; evaluation?: Evaluation; buildActivationContext?(card: Card | undefined, analysis: Analysis, options: Omit<BurningWestActivationOptions, "effect"> & { effect?: EffectDefinition | ChainEffect | undefined; reason?: string | undefined }): BurningWestActivationContext };
 type ReplacementInput = { game?: Game | null; player?: Player | null; sourceCard?: Card | null; effect?: EffectDefinition; replacementEffect?: unknown; targetCard?: Card | null; cause?: unknown; fromZone?: string; context?: Context; kind?: string; analysis?: Analysis };
-const BW = Object.freeze({
-  AMBUSH: "Ambush in Crash Town",
-  LAW: "Law in the Burning West",
-  QUICK_DRAW: "Quick Draw in the Burning West",
-  CRASH_TOWN: "Crash Town, the Burning City",
-  PREACHER: "Preacher of the Burning West",
-  PEACEMAKER: "Burning Peacemaker",
-  WANTED: "Wanted in the Burning West",
-  REWARD: "Burning Reward",
-  DEAD_EYE: "Deadeye of the Burning West",
-  GUNSLINGER: "Gunslinger of the Burning West",
-  BUTCHER: "Butcher of the Burning West",
-  SHERIFF: "Sheriff of the Burning West",
-  UNDERTAKER: "Undertaker of the Burning West",
-  SPECIALIST: "Specialist of the Burning West",
-  EXECUTIONER: "Executioner of the Burning West",
-  FUNERAL: "Funeral at Sunset"
-});
+
 
 const BURNING_WEST_DEFENSE_NAMES = new Set<string>([BW.AMBUSH, BW.LAW, BW.QUICK_DRAW]);
 
@@ -331,10 +315,8 @@ function hasCardNamed(cards: Cards, name: string) {
 }
 
 function hasPeacemakerEquipped(card: Card | null | undefined) {
-  return compactCards(card?.equippedCards).some((equipped) => getCardName(equipped) === BW.PEACEMAKER)
-    || compactCards(card?.equips).some((equipped) => getCardName(equipped) === BW.PEACEMAKER)
-    || compactCards(card?.equipCards).some((equipped) => getCardName(equipped) === BW.PEACEMAKER)
-    || compactCards(card?.attachedCards).some((equipped) => getCardName(equipped) === BW.PEACEMAKER)
+  return hasPeacemakerAttachment([...compactCards(card?.equippedCards), ...compactCards(card?.equips),
+    ...compactCards(card?.equipCards), ...compactCards(card?.attachedCards)], [], () => false, getCardName)
     || Boolean((card?.statuses as { burningPeacemaker?: unknown } | undefined)?.burningPeacemaker || card?.flags?.burningPeacemaker);
 }
 
@@ -375,7 +357,7 @@ function scoreProtectedCard(card: Card | null | undefined, analysis: Analysis = 
   if (name === BW.REWARD) score += analysis?.battleRewardLive ? 25 : 18;
   if (name === BW.QUICK_DRAW) score += 17;
   if (name === BW.AMBUSH) score += 16;
-  if (name === BW.DEAD_EYE) score += 16;
+  if (name === BW.DEADEYE) score += 16;
   if (name === BW.FUNERAL) score += 12;
   if (name === BW.CRASH_TOWN) score += 10;
 

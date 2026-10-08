@@ -81,9 +81,9 @@ test("presence immunity survives planning clones and contributes to fingerprints
   assert.deepEqual(projected.statuses.faceupStatuses, { unaffectedByOpponentCardEffects: { previous: null, current: true } });
 });
 
-test("shared simulation continues to reject unmodeled fusion-immunity actions explicitly", () => {
+test("shared simulation rejects fusion immunity without its required contextual recipient", () => {
   const state = simulationState();
   const action: ActionOf<"grant_void_fusion_immunity"> = { type: "grant_void_fusion_immunity", archetype: "Void" };
-  applySimulatedActions({ state, actions: [action] });
-  assert.deepEqual(state._simUnsupportedActions, ["grant_void_fusion_immunity"]);
+  assert.equal(applySimulatedActions({ state, actions: [action] }), false);
+  assert.deepEqual(state._simUnsupportedActions ?? [], []);
 });

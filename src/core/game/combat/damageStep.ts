@@ -555,8 +555,32 @@ export function retireDamageStepBuffsForCard(
 ): void {
   for (const buffs of [game.damageCalculationTempBuffs, game.endOfDamageStepTempBuffs]) {
     if (!Array.isArray(buffs)) continue;
-    for (let index = buffs.length - 1; index >= 0; index -= 1) {
-      if (buffs[index]?.card === card) buffs.splice(index, 1);
+    retireTrackedDamageStepBuffsForCard(buffs, card);
+  }
+}
+
+export function retireTrackedDamageStepBuffsForCard(buffs: Array<{ card?: object | null }>, card: object): void {
+  for (let index = buffs.length - 1; index >= 0; index -= 1) {
+    if (buffs[index]?.card === card) buffs.splice(index, 1);
+  }
+}
+
+/** Expiry receipts cannot consume a later modifier after their delta was removed. */
+export function consumeTrackedDamageStepBuffs<Card extends object>(
+  groups: readonly (Array<{ card?: Card | null; atk?: number; def?: number }> | undefined)[],
+  card: Card,
+  stat: "atk" | "def",
+  amount: number,
+  sameCard: (left: Card | null | undefined, right: Card) => boolean = (left, right) => left === right,
+): void {
+  let remaining = amount;
+  for (const buffs of groups) {
+    for (const buff of buffs || []) {
+      if (!sameCard(buff.card, card) || remaining <= 0) continue;
+      const tracked = Math.max(0, Number(buff[stat] || 0));
+      const consumed = Math.min(tracked, remaining);
+      buff[stat] = Number(buff[stat] || 0) - consumed;
+      remaining -= consumed;
     }
   }
 }
@@ -566,6 +590,15 @@ function removeTrackedBuffs(
   key: "damageCalculationTempBuffs" | "endOfDamageStepTempBuffs",
 ): void {
   const buffs = Array.isArray(game[key]) ? game[key] : [];
+  removeTrackedDamageStepBuffs(buffs);
+}
+
+/** Shared removal of the actual, clamped stat deltas registered for a Damage Step. */
+export function removeTrackedDamageStepBuffs(
+  buffs: Array<{ card?: { atk?: number | undefined; def?: number | undefined;
+    tempAtkBoost?: number | undefined; tempDefBoost?: number | undefined } | null;
+    atk?: number; def?: number }>,
+): void {
   for (const buff of buffs.splice(0)) {
     const card = buff?.card;
     if (!card) continue;

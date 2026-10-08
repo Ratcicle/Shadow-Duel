@@ -395,7 +395,13 @@ for (const id of [251, 255]) for (const actor of ["bot", "player"] as const) {
         activationContext: { decisions: { selections: { estrelas_convergentes_discard: [required(required(cost).instanceId)] } } } });
     }
     if (id === 255) assert.equal(state.player.lp, 7200);
-    else { assert.ok(state.bot.hand.includes(recruit)); assert.equal(recruit.level, 1); assert.ok(state.bot.graveyard.includes(secondDiscard)); }
+    else {
+      assert.ok(state.bot.hand.includes(recruit));
+      // Runtime resolves discard child triggers after the parent: first recovery
+      // enters at Level 4, then the second Stars reduces that recovered card to 2.
+      assert.equal(recruit.level, 2);
+      assert.ok(state.bot.graveyard.includes(secondDiscard));
+    }
     assert.ok(state._simOncePerTurn);
     assert.equal(state._simUnsupportedActions, undefined);
   });

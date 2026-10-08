@@ -1,3 +1,11 @@
+import { bindPlanningActionPresence } from "./actionIdentity.js";
+import { getCounterValue } from "./counters.js";
+import { matchesTargetFilters } from "./targetSelection.js";
+import {
+  canUseAsAscensionMaterial, checkAscensionRequirements, getMaterialFieldAgeTurnCounter,
+  type AscensionReadCard, type AscensionReadPlayer, type AscensionReadHost,
+} from "../../game/summon/ascension.js";
+import { createMaterialDuelStats } from "../../game/summon/materialStats.js";
 import type {
   AscensionAIAction,
   AIStrategyBotPort,
@@ -15,6 +23,47 @@ type AscensionPlanningPlayer = SimulatedPlayerState | AIStrategyBotPort;
 interface AscensionCheckResult {
   ok: boolean;
   reason?: string;
+}
+
+/** Adapt snapshot reads to the runtime query without attaching methods or
+ * consuming counters on the snapshot. Every query card has one physical view. */
+export function checkSimulatedAscension(
+  state: Pick<AiStateShape, "turnCounter" | "materialDuelStats" | "bot" | "player">,
+  material: SimulatedCardState,
+  ascensionCard: SimulatedCardState,
+): AscensionCheckResult {
+  const views = new Map<SimulatedCardState, AscensionReadCard>();
+  const originals = new Map<AscensionReadCard, SimulatedCardState>();
+  const viewCard = (card: SimulatedCardState): AscensionReadCard => {
+    const previous = views.get(card);
+    if (previous) return previous;
+    const view = { ...card, getCounter: (type: string) => getCounterValue(card, type) };
+    views.set(card, view); originals.set(view, card);
+    return view;
+  };
+  const viewPlayer = (player: SimulatedPlayerState): AscensionReadPlayer => ({
+    id: player.id, lp: player.lp,
+    hand: player.hand.map(viewCard), field: player.field.map(viewCard),
+    deck: player.deck.map(viewCard), graveyard: player.graveyard.map(viewCard),
+    spellTrap: player.spellTrap.map(viewCard), extraDeck: player.extraDeck.map(viewCard),
+    banished: player.banished.map(viewCard), fieldSpell: player.fieldSpell ? viewCard(player.fieldSpell) : null,
+  });
+  const player = viewPlayer(state.bot), opponent = viewPlayer(state.player);
+  const query: AscensionReadHost = {
+    turnCounter: state.turnCounter || 0,
+    materialDuelStats: state.materialDuelStats || createMaterialDuelStats(),
+    effectEngine: { cardMatchesFilters: (card, filters) => matchesTargetFilters(originals.get(card), {
+      ...filters, currentTurn: state.turnCounter || 0,
+    }) },
+    getOpponent: owner => owner === player ? opponent : player,
+    getMaterialFieldAgeTurnCounter: card => getMaterialFieldAgeTurnCounter.call(query, card),
+    devLog() {},
+  };
+  const materialView = viewCard(material);
+  const materialCheck = canUseAsAscensionMaterial.call(query, player, materialView);
+  return materialCheck.ok
+    ? checkAscensionRequirements.call(query, player, viewCard(ascensionCard), materialView)
+    : materialCheck;
 }
 
 interface AscensionPlanningGame {
@@ -183,7 +232,7 @@ export function getGenericAscensionActions(
         material,
         ascensionContext,
       );
-      const action: PlannedAscensionAction = {
+      const action: PlannedAscensionAction = bindPlanningActionPresence({
         type: "ascension",
         materialIndex,
         ascensionCard,
@@ -191,7 +240,7 @@ export function getGenericAscensionActions(
         position,
         priority,
         extraDeck: true,
-      };
+      }, ascensionCard, bot!.id, "extraDeck", isSimulatedState ? undefined : game, [{ card: material, zone: "field" }]);
 
       const decorated =
         policy.decorateAction?.(action, ascensionCard, material, ascensionContext) ||

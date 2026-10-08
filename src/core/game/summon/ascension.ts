@@ -28,6 +28,7 @@ import type { CardFilter } from "../../contracts/effects.js";
 import type { DecisionBrokerPort } from "../../contracts/decisions.js";
 import type {
   MaterialDuelStats,
+  MaterialStatsForPlayer,
   MaybePromise,
   MoveCardOptions,
   MoveCardResult,
@@ -47,6 +48,43 @@ import type {
   SelectionSessionInput,
 } from "../../contracts/selection.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
+
+/** Read-only query boundary shared by runtime and isolated planning snapshots. */
+export interface AscensionReadCard {
+  readonly id?: GameCard["id"] | undefined;
+  readonly name?: string | null | undefined;
+  readonly cardKind?: GameCard["cardKind"] | null | undefined;
+  readonly ascension?: AscensionDefinition | null | undefined;
+  readonly archetype?: string | null | undefined;
+  readonly archetypes?: readonly string[] | undefined;
+  readonly type?: string | null | undefined;
+  readonly attribute?: GameCard["attribute"] | undefined;
+  readonly level?: number | undefined;
+  readonly isFacedown?: boolean | undefined;
+  readonly revealedTurn?: number | null | undefined;
+  readonly summonedTurn?: number | null | undefined;
+  getCounter?(counterType: string): number;
+}
+export interface AscensionReadPlayer {
+  readonly id: string;
+  readonly lp?: number | undefined;
+  readonly hand: readonly AscensionReadCard[];
+  readonly field: readonly AscensionReadCard[];
+  readonly deck: readonly AscensionReadCard[];
+  readonly graveyard: readonly AscensionReadCard[];
+  readonly spellTrap: readonly AscensionReadCard[];
+  readonly extraDeck: readonly AscensionReadCard[];
+  readonly banished: readonly AscensionReadCard[];
+  readonly fieldSpell: AscensionReadCard | null;
+}
+export interface AscensionReadHost {
+  readonly turnCounter: number;
+  readonly materialDuelStats: Readonly<Partial<Record<string, MaterialStatsForPlayer>>>;
+  readonly effectEngine: { cardMatchesFilters?(card: AscensionReadCard, filters: CardFilter): boolean };
+  getOpponent?(player: AscensionReadPlayer): AscensionReadPlayer | null;
+  getMaterialFieldAgeTurnCounter(card: AscensionReadCard): number;
+  devLog(code: string, detail?: unknown): void;
+}
 
 type RuntimeAscensionDefinition = AscensionDefinition & {
   readonly material?: CardFilter;
@@ -146,7 +184,7 @@ interface AscensionHost {
 }
 
 function runtimeAscensionDefinition(
-  card: GameCard | null | undefined,
+  card: AscensionReadCard | null | undefined,
 ): RuntimeAscensionDefinition | null {
   return card?.ascension
     ? (card.ascension as AscensionDefinition & RuntimeAscensionDefinition)
@@ -171,8 +209,8 @@ function setAscensionMaterials(
  * @returns {number} The turn counter when card became face-up on field
  */
 export function getMaterialFieldAgeTurnCounter(
-  this: AscensionHost,
-  card: GameCard | null | undefined,
+  this: Pick<AscensionReadHost, "turnCounter">,
+  card: AscensionReadCard | null | undefined,
 ) {
   if (!card) return this.turnCounter;
 
@@ -198,16 +236,16 @@ export function getMaterialFieldAgeTurnCounter(
   return Math.max(...values);
 }
 
-function getCardArchetypes(card: GameCard | null | undefined): string[] {
+function getCardArchetypes(card: AscensionReadCard | null | undefined): readonly string[] {
   if (!card) return [];
   if (Array.isArray(card.archetypes)) return card.archetypes;
   return card.archetype ? [card.archetype] : [];
 }
 
 function matchesAscensionMaterialFilters(
-  materialCard: GameCard | null | undefined,
+  materialCard: AscensionReadCard | null | undefined,
   filters: CardFilter = {},
-  engine: AscensionEffectEnginePort | null = null,
+  engine: AscensionReadHost["effectEngine"] | null = null,
 ) {
   if (!materialCard || !filters || typeof filters !== "object") return false;
 
@@ -256,9 +294,9 @@ function matchesAscensionMaterialFilters(
 }
 
 export function ascensionMaterialMatches(
-  ascensionCard: GameCard | null | undefined,
-  materialCard: GameCard | null | undefined,
-  engine: AscensionEffectEnginePort | null = null,
+  ascensionCard: AscensionReadCard | null | undefined,
+  materialCard: AscensionReadCard | null | undefined,
+  engine: AscensionReadHost["effectEngine"] | null = null,
 ) {
   const asc = runtimeAscensionDefinition(ascensionCard);
   if (!asc || !materialCard) return false;
@@ -277,7 +315,7 @@ export function ascensionMaterialMatches(
 
 function getRequirementMaterialId(
   asc: AscensionDefinition,
-  materialCard: GameCard | null,
+  materialCard: AscensionReadCard | null,
 ) {
   if (materialCard && typeof materialCard.id === "number")
     return materialCard.id;
@@ -316,9 +354,9 @@ function captureAscensionMaterialMetadata(
 }
 
 function getAscensionZoneCards(
-  player: GamePlayer,
+  player: AscensionReadPlayer,
   zone: CanonicalZone,
-): GameCard[] {
+): readonly AscensionReadCard[] {
   if (zone === "fieldSpell") {
     return player.fieldSpell ? [player.fieldSpell] : [];
   }
@@ -341,13 +379,13 @@ function getAscensionZoneCards(
   zone satisfies never;
 }
 
-function isGamePlayer(value: GamePlayer | null): value is GamePlayer {
+function isGamePlayer(value: AscensionReadPlayer | null): value is AscensionReadPlayer {
   return value !== null;
 }
 
 function countAscensionFieldCounters(
-  game: AscensionHost,
-  player: GamePlayer,
+  game: AscensionReadHost,
+  player: AscensionReadPlayer,
   req: Partial<AscensionRequirement> = {},
 ) {
   const counterType = req.counterType || "default";
@@ -439,10 +477,10 @@ export function getAscensionCandidatesForMaterial(
  * @returns {{ ok: boolean, reason?: string }}
  */
 export function checkAscensionRequirements(
-  this: AscensionHost,
-  player: GamePlayer | null | undefined,
-  ascensionCard: GameCard | null | undefined,
-  materialCard: GameCard | null = null,
+  this: AscensionReadHost,
+  player: AscensionReadPlayer | null | undefined,
+  ascensionCard: AscensionReadCard | null | undefined,
+  materialCard: AscensionReadCard | null = null,
 ): AscensionCheckResult {
   const asc = runtimeAscensionDefinition(ascensionCard);
   if (!player || !ascensionCard || !asc) {
@@ -617,9 +655,9 @@ export function checkAscensionRequirements(
  * @returns {{ ok: boolean, reason?: string }}
  */
 export function canUseAsAscensionMaterial(
-  this: AscensionHost,
-  player: GamePlayer | null | undefined,
-  materialCard: GameCard | null | undefined,
+  this: Pick<AscensionReadHost, "turnCounter" | "getMaterialFieldAgeTurnCounter">,
+  player: AscensionReadPlayer | null | undefined,
+  materialCard: AscensionReadCard | null | undefined,
 ): AscensionCheckResult {
   if (!player || !materialCard) {
     return { ok: false, reason: "Missing material." };

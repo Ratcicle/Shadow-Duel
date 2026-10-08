@@ -9,7 +9,7 @@ import type {
 } from "./contracts.js";
 
 import {
-  CARD_KNOWLEDGE,
+  getDragonStrategicCardValue,
   isExtremeDragon,
 } from "./knowledge.js";
 import { analyzeDragonState } from "./stateAnalysis.js";
@@ -59,13 +59,7 @@ function getCardInstanceId(card: DragonCard) {
 }
 
 function cardStrategicValue(card: DragonCard) {
-  const knowledge = CARD_KNOWLEDGE[card?.name!] || {};
-  return (
-    (knowledge.value || knowledge.priority || 0) +
-    (card?.level || 0) * 0.25 +
-    Math.max(card?.atk || 0, card?.def || 0) / 1000 +
-    (isExtremeDragon(card) ? 4 : 0)
-  );
+  return getDragonStrategicCardValue(card, 0);
 }
 
 function getOpponent(context: DragonPolicyContext = {}, player: DragonPlayer | null = null) {

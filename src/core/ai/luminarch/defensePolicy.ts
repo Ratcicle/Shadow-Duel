@@ -11,6 +11,9 @@ import { estimateCardValue } from "../StrategyUtils.js";
 import { evaluateCardExpendability } from "./cardValue.js";
 import { evaluateLuminarchDefensePlan } from "./defensePlanning.js";
 import { isLuminarch } from "./knowledge.js";
+import { cardDatabaseByName } from "../../../data/cards.js";
+import { quoteLuminarchLpCost } from "./resourceEconomy.js";
+import type { LpQuoteCard } from "../common/simulatedActions/shared.js";
 import {
   getBattleReadyLuminarchAttackers,
   getBestTemporaryCombatDebuffTarget,
@@ -279,10 +282,11 @@ function hasRadiantWaveAccess(analysis: LuminarchAnalysis = {}) {
 }
 
 function getRadiantWaveLpCost(analysis: LuminarchAnalysis = {}) {
-  const hasPureKnight = getFaceupLuminarchMonsters(analysis).some(
-    (card) => card?.name === "Luminarch Pure Knight",
-  );
-  return hasPureKnight ? 1000 : 2000;
+  const source: LpQuoteCard | undefined = cardsIn(analysis, "hand").find(card => card.name === RADIANT_WAVE)
+    || cardDatabaseByName.get(RADIANT_WAVE);
+  const payment = source?.effects?.flatMap(effect => [...(effect.activationCosts || []), ...(effect.actions || [])])
+    .find(action => action.type === "pay_lp");
+  return source && payment ? quoteLuminarchLpCost(analysis, source, payment).finalAmount : 2000;
 }
 
 function getRadiantWaveTargets(analysis: LuminarchAnalysis = {}) {
@@ -297,6 +301,8 @@ export function evaluateLuminarchRadiantWavePolicy(analysis: LuminarchAnalysis =
   const targets = getRadiantWaveTargets(analysis);
   const lpCost = getRadiantWaveLpCost(analysis);
   const lp = analysis.lp || 8000;
+  if (lp < lpCost) return { yes: false, priority: 0, lpCost, bestTarget: null,
+    reason: `LP insuficiente (custo ${lpCost} LP)` };
   if (!hasRadiantWaveAccess(analysis) || targets.length === 0) {
     return {
       yes: false,

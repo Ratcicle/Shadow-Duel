@@ -1,12 +1,15 @@
 import { addEffectNegation, clearEffectNegation, expireEffectNegation, normalizeNegationDuration as normalizeNegateEffectsDuration } from "../../../effects/negation.js";
+import { removeTrackedDamageStepBuffs, consumeTrackedDamageStepBuffs } from "../../../game/combat/damageStep.js";
 import { isSupportedSimulatedDestructionReplacement } from "./destruction.js";
+import { applyMove } from "./movement.js";
 import { expireFaceupDeclaredValues, restoreFaceupStatuses, trackFaceupStatus } from "../../../Card.js";
 import { applyLevelModification, expireLevelModifications, applyNamedStatChange } from "../../../effects/actions/stats.js";
 import { getCardEffectImmunity, isNonTargetingEffectReference } from "../../../effects/targeting/filters.js";
 import { getEffectiveAtk } from "../cardStats.js";
-import { expireFaceupStatBuffs } from "../../../effects/actions/stats.js";
+import { expireFaceupStatBuffs, removeTrackedStatChange } from "../../../effects/actions/stats.js";
 import { hasUnmodeledTemporaryPassiveSuppression, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, suppressTemporaryDynamicStatIncreasesForDebuff } from "../../../effects/passives/passiveBuffs.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
+import { applyGrantVoidFusionImmunity as grantFusionImmunity } from "../../../effects/actions/immunity.js";
 import { estimateMonsterValue, hasArchetype } from "../cardValue.js";
 import {
   evaluateSimulatedConditions,
@@ -47,6 +50,7 @@ import {
 } from "./shared.js";
 import type { ActionTargetScope, ContextNumberSource } from "../../../contracts/actions.js";
 import type {
+  AiStateShape,
   SimulatedCardState,
   SimulatedReplacementEffect,
   SimulatedPlayerState,
@@ -387,6 +391,74 @@ export function applyPermanentBuffNamed(
   if (!fieldWideAura && !recipients.some(card => card.cardKind === "monster")) return STOP_SIMULATION;
 }
 
+export function applyRemovePermanentBuffNamed(
+  ctx: SimulatedActionHandlerContext<"remove_permanent_buff_named">,
+): void {
+  const { action, targets, options, self, opponent } = ctx;
+  const source = options.sourceCard;
+  if (!source) return;
+  const fieldWide = (action.targetRef || "self") === "self" && action.removeFromAllField;
+  const recipients = fieldWide ? self.field.filter(card => card.cardKind === "monster" &&
+    (!action.archetype || hasArchetype(card, action.archetype)))
+    : action.targetRef ? targets : resolveTargetsForAction({ targetRef: "self" }, ctx.selections, options, opponent);
+  const name = action.sourceName || source.name || "";
+  for (const card of recipients) {
+    const buff = card.permanentBuffsBySource?.[name];
+    if (!buff) continue;
+    if (buff.atk) removeTrackedStatChange(card, "atk", buff.atk);
+    if (buff.def) removeTrackedStatChange(card, "def", buff.def);
+    delete card.permanentBuffsBySource?.[name];
+  }
+}
+
+/** Capture values before sequential departures, then grant the declared reward. */
+export function applyBanishAndBuff(
+  ctx: SimulatedActionHandlerContext<"banish_and_buff">,
+): boolean {
+  const { action, targets, state, options, selections, opponent } = ctx;
+  if (!targets.length || targets.some(card => !findCardOwner(state, card))) return false;
+  const property = action.buffSource || "atk";
+  const entries = targets.map(card => ({ card, value: Math.floor(
+    (typeof property === "number" ? property : property === "level"
+      ? (card.level || 0) * 100 : Number(Reflect.get(card, property) || 0)) * (action.buffMultiplier ?? 1),
+  ) }));
+  let amount = 0;
+  for (const entry of entries) {
+    const result = applyMove({ ...ctx, targets: [entry.card], action: {
+      type: "move", targetRef: action.targetRef, to: "banished",
+      contextLabel: "banish_and_buff", requireAll: true,
+    } });
+    if (result === STOP_SIMULATION) return false;
+    amount += entry.value;
+  }
+  if (amount === 0) return true;
+  const recipients = resolveTargetsForAction({ targetRef: action.buffTarget || "self" }, selections, options, opponent);
+  const duration = action.duration || "while_faceup";
+  const type = action.buffType || "atk";
+  const atk = type === "atk" || type === "both" ? amount : 0;
+  const def = type === "def" || type === "both" ? amount : 0;
+  for (const card of recipients) {
+    if (card.cardKind !== "monster") continue;
+    if (duration === "end_of_turn") {
+      if (type === "atk" || type === "both") {
+        card.atk = (card.atk || 0) + amount;
+        card.tempAtkBoost = (card.tempAtkBoost || 0) + amount;
+      }
+      if (type === "def" || type === "both") {
+        card.def = (card.def || 0) + amount;
+        card.tempDefBoost = (card.tempDefBoost || 0) + amount;
+      }
+    } else {
+      const source = options.sourceCard;
+      const key = `${action.type}_${source?.instanceId ?? source?.id ?? source?.name ?? "source"}${duration === "while_faceup" ? ":while_faceup" : ""}`;
+      applyNamedStatChange(card, key, atk, def);
+      const buff = card.permanentBuffsBySource?.[key];
+      if (duration === "while_faceup" && buff) buff.duration = "while_faceup";
+    }
+  }
+  return true;
+}
+
 export function applyBuffStatsTemp(
   ctx: SimulatedActionHandlerContext<"buff_stats_temp" | "buff_stats_temp_with_second_attack">,
 ): void {
@@ -394,11 +466,7 @@ export function applyBuffStatsTemp(
   const action: SimulatedActionHandlerContext<"buff_stats_temp">["action"] = { ...ctx.action, type: "buff_stats_temp" };
   const duration = action.duration ||
     (ctx.action.type === "buff_stats_temp_with_second_attack" ? "end_of_turn" : "while_faceup");
-  if (duration === "damage_calculation" || duration === "end_of_damage_step") {
-    state._simUnsupportedActions ??= [];
-    state._simUnsupportedActions.push(action.type);
-    return;
-  }
+  const isDamageStepBuff = duration === "damage_calculation" || duration === "end_of_damage_step";
   let atkBoost = (Number.isFinite(action.atkBoost) ? action.atkBoost! : 0) +
     resolveStatBoostFromContext(action.atkBoostFromContext, options, ctx);
   if (action.atkBoostFromTarget) {
@@ -422,7 +490,7 @@ export function applyBuffStatsTemp(
   const defBoost = (Number.isFinite(action.defBoost) ? action.defBoost! : 0) +
     resolveStatBoostFromContext(action.defBoostFromContext, options, ctx);
   let expiresOnTurn: number | null = null;
-  if (!action.permanent) {
+  if (!action.permanent && !isDamageStepBuff) {
     if (duration === "end_of_next_turn") expiresOnTurn = state.turnCounter + 1;
     else if (Number.isFinite(action.durationTurns) && action.durationTurns! > 0) {
       expiresOnTurn = state.turnCounter + action.durationTurns!;
@@ -443,8 +511,9 @@ export function applyBuffStatsTemp(
       turnCounter: state.turnCounter,
     } }, card, self, { sourceCard: options.sourceCard || null, effectType }).immune) return;
     let changed = false;
+    const appliedStats = { atk: 0, def: 0 };
     for (const [stat, boost] of [["atk", atkBoost], ["def", defBoost]] as const) {
-      if (boost < 0 && !action.permanent && !isFaceupBuff && expiresOnTurn === null) {
+      if (boost < 0 && !action.permanent && !isFaceupBuff && expiresOnTurn === null && !isDamageStepBuff) {
         const suppressed = suppressTemporaryDynamicStatIncreasesForDebuff(card, stat, boost);
         if (suppressed > 0 && hasUnmodeledTemporaryPassiveSuppression(card)) {
           (state._simUnsupportedActions ??= []).push("buff_stats_temp:passive_recalculation");
@@ -455,6 +524,7 @@ export function applyBuffStatsTemp(
       const applied = next - current;
       if (!applied) continue;
       changed = true;
+      appliedStats[stat] = applied;
       if (expiresOnTurn !== null) {
         card.turnBasedBuffs ??= [];
         const id = [action.sourceName || options.sourceCard?.name || action.type,
@@ -473,6 +543,10 @@ export function applyBuffStatsTemp(
       card[stat] = next;
     }
     if (changed) changedCards.push(card);
+    if (changed && (duration === "damage_calculation" || duration === "end_of_damage_step")) {
+      const key = duration === "damage_calculation" ? "damageCalculationTempBuffs" : "endOfDamageStepTempBuffs";
+      (state[key] ??= []).push({ card, ...appliedStats });
+    }
     if (
       ctx.action.type === "buff_stats_temp_with_second_attack" ||
       (action as LegacyBuffStatsAction).grantSecondAttack === true ||
@@ -489,6 +563,15 @@ export function applyBuffStatsTemp(
   });
   if (action.storeAs && selections) selections[action.storeAs] = changedCards;
   return;
+}
+
+/** The caller preserves calculated battle numbers before retiring these deltas. */
+export function clearSimulatedDamageCalculationBuffs(state: Pick<AiStateShape, "damageCalculationTempBuffs">): void {
+  removeTrackedDamageStepBuffs(state.damageCalculationTempBuffs || []);
+}
+
+export function clearSimulatedEndOfDamageStepBuffs(state: Pick<AiStateShape, "endOfDamageStepTempBuffs">): void {
+  removeTrackedDamageStepBuffs(state.endOfDamageStepTempBuffs || []);
 }
 
 /** Match the runtime hand-level action and its existing end-turn cleanup. */
@@ -596,7 +679,7 @@ export function applySetAttackLimitFromZoneCount(
 export function applyRemoveStatIncreases(
   ctx: SimulatedActionHandlerContext<"remove_stat_increases">,
 ): void {
-  const { action, targets } = ctx;
+  const { action, targets, state } = ctx;
   const stats = Array.isArray(action.stats) && action.stats.length > 0
     ? action.stats
     : ["atk", "def"];
@@ -612,6 +695,8 @@ export function applyRemoveStatIncreases(
         const reduction = currentAtk - baseAtk;
         card.atk = baseAtk;
         if (Number(card.tempAtkBoost || 0) > 0) {
+          const consumed = Math.min(Number(card.tempAtkBoost || 0), reduction);
+          consumeTrackedDamageStepBuffs([state.damageCalculationTempBuffs, state.endOfDamageStepTempBuffs], card, "atk", consumed);
           card.tempAtkBoost = Math.max(
             0,
             Number(card.tempAtkBoost || 0) - reduction,
@@ -628,6 +713,8 @@ export function applyRemoveStatIncreases(
         const reduction = currentDef - baseDef;
         card.def = baseDef;
         if (Number(card.tempDefBoost || 0) > 0) {
+          const consumed = Math.min(Number(card.tempDefBoost || 0), reduction);
+          consumeTrackedDamageStepBuffs([state.damageCalculationTempBuffs, state.endOfDamageStepTempBuffs], card, "def", consumed);
           card.tempDefBoost = Math.max(
             0,
             Number(card.tempDefBoost || 0) - reduction,
@@ -712,6 +799,15 @@ export function applyForbidAttackThisTurn(
     card.cannotAttackThisTurn = true;
     card._simCannotAttackByEffect = true;
   }
+}
+
+export function applyGrantVoidFusionImmunity(
+  ctx: SimulatedActionHandlerContext<"grant_void_fusion_immunity">,
+): boolean {
+  return grantFusionImmunity.call({ game: ctx.state, ui: null }, ctx.action, {
+    player: ctx.self,
+    summonedCard: ctx.options.actionContext?.summonedCard ?? null,
+  });
 }
 
 export function applyGrantProtection(
@@ -975,7 +1071,8 @@ export function applyAddStatus(
           const passiveType = "passive" in effect ? effect.passive?.type : undefined;
           // These stat families are reconciled by their declared producers.
           if (passiveType === "field_presence_type_summon_count_buff" || passiveType === "activated_card_count_buff" ||
-              passiveType === "equipped_field_counter_buff" || passiveType === "field_counter_stat_aura") return;
+              passiveType === "archetype_count_buff" || passiveType === "graveyard_card_count_buff" || passiveType === "graveyard_archetype_count_buff" || passiveType === "graveyard_type_count_buff" ||
+              passiveType === "equipped_field_counter_buff" || passiveType === "equipped_counter_buff" || passiveType === "field_counter_stat_aura") return;
           // These rules read negation directly at attack/movement time.
           if (passiveType === "restrict_opponent_summon_turn_attack" || passiveType === "counter_attack_lock" || passiveType === "send_to_grave_replacement" ||
               passiveType === "conditional_protection" || passiveType === "field_archetype_aura_buff" || passiveType === "event_actions") return;

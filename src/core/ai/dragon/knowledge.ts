@@ -708,11 +708,23 @@ export function countSafeBanishTargets(graveyard: DragonCard[]) {
   return graveyard.filter((c) => c && c.cardKind === "monster" && !isExtremeDragon(c)).length;
 }
 
-/**
- * Returns knowledge for a card by name.
- * @param {string} name
- * @returns {CardKnowledge|null}
- */
+/** Shared policy value; board evaluation and material premiums remain separate. */
+export function getDragonBaseCardValue(card: DragonCard | null | undefined): number {
+  if (!card) return 0;
+  const knowledge = CARD_KNOWLEDGE[card.name!] || {};
+  return (knowledge.value || knowledge.priority || 0)
+    + (card.level || 0) * 0.25
+    + Math.max(card.atk || 0, card.def || 0) / 1000;
+}
+
+export function getDragonStrategicCardValue(card: DragonCard | null | undefined, extraDeckBonus: 0 | 5 = 5): number {
+  if (!card) return 0;
+  return getDragonBaseCardValue(card)
+    + (isExtremeDragon(card) ? 4 : 0)
+    + (card.monsterType === "fusion" || card.monsterType === "ascension" ? extraDeckBonus : 0);
+}
+
+/** Returns knowledge for a card by name. */
 export function getCardKnowledge(name: string) {
   return CARD_KNOWLEDGE[name] || null;
 }

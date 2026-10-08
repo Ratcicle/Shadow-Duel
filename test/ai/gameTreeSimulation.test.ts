@@ -1,3 +1,4 @@
+import { createMaterialDuelStats, recordMaterialEffectActivationInStats } from "../../src/core/game/summon/materialStats.js";
 import { placeSimulationCards } from "../helpers/simulation.js";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -122,23 +123,31 @@ test("GameTree preserves named OPT for its physical owner across four plies", ()
 });
 
 test("GameTree restores actor-local sets, flags and physical-id ledgers without sibling aliases", () => {
-  const input = simulationState({ _dragonSimOnce: { bot: { prior: true } }, _simMaterialEffectActivationsByMaterialId: { bot: { 42: 1 } } });
+  const input = simulationState({ materialDuelStats: createMaterialDuelStats() });
+  for (const seat of ["bot", "player"] as const) recordMaterialEffectActivationInStats(input.materialDuelStats, seat, { id: 42, cardKind: "monster" }, "prior");
+  const before = structuredClone(input);
   const availability: Array<[string, boolean]> = [];
   const result = gameTreeSearch(input, {
     generateMainPhaseActions(state: SimulationGameState): AIAction[] {
       availability.push([state.bot.id, !state._simArcanistApprenticeSearchUsed]);
-      assert.deepEqual(state._dragonSimOnce, { bot: { prior: true } });
-      assert.deepEqual(state._simMaterialEffectActivationsByMaterialId, { bot: { 42: 1 } });
+      assert.ok(state.bot.id === "bot" || state.bot.id === "player");
+      const history = required(state.materialDuelStats)[state.bot.id];
+      assert.equal(history.effectActivationsByMaterialId.get(42), state._simArcanistApprenticeSearchUsed ? 2 : 1);
+      assert.deepEqual([...required(history.activatedEffectIdsByMaterialId.get(42))], state._simArcanistApprenticeSearchUsed ? ["prior", "shared"] : ["prior"]);
       return [idle];
     },
     simulateMainPhaseAction(state: SimulationGameState) {
-      if (useSimOpt(state, "shared", "_simArcanistOptUsed")) state.bot.lp += 100;
+      if (useSimOpt(state, "shared", "_simArcanistOptUsed")) {
+        state.bot.lp += 100;
+        recordMaterialEffectActivationInStats(state.materialDuelStats, state.bot.id, { id: 42, cardKind: "monster" }, "shared");
+      }
       state._simArcanistApprenticeSearchUsed = true;
     },
   }, input.bot, 4);
   assert.deepEqual(availability, [["bot", true], ["player", true], ["bot", false], ["player", false]]);
   assert.equal(result.score, 0);
   assert.equal(input._simArcanistApprenticeSearchUsed, undefined);
+  assert.deepEqual(input, before);
 });
 
 test("GameTree equipment removal updates only its cloned host and keeps sibling links intact", () => {
@@ -215,10 +224,10 @@ test("GameTree keeps restrictions and additional Normal Summon permission for a 
 test("GameTree preserves unsupported diagnostics and rejects the dependent branch", () => {
   const input = simulationState({ bot: { field: [simulationCard({
     name: "Unsupported", cardKind: "monster", atk: 0,
-    effects: [{ id: "unsupported", timing: "ignition", activationZones: ["field"], actions: [{ type: "heal_from_destroyed_atk", fraction: 0.5 }] }],
+    effects: [{ id: "unsupported", timing: "ignition", activationZones: ["field"], actions: [{ type: "damage_from_destroyed_atk", fraction: 0.5 }] }],
   })] } });
   const { after, result, simulations } = observeAction(input, monsterEffect);
-  assert.deepEqual(Reflect.get(after, "_simUnsupportedActions"), ["heal_from_destroyed_atk"]);
+  assert.deepEqual(Reflect.get(after, "_simUnsupportedActions"), ["damage_from_destroyed_atk"]);
   assert.equal(result.score, 0);
   assert.equal(result.action, null);
   assert.equal(simulations, 1);
@@ -325,4 +334,25 @@ test("GameTree equipment graph copies only planning data, even on linked cards o
   }, input.bot, 1);
   assert.equal(result.error, undefined);
   assert.equal(calls, 1);
+});
+
+test("GameTree canonical material Maps and nested ID Sets do not alias sibling branches", () => {
+  const input = simulationState({ materialDuelStats: createMaterialDuelStats() });
+  recordMaterialEffectActivationInStats(input.materialDuelStats, "bot", { id: 42, cardKind: "monster" }, "prior");
+  const observed: Array<[number, string[]]> = [];
+  const result = gameTreeSearch(input, {
+    generateMainPhaseActions(state: SimulationGameState): AIAction[] {
+      if (state.bot.id === "bot") return [monsterEffect, idle];
+      const history = required(state.materialDuelStats).bot;
+      observed.push([required(history.effectActivationsByMaterialId.get(42)), [...required(history.activatedEffectIdsByMaterialId.get(42))]]);
+      return [idle];
+    },
+    simulateMainPhaseAction(state: SimulationGameState, action: AIAction) {
+      if (action.type === "monsterEffect") recordMaterialEffectActivationInStats(state.materialDuelStats, state.bot.id, { id: 42, cardKind: "monster" }, "branch");
+    },
+  }, input.bot, 2);
+  assert.equal(result.error, undefined);
+  assert.deepEqual(observed, [[2, ["prior", "branch"]], [1, ["prior"]]]);
+  assert.equal(required(input.materialDuelStats).bot.effectActivationsByMaterialId.get(42), 1);
+  assert.deepEqual([...required(required(input.materialDuelStats).bot.activatedEffectIdsByMaterialId.get(42))], ["prior"]);
 });

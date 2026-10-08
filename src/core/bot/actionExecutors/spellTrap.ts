@@ -1,3 +1,4 @@
+import { resolvePlanningSourceIndex } from "../../ai/common/actionIdentity.js";
 import type { BotRuntimePort, BotGamePort } from "../../contracts/bot.js";
 import type {
   AIActionOf,
@@ -114,9 +115,7 @@ export async function executeSpellTrapEffectAction(
   game: BotGamePort,
   action: AIActionOf<"spellTrapEffect">,
 ): Promise<boolean> {
-  const zoneIndex = Number.isInteger(action.zoneIndex)
-    ? action.zoneIndex
-    : action.index;
+  const zoneIndex = resolvePlanningSourceIndex(bot.spellTrap, action, bot.id, "spellTrap", action.card) ?? (Number.isInteger(action.zoneIndex) ? action.zoneIndex : action.index);
   const card = bot.spellTrap?.[zoneIndex!];
   if (!card || (card.cardKind !== "spell" && card.cardKind !== "trap")) {
     console.log(
@@ -199,14 +198,14 @@ export async function executeGraveyardSpellEffectAction(
   game: BotGamePort,
   action: AIActionOf<"graveyardSpellEffect">,
 ): Promise<boolean> {
-  const graveyardIndex = Number.isInteger(action.graveyardIndex)
+  const graveyardIndex = resolvePlanningSourceIndex(bot.graveyard, action, bot.id, "graveyard", action.card) ?? (Number.isInteger(action.graveyardIndex)
     ? action.graveyardIndex
     : bot.graveyard.findIndex(
         (c) =>
           c &&
           (c.id === action.cardId ||
             (!action.cardId && c.name === action.cardName)),
-      );
+      ));
   const card = bot.graveyard?.[graveyardIndex!];
   if (!card || (card.cardKind !== "spell" && card.cardKind !== "trap")) {
     console.log(

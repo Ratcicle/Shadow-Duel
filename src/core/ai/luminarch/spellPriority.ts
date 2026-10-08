@@ -15,6 +15,7 @@ import { evaluateKnightsConvocationPlan } from "./defensePlanning.js";
 import {
   assessLuminarchResourceRecovery,
   getLuminarchResourcePressure,
+  forecastLuminarchEffectLpCost,
 } from "./resourceEconomy.js";
 import {
   evaluateLuminarchProtectionSpell,
@@ -160,7 +161,10 @@ export function shouldPlaySpell(card: SimulatedCardState, analysis: LuminarchAna
       }
 
       const lpForHolyAscension = analysis.lp || 8000;
-      const finalLpAfterHolyAscension = lpForHolyAscension - 1000;
+      const holyEffect = card.effects?.find(effect => effect.timing === "on_play");
+      if (!holyEffect) return { yes: false, reason: "Efeito de buff indisponível" };
+      const holyCost = forecastLuminarchEffectLpCost(analysis, card, holyEffect).finalAmount;
+      const finalLpAfterHolyAscension = lpForHolyAscension - holyCost;
       if (finalLpAfterHolyAscension <= 0) {
         return { yes: false, reason: "LP insuficiente (custo 1000 LP)" };
       }
@@ -256,7 +260,9 @@ export function shouldPlaySpell(card: SimulatedCardState, analysis: LuminarchAna
         // Calcular power swing potencial
         const potentialSummons = Math.min(gyLuminarch.length, oppField, openMonsterZones, 5);
         const lpGain = potentialSummons * 500; // heal de volta
-        const netLpCost = 2000 - lpGain; // custo real após heal
+        const judgmentEffect = card.effects?.find(effect => effect.timing === "on_play");
+        if (!judgmentEffect) return { yes: false, reason: "Efeito de recuperação indisponível" };
+        const netLpCost = forecastLuminarchEffectLpCost(analysis, card, judgmentEffect).finalAmount - lpGain;
         const finalLp = lp - netLpCost;
 
         // Avaliar se é worth it

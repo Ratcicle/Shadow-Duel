@@ -69,7 +69,7 @@ export function processSimulatedDelayedActions(
       recordCompletedSimulatedSummon(state, { card, player: owner, method });
       options.emitSimulatedEvent?.("after_summon", { card, player: owner, method, fromZone,
         summonProcedure: summon.summonProcedure, sourceCard: card });
-      options.emitSimulatedEvent?.("card_moved", { card, player: owner, fromZone, toZone: "field", movedByEffect: true });
+      options.emitSimulatedEvent?.("card_moved", { card, player: owner, fromZone, toZone: "field", movedByEffect: false });
       if (summon.getsBuffIfTargetWasFusionOrAscension && card.cardKind === "monster") {
         card.atk = (card.atk || 0) + 800;
         card.turnBasedBuffs ??= [];

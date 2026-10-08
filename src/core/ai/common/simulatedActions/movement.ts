@@ -95,7 +95,7 @@ export function setSimulatedController(
   card.controller = player.id;
 }
 
-function clearSimulatedTemporaryControl(
+export function clearSimulatedTemporaryControl(
   state: SimulatedRuntimeState,
   card: SimulatedCardState,
 ): void {
@@ -145,7 +145,8 @@ export function emitSimulatedMove(
     fromZone, toZone, movedByEffect, wasFaceupBeforeMove,
     locationVersion: receipt?.destinationPresence.locationVersion ?? card.locationVersion ?? 0,
     ...(receipt?.equipBindingsAtFieldExit.length ? { equipBindingsAtFieldExit: receipt.equipBindingsAtFieldExit } : {}),
-    effectsNegatedAtFieldExit, contextLabel,
+    effectsNegatedAtFieldExit,
+    contextLabel: contextLabel || (card.isToken === true && fromZone === "field" && toZone === "removed" ? "token_removed" : null),
     sourceCard: options.sourceCard || null,
     effectId: options.effect?.id || null,
     actionContext: options.actionContext,

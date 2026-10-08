@@ -68,12 +68,38 @@ export function incrementMaterialStat(
   materialCardId: number,
   delta = 1,
 ) {
-  const store = this.materialDuelStats?.[playerId]?.[mapName];
-  if (!store || !(store instanceof Map) || !Number.isFinite(materialCardId)) {
-    return;
-  }
-  const next = (store.get(materialCardId) || 0) + delta;
-  store.set(materialCardId, next);
+  incrementMaterialStatInStats(this.materialDuelStats, playerId, mapName, materialCardId, delta);
+}
+
+/** Shared mutation over the canonical ledger; callers own the surrounding events. */
+export function incrementMaterialStatInStats(
+  stats: MaterialDuelStats | undefined,
+  playerId: PlayerId,
+  mapName: MaterialStatMapName,
+  materialCardId: number,
+  delta = 1,
+): void {
+  const store = stats?.[playerId]?.[mapName];
+  if (!store || !(store instanceof Map) || !Number.isFinite(materialCardId)) return;
+  store.set(materialCardId, (store.get(materialCardId) || 0) + delta);
+}
+
+/** A successfully resolved monster effect records both count and distinct ID. */
+export function recordMaterialEffectActivationInStats(
+  stats: MaterialDuelStats | undefined,
+  playerId: string,
+  sourceCard: {
+    readonly id?: GameCard["id"] | null | undefined;
+    readonly cardKind?: GameCard["cardKind"] | null | undefined;
+  } | null | undefined,
+  effectId: string | null | undefined,
+  increment?: (playerId: PlayerId, materialCardId: number) => void,
+): void {
+  if (playerId !== "player" && playerId !== "bot") return;
+  if (!sourceCard || sourceCard.cardKind !== "monster" || typeof sourceCard.id !== "number") return;
+  recordMaterialEffectIdentity(stats, playerId, sourceCard, effectId);
+  if (increment) increment(playerId, sourceCard.id);
+  else incrementMaterialStatInStats(stats, playerId, "effectActivationsByMaterialId", sourceCard.id);
 }
 
 export function recordMaterialEffectActivation(
@@ -86,13 +112,8 @@ export function recordMaterialEffectActivation(
   if (playerId !== "player" && playerId !== "bot") return;
   if (!sourceCard || sourceCard.cardKind !== "monster") return;
   if (typeof sourceCard.id !== "number") return;
-  recordMaterialEffectIdentity(this.materialDuelStats, playerId, sourceCard, meta.effectId);
-  this.incrementMaterialStat(
-    playerId,
-    "effectActivationsByMaterialId",
-    sourceCard.id,
-    1,
-  );
+  recordMaterialEffectActivationInStats(this.materialDuelStats, playerId, sourceCard, meta.effectId,
+    (ownerId, materialId) => this.incrementMaterialStat(ownerId, "effectActivationsByMaterialId", materialId, 1));
   this.devLog("MATERIAL_EFFECT_ACTIVATION", {
     summary: `${playerId}:${sourceCard.name} (${sourceCard.id})`,
     player: playerId,

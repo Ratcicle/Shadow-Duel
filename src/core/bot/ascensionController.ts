@@ -1,3 +1,4 @@
+import { bindPlanningActionPresence } from "../ai/common/actionIdentity.js";
 import type {
   BotRuntimePort,
   BotGamePort,
@@ -93,10 +94,10 @@ export function selectAutomaticAscensionAction(
         game,
       );
 
-    const action: AutomaticAscensionAction = {
+    const action: AutomaticAscensionAction = bindPlanningActionPresence({
       type: "ascension", materialIndex: bot.field.indexOf(selected.material),
       ascensionCard: selected.ascensionCard, position,
-    };
+    }, selected.ascensionCard, bot.id, "extraDeck", game, [{ card: selected.material, zone: "field" }]);
     if (allowed(action)) return action;
     const index = choices.findIndex(choice => choice.material === selected.material &&
       choice.ascensionCard === selected.ascensionCard);

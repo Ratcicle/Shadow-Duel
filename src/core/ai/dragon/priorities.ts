@@ -22,6 +22,7 @@ import {
 } from "./knowledge.js";
 import {
   fieldHasTributeValue,
+  getNormalTributeRequirement,
   getTributeValueTotal,
   selectTributeIndicesByValue,
 } from "../../game/summon/tributeValue.js";
@@ -694,57 +695,7 @@ export function shouldSummonMonster(card: DragonCard, analysis: DragonAnalysis, 
  * @returns {{ tributesNeeded: number, usingAlt: boolean, alt: Object|null }}
  */
 export function getTributeRequirementFor(card: DragonCard, playerState: DragonPlayer) {
-  let tributesNeeded = 0;
-  const level = card.level || 0;
-
-  if (level >= 5 && level <= 6) tributesNeeded = 1;
-  else if (level >= 7) tributesNeeded = 2;
-
-  if (
-    typeof card.requiredTributes === "number" &&
-    card.requiredTributes >= 0
-  ) {
-    tributesNeeded = card.requiredTributes;
-  }
-
-  const alt = card.altTribute as DragonCard["altTribute"] & { type?: string; requiresType?: string; requiresName?: string; tributes?: number };
-
-  // Standard alt: no tribute if empty field
-  if (alt?.type === "no_tribute_if_empty_field" && (playerState.field?.length || 0) === 0) {
-    return { tributesNeeded: 0, usingAlt: true, alt };
-  }
-
-  // Dragon-style alt: { requiresType: "Dragon", tributes: N }
-  // Majestic Silver Dragon: can use 1 Dragon tribute instead of 2 normal
-  if (alt?.requiresType && typeof alt?.tributes === "number") {
-    const field = playerState.field || [];
-    const hasRequiredType = field.some(
-      (c) =>
-        c &&
-        !c.isFacedown &&
-        c.type === alt.requiresType &&
-        c.cardKind === "monster"
-    );
-    if (hasRequiredType && alt.tributes < tributesNeeded) {
-      return { tributesNeeded: alt.tributes, usingAlt: true, alt };
-    }
-  }
-
-  if (alt?.requiresName && typeof alt?.tributes === "number") {
-    const field = playerState.field || [];
-    const hasRequiredName = field.some(
-      (c) =>
-        c &&
-        !c.isFacedown &&
-        c.name === alt.requiresName &&
-        c.cardKind === "monster"
-    );
-    if (hasRequiredName && alt.tributes < tributesNeeded) {
-      return { tributesNeeded: alt.tributes, usingAlt: true, alt };
-    }
-  }
-
-  return { tributesNeeded, usingAlt: false, alt };
+  return getNormalTributeRequirement(card, playerState.field || []);
 }
 
 /**

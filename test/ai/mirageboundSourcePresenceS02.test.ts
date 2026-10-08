@@ -106,7 +106,8 @@ for (const id of [353, 364] as const) for (const seat of seats) for (const swapp
       assert.equal(f.owner.field.includes(f.source), false);
       assert.equal(f.target.position, "defense", "Jackal does not change its target after its summon fails");
       assert.equal(completed, 0); assert.equal(summons, 0);
-      assert.equal(canUseSimulatedEffectUsage(f.state, f.effect, f.source, f.owner.id, true), false);
+      assert.equal(canUseSimulatedEffectUsage(f.state, f.effect, f.source, f.owner.id, true), mutation === "full_field",
+        "capacity rejection precedes publication; failures after selection preserve the committed use");
       assert.deepEqual(f.state._simUnsupportedActions || [], []);
     });
   }

@@ -39,6 +39,8 @@ import type {
   NormalSummonCardView,
   NormalSummonFilter,
   NormalSummonPlayerView,
+  NormalSummonPlayerReadView,
+  NormalSummonGameReadView,
   NormalSummonRecord,
   PlayerDamageOptions,
   PlayerGainLpOptions,
@@ -82,7 +84,7 @@ interface NormalSummonPassiveSource {
   zone: "field" | "spellTrap" | "fieldSpell";
 }
 
-type NormalSummonPlayerInput = GamePlayer | NormalSummonPlayerView;
+type NormalSummonPlayerInput = GamePlayer | NormalSummonPlayerReadView;
 
 type IndexedCardData = CardConstructorData & { id: RawCardDefinitionId };
 
@@ -269,7 +271,7 @@ function passiveAppliesToNormalSummonPlayer(
   passive: NormalSummonPassiveRule,
   sourceOwner: NormalSummonPlayerInput,
   targetPlayer: NormalSummonPlayerInput,
-  game: PlayerGamePort | null,
+  game: NormalSummonGameReadView | null,
 ): boolean {
   const rules = asArray(
     passive.targetPlayer || passive.player || passive.owner || "self",
@@ -280,7 +282,7 @@ function passiveAppliesToNormalSummonPlayer(
     if (rule === "opponent") {
       const opponent =
         game && sourceOwner && typeof game.getOpponent === "function"
-          ? game.getOpponent(sourceOwner as GamePlayer)
+          ? game.getOpponent(sourceOwner)
           : null;
       if (opponent === targetPlayer) return true;
     }
@@ -441,7 +443,7 @@ export function canUseNormalSummonForCard(
 }
 
 export function recordNormalSummonForTurn(
-  player: NormalSummonPlayerInput | null | undefined,
+  player: GamePlayer | NormalSummonPlayerView | null | undefined,
   card: NormalSummonCardView | null | undefined,
 ): void {
   if (!player) return;

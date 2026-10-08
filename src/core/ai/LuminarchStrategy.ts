@@ -37,7 +37,7 @@ import {
 import {
   buildLuminarchActivationContext,
 } from "./luminarch/actionContext.js";
-import { buildLuminarchResourceEconomy } from "./luminarch/resourceEconomy.js";
+import { buildLuminarchResourceEconomy, forecastLuminarchEffectLpCost } from "./luminarch/resourceEconomy.js";
 import { getLuminarchSummonActions } from "./luminarch/summonActions.js";
 import { getLuminarchSpellActions } from "./luminarch/spellActions.js";
 import {
@@ -160,9 +160,9 @@ function evaluateBarbariasStanceDance(card: import("../contracts/aiState.js").Si
   };
 }
 
-function canUseCitadelBuff(bot: SimulatedPlayerState, opponent: SimulatedPlayerState | null | undefined, bestBuffTarget: { monster: SimulatedCardState | null; score: number }) {
+function canUseCitadelBuff(bot: SimulatedPlayerState, opponent: SimulatedPlayerState | null | undefined, bestBuffTarget: { monster: SimulatedCardState | null; score: number }, lpCost = 1000) {
   const lp = bot?.lp || 0;
-  const finalLp = lp - 1000;
+  const finalLp = lp - lpCost;
   if (finalLp <= 0) return false;
   if (!bestBuffTarget?.monster || bestBuffTarget.score <= 0) return false;
 
@@ -564,8 +564,6 @@ export default class LuminarchStrategy extends BaseStrategy {
 
     // Declarar variáveis no escopo da função
     let gameStance = { stance: "balanced", reason: "default" };
-    let turnPlan = { plan: ["Jogar normalmente"] };
-    let fusionOpportunity: LuminarchActionGenerationContext["fusionOpportunity"] = null;
     let strategyAnalysis: LuminarchAnalysis | null = null;
     let luminarchFinisherPlans: LuminarchPlan[] = [];
     let luminarchDefensePlan = { stable: false, readyToCounterattack: false };
@@ -588,55 +586,36 @@ export default class LuminarchStrategy extends BaseStrategy {
         { evaluateBarbariasStanceDance },
       );
       analysis.finisherPlans = luminarchFinisherPlans;
-      turnPlan = planNextTurns(analysis);
-
       if (bot?.debug) {
         console.log(
           `[LuminarchStrategy] 🎯 Stance: ${gameStance.stance.toUpperCase()} - ${
             gameStance.reason
           }`,
         );
-        console.log(`[LuminarchStrategy] 📋 Plano:`, turnPlan.plan[0]);
-      }
+        console.log(`[LuminarchStrategy] 📋 Plano:`, planNextTurns(analysis).plan[0]);
 
-      // === FINISHER/FUSION PRIORITY EVALUATION ===
-      const fusionPlan = luminarchFinisherPlans.find(
-        (plan) =>
-          plan?.kind === "fusion" &&
-          plan.targetName === "Luminarch Megashield Barbarias",
-      );
-      fusionOpportunity = fusionPlan
-        ? {
-            fusionName: fusionPlan.targetName,
-            decision: {
-              reason: fusionPlan.reason,
-              priority:
-                fusionPlan.details?.spellPriority || fusionPlan.actionPriority,
-            },
-            plan: fusionPlan,
-          }
-        : null;
-
-      if (fusionOpportunity && bot?.debug) {
-        console.log(
-          `[LuminarchStrategy] 🔮 Fusão detectada: ${fusionOpportunity.fusionName} - ${fusionOpportunity.decision.reason}`,
+        const fusionPlan = luminarchFinisherPlans.find(
+          (plan) =>
+            plan?.kind === "fusion" &&
+            plan.targetName === "Luminarch Megashield Barbarias",
         );
-      }
+        if (fusionPlan) {
+          console.log(
+            `[LuminarchStrategy] 🔮 Fusão detectada: ${fusionPlan.targetName} - ${fusionPlan.reason}`,
+          );
+        }
 
-      const availableCombos = detectAvailableCombos(analysis);
-      if (availableCombos.length > 0 && bot?.debug) {
-        console.log(
-          `[LuminarchStrategy] 🎯 Combos detectados:`,
-          availableCombos.map((c) => `${c.name} (priority ${c.priority})`),
-        );
-      }
+        const availableCombos = detectAvailableCombos(analysis);
+        if (availableCombos.length > 0) {
+          console.log(
+            `[LuminarchStrategy] 🎯 Combos detectados:`,
+            availableCombos.map((c) => `${c.name} (priority ${c.priority})`),
+          );
+        }
 
-      // Detectar se deve priorizar defesa ou tentar lethal
-      const shouldDefend = shouldPrioritizeDefense(analysis);
-      const canLethal = canAttemptLethal(analysis);
-      const turtleAnalysis = shouldTurtleStrategy(analysis);
-
-      if (bot?.debug) {
+        const shouldDefend = shouldPrioritizeDefense(analysis);
+        const canLethal = canAttemptLethal(analysis);
+        const turtleAnalysis = shouldTurtleStrategy(analysis);
         console.log(
           `[LuminarchStrategy] Situação: ${
             canLethal
@@ -684,7 +663,6 @@ export default class LuminarchStrategy extends BaseStrategy {
       macroStrategy,
       gameStance,
       analysis: strategyAnalysis,
-      fusionOpportunity,
       finisherPlans: luminarchFinisherPlans,
       bestFinisherPlan: luminarchFinisherPlans[0] || null,
       luminarchDefensePlan,
@@ -740,7 +718,8 @@ export default class LuminarchStrategy extends BaseStrategy {
           );
 
           shouldUseFieldEffect =
-            canUseCitadelBuff(bot, opponent, bestBuffTarget);
+            canUseCitadelBuff(bot, opponent, bestBuffTarget,
+              forecastLuminarchEffectLpCost(strategyAnalysis || {}, bot.fieldSpell, effect).finalAmount);
         }
 
         if (preview && preview.ok && shouldUseFieldEffect) {
@@ -1135,7 +1114,6 @@ export default class LuminarchStrategy extends BaseStrategy {
         }),
       placeSpellCard: this.placeSpellCard.bind(this),
       citadelTempBuff: CITADEL_TEMP_BUFF,
-      barbariasStanceDance: BARBARIAS_STANCE_DANCE,
     });
   }
 

@@ -1,4 +1,10 @@
-import { getCounterCount, setCounterValue } from "../common/counters.js";
+import { getCounterCount } from "../common/counters.js";
+import { emitSimulatedAttackDeclaration, emitSimulatedBattleDestroy } from "../common/simulation.js";
+import { matchesTargetFilters } from "../common/targetSelection.js";
+import { checkAscensionRequirements, getMaterialFieldAgeTurnCounter, type AscensionReadHost, type AscensionReadPlayer } from "../../game/summon/ascension.js";
+import type { SimulatedCardState, SimulatedPlayerState } from "../../contracts/aiState.js";
+import type { SimulatedRuntimeState, SimulatedActionOptions } from "../common/simulatedActions/shared.js";
+import type { EffectDefinition } from "../../contracts/effects.js";
 import type {
   DragonCard,
   DragonPlayer,
@@ -40,7 +46,7 @@ export interface DragonPlanningAction {
 }
 
 interface DragonMilestone { label?: string; name?: string; reason?: string; score?: number; detail?: unknown; }
-interface DragonBattleSummary { damage?: number; destroyedCards?: Array<DragonCard & { owner?: string }> }
+interface DragonBattleSummary { damage?: number; destroyedCards?: Array<DragonCard & { owner?: string; card?: DragonCard; destroyedBy?: string }> }
 export interface DragonLineContext extends DragonPolicyContext {
   initialState?: DragonGame | null;
   finalState?: DragonGame | null;
@@ -52,6 +58,9 @@ export interface DragonLineContext extends DragonPolicyContext {
   milestoneScore?: number;
   profile?: Partial<AIPlanningProfile> & { critical?: boolean };
   summary?: DragonBattleSummary;
+  attacker?: DragonCard | null;
+  target?: DragonCard | null;
+  options?: SimulatedActionOptions;
   battlePlan?: { attackerCard?: DragonCard | null; attackerIndex?: number; targetIndex?: number | null };
 }
 // -----------------------------------------------------------------------------
@@ -368,14 +377,19 @@ function hasVolcanicGyRisk({ graveyard, opponent, opponentGraveyard }: { graveya
 }
 
 function hasRainbowRequirement(game: DragonGame, player: DragonPlayer) {
-  const materialId = 29;
-  const playerId = player?.id || "bot";
-  const store =
-    (game?.materialDuelStats as Partial<Record<string, { effectActivationsByMaterialId?: unknown }>> | undefined)?.[playerId]?.effectActivationsByMaterialId ||
-    (game?._simMaterialEffectActivationsByMaterialId as Partial<Record<string, unknown>> | undefined)?.[playerId];
-  if (!store) return false;
-  if (typeof (store as { get?: unknown }).get === "function") return ((store as { get(id: number): number | undefined }).get(materialId) || 0) >= 3;
-  return ((store as Record<number, number>)[materialId] || (store as Record<string, number>)[String(materialId)] || 0) >= 3;
+  const rainbow = player.extraDeck?.find(card => card.name === "Rainbow Cosmic Dragon");
+  if (!rainbow?.ascension) return false;
+  const owner: AscensionReadPlayer = { id: player.id || "bot", lp: player.lp,
+    hand: player.hand || [], field: player.field || [], deck: player.deck || [],
+    graveyard: player.graveyard || [], spellTrap: player.spellTrap || [],
+    extraDeck: player.extraDeck || [], banished: player.banished || [], fieldSpell: player.fieldSpell || null };
+  // This policy forecasts the declared Duel-history requirement, not whether
+  // a prospective material already has a legal field age or position.
+  const query: AscensionReadHost = { turnCounter: game.turnCounter || 0,
+    materialDuelStats: game.materialDuelStats || {},
+    effectEngine: { cardMatchesFilters: (card, filters) => matchesTargetFilters(card as SimulatedCardState, filters) },
+    getMaterialFieldAgeTurnCounter: card => getMaterialFieldAgeTurnCounter.call(query, card), devLog() {} };
+  return checkAscensionRequirements.call(query, owner, rainbow).ok;
 }
 
 function hasPurifiedLine({ hand, field, graveyard, extraDeck, game, player }: { hand: readonly DragonCard[]; field: readonly DragonCard[]; graveyard: readonly DragonCard[]; extraDeck: readonly DragonCard[]; game: DragonGame; player: DragonPlayer }) {
@@ -956,71 +970,93 @@ export function applyDragonRetentionPriorities<Action extends DragonPlanningActi
     .map((entry) => entry.action);
 }
 
-function getDestroyedOpponentMonsters(summary: DragonBattleSummary = {}) {
-  return (summary.destroyedCards || []).filter(
-    (card) => card?.owner === "opponent" && card.cardKind === "monster",
-  );
-}
-
-function addJaggedCounter(fieldSpell: DragonCard | null | undefined) {
-  if (!fieldSpell || fieldSpell.name !== "Jagged Peak of the Dragons") return false;
-  setCounterValue(fieldSpell, "dragon_peak", getCounterCount(fieldSpell, "dragon_peak") + 1);
+function isDragonBattleState(state: DragonGame | undefined): state is DragonGame & SimulatedRuntimeState {
+  if (!state?.bot || !state.player) return false;
+  for (const player of [state.bot, state.player]) {
+    if (!player.id || typeof player.lp !== "number" ||
+      ![player.hand, player.field, player.deck, player.graveyard, player.banished, player.extraDeck, player.spellTrap].every(Array.isArray)) return false;
+  }
   return true;
 }
 
-export function applyDragonSimulatedBattleRewards(context: DragonLineContext = {}) {
-  const state = context.state || {};
-  const bot = context.bot || state.bot || {};
-  const opponent = context.opponent || state.player || {};
+function getDragonBattleState(context: DragonLineContext): SimulatedRuntimeState | null {
+  return isDragonBattleState(context.state) ? context.state : null;
+}
+
+function getDragonBattleAttacker(context: DragonLineContext, bot: SimulatedPlayerState): SimulatedCardState | null {
+  return (context.attacker || context.battlePlan?.attackerCard ||
+    (context.battlePlan?.attackerIndex != null ? bot.field[context.battlePlan.attackerIndex] : null) || null) as SimulatedCardState | null;
+}
+
+function scopedBattleEffects(card: SimulatedCardState | null | undefined, event: "battle_destroy" | "attack_declared"): EffectDefinition[] {
+  return card?.effects?.filter(effect => effect.timing === "on_event" && effect.event === event &&
+    !!effect.actions?.length && effect.actions.every(action => event === "attack_declared"
+      ? action.type === "damage"
+      : action.type === "add_counter" || action.type === "heal_from_destroyed_level" || action.type === "heal_from_destroyed_atk")) || [];
+}
+
+// A declaration is resolved before combat; its factual LP delta enriches the
+// later battle summary without replaying the damage after the source exits.
+const dragonDeclarationDamage = new WeakMap<object, { attacker: SimulatedCardState; target: SimulatedCardState | null; damage: number }>();
+
+export function prepareDragonSimulatedBattle(context: DragonLineContext = {}): string[] {
+  const state = getDragonBattleState(context);
+  if (!state) return [];
+  const attacker = getDragonBattleAttacker(context, state.bot);
+  if (!attacker) return [];
+  const target = (context.target !== undefined ? context.target :
+    context.battlePlan?.targetIndex != null ? state.player.field[context.battlePlan.targetIndex] : null) as SimulatedCardState | null;
+  const sources = [attacker, target].filter((card): card is SimulatedCardState => !!card);
+  const effects = sources.flatMap(card => scopedBattleEffects(card, "attack_declared"));
+  const ownLp = state.bot.lp, opponentLp = state.player.lp;
+  if (effects.length) emitSimulatedAttackDeclaration(state, { attacker, defender: target, target,
+    attackerOwner: state.bot, defenderOwner: target ? state.player : null,
+    recordNegatedBattleActivation: true }, context.options || {}, sources, effects);
+  const damage = (opponentLp - state.player.lp) - (ownLp - state.bot.lp);
+  dragonDeclarationDamage.set(state, { attacker, target, damage });
+  return damage ? ["Volcanic battle burn"] : [];
+}
+
+export function applyDragonSimulatedBattleRewards(context: DragonLineContext = {}): string[] {
+  const state = getDragonBattleState(context);
+  if (!state) return [];
+  const attacker = getDragonBattleAttacker(context, state.bot);
+  if (!attacker) return [];
   const summary = context.summary || {};
-  const battlePlan = context.battlePlan || {};
-  const attacker =
-    battlePlan.attackerCard ||
-    (Number.isInteger(battlePlan.attackerIndex)
-      ? bot.field?.[battlePlan.attackerIndex!]
-      : null);
-  if (!isFaceupDragon(attacker)) return [];
-
-  const rewards: string[] = [];
-  const destroyedOpponent = getDestroyedOpponentMonsters(summary);
-  if (destroyedOpponent.length > 0 && addJaggedCounter(bot.fieldSpell)) {
-    rewards.push("Jagged Peak counter");
+  const declaration = dragonDeclarationDamage.get(state);
+  const target = declaration?.attacker === attacker ? declaration.target :
+    context.target !== undefined ? context.target as SimulatedCardState | null :
+    context.battlePlan?.targetIndex != null ? state.player.field[context.battlePlan.targetIndex] || null : null;
+  if (declaration?.attacker === attacker) {
+    summary.damage = Number(summary.damage || 0) + declaration.damage;
+    dragonDeclarationDamage.delete(state);
   }
-
-  if (attacker.name === "Volcanic Extreme Dragon" && battlePlan.targetIndex != null) {
-    const burn = 600;
-    opponent.lp = Math.max(0, Number(opponent.lp || 0) - burn);
-    summary.damage = Number(summary.damage || 0) + burn;
-    rewards.push("Volcanic battle burn");
-  }
-
-  if (attacker.name === "Rainbow Cosmic Dragon" && destroyedOpponent.length > 0) {
-    const heal = destroyedOpponent.reduce(
-      (sum, card) => sum + Math.max(0, Number(card.baseAtk ?? card.atk ?? 0)),
-      0,
-    );
-    if (heal > 0) {
-      bot.lp = Number(bot.lp || 0) + heal;
-      rewards.push("Rainbow battle heal");
+  const rewards = new Set<string>();
+  const attackerEffects = scopedBattleEffects(attacker, "battle_destroy");
+  const sources = [state.bot.fieldSpell, state.player.fieldSpell, attacker, target].filter((card): card is SimulatedCardState => !!card);
+  const effects = sources.flatMap(card => scopedBattleEffects(card, "battle_destroy"));
+  for (const entry of summary.destroyedCards || []) {
+    if (entry.destroyedBy && entry.destroyedBy !== "battle") continue;
+    // A battle fact must retain the physical target. Names cannot substitute
+    // for an absent copy when multiple identical cards are on the board.
+    const destroyed = entry.card as SimulatedCardState | undefined;
+    if (!destroyed) continue;
+    const owner = entry.owner === "opponent" ? state.player : state.bot;
+    const destroyer = owner === state.player ? attacker : target;
+    if (!destroyer) continue;
+    const ownLp = state.bot.lp;
+    const counters = getCounterCount(state.bot.fieldSpell, "dragon_peak");
+    emitSimulatedBattleDestroy(state, { attacker: destroyer, destroyed, destroyedOwner: owner,
+      destroyedPosition: entry.position || null, battleDestroyer: destroyer,
+      recordNegatedBattleActivation: true }, context.options || {}, sources, effects);
+    if (getCounterCount(state.bot.fieldSpell, "dragon_peak") > counters) rewards.add("Jagged Peak counter");
+    if (state.bot.lp > ownLp) {
+      if (attackerEffects.some(effect => effect.actions?.some(action => action.type === "heal_from_destroyed_atk"))) rewards.add("Rainbow battle heal");
+      else if (attackerEffects.some(effect => effect.actions?.some(action => action.type === "heal_from_destroyed_level"))) rewards.add("Purified battle heal");
     }
   }
-
-  if (attacker.name === "Purified Crystal Dragon" && destroyedOpponent.length > 0) {
-    const heal = destroyedOpponent.reduce(
-      (sum, card) => sum + Math.max(0, Number(card.level || 0)) * 100,
-      0,
-    );
-    if (heal > 0) {
-      bot.lp = Number(bot.lp || 0) + heal;
-      rewards.push("Purified battle heal");
-    }
-  }
-
-  if (attacker.name === "Radiant Cosmic Dragon" && attacker.preventsBattleDamageToController) {
-    rewards.push("Radiant battle damage shield");
-  }
-
-  return rewards;
+  if (attacker.name === "Radiant Cosmic Dragon" && attacker.preventsBattleDamageToController) rewards.add("Radiant battle damage shield");
+  return [...rewards];
 }
 
 export function scoreDragonBattleAttackCandidate(context: DragonPolicyContext = {}) {

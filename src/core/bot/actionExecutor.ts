@@ -1,4 +1,5 @@
 import { executeAscensionAction } from "./actionExecutors/ascension.js";
+import { isPlanningActionPresenceCurrent } from "../ai/common/actionIdentity.js";
 import { executeExtraDeckProcedureAction, executeSynchroAction } from "./actionExecutors/extraDeck.js";
 import {
   executeSpecialSummonSanctumProtectorAction,
@@ -42,6 +43,7 @@ const EXECUTORS = {
 
 export async function executeBotMainPhaseAction<Type extends AIActionType>(bot: BotRuntimePort, game: BotGamePort, action: AIActionOf<Type> | null | undefined): Promise<boolean> {
   if (!action) return false;
+  if (!isPlanningActionPresenceCurrent(action, bot)) return false;
   const baseGuard = game.canStartAction({
     actor: bot,
     kind: "bot_main_action",

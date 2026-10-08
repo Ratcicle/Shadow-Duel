@@ -15,6 +15,7 @@ import Card from "../../src/core/Card.js";
 import { simulateMainPhaseAction as simulateDragonMainPhaseAction } from "../../src/core/ai/dragon/simulation.js";
 import ArcanistStrategy from "../../src/core/ai/ArcanistStrategy.js";
 import { ARCANIST_NAMES } from "../../src/core/ai/arcanist/knowledge.js";
+import { cardDefinition } from "../helpers/fixtures.js";
 
 function monster(id: number, slot: 0 | 1 | 2 | 3 | 4 | null) {
   return simulationCard({ id, instanceId: id, name: `Monster ${id}`, cardKind: "monster", fieldSlot: slot });
@@ -100,7 +101,7 @@ test("Arcanist custom hand Spells cannot bypass a full spell/trap row", () => {
 
 test("Arcanist Seismic Impact occupies a vacancy until its effect finishes", () => {
   const strategy = new ArcanistStrategy(new Player("bot", "Bot"));
-  const spell = simulationCard({ id: 801, name: ARCANIST_NAMES.SEISMIC_IMPACT, cardKind: "spell", archetype: "Arcanist", subtype: "normal", fieldSlot: null });
+  const spell = createPlanningCopy().cloneCardForSim(new Card(cardDefinition(316), "bot"));
   const host = simulationCard({ id: 802, cardKind: "monster", archetype: "Arcanist", fieldSlot: 4 });
   const equip = simulationCard({ id: 803, cardKind: "spell", archetype: "Arcanist", subtype: "equip", fieldSlot: 0 });
   host.equips = [equip];
@@ -108,9 +109,13 @@ test("Arcanist Seismic Impact occupies a vacancy until its effect finishes", () 
   const state = simulationState({ bot: { hand: [spell], field: [host], spellTrap: [equip] }, player: { field: [target] } });
   let inspectedResolution = false;
   Object.defineProperty(equip, "equippedTo", { configurable: true, get: () => {
-    inspectedResolution = true;
-    assert.ok(state.bot.spellTrap.includes(spell));
-    assert.equal(spell.fieldSlot, 2);
+    // Legality now examines the real declarative cost before placement.
+    // Its later payment must still see the Spell occupying its vacancy.
+    if (!state.bot.hand.includes(spell)) {
+      inspectedResolution = true;
+      assert.ok(state.bot.spellTrap.includes(spell));
+      assert.equal(spell.fieldSlot, 2);
+    }
     return host;
   }, set: () => {} });
   strategy.simulateArcanistSpell(state, { type: "spell", index: 0, cardId: spell.id });

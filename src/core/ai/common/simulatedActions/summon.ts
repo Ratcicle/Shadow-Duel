@@ -2,6 +2,7 @@ import { getAcceptedSynchroMaterialRoles } from "../../../game/summon/synchro.js
 import { applyCostSummonMarker, applyPaidCostSummonMarkers } from "../../../effects/costs/summonMarkers.js";
 import { appendSimulatedZoneCard } from "../zones.js";
 import { getNormalSummonTributeOptions } from "../../../game/summon/tributeValue.js";
+import { getCounterLimitSummonOptions } from "../../../actionHandlers/summon/counterLimit.js";
 import { recordNormalSummonForTurn } from "../../../Player.js";
 import { resolveExactInstanceSelection } from "../../../AutoSelector.js";
 import { appendSimulatedFieldCard } from "../zones.js";
@@ -490,6 +491,8 @@ export function applySpecialSummonFromZone(
       options,
     );
     appendSimulatedFieldCard(targetPlayer.field, card);
+    card.lastSummonMethod = "special";
+    card.lastSummonedFromZone = fromZone;
     recordCompletedSimulatedSummon(state, { card, player: targetPlayer, method: "special" });
     applyPaidCostSummonMarkers(action, card, options.costPayment?.summonMarkers || [],
       options.effect?.id || null, Number(state.turnCounter || 0));
@@ -529,6 +532,48 @@ export function applySpecialSummonFromZone(
   }
   if (summoned.length === 0) return fail();
   return;
+}
+
+/** Activation-snapshot limits feed the existing zone-summon transaction. */
+export function applySpecialSummonFromDeckWithCounterLimit(
+  ctx: SimulatedActionHandlerContext<"special_summon_from_deck_with_counter_limit">,
+): void | typeof STOP_SIMULATION {
+  const { action, options, self, state, opponent } = ctx;
+  const source = options.sourceCard;
+  if (!source) return;
+  const { maxAtk, candidates } = getCounterLimitSummonOptions<SimulatedCardState, SimulatedPlayerState>(action,
+    { source, player: self,
+      ...(options.activationContext ? { activationContext: options.activationContext } : {}),
+      ...(options.actionContext ? { actionContext: options.actionContext } : {}),
+    }, { game: {
+      canSpecialSummonUnderRestrictions: card => ({ ok: canSimSpecialSummon(card, self) }),
+      canPlaceCardOnField: card => ({ ok: canSimulatedProcedureEnterField(card, self, opponent, []) }),
+    } });
+  if (!candidates.length || !hasOpenMonsterZone(self)) return;
+  const evaluation = options.evaluateRecruitCandidate?.(candidates,
+    { game: state, player: self, opponent, source, action });
+  const best = evaluation?.best && candidates.includes(evaluation.best) ? evaluation.best
+    : candidates.reduce((previous, card) => (card.atk ?? 0) > (previous.atk ?? 0) ? card : previous);
+  const summonAction: ActionOf<"special_summon_from_zone"> & { contextLabel: string } = {
+    type: "special_summon_from_zone", zone: "deck", count: 1,
+    contextLabel: options.activationContext?.decisions?.specialSummons?.counter_summon !== undefined
+      ? "counter_summon" : options.effect?.id || "counter_summon",
+    filters: { maxAtk },
+    ...(action.archetype ? { archetype: action.archetype } : {}),
+    ...("position" in action && (action.position === "attack" || action.position === "defense" || action.position === "choice")
+      ? { position: action.position } : {}),
+    ...("cannotAttackThisTurn" in action && typeof action.cannotAttackThisTurn === "boolean"
+      ? { cannotAttackThisTurn: action.cannotAttackThisTurn } : {}),
+  };
+  const summonOptions: SimulatedActionOptions = { ...options, chooseSpecialSummonCards: (cards, input) =>
+    options.chooseSpecialSummonCards ? options.chooseSpecialSummonCards(cards, input) : [best] };
+  const result = applySpecialSummonFromZone({ ...ctx, action: summonAction,
+    options: summonOptions });
+  if (result === STOP_SIMULATION) return result;
+  if (summonOptions.lastSpecialSummonedCard && action.sendSourceToGraveAfter && findCardZone(self, source)) {
+    ctx.applySimulatedActions({ actions: [{ type: "move", player: "self", targetRef: "self", to: "graveyard" }],
+      ...(ctx.selections ? { selections: ctx.selections } : {}), state, selfId: ctx.selfId, options });
+  }
 }
 
 export function applyDeSynchro(
@@ -1306,7 +1351,10 @@ export function applyPolymerizationFusionSummon(
     }
     return estimateMonsterValue(b.fusionCard) - estimateMonsterValue(a.fusionCard);
   });
-  const fusionEntry = fusionEntries[0];
+  const fusionEntry = options.chooseFusionSummon
+    ? options.chooseFusionSummon({ candidates: fusionEntries, state, player: targetPlayer, opponent: otherPlayer })
+    : fusionEntries[0];
+  if (fusionEntry && !fusionEntries.includes(fusionEntry)) return;
   if (!fusionEntry) return;
   const { fusionCard, materials } = fusionEntry;
   const frame = createDeferredSimulatedEventFrame(state, { ...options, enableSimulatedEvents: true });

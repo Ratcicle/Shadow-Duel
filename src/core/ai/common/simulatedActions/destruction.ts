@@ -1,6 +1,7 @@
 import { appendSimulatedZoneCard } from "../zones.js";
 import type { SimulatedMoveReceipt } from "../zones.js";
-import { getOriginalOwner, setSimulatedController } from "./movement.js";
+import { emitSimulatedMove, getOriginalOwner, setSimulatedController } from "./movement.js";
+import { applySimulatedEffectDamage } from "./resources.js";
 import { applySimulatedActions } from "./index.js";
 import { resolveExactInstanceSelection } from "../../../AutoSelector.js";
 import { getEffectiveAtk } from "../cardStats.js";
@@ -56,6 +57,41 @@ import type { SimulatedActionHandlerContext } from "./shared.js";
 import type { SimulatedActionOptions, SimulatedRuntimeState } from "./shared.js";
 import { hasSimulatedProtection } from "./lifecycle.js";
 import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../simStateUtils.js";
+
+export function getGraveyardBanishBurnEntries(
+  action: SimulatedActionHandlerContext<"banish_all_graveyard_and_burn">["action"],
+  self: SimulatedPlayerState,
+  opponent: SimulatedPlayerState,
+): Array<{ owner: SimulatedPlayerState; card: SimulatedCardState }> {
+  const owners = action.scope === "both" ? [self, opponent] : action.scope === "opponent" ? [opponent] : [self];
+  return owners.flatMap(owner => owner.graveyard.map(card => ({ owner, card })));
+}
+
+export function applyBanishAllGraveyardAndBurn(
+  ctx: SimulatedActionHandlerContext<"banish_all_graveyard_and_burn">,
+): boolean {
+  const { action, state, self, opponent, options } = ctx;
+  const pending = getGraveyardBanishBurnEntries(action, self, opponent);
+  let movedCount = 0;
+  for (const { owner, card } of pending) {
+    // An earlier movement event can remove a later physical card from the GY.
+    if (!owner.graveyard.includes(card)) continue;
+    const wasFaceupBeforeMove = card.isFacedown !== true;
+    const receipt: { value: SimulatedMoveReceipt | null } = { value: null };
+    if (!moveCardToZone(owner, card, "banished", owner, {
+      state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer: self,
+      ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}),
+      onMoveCommitted: result => { receipt.value = result; },
+    })) continue;
+    emitSimulatedMove(card, state, owner, owner, "graveyard", wasFaceupBeforeMove, false,
+      options, "banish_all_graveyard_and_burn", true, receipt.value);
+    movedCount++;
+  }
+  if (movedCount === 0) return false;
+  const amount = movedCount * (action.damagePerCard ?? 0);
+  if (amount > 0) applySimulatedEffectDamage(action.player === "self" ? self : opponent, amount, options);
+  return true;
+}
 
 /** The modeled replacement path supports only free or single-action costs. */
 export function isSupportedSimulatedDestructionReplacement(replacement: ActionReplacementEffect): boolean {
@@ -300,6 +336,35 @@ export function applyDestroy(
     destroySimulatedCard(card, owner, self, state, options);
   });
   return;
+}
+
+/** The declared type owns candidate selection; shared destruction owns outcomes. */
+export function applyDestroyOtherDragonsAndBuff(
+  ctx: SimulatedActionHandlerContext<"destroy_other_dragons_and_buff">,
+): boolean {
+  const { action, self, state, options } = ctx;
+  const source = options.sourceCard;
+  const typeName = action.typeName;
+  if (!source || !typeName) return false;
+  const candidates = self.field.filter(card => card !== source && card.cardKind === "monster" &&
+    (Array.isArray(card.types) ? card.types.includes(typeName) : card.type === typeName));
+  let destroyed = 0;
+  for (const card of candidates) {
+    if (destroySimulatedCard(card, self, self, state, options)) destroyed++;
+  }
+  const perCard = typeof action.atkPerDestroyed === "number" && Number.isFinite(action.atkPerDestroyed)
+    ? action.atkPerDestroyed : 200;
+  if (destroyed > 0 && perCard !== 0) {
+    const amount = destroyed * perCard;
+    const name = action.buffSourceName || `${source.name}-self-destroy-buff`;
+    source.permanentBuffsBySource ??= {};
+    const previous = source.permanentBuffsBySource[name];
+    // This runtime action adds its signed delta without the clamping used by
+    // applyNamedStatChange; preserve that contract instead of changing a rule.
+    source.permanentBuffsBySource[name] = { ...previous, atk: (previous?.atk || 0) + amount };
+    source.atk = (source.atk || 0) + amount;
+  }
+  return destroyed > 0;
 }
 
 export function applyDestroyAndDamageByTargetAtk(

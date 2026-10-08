@@ -214,7 +214,8 @@ for (const seat of ["player", "bot"] as const) {
       assert.deepEqual(owner.hand, [legal]);
       assert.deepEqual(owner.graveyard, [sameName, discarded]);
       const copy = new Card(cardDefinition(251), owner.id);
-      assert.equal(game.canUseOncePerTurn(copy, owner, required(copy.effects[1])).ok, false);
+      const recovery = required(copy.effects.find(effect => effect.id === "luminous_dragon_discard_recover"));
+      assert.equal(game.canUseOncePerTurn(copy, owner, recovery).ok, false);
     });
   }
 }

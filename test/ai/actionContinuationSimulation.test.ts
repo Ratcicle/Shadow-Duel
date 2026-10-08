@@ -47,7 +47,17 @@ for (const actor of ['player', 'bot'] as const) for (const scenario of ['attack'
       };
       const locking = game.performNormalSummon(owner, 0, 'attack', false);
       await completeTestSelections(game, locking);
-      assert.equal(required(await locking).success, true, 'public Normal Summon creates the real response window');
+      assert.equal(required(await locking).success, true, 'public Normal Summon establishes Priestess before the Quick Effect');
+      // The summon window admits explicit summon responses. Leviathan is a
+      // manual Quick Effect, so prepare its lock through the general window.
+      assert.equal(game.chainSystem.canOfferEffectInChainContext(required(leviathan.effects.find(effect =>
+        effect.id === 'magmatic_obsidian_leviathan_facedown_lock')), { type: 'summon' }), false);
+      const quickWindow = Promise.resolve(game.chainSystem.openChainWindow({ type: 'main_phase_action', player: owner },
+        { firstPlayer: owner, secondPlayer: opponent }));
+      await completeTestSelections(game, quickWindow);
+      const quickResult = await quickWindow;
+      assert.ok(quickResult);
+      assert.equal(quickResult.success, true);
       assert.equal(selectedLock, true, 'Leviathan must be offered and chosen as a legal Chain response');
       game.ui.showChainResponseModal = async () => null;
       assert.equal(owner.graveyard.includes(discard), true, 'actual discard cost is paid');

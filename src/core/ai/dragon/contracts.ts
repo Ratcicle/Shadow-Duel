@@ -1,6 +1,7 @@
 import type { SimulatedCardShape } from "../../contracts/aiState.js";
 import type { CardFilter, EffectDefinition } from "../../contracts/effects.js";
-import type { GameRuntimeState } from "../../contracts/gameRuntime.js";
+import type { SimulatedUsageState } from "../common/simStateUtils.js";
+import type { MaterialDuelStats, GameRuntimeState } from "../../contracts/gameRuntime.js";
 import type { analyzeDragonState } from "./stateAnalysis.js";
 
 /** Read projection shared by the Dragon policies for live and simulated cards. */
@@ -61,14 +62,13 @@ export interface DragonPlayer<Card extends DragonCard = DragonCard> {
   spellTrap?: readonly Card[];
   fieldSpell?: Card | null;
   materialEntries?: DragonMaterialEntry[];
-  _simMaterialEffectActivationsByMaterialId?: unknown;
   summonCount?: number;
   normalSummonUsed?: boolean;
   additionalNormalSummons?: number;
   oncePerTurnUsageByName?: SimulatedCardShape["oncePerTurnUsageByName"];
 }
 
-export interface DragonGame {
+export interface DragonGame extends Pick<SimulatedUsageState, "_simOncePerTurn" | "_simOncePerTurnTurn"> {
   player?: DragonPlayer | null;
   bot?: DragonPlayer | null;
   opponent?: DragonPlayer | null;
@@ -81,25 +81,10 @@ export interface DragonGame {
   turnLineSearchMaxDepth?: number | null;
   turnLineSearchNodeBudget?: number | null;
   turnLineSearchTurnMode?: "mainOnly" | "mainBattleMain2" | null;
-  _simMaterialEffectActivationsByMaterialId?: {
-    player?: unknown;
-    bot?: unknown;
-  } | undefined;
   _isPerspectiveState?: boolean;
   _gameRef?: DragonGame;
-  _dragonSimOnce?: {
-    player?: unknown;
-    bot?: unknown;
-  };
   oncePerTurnUsage?: GameRuntimeState["oncePerTurnUsage"];
-  materialDuelStats?: {
-    player?: {
-      effectActivationsByMaterialId?: unknown;
-    };
-    bot?: {
-      effectActivationsByMaterialId?: unknown;
-    };
-  };
+  materialDuelStats?: MaterialDuelStats;
   currentDragonBotList?: boolean;
   currentAnalysis?: DragonAnalysis | null;
   analysis?: DragonAnalysis;

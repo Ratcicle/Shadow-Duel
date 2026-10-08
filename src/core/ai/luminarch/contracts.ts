@@ -176,14 +176,6 @@ export interface LuminarchActionGenerationContext extends LuminarchContext {
     reason: string;
   };
   bestFinisherPlan?: LuminarchPlan | null;
-  fusionOpportunity?: {
-    fusionName?: string | null | undefined;
-    decision: {
-      reason?: string | null | undefined;
-      priority: number;
-    };
-    plan: LuminarchPlan;
-  } | null;
   verboseEval?: boolean;
   hooks: Required<LuminarchHooks>;
 }

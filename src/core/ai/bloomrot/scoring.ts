@@ -1,3 +1,4 @@
+import { getEffectiveAtk as effectiveAtk, getEffectiveDef as effectiveDef } from "../common/cardStats.js";
 import type { BloomrotCard, BloomrotPlayer, BloomrotZone, BloomrotAnalysis } from "./analysis.js";
 import type { AIState, AIStrategyBotPort } from "../../contracts/ai.js";
 import type { SimulatedPlayerState } from "../../contracts/aiState.js";
@@ -61,18 +62,6 @@ function getCards(player: BloomrotPlayer | null | undefined, zone: BloomrotZone)
   if (!player) return [];
   if (zone === "fieldSpell") return player.fieldSpell ? [player.fieldSpell] : [];
   return asArray(player[zone]);
-}
-
-function effectiveAtk(card: BloomrotCard | null | undefined) {
-  return (
-    Number(card?.atk || 0)
-  );
-}
-
-function effectiveDef(card: BloomrotCard | null | undefined) {
-  return (
-    Number(card?.def || 0)
-  );
 }
 
 function battleValue(card: BloomrotCard | null | undefined) {

@@ -21,8 +21,18 @@ for (const seat of ["player", "bot"] as const) {
       const result = applySimulatedActions({ state, selfId: seat, actions: effect.actions, selections,
         options: { sourceCard: source, effect, referenceSnapshots: references } });
       assert.equal(result, spores === 1);
-      assert.deepEqual(state._simUnsupportedActions || [], spores === 1 ? ["buff_stats_temp"] : []);
-      assert.equal(source.atk, definition.atk, "battle-duration buffs remain explicitly unsupported");
+      assert.deepEqual(state._simUnsupportedActions || [], []);
+      assert.equal(source.atk, Number(definition.atk) + (spores === 1 ? 500 : 0));
+      assert.equal(source.def, definition.def);
+      assert.equal(source.tempAtkBoost || 0, spores === 1 ? 500 : 0);
+      const buffs = state.damageCalculationTempBuffs || [];
+      assert.equal(buffs.length, spores === 1 ? 1 : 0);
+      if (spores === 1) {
+        const buff = required(buffs[0]);
+        assert.equal(buff.card, source, "cleanup binds the same physical battle participant");
+        assert.equal(buff.atk, 500);
+        assert.equal(buff.def || 0, 0);
+      }
     });
   }
   for (const protection of ["target", "effect"] as const) {

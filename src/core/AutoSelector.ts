@@ -9,7 +9,6 @@ import { getEffectiveAtk, getEffectiveDef } from "./ai/common/cardStats.js";
 import { hasActivePiercing } from "./game/combat/availability.js";
 import type {
   ActionRuntimeCard,
-  ActionRuntimePlayer,
 } from "./contracts/actionRuntime.js";
 import type {
   NormalizedSelectionContract,
@@ -63,7 +62,10 @@ interface AutoSelectorScorableCard {
   isFacedown?: boolean;
 }
 
-interface AutoSelectorPlayer extends ActionRuntimePlayer {
+interface AutoSelectorPlayer {
+  id: string;
+  lp: number;
+  fieldSpell?: AutoSelectorCard | null;
   field: AutoSelectorCard[];
   hand: AutoSelectorCard[];
   deck: AutoSelectorCard[];

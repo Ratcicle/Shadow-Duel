@@ -29,6 +29,7 @@ import {
 import {
   canResolveSummonActionForCurrentState as canResolveSummonActionForCurrentStateForBot,
   collectHandSummonProcedureActions,
+  bindGeneratedMainPhaseAction,
   filterValidActionsForCurrentState as filterValidActionsForCurrentStateForBot,
   resolveHandIndexForAction as resolveHandIndexForBotAction,
   tributeMatchesAltRequirement as tributeMatchesAltRequirementForBot,
@@ -48,7 +49,7 @@ import type {
   AITributeRequirement,
   AITributeTradeResult,
 } from "./contracts/ai.js";
-import { getGenericSynchroActions } from "./ai/common/actionGeneration.js";
+import { getGenericHandSummonProcedureActions, getGenericSynchroActions } from "./ai/common/actionGeneration.js";
 import type {
   AiLiveGamePort,
   SimulatedCardState,
@@ -295,11 +296,18 @@ export default class Bot extends Player {
   }
 
   generateMainPhaseActions(game: AiLiveGamePort): AIAction[] {
-    const actions = [
-      ...this.strategy.generateMainPhaseActions(game),
-      ...collectHandSummonProcedureActions(this, game as BotGamePort),
-    ];
+    const actions = this.strategy.generateMainPhaseActions(game);
+    // Search clones contain projected legality, not runtime methods. Preserve
+    // strategy choices and supplement only procedures not already enumerated.
+    const procedures = game._isPerspectiveState
+      ? getGenericHandSummonProcedureActions(game)
+      : collectHandSummonProcedureActions(this, game as BotGamePort);
+    actions.push(...(game._isPerspectiveState ? procedures.filter(procedure => !actions.some(action =>
+      action.type === "handSummonProcedure" && action.index === procedure.index && action.cardId === procedure.cardId)) : procedures));
     actions.push(...getGenericSynchroActions(game, { existingActions: actions }));
+    if (!game._isPerspectiveState) {
+      for (const action of actions) bindGeneratedMainPhaseAction(this, game as BotGamePort, action);
+    }
 
     // 📊 Log de geração de ações
     if (botLogger) {

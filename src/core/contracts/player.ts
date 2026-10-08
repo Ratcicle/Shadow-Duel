@@ -201,4 +201,20 @@ export interface NormalSummonPlayerView {
   fieldSpell?: NormalSummonCardView | null;
 }
 
+/** Read-only projection accepted by availability and tribute queries. */
+export interface NormalSummonGameReadView {
+  readonly player?: NormalSummonPlayerReadView;
+  readonly bot?: NormalSummonPlayerReadView;
+  getOpponent?(player: NormalSummonPlayerReadView | null): NormalSummonPlayerReadView | null;
+}
+
+export interface NormalSummonPlayerReadView extends Omit<NormalSummonPlayerView,
+  "game" | "additionalNormalSummonPermissions" | "normalSummonsThisTurn" | "field" | "spellTrap"> {
+  readonly game?: NormalSummonGameReadView;
+  readonly additionalNormalSummonPermissions?: readonly AdditionalNormalSummonPermission[];
+  readonly normalSummonsThisTurn?: readonly NormalSummonRecord[];
+  readonly field?: readonly NormalSummonCardView[];
+  readonly spellTrap?: readonly NormalSummonCardView[];
+}
+
 export type PlayerMoveResult = MoveCardResult;

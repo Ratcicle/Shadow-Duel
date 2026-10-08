@@ -30,7 +30,8 @@ type PassiveStatCard = {
 };
 /** Proven origin is private planner capability metadata, never serialized card data. */
 type ModeledPassiveFamily = "field_archetype_aura_buff" | "activated_card_count_buff" |
-  "field_presence_type_summon_count_buff" | "equipped_field_counter_buff" | "field_counter_stat_aura";
+  "field_presence_type_summon_count_buff" | "equipped_field_counter_buff" | "equipped_counter_buff" | "field_counter_stat_aura" |
+  "archetype_count_buff" | "graveyard_card_count_buff" | "graveyard_archetype_count_buff" | "graveyard_type_count_buff";
 const modeledPassiveContributions = new WeakMap<object, Map<string, ModeledPassiveFamily>>();
 type PassiveProofCard = Pick<PassiveStatCard, "dynamicBuffs" | "temporarySuppressedDynamicBuffStatsByKey">;
 
@@ -101,7 +102,7 @@ type PassivePlayer = Omit<
   extraDeck: PassiveCard[];
   opponentCannotActivateDuringBattle?: boolean;
 };
-interface RuntimePassive extends Omit<PassiveRuleDefinition, "type"> {
+export interface RuntimePassive extends Omit<PassiveRuleDefinition, "type"> {
   readonly type:
     | PassiveRuleDefinition["type"]
     | "type_special_summoned_count_buff"
@@ -640,6 +641,17 @@ export function getFieldCounterStatAuraBuffKey(
   return `${effectId || `passive_${source.id}_${effectIndex}_field_counter_aura`}_${sourceKey}_${counterType}`;
 }
 
+/** Use the runtime key for an equipped counter contribution. */
+export function getEquippedCounterBuffKey(
+  source: Parameters<typeof getFieldAuraBuffKey>[0],
+  effectId: string | undefined,
+  effectIndex: number,
+  sourceIndex: number,
+): string {
+  const sourceKey = source.fieldPresenceId || source.instanceId || `${source.id}_${sourceIndex}`;
+  return effectId || `passive_${source.id}_${effectIndex}_${sourceKey}_counter_equip`;
+}
+
 /** Equip counter and fixed components reconcile independently for each source. */
 export function getEquippedFieldCounterBuffKeys(
   source: Parameters<typeof getFieldAuraBuffKey>[0],
@@ -1082,6 +1094,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
           passive.amountPerCard ?? passive.perCard ?? passive.buffPerCard ?? 0;
         const stats: readonly PassiveStat[] = passive.stats || ["atk", "def"];
         const buffKey = effect.id || `passive_${card.id}_${index}_gy_type`;
+        registerModeledPassiveContribution(card, buffKey, "graveyard_type_count_buff");
         const applied = refreshBuff(
           card,
           buffKey,
@@ -1116,6 +1129,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
           passive.amountPerCard ?? passive.perCard ?? passive.buffPerCard ?? 0;
         const stats: readonly PassiveStat[] = passive.stats || ["atk", "def"];
         const buffKey = effect.id || `passive_${card.id}_${index}_gy_card`;
+        registerModeledPassiveContribution(card, buffKey, "graveyard_card_count_buff");
         const applied = refreshBuff(
           card,
           buffKey,
@@ -1162,6 +1176,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
           passive.amountPerCard ?? passive.perCard ?? passive.buffPerCard ?? 0;
         const stats: readonly PassiveStat[] = passive.stats || ["atk", "def"];
         const buffKey = effect.id || `passive_${card.id}_${index}_gy_archetype`;
+        registerModeledPassiveContribution(card, buffKey, "graveyard_archetype_count_buff");
         const applied = refreshBuff(
           card,
           buffKey,
@@ -1279,12 +1294,8 @@ export function updatePassiveBuffs(this: PassiveHost) {
           passive.amount ??
           0;
         const stats: readonly PassiveStat[] = passive.stats || ["atk", "def"];
-        const sourceKey =
-          card.fieldPresenceId ||
-          card.instanceId ||
-          `${card.id}_${passiveSources.indexOf(card)}`;
-        const buffKey =
-          effect.id || `passive_${card.id}_${index}_${sourceKey}_counter_equip`;
+        const buffKey = getEquippedCounterBuffKey(card, effect.id, index, passiveSources.indexOf(card));
+        registerModeledPassiveContribution(target, buffKey, "equipped_counter_buff");
         const applied = refreshBuff(
           target,
           buffKey,
@@ -1543,6 +1554,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
       }
 
       const buffKey = effect.id || `passive_${card.id}_${index}`;
+      registerModeledPassiveContribution(card, buffKey, "archetype_count_buff");
       const applied = refreshBuff(
         card,
         buffKey,

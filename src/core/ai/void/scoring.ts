@@ -1,7 +1,7 @@
 import type { AIState, AIStrategyBotPort } from "../../contracts/ai.js";
 import type { SimulatedCardState, SimulatedPlayerState } from "../../contracts/aiState.js";
 import type { GameCard } from "../../contracts/cards.js";
-import type { buildStrategyAnalysis } from "../common/analysis.js";
+import { buildStrategyAnalysis } from "../common/analysis.js";
 import type { FinisherPlan } from "../common/finisherPlans.js";
 type Analysis = Omit<Partial<ReturnType<typeof buildStrategyAnalysis>>, "phase" | "fieldSpell"> & { fieldSpell?: ReturnType<typeof buildStrategyAnalysis>["fieldSpell"] | undefined; phase?: string | null | undefined };
 type MonsterContext = { oppStrongestAtk?: number; hollowCount?: number; voidCount?: number; hollowsInGY?: number; voidsInGY?: number; phase?: string; hydraProjectedDraws?: number };
@@ -522,13 +522,14 @@ export function evaluateBoardVoid(gameOrState: AIState, perspectivePlayer?: Simu
   // 4. COMBO POTENTIAL — Avaliar combos disponíveis
   // ═══════════════════════════════════════════════════════════════════════════
   const analysis = {
+    bot: perspective || null,
     hand: myHand,
     field: myField,
     graveyard: myGY,
     extraDeck: myExtra,
     deck: perspective?.deck || [],
     fieldSpell: perspective?.fieldSpell,
-    summonAvailable: (perspective?.summonCount || 0) < 1,
+    summonAvailable: buildStrategyAnalysis({ bot: perspective || null }).summonAvailable,
     oppFieldCount: oppField.length,
     oppStrongestAtk,
     myLP,

@@ -182,8 +182,6 @@ export interface SimulatedCardShape extends SimulatedCardCore {
   _simArcanistLightningAtkBoost?: number;
   _simArcanistLightningAttackLock?: boolean;
   _simArcanistLightningPiercing?: boolean;
-  _simBloomrotCarrioncapMarkedBattle?: boolean;
-  _simBloomrotRotStagBattleBoost?: boolean;
   _simBurningWestSheriffDamageStepBoost?: number;
   _simCannotAttackByEffect?: boolean;
   _simDarknessValleyBuff?: boolean;
@@ -194,7 +192,6 @@ export interface SimulatedCardShape extends SimulatedCardCore {
   _simMagicSickleBattleBoost?: boolean;
   _simMasterMirrorsShuffleDraw?: boolean;
   _simMasterRevivedOnEquip?: string | undefined;
-  _simProtectedByRaven?: boolean;
   _simProtection?: SimulatedProtectionEffect;
   _simProtectionEffects?: SimulatedProtectionEffect[];
   _simRecoveredOnEquip?: string | undefined;
@@ -227,22 +224,6 @@ export type SimulatedOptBucket = Map<string, number>;
 export interface SimulatedOptLedger {
   player?: SimulatedOptBucket;
   bot?: SimulatedOptBucket;
-}
-
-/**
- * Dragon simulation still stores effect keys in legacy plain-object buckets.
- * The seat keys are closed here; bucket keys remain an unknown runtime
- * boundary and are narrowed through Reflect by the Dragon simulator.
- */
-export interface SimulatedDragonOnceLedger {
-  player?: unknown;
-  bot?: unknown;
-}
-
-/** Per-seat legacy plain-object counters keyed by raw material card ID. */
-export interface SimulatedMaterialActivationLedger {
-  player?: unknown;
-  bot?: unknown;
 }
 
 export interface SimulatedLuminarchLpPayment {
@@ -299,20 +280,13 @@ export interface SimulatedLuminarchState {
   sunforgedBattleProtectionUsed?: boolean;
 }
 
-export interface SimulatedBurningWestState {
-  wantedRewardUsed?: boolean;
-  burningRewardUsed?: boolean;
-  deadeyeRewardUsed?: boolean;
-  gunslingerRewardUsed?: boolean;
-  peacemakerRewardUsed?: boolean;
-}
-
 export interface SimulatedPlayerState {
   usedEffects?: number[];
   debug?: boolean;
   id: PlayerId | string;
   lp: number;
   lpGainedThisTurn?: number;
+  damageReceivedThisTurn?: number;
   hand: SimulatedCardState[];
   field: SimulatedCardState[];
   graveyard: SimulatedCardState[];
@@ -331,7 +305,7 @@ export interface SimulatedPlayerState {
   forbidDirectAttacksThisTurn?: boolean;
   directAttacksDeclaredThisTurn?: number;
   oncePerTurnUsageByName?: GameCard["oncePerTurnUsageByName"];
-  _simMaterialEffectActivationsByMaterialId?: unknown;
+  oncePerDuelUsageByName?: Record<string, number | boolean>;
 }
 
 /**
@@ -403,6 +377,7 @@ export interface AiCardInput {
 
 export interface AiPlayerInput {
   id?: PlayerId | string;
+  oncePerDuelUsageByName?: Readonly<Record<string, number | boolean>>;
   lp?: number;
   lpGainedThisTurn?: number;
   hand?: readonly AiCardInput[];
@@ -439,6 +414,8 @@ export interface AiLiveGamePort {
 
 /** Permissive read boundary retained for legacy search callers and fixtures. */
 export interface AiStateInput {
+  damageCalculationTempBuffs?: readonly { card?: AiCardInput | null; atk?: number; def?: number }[];
+  endOfDamageStepTempBuffs?: readonly { card?: AiCardInput | null; atk?: number; def?: number }[];
   oncePerTurnUsage?: AiRuntimeOncePerTurnUsage;
   oncePerTurnTurnCounter?: number;
   player?: AiPlayerInput | null;
@@ -454,6 +431,8 @@ export interface AiStateInput {
 }
 
 export interface AiStateShape extends AiLiveGamePort {
+  damageCalculationTempBuffs?: Array<{ card?: SimulatedCardState | null; atk?: number; def?: number }>;
+  endOfDamageStepTempBuffs?: Array<{ card?: SimulatedCardState | null; atk?: number; def?: number }>;
   materialDuelStats?: MaterialDuelStats;
   _simGeneratedInstanceCounter?: number;
   _simRequiresReplan?: boolean;
@@ -473,7 +452,6 @@ export interface AiStateShape extends AiLiveGamePort {
   _suppressP2Analysis?: boolean;
   _simOncePerTurn?: SimulatedOptLedger;
   _simOncePerTurnTurn?: number;
-  _dragonSimOnce?: SimulatedDragonOnceLedger;
   _simOptUsed?: Set<string>;
   _simArcanistOptUsed?: Set<string>;
   _simPassiveOncePerTurn?: SimulatedOptBucket;
@@ -483,14 +461,9 @@ export interface AiStateShape extends AiLiveGamePort {
   _simFieldPresenceSeq?: number;
   _simEventDepth?: number;
   _simPlanningBattleDone?: boolean;
-  _simGrandLibraryBattleRewardUsed?: boolean;
   _simArcanistApprenticeSearchUsed?: boolean;
   _simArcanistSpellActivations?: number;
   _simLuminarch?: SimulatedLuminarchState;
-  _simBurningWest?: SimulatedBurningWestState;
-  _simMaterialEffectActivationsByMaterialId?: SimulatedMaterialActivationLedger | undefined;
-  _simVoidBeastSearchUsed?: boolean;
-  _simVoidHollowRecruitUsed?: boolean;
   /** GameTree-only storage for metadata otherwise bound to the current bot view. */
   _gameTreeActors?: Record<string, GameTreeActorState>;
 }
@@ -548,9 +521,9 @@ export interface SimulatedDelayedDestroyAction extends Omit<SimulatedDelayedSumm
 export type SimulatedDelayedAction = SimulatedDelayedSummonAction | SimulatedDelayedDestroyAction;
 
 export type GameTreeActorState = Pick<AiStateShape,
-  | "_simOptUsed" | "_simArcanistOptUsed" | "_simLuminarch" | "_simBurningWest"
-  | "_simGrandLibraryBattleRewardUsed" | "_simArcanistApprenticeSearchUsed"
-  | "_simArcanistSpellActivations" | "_simVoidBeastSearchUsed" | "_simVoidHollowRecruitUsed"
+  | "_simOptUsed" | "_simArcanistOptUsed" | "_simLuminarch"
+  | "_simArcanistApprenticeSearchUsed"
+  | "_simArcanistSpellActivations"
 >;
 
 export interface GameTreeStateShape extends AiStateShape {

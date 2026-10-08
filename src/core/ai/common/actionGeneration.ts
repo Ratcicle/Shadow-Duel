@@ -1,3 +1,4 @@
+import { isCanonicalZone } from "../../contracts/zones.js";
 /**
  * Shared AI action generation primitives.
  *
@@ -6,6 +7,7 @@
  * unless the caller explicitly provides it.
  */
 
+import { bindPlanningActionPresence, getPlanningIdentityGame } from "./actionIdentity.js";
 import type {
   AIAction,
   AIActionOf,
@@ -13,6 +15,7 @@ import type {
   AIActivationContext,
   AIStrategyBotPort,
   AIState,
+  ExtraDeckMaterialHint,
   HandProcedureMaterialHint,
   SynchroAIAction,
 } from "../../contracts/ai.js";
@@ -22,9 +25,12 @@ import type {
   SimulatedCardState,
   SimulatedPlayerState,
 } from "../../contracts/aiState.js";
-import type { GameCard } from "../../contracts/cards.js";
+import type { BattlePositionInput, GameCard } from "../../contracts/cards.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
+import type { EventZone } from "../../contracts/events.js";
+import type { NormalSummonPlayerReadView } from "../../contracts/player.js";
 import { enumerateSynchroMaterialCombos } from "../../game/summon/synchro.js";
+import { getNormalSummonTributeOptions } from "../../game/summon/tributeValue.js";
 import { matchesCardFilter, type RuntimeCardFilter } from "../../effects/filters/cardFilters.js";
 import { isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
 import { canSimulatedSpecialSummon, canSimulatedProcedureEnterField } from "./simulation.js";
@@ -92,7 +98,8 @@ export function getGenericHandSummonProcedureActions(game: AIState): AIActionOf<
       const index = (zone === "field" ? field : graveyard).indexOf(material);
       materials.push({ zone, index, cardId: material.id, instanceId: material.instanceId });
     }
-    return [{ type: "handSummonProcedure", cardId: card.id, cardName: card.name, index, materials }];
+    return [bindPlanningActionPresence({ type: "handSummonProcedure" as const, card: card as SimulatedCardState,
+      cardId: card.id, cardName: card.name, index, materials }, card, player.id || "", "hand", undefined, selected.map(material => ({ card: material, zone: field.includes(material) ? "field" : "graveyard" })))];
   });
 }
 
@@ -176,6 +183,23 @@ export function getGenericSynchroActions(
 }
 
 type PlanningCard = GameCard | SimulatedCardState;
+/** Preserve a physical source index when a caller visits one card at a time. */
+export interface ActionGenerationEntry<Card extends PlanningCard = PlanningCard> {
+  readonly card: Card;
+  readonly sourceIndex: number;
+}
+
+function* generationEntries<Card extends PlanningCard>(
+  cards: readonly Card[],
+  entries?: readonly ActionGenerationEntry<Card>[],
+): Iterable<ActionGenerationEntry<Card>> {
+  if (entries) {
+    yield* entries;
+    return;
+  }
+  // Retain the original lazy array traversal for existing callers.
+  for (const [sourceIndex, card] of cards.entries()) yield { card, sourceIndex };
+}
 type ActionIndexKey =
   | "index"
   | "fieldIndex"
@@ -213,6 +237,7 @@ interface BuildPrioritizedActionInput<Type extends AIActionType = AIActionType> 
   graveyardIndex?: number | null;
   materialIndex?: number | null;
   card?: PlanningCard | null;
+  sourceBinding?: { controllerId: string; zone: EventZone; game?: object | null | undefined };
   priority?: number | undefined;
   reason?: string | null | undefined;
   effect?: EffectDefinition | null;
@@ -240,6 +265,7 @@ interface SafetyAdjustmentResult {
 interface ActionGenerationAnalysis {
   canNormalSummon?: boolean | undefined;
   fieldCapacity?: number;
+  game?: object | null | undefined;
 }
 
 interface HandSpellContext<Analysis = unknown, Player extends AIStrategyBotPort = AIStrategyBotPort> {
@@ -254,6 +280,7 @@ interface HandSpellOptions<Analysis = unknown, Player extends AIStrategyBotPort 
   game?: AIState | undefined;
   player: Player;
   hand?: Player["hand"];
+  entries?: readonly ActionGenerationEntry<Player["hand"][number]>[];
   analysis?: Analysis;
   shouldPlay?(
     card: Player["hand"][number],
@@ -284,6 +311,12 @@ interface TributeInfo {
 interface NormalSummonOptions<Analysis extends ActionGenerationAnalysis = ActionGenerationAnalysis, Player extends AIStrategyBotPort = AIStrategyBotPort> {
   player: Player;
   hand?: Player["hand"];
+  entries?: readonly ActionGenerationEntry<Player["hand"][number]>[];
+  /** Optional coherent owner view; defaults preserve existing projections. */
+  summonPlayer?: Omit<NormalSummonPlayerReadView, "field"> & {
+    hand: readonly Player["hand"][number][];
+    field: readonly Player["field"][number][];
+  };
   analysis?: Analysis;
   getTributeRequirement?(
     card: Player["hand"][number],
@@ -313,6 +346,7 @@ interface IgnitionEffectOptions<Type extends AIActionType, Analysis = unknown, P
   game?: AIState | undefined;
   player: Player;
   cards?: Player["hand"];
+  entries?: readonly ActionGenerationEntry<Player["hand"][number]>[];
   analysis?: Analysis;
   type: Type;
   sourceZone?: string;
@@ -322,6 +356,16 @@ interface IgnitionEffectOptions<Type extends AIActionType, Analysis = unknown, P
     sourceZone: string | undefined,
     context: IgnitionContext<Analysis, Player>,
   ): EffectDefinition | null;
+  /** Opt-in multi-effect discovery; returned order is the caller's policy order. */
+  findEffects?(
+    card: Player["hand"][number],
+    sourceZone: string | undefined,
+    context: IgnitionContext<Analysis, Player>,
+  ): readonly EffectDefinition[];
+  /** Overrides only candidate preflight; discovery, policy and preview retain their order. */
+  validateCandidate?(
+    context: IgnitionContext<Analysis, Player> & { effect: EffectDefinition },
+  ): boolean | ActionAllowedResult | null | undefined;
   shouldActivate?(
     card: Player["hand"][number],
     analysis: Analysis | undefined,
@@ -475,6 +519,7 @@ export function buildPrioritizedAction<Type extends AIActionType>({
   graveyardIndex,
   materialIndex,
   card,
+  sourceBinding,
   priority = 0,
   reason = null,
   effect = null,
@@ -500,10 +545,12 @@ export function buildPrioritizedAction<Type extends AIActionType>({
     action.activationContext = activationContext as AIActivationContext;
   }
 
-  return {
+  const result = {
     ...action,
     ...(extra || {}),
   } as AIActionOf<Type>;
+  return card && sourceBinding ? bindPlanningActionPresence(result, card,
+    sourceBinding.controllerId, sourceBinding.zone, sourceBinding.game) : result;
 }
 
 /**
@@ -513,6 +560,7 @@ export function getGenericHandSpellActions<Analysis = unknown, Player extends AI
   game,
   player,
   hand = player?.hand || [],
+  entries,
   analysis,
   shouldPlay,
   buildActivationContext,
@@ -521,7 +569,7 @@ export function getGenericHandSpellActions<Analysis = unknown, Player extends AI
   extra = {},
 }: HandSpellOptions<Analysis, Player> = {} as HandSpellOptions<Analysis, Player>): AIActionOf<"spell">[] {
   const actions: AIActionOf<"spell">[] = [];
-  for (const [index, card] of (hand || []).entries()) {
+  for (const { sourceIndex: index, card } of generationEntries(hand || [], entries)) {
     if (!card || card.cardKind !== "spell") continue;
 
     const context = { game, player, analysis, index, card };
@@ -546,6 +594,7 @@ export function getGenericHandSpellActions<Analysis = unknown, Player extends AI
         type,
         index,
         card,
+        sourceBinding: { controllerId: player.id || "", zone: "hand", game: getPlanningIdentityGame(player, game) },
         priority: decision.priority || 1,
         reason: decision.reason,
         activationContext,
@@ -566,6 +615,8 @@ export function getGenericHandSpellActions<Analysis = unknown, Player extends AI
 export function getGenericNormalSummonActions<Analysis extends ActionGenerationAnalysis = ActionGenerationAnalysis, Player extends AIStrategyBotPort = AIStrategyBotPort>({
   player,
   hand = player?.hand || [],
+  entries,
+  summonPlayer: queryPlayer,
   analysis,
   getTributeRequirement,
   shouldSummon,
@@ -573,13 +624,27 @@ export function getGenericNormalSummonActions<Analysis extends ActionGenerationA
   extra = {},
 }: NormalSummonOptions<Analysis, Player> = {} as NormalSummonOptions<Analysis, Player>): AIActionOf<"summon">[] {
   const actions: AIActionOf<"summon">[] = [];
-  if (!analysis?.canNormalSummon || (analysis.fieldCapacity as number) <= 0) {
+  if (!analysis?.canNormalSummon) {
     return actions;
   }
+  const summonPlayer = queryPlayer || {
+    id: player.id,
+    hand: player.hand,
+    field: player.field,
+    spellTrap: player.spellTrap,
+    fieldSpell: player.fieldSpell,
+    summonCount: player.summonCount ?? 0,
+    additionalNormalSummons: player.additionalNormalSummons ?? 0,
+    additionalNormalSummonPermissions: [...(player.additionalNormalSummonPermissions || [])],
+    normalSummonsThisTurn: [...(player.normalSummonsThisTurn || [])],
+  };
 
-  for (const [index, card] of (hand || []).entries()) {
+  for (const { sourceIndex: index, card } of generationEntries(hand || [], entries)) {
     if (!card || card.cardKind !== "monster") continue;
     if (card.cannotBeNormalSummonedOrSet) continue;
+    // The canonical query checks this card's remaining allowance and physical
+    // costs, including Tribute Summons which free an otherwise full field.
+    if (getNormalSummonTributeOptions(summonPlayer, card).length === 0) continue;
 
     const context = { player, analysis, index, card };
     const tributeInfo =
@@ -600,6 +665,7 @@ export function getGenericNormalSummonActions<Analysis extends ActionGenerationA
         type,
         index,
         card,
+        sourceBinding: { controllerId: player.id || "", zone: "hand", game: getPlanningIdentityGame(player, analysis.game) },
         priority: decision.priority || 1,
         reason: decision.reason,
         extra: {
@@ -625,11 +691,14 @@ export function getGenericIgnitionEffectActions<Type extends AIActionType, Analy
   game,
   player,
   cards = [],
+  entries,
   analysis,
   type,
   sourceZone,
   indexFields = ["index"],
   findEffect,
+  findEffects,
+  validateCandidate,
   shouldActivate,
   buildActivationContext,
   canActivate,
@@ -638,7 +707,7 @@ export function getGenericIgnitionEffectActions<Type extends AIActionType, Analy
   extra = {} as AIActionExtra<Type>,
 }: IgnitionEffectOptions<Type, Analysis, Player> = {} as IgnitionEffectOptions<Type, Analysis, Player>): AIActionOf<Type>[] {
   const actions: AIActionOf<Type>[] = [];
-  for (const [sourceIndex, card] of (cards || []).entries()) {
+  for (const { sourceIndex, card } of generationEntries(cards || [], entries)) {
     if (!card || !cardFilter(card, sourceZone, { player, sourceIndex })) {
       continue;
     }
@@ -651,61 +720,65 @@ export function getGenericIgnitionEffectActions<Type extends AIActionType, Analy
       card,
       sourceZone,
     };
-    const effect =
-      typeof findEffect === "function"
-        ? findEffect(card, sourceZone, context)
-        : null;
-    if (!effect) continue;
-    if (effect.actions?.some(action => (action.type === "bounce_and_summon" || (effect.activationCosts?.length && action.type === "special_summon_from_zone")) &&
-        !hasActionZoneCandidates(player, action, card))) continue;
+    const effects = typeof findEffects === "function"
+      ? findEffects(card, sourceZone, context)
+      : [typeof findEffect === "function" ? findEffect(card, sourceZone, context) : null];
+    for (const effect of effects) {
+      if (!effect) continue;
+      if (typeof validateCandidate === "function") {
+        if (!isActionAllowed(validateCandidate({ ...context, effect }))) continue;
+      } else if (effect.actions?.some(action => (action.type === "bounce_and_summon" || (effect.activationCosts?.length && action.type === "special_summon_from_zone")) &&
+          !hasActionZoneCandidates(player, action, card))) continue;
 
-    const decision =
-      typeof shouldActivate === "function"
-        ? shouldActivate(card, analysis, { ...context, effect })
-        : { yes: true };
-    if (!decision?.yes) continue;
+      const decision =
+        typeof shouldActivate === "function"
+          ? shouldActivate(card, analysis, { ...context, effect })
+          : { yes: true };
+      if (!decision?.yes) continue;
 
-    const activationContext =
-      typeof buildActivationContext === "function"
-        ? buildActivationContext(card, analysis, {
-            ...context,
-            effect,
-            decision,
-          })
-        : null;
-    const canUse =
-      typeof canActivate === "function"
-        ? canActivate({
+      const activationContext =
+        typeof buildActivationContext === "function"
+          ? buildActivationContext(card, analysis, {
+              ...context,
+              effect,
+              decision,
+            })
+          : null;
+      const canUse =
+        typeof canActivate === "function"
+          ? canActivate({
+              ...context,
+              effect,
+              decision,
+              activationContext,
+            })
+          : true;
+      if (!isActionAllowed(canUse)) continue;
+
+      const indexes: Partial<Pick<MutablePrioritizedAction, ActionIndexKey>> = {};
+      for (const field of indexFields || []) {
+        indexes[field] = sourceIndex;
+      }
+
+      actions.push(
+        buildPrioritizedAction({
+          type,
+          ...indexes,
+          card,
+          ...(isCanonicalZone(sourceZone) ? { sourceBinding: { controllerId: player.id || "", zone: sourceZone, game } } : {}),
+          effect: includeEffectId ? effect : null,
+          priority: decision.priority || 1,
+          reason: decision.reason,
+          activationContext,
+          extra: resolveExtra(extra, {
             ...context,
             effect,
             decision,
             activationContext,
-          })
-        : true;
-    if (!isActionAllowed(canUse)) continue;
-
-    const indexes: Partial<Pick<MutablePrioritizedAction, ActionIndexKey>> = {};
-    for (const field of indexFields || []) {
-      indexes[field] = sourceIndex;
-    }
-
-    actions.push(
-      buildPrioritizedAction({
-        type,
-        ...indexes,
-        card,
-        effect: includeEffectId ? effect : null,
-        priority: decision.priority || 1,
-        reason: decision.reason,
-        activationContext,
-        extra: resolveExtra(extra, {
-          ...context,
-          effect,
-          decision,
-          activationContext,
+          }),
         }),
-      }),
-    );
+      );
+    }
   }
 
   return actions;
@@ -811,4 +884,99 @@ export function createActionGenerationContext<Extra extends object>({
     log,
     ...(extra || {}),
   };
+}
+
+type ProcedurePlanningCard = SimulatedCardState | GameCard;
+interface ProcedurePlanningEntry<Card> {
+  readonly card: Card;
+  readonly sourceIndex: number;
+}
+interface ProcedurePlanningSelection<Card, Evaluation> {
+  readonly combo: readonly Card[];
+  readonly evaluation: Evaluation;
+}
+interface ProcedurePlanningDetails {
+  readonly priority: number;
+  readonly reason: string;
+  readonly position: BattlePositionInput;
+  readonly activationContext: AIActivationContext;
+}
+type ProcedurePlanningMaterialHint = ExtraDeckMaterialHint & {
+  readonly index: number;
+  readonly instanceIds: Array<string | number>;
+};
+
+/** Pure transport of the existing catalogue material hints, in physical order. */
+export function buildGenericExtraDeckProcedureAction<Card extends ProcedurePlanningCard>(
+  source: Card,
+  sourceIndex: number,
+  materials: ProcedurePlanningMaterialHint[],
+  details: ProcedurePlanningDetails,
+): AIActionOf<"extraDeckProcedure"> {
+  return {
+    type: "extraDeckProcedure",
+    cardId: source.id,
+    cardName: source.name,
+    extraDeckIndex: sourceIndex,
+    extraDeckCard: source,
+    materialIndices: materials.map(material => material.index),
+    // These legacy arrays mirror hints supplied from catalogue cards. Retain
+    // their transport alongside aliases; do not repair or replace identities.
+    materialIds: materials.map(material => material.id!),
+    materialNames: materials.map(material => material.name!),
+    materialInstanceIds: materials.map(material => material.instanceIds),
+    materials,
+    requiredMaterialCount: materials.length,
+    ...details,
+  };
+}
+
+/**
+ * Preserve the caller's entry order and query the existing procedure validator
+ * through its read adapter. Material rules and strategy scores are callbacks.
+ * Current command consumers transport field materials; other-zone selections
+ * require their own supported command rather than invalid field hints.
+ */
+export function getGenericExtraDeckProcedureActions<Card extends ProcedurePlanningCard, Evaluation>(
+  player: { readonly id: string; readonly field: readonly Card[] },
+  entries: Iterable<ProcedurePlanningEntry<Card>>,
+  options: {
+    readonly game?: object | null;
+    readonly getMaterialCombos: (entry: ProcedurePlanningEntry<Card>) => {
+      readonly ok: boolean; readonly combos: readonly Card[][];
+    };
+    readonly selectMaterials: (
+      combos: readonly Card[][], entry: ProcedurePlanningEntry<Card>,
+    ) => ProcedurePlanningSelection<Card, Evaluation> | null;
+    readonly getActionDetails: (
+      selected: ProcedurePlanningSelection<Card, Evaluation>, entry: ProcedurePlanningEntry<Card>,
+    ) => ProcedurePlanningDetails;
+    readonly getMaterialInstanceIds: (material: Card) => Array<string | number>;
+    readonly decorateAction?: (
+      action: AIActionOf<"extraDeckProcedure">,
+      selected: ProcedurePlanningSelection<Card, Evaluation>, entry: ProcedurePlanningEntry<Card>,
+    ) => AIActionOf<"extraDeckProcedure">;
+  },
+): AIActionOf<"extraDeckProcedure">[] {
+  const actions: AIActionOf<"extraDeckProcedure">[] = [];
+  for (const entry of entries) {
+    const result = options.getMaterialCombos(entry);
+    if (!result.ok || result.combos.length === 0) continue;
+    const selected = options.selectMaterials(result.combos, entry);
+    if (!selected || selected.combo.length === 0) continue;
+    if (selected.combo.some(card => !player.field.includes(card))) continue;
+    const materials = selected.combo.map(card => ({
+      index: player.field.indexOf(card), id: card.id, name: card.name,
+      instanceIds: options.getMaterialInstanceIds(card),
+    }));
+    let action = buildGenericExtraDeckProcedureAction(
+      entry.card, entry.sourceIndex, materials, options.getActionDetails(selected, entry),
+    );
+    action = options.decorateAction?.(action, selected, entry) || action;
+    actions.push(bindPlanningActionPresence(
+      action, entry.card, player.id, "extraDeck", getPlanningIdentityGame(player, options.game),
+      selected.combo.map(card => ({ card, zone: "field" })),
+    ));
+  }
+  return actions;
 }

@@ -6,7 +6,8 @@ import { simulateMainPhaseAction } from "../../src/core/ai/shadowheart/simulatio
 import { cloneBotGameState } from "../../src/core/bot/simulationBridge.js";
 import * as usage from "../../src/core/ai/common/simStateUtils.js";
 import { createGameTreeCopy } from "../../src/core/ai/common/gameTreeSimulation.js";
-import { required } from "../helpers/fixtures.js";
+import { cardDefinition, required } from "../helpers/fixtures.js";
+import type { EffectDefinition } from "../../src/core/contracts/effects.js";
 
 function usageFixture(actor: "bot" | "player") {
   const first = player("bot");
@@ -71,7 +72,7 @@ interface TestCard {
   def: number;
   archetype: string;
   archetypes: string[];
-  effects: [];
+  effects: readonly EffectDefinition[];
 }
 
 function player(id: "player" | "bot") {
@@ -121,8 +122,14 @@ function cloneLegacyBotFixture(bot: object, game: object) {
 
 test("Shadow-Heart and common simulation share counted OPT buckets", () => {
   const sourceBot = player("bot");
-  const imp = shadowHeartMonster(1, "Shadow-Heart Imp");
-  sourceBot.hand.push(imp, shadowHeartMonster(2, "Shadow-Heart Gecko"));
+  const imp = shadowHeartMonster(107, "Shadow-Heart Imp");
+  const gecko = shadowHeartMonster(108, "Shadow-Heart Gecko");
+  // This interop assertion exercises a real trigger, rather than implicit
+  // behavior inferred from the source's display name.
+  imp.effects = cardDefinition(107).effects || [];
+  // The recruit intentionally has no further effects: isolate the counted
+  // source trigger from a second, independent search trigger.
+  sourceBot.hand.push(imp, gecko);
   const opponent = player("player");
   const bot = {
     ...sourceBot,

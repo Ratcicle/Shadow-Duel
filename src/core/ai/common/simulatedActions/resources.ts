@@ -1,6 +1,9 @@
-import { appendSimulatedZoneCard } from "../zones.js";
+import { appendSimulatedZoneCard, getZoneCards } from "../zones.js";
+import { cardMatchesKind } from "../../../Card.js";
 import { resolveExactInstanceSelection } from "../../../AutoSelector.js";
 import { getEffectiveAtk } from "../cardStats.js";
+import { emitSimulatedMove } from "./movement.js";
+import type { SimulatedMoveReceipt } from "../zones.js";
 import { getBaseLpCost } from "../../../effects/costs/lpCost.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
 import { estimateMonsterValue, hasArchetype } from "../cardValue.js";
@@ -219,6 +222,11 @@ export function applyHeal(
   if (targetPlayer.lp > before) {
     targetPlayer.lpGainedThisTurn = (targetPlayer.lpGainedThisTurn || 0) + (targetPlayer.lp - before);
     options.onLpGain?.({ state, player: targetPlayer, sourceCard: options.sourceCard || null, before, after: targetPlayer.lp });
+    options.emitSimulatedEvent?.("lp_change", {
+      player: targetPlayer, sourceCard: options.sourceCard || null,
+      before, after: targetPlayer.lp, lpGained: targetPlayer.lp - before,
+      lpLost: 0, lpPaid: 0, damageAmount: 0,
+    });
   }
   return;
 }
@@ -255,27 +263,85 @@ export function applyHealPerArchetypeMonster(
   const count = (targetPlayer.field || []).filter((card) =>
     hasArchetype(card, archetype)
   ).length;
-  targetPlayer.lp += (action.amountPerMonster || 0) * count;
+  applyHeal({ ...ctx, action: { type: "heal", amount: (action.amountPerMonster || 0) * count,
+    player: action.player || "self" } });
   return;
+}
+
+export function applyHealPerFieldCount(
+  ctx: SimulatedActionHandlerContext<"heal_per_field_count">,
+): void | false {
+  const { action, self, opponent } = ctx;
+  if (action.amountPerCard <= 0) return false;
+  const filters = action.filters || {};
+  const countedPlayer = filters.owner === "opponent" ? opponent : self;
+  const zone = filters.zone || "field";
+  // The runtime action counts an array zone and heals its activating player.
+  // Preserve its scalar filters and legacy recipient behavior exactly.
+  if (!Array.isArray(Reflect.get(countedPlayer, zone))) return false;
+  const count = getZoneCards(countedPlayer, zone).filter(card =>
+    (!filters.cardKind || cardMatchesKind(card, filters.cardKind)) &&
+    (!filters.archetype || card.archetype === filters.archetype) &&
+    (!filters.type || card.type === filters.type) &&
+    (!filters.name || card.name === filters.name) &&
+    (!filters.requireFaceup || !card.isFacedown)).length;
+  if (count === 0) return;
+  applyHeal({ ...ctx, action: { type: "heal", amount: count * action.amountPerCard, player: "self" } });
+}
+
+export function applyHealFromDestroyedAtk(
+  ctx: SimulatedActionHandlerContext<"heal_from_destroyed_atk">,
+): void | false {
+  const { action, options } = ctx;
+  const destroyed = (options.actionContext || options.activationContext?.actionContext)?.destroyed;
+  if (!destroyed || Array.isArray(destroyed)) return false;
+  const value = action.useBaseAtk === true && Number.isFinite(Number(destroyed.baseAtk))
+    ? Number(destroyed.baseAtk)
+    : Number.isFinite(Number(destroyed.atk)) ? Number(destroyed.atk) : 0;
+  const amount = Math.floor(value * (action.fraction ?? action.multiplier ?? 1));
+  if (amount <= 0) return false;
+  applyHeal({ ...ctx, action: { type: "heal", amount, player: "self" } });
+}
+
+export function applyHealFromDestroyedLevel(
+  ctx: SimulatedActionHandlerContext<"heal_from_destroyed_level">,
+): void | false {
+  const { action, options } = ctx;
+  const destroyed = (options.actionContext || options.activationContext?.actionContext)?.destroyed;
+  if (!destroyed || Array.isArray(destroyed)) return false;
+  const amount = Math.floor((destroyed.level || 0) * (action.multiplier || 100));
+  if (amount <= 0) return;
+  // Runtime heals the resolving player, including the legacy player field.
+  applyHeal({ ...ctx, action: { type: "heal", amount, player: "self" } });
 }
 
 export function applyDamage(
   ctx: SimulatedActionHandlerContext<"damage">,
-): void {
-  const {
-    action,
-    targets,
-    selections,
-    state,
-    selfId,
-    options,
-    self,
-    opponent,
-    applySimulatedActions,
-  } = ctx;
-  const targetPlayer = resolveActionPlayer(action, self, opponent);
-  targetPlayer.lp -= action.amount || 0;
-  return;
+): boolean {
+  const { action, self, opponent, options } = ctx;
+  const targetPlayer = action.player === "self" ? self : opponent;
+  return applySimulatedEffectDamage(targetPlayer, action.amount ?? 0, options);
+}
+
+/** Effect damage shares runtime LP clamping, history and sequential LP facts. */
+export function applySimulatedEffectDamage(
+  targetPlayer: SimulatedPlayerState,
+  amount: number,
+  options: SimulatedActionOptions,
+): boolean {
+  if (!amount || amount <= 0) return false;
+  const before = targetPlayer.lp;
+  targetPlayer.lp = Math.max(0, targetPlayer.lp - amount);
+  const actual = Math.max(0, before - targetPlayer.lp);
+  if (actual > 0) {
+    targetPlayer.damageReceivedThisTurn = Math.max(0, Number(targetPlayer.damageReceivedThisTurn || 0)) + actual;
+    options.emitSimulatedEvent?.("lp_change", {
+      player: targetPlayer, sourceCard: options.sourceCard || null,
+      before, after: targetPlayer.lp, lpGained: 0, lpLost: actual,
+      lpPaid: 0, damageAmount: actual, damagedPlayer: targetPlayer,
+    });
+  }
+  return targetPlayer.lp < before;
 }
 
 export function applyPayLp(
@@ -316,10 +382,21 @@ export function applyPayLp(
   ) {
     return STOP_SIMULATION;
   }
-  targetPlayer.lp = Math.max(0, (targetPlayer.lp || 0) - finalAmount);
+  const before = targetPlayer.lp || 0;
+  targetPlayer.lp = Math.max(0, before - finalAmount);
   cost.appliedReducers.forEach((reducer) => {
     markSimulatedPassiveUsed(state, reducer.board, reducer.card, reducer.effect);
   });
+  if (targetPlayer.lp < before) {
+    options.onLpPayment?.({ state, player: targetPlayer, sourceCard: options.sourceCard || null,
+      effect: options.effect || null, before, after: targetPlayer.lp, amount: before - targetPlayer.lp,
+      payingActivationCosts: options.payingActivationCosts === true });
+    options.emitSimulatedEvent?.("lp_change", {
+      player: targetPlayer, sourceCard: options.sourceCard || null,
+      before, after: targetPlayer.lp, lpGained: 0, lpLost: before - targetPlayer.lp,
+      lpPaid: before - targetPlayer.lp, damageAmount: 0,
+    });
+  }
   return;
 }
 
@@ -475,6 +552,13 @@ export function applySearchAny(
   } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
   const candidates = getActionCandidates(targetPlayer, action, "deck");
+  options.lastAddedToHandCards = [];
+  options.lastAddedToHandCard = null;
+  for (const context of new Set([options.actionContext, options.activationContext?.actionContext])) {
+    if (!context) continue;
+    context.lastAddedToHandCards = [];
+    context.lastAddedToHandCard = null;
+  }
   const chosen = chooseRankedCards(
     candidates,
     "benefit",
@@ -486,6 +570,13 @@ export function applySearchAny(
   if (!chosen) return;
   removeCardFromZones(targetPlayer, chosen);
   appendSimulatedZoneCard(targetPlayer.hand, chosen);
+  options.lastAddedToHandCards = [chosen];
+  options.lastAddedToHandCard = chosen;
+  for (const context of new Set([options.actionContext, options.activationContext?.actionContext])) {
+    if (!context) continue;
+    context.lastAddedToHandCards = [chosen];
+    context.lastAddedToHandCard = chosen;
+  }
   return;
 }
 
@@ -637,9 +728,15 @@ export function applyDiscardFromHand(
   if (chosen.length < count.min) return STOP_SIMULATION;
 
   for (const card of chosen) {
+    const wasFaceupBeforeMove = card.isFacedown !== true;
+    const receipt: { value: SimulatedMoveReceipt | null } = { value: null };
     if (!moveCardToZone(targetPlayer, card, "graveyard", targetPlayer, {
       state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer: self,
+      ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}),
+      onMoveCommitted: result => { receipt.value = result; },
     })) return STOP_SIMULATION;
+    emitSimulatedMove(card, state, targetPlayer, targetPlayer, "hand", wasFaceupBeforeMove,
+      false, options, action.contextLabel || "discard", true, receipt.value);
   }
   return;
 }

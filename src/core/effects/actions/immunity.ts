@@ -1,15 +1,25 @@
-import type Game from "../../Game.js";
 import { trackFaceupStatus } from "../../Card.js";
-import type { ActionRuntimeCard, EffectContext } from "../../contracts/actionRuntime.js";
 import type { ActionOf } from "../../contracts/actions.js";
 
-interface ImmuneRuntimeCard extends ActionRuntimeCard {
-  immuneToOpponentEffectsUntilTurn?: number;
+interface ImmuneRuntimeCard {
+  readonly cardKind?: string | null | undefined;
+  readonly monsterType?: string | null | undefined;
+  readonly owner?: string | undefined;
+  readonly archetypes?: readonly string[] | undefined;
+  readonly archetype?: string | null | undefined;
+  readonly name?: string | null | undefined;
+  unaffectedByOpponentCardEffects?: boolean;
+  immuneToOpponentEffectsUntilTurn?: number | null;
 }
 
 interface ImmunityActionHost {
-  game: Game;
+  readonly game: { readonly turnCounter?: number };
   readonly ui: { log?(message: string): void } | null;
+}
+
+interface ImmunityActionContext {
+  readonly summonedCard?: ImmuneRuntimeCard | null;
+  readonly player?: { readonly id: string } | null;
 }
 
 /**
@@ -33,7 +43,7 @@ interface ImmunityActionHost {
 export function applyGrantVoidFusionImmunity(
   this: ImmunityActionHost,
   action: ActionOf<"grant_void_fusion_immunity">,
-  ctx: EffectContext,
+  ctx: ImmunityActionContext,
 ): boolean {
   const card = ctx?.summonedCard as ImmuneRuntimeCard | null | undefined;
   const player = ctx?.player;

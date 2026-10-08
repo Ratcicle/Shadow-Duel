@@ -14,6 +14,9 @@ import {
   getSynchroMaterialCombos,
 } from "../../game/summon/synchro.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
+import { getCounterLimitSummonOptions } from "../../actionHandlers/summon/counterLimit.js";
+import { getCounterCount } from "./counters.js";
+import { isActionOptionalNoop } from "../../actionHandlers/shared.js";
 import type {
   ActionOf,
   CardAction,
@@ -363,6 +366,27 @@ function hasSynchroSummonActionCandidate(
   });
 }
 
+interface SummonCapacityPreview {
+  readonly occupiedMonsterZones: number;
+  readonly fieldSlotsFreedBeforeSummon: number;
+}
+
+/** Capacity only: candidate zones may still change when activation costs move cards. */
+export function hasActionSummonCapacity(
+  player: AIActionPlayer | null | undefined,
+  action: CardAction,
+  capacity?: SummonCapacityPreview,
+): boolean {
+  if (!player || action.type !== "special_summon_from_zone" || isActionOptionalNoop(action)) return true;
+  // This query only owns the supplied player's zones. An opposing destination
+  // needs an explicit capacity projection; never substitute the source field.
+  if (action.summonToOwner === "opponent" && !capacity) return true;
+  // Declared allowances and selected physical costs describe the same slots.
+  const freed = Math.max(0, action.fieldSlotsFreedBeforeSummon || 0,
+    capacity?.fieldSlotsFreedBeforeSummon || 0);
+  return (capacity?.occupiedMonsterZones ?? (player.field || []).length) - freed < 5;
+}
+
 export function hasActionZoneCandidates(
   player: AIActionPlayer | null | undefined,
   action: CardAction | null | undefined,
@@ -370,6 +394,20 @@ export function hasActionZoneCandidates(
   activationContext: unknown = null,
 ): boolean {
   if (!player || !action) return true;
+
+  // Mandatory self-summons from hand cannot begin their costs without a
+  // monster slot. Procedures that free slots declare other action variants.
+  if (action.type === "conditional_summon_from_hand" && action.optional === false) {
+    return (player.field || []).length < 5;
+  }
+
+  if (action.type === "special_summon_from_deck_with_counter_limit") {
+    const candidates = getCounterLimitSummonOptions<FilterableCard, { field: readonly FilterableCard[]; deck: readonly FilterableCard[] }>(action,
+      { source: { getCounter: type => getCounterCount(source, type) }, player: { field: player.field || [], deck: player.deck || [] } },
+      { game: { canSpecialSummonUnderRestrictions: card => ({ ok: cardPassesSpecialSummonRestrictions(card, player) }) } },
+      true).candidates;
+    return candidates.length > 0;
+  }
 
   if (action.type === "search_any") {
     return getPlayerZoneCards(player, action.zone || "deck").filter(card => cardMatchesFilter(card, {
@@ -388,13 +426,15 @@ export function hasActionZoneCandidates(
   }
 
   if (action.type === "special_summon_from_zone") {
+    const min = ((action as SpecialSummonAvailabilityAction).count as SelectionCount | undefined)
+      ?.min ?? 1;
+    if (!hasActionSummonCapacity(player, action)) return false;
     const zoneSpec = action.zone || action.sourceZone || "deck";
     const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
     const zoneCards = zoneNames.flatMap((zone) => getPlayerZoneCards(player, zone));
 
     if (action.requireSource) {
-      return !!source && zoneCards.includes(source) && cardPassesSpecialSummonRestrictions(source, player) &&
-        (player.field || []).length - (action.fieldSlotsFreedBeforeSummon || 0) < 5;
+      return !!source && zoneCards.includes(source) && cardPassesSpecialSummonRestrictions(source, player);
     }
 
     const filters: MutableAiCardFilter = {
@@ -440,8 +480,6 @@ export function hasActionZoneCandidates(
         : {}),
     };
     applyContextMaxLevelFilter(filters, action, activationContext);
-    const min = ((action as SpecialSummonAvailabilityAction).count as SelectionCount | undefined)
-      ?.min ?? 1;
     const candidates = zoneCards.filter((card) =>
       cardMatchesFilter(card, filters) &&
       !(filters.excludeSelf && card === source) &&

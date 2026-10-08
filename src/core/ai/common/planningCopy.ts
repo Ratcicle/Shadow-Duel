@@ -1,3 +1,4 @@
+import { copyPlanningActionPresence } from "./actionIdentity.js";
 import { copyModeledPassiveContributions, hasUnmodeledTemporaryPassiveSuppression } from "../../effects/passives/passiveBuffs.js";
 import type {
   AiCardInput,
@@ -13,7 +14,20 @@ import {
 } from "./stateFingerprint.js";
 import { projectOncePerTurnUsage } from "../../game/turn/oncePerTurn.js";
 import type { ActionReplacementEffect } from "../../contracts/actions/shared.js";
+import type { SimulatedUsageCard } from "./simStateUtils.js";
 type SearchCardInput = AiCardInput;
+
+/** Project only one card's canonical OPT evidence; retain the physical card. */
+export function projectRuntimeCardEffectUsage(
+  input: Pick<AiStateInput, "oncePerTurnUsage" | "oncePerTurnTurnCounter" | "turnCounter">,
+  card: AiCardInput & SimulatedUsageCard,
+) {
+  if (!input.oncePerTurnUsage || (input.oncePerTurnTurnCounter !== undefined &&
+    input.oncePerTurnTurnCounter !== input.turnCounter)) return {};
+  return projectOncePerTurnUsage(input.oncePerTurnUsage.card?.get(card),
+    `:card:${String(card.duelCardId ?? card.instanceId)}:presence:${String(card.oncePerTurnResetVersion || 0)}`,
+    input.turnCounter);
+}
 
 /** Copy public, already-resolved destruction registrations into the planner. */
 export function projectRuntimeReplacementEffects(input: AiStateInput, state: AiStateShape): void {
@@ -75,9 +89,7 @@ export function projectRuntimeEffectUsage(input: AiStateInput, state: AiStateSha
     cloned.oncePerTurnUsageByName = { ...cloned.oncePerTurnUsageByName, ...projectOncePerTurnUsage(entries) };
     const copyCard = (card: AiCardInput | null | undefined, target: SimulatedCardState | null | undefined) => {
       if (!card || !target) return;
-      const id: unknown = Reflect.get(card, "duelCardId") ?? card.instanceId;
-      const presence: unknown = Reflect.get(card, "oncePerTurnResetVersion") || 0;
-      const usage = projectOncePerTurnUsage(runtime.card?.get(card), `:card:${String(id)}:presence:${String(presence)}`);
+      const usage = projectRuntimeCardEffectUsage(input, card);
       if (Object.keys(usage).length > 0) target.oncePerTurnUsageByName = { ...target.oncePerTurnUsageByName, ...usage };
     };
     for (const zone of PLANNING_ZONES) {
@@ -159,6 +171,7 @@ export function createPlanningCopy(planningCardsOnly = false) {
         Reflect.set(result, key, copyValue(entry));
     }
     copyModeledPassiveContributions(value, result);
+    copyPlanningActionPresence(value, result);
     return result;
   }
 

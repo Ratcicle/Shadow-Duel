@@ -1,10 +1,11 @@
-import type { AIAction, AIPlannedAction, ExtraDeckMaterialHint } from "../contracts/ai.js";
+import { getPlanningActionPresence, resolvePlanningSourceIndex } from "../ai/common/actionIdentity.js";
+import type { AIAction, AIPlannedAction } from "../contracts/ai.js";
 import type { AiStateInput } from "../contracts/aiState.js";
 import type { BotGamePort, BotRuntimePort } from "../contracts/bot.js";
 import type { GameCard } from "../contracts/cards.js";
 import type { GameRuntimeState } from "../contracts/gameRuntime.js";
 import { fingerprintPlanningState, PLANNING_ZONES } from "../ai/common/stateFingerprint.js";
-import { resolveHandIndexForAction, resolveHandProcedureMaterials } from "./actionValidation.js";
+import { resolveHandIndexForAction, resolveHandProcedureMaterials, resolveAscensionActionForCurrentState, findExtraDeckCardForAction, resolveExtraDeckProcedureMaterials } from "./actionValidation.js";
 
 type CanonicalValue = null | boolean | number | string | CanonicalValue[];
 type MainPhaseIdentityGame = Pick<BotGamePort,
@@ -142,26 +143,11 @@ function indexedCard(cards: readonly GameCard[], index: number | undefined): Gam
   return index !== undefined && Number.isInteger(index) ? cards[index] : undefined;
 }
 
-function fieldOrGraveSource(cards: readonly GameCard[], index: number | undefined, action: AIAction): GameCard | undefined {
+function fieldOrGraveSource(cards: readonly GameCard[], index: number | undefined, action: AIAction, controllerId: string, zone: "field" | "graveyard"): GameCard | undefined {
+  const boundIndex = resolvePlanningSourceIndex(cards, action, controllerId, zone, action.card);
+  if (boundIndex !== null) return cards[boundIndex];
   if (index !== undefined && Number.isInteger(index)) return cards[index];
   return cards.find(card => card.id === action.cardId || (!action.cardId && card.name === action.cardName));
-}
-
-function extraDeckSource(bot: BotRuntimePort, action: Extract<AIAction, { type: "extraDeckProcedure" }>): GameCard | undefined {
-  const matches = (card: GameCard) => card.id === action.cardId || card.name === action.cardName || card.name === action.extraDeckCard?.name;
-  const direct = indexedCard(bot.extraDeck, action.extraDeckIndex);
-  return direct && matches(direct) ? direct : bot.extraDeck.find(matches);
-}
-
-function extraDeckMaterial(bot: BotRuntimePort, hint: ExtraDeckMaterialHint): GameCard | undefined {
-  if (hint.instanceIds?.length) {
-    const found = bot.field.find(card => [card.instanceId, card._instanceId, Reflect.get(card, "uid"), card.uuid, Reflect.get(card, "simInstanceId"), card.fieldPresenceId]
-      .some((id: unknown) => (typeof id === "string" || typeof id === "number") && hint.instanceIds?.includes(id)));
-    if (found) return found;
-  }
-  const matches = (card: GameCard) => (hint.id === undefined || card.id === hint.id) && (!hint.name || card.name === hint.name);
-  const direct = indexedCard(bot.field, hint.index);
-  return direct && matches(direct) ? direct : bot.field.find(matches);
 }
 
 /** Source resolution mirrors runtime executors, including index 0 and their hint precedence. */
@@ -189,7 +175,7 @@ export function fingerprintMainPhaseAction(action: AIPlannedAction, game: MainPh
       source = bot.hand[resolveHandIndexForAction(bot, action, "monster")];
       if (action.type === "summon") choices = { position: action.position, facedown: action.facedown, tributes: action.tributeIndices?.map(index => sourceIdentity(bot.field[index], "tribute")) };
       if (action.type === "handSummonProcedure") {
-        const materials = resolveHandProcedureMaterials(bot, action.materials);
+        const materials = resolveHandProcedureMaterials(bot, action.materials, action);
         if (!materials) throw new TypeError("Unresolved hand procedure materials");
         choices = { position: action.position || "attack", materials: materials.map(material => sourceIdentity(material, "material")) };
       }
@@ -207,17 +193,17 @@ export function fingerprintMainPhaseAction(action: AIPlannedAction, game: MainPh
     case "monsterEffect":
     case "position_change":
       zone = "field";
-      source = fieldOrGraveSource(bot.field, action.fieldIndex, action);
+      source = fieldOrGraveSource(bot.field, action.fieldIndex, action, bot.id, "field");
       if (action.type === "position_change") choices = { position: action.toPosition };
       break;
     case "graveyardMonsterEffect":
     case "graveyardSpellEffect":
       zone = "graveyard";
-      source = fieldOrGraveSource(bot.graveyard, action.graveyardIndex, action);
+      source = fieldOrGraveSource(bot.graveyard, action.graveyardIndex, action, bot.id, "graveyard");
       break;
     case "spellTrapEffect":
       zone = "spellTrap";
-      source = indexedCard(bot.spellTrap, Number.isInteger(action.zoneIndex) ? action.zoneIndex : action.index);
+      source = indexedCard(bot.spellTrap, resolvePlanningSourceIndex(bot.spellTrap, action, bot.id, "spellTrap", action.card) ?? (Number.isInteger(action.zoneIndex) ? action.zoneIndex : action.index));
       break;
     case "fieldEffect":
       zone = "fieldSpell";
@@ -225,8 +211,11 @@ export function fingerprintMainPhaseAction(action: AIPlannedAction, game: MainPh
       break;
     case "ascension":
       zone = "extraDeck";
-      source = action.ascensionCard;
-      choices = { position: action.position, material: sourceIdentity(indexedCard(bot.field, action.materialIndex), "material") };
+      {
+        const resolved = resolveAscensionActionForCurrentState(bot, action);
+        source = resolved?.card;
+        choices = { position: action.position, material: sourceIdentity(resolved?.material, "material") };
+      }
       break;
     case "synchro":
       zone = "extraDeck";
@@ -240,9 +229,11 @@ export function fingerprintMainPhaseAction(action: AIPlannedAction, game: MainPh
       break;
     case "extraDeckProcedure": {
       zone = "extraDeck";
-      source = extraDeckSource(bot, action);
+      source = findExtraDeckCardForAction(bot, action);
       const hints = action.materials ?? (action.materialIndices ?? []).map((index, offset) => ({ index, id: action.materialIds?.[offset], name: action.materialNames?.[offset], instanceIds: action.materialInstanceIds?.[offset] }));
-      choices = { position: action.position || "attack", summonProcedure: action.summonProcedure, materials: hints.map(hint => sourceIdentity(extraDeckMaterial(bot, hint), "material")) };
+      const materials = resolveExtraDeckProcedureMaterials(bot, action);
+      if (materials.length !== hints.length) throw new TypeError("Unresolved Extra Deck procedure materials");
+      choices = { position: action.position || "attack", summonProcedure: action.summonProcedure, materials: materials.map(material => sourceIdentity(material, "material")) };
       break;
     }
     default: {
@@ -266,5 +257,5 @@ export function fingerprintMainPhaseAction(action: AIPlannedAction, game: MainPh
     blueprintSourceCardId: context.blueprintSourceCardId,
     blueprintId: context.blueprintId,
   } : {};
-  return JSON.stringify(canonicalize({ actor: bot.id, type: action.type, zone, source: sourceIdentity(source), effectId: action.effectId || action.effect?.id || context?.effectId || context?.effect?.id, activation, choices }, references));
+  return JSON.stringify(canonicalize({ actor: bot.id, type: action.type, zone, presence: getPlanningActionPresence(action), source: sourceIdentity(source), effectId: action.effectId || action.effect?.id || context?.effectId || context?.effect?.id, activation, choices }, references));
 }

@@ -7,7 +7,7 @@ import type {
   DragonCandidate,
 } from "./contracts.js";
 
-import { CARD_KNOWLEDGE, isExtremeDragon } from "./knowledge.js";
+import { getDragonStrategicCardValue, isExtremeDragon } from "./knowledge.js";
 import { analyzeDragonState } from "./stateAnalysis.js";
 
 const LOW_DRAGON_NAMES = new Set([
@@ -97,15 +97,7 @@ function getEffectiveAtkValue(card: DragonCard | null) {
 }
 
 function cardStrategicValue(card: DragonCard) {
-  if (!card) return 0;
-  const knowledge = CARD_KNOWLEDGE[card.name!] || {};
-  return (
-    (knowledge.value || knowledge.priority || 0) +
-    (card.level || 0) * 0.25 +
-    Math.max(card.atk || 0, card.def || 0) / 1000 +
-    (isExtremeDragon(card) ? 4 : 0) +
-    (card.monsterType === "fusion" || card.monsterType === "ascension" ? 5 : 0)
-  );
+  return getDragonStrategicCardValue(card);
 }
 
 function getOpponent(context: DragonPolicyContext = {}, player: DragonPlayer | null = null) {

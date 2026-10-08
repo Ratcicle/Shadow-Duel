@@ -2,12 +2,12 @@
 
 Este documento registra a direção geral de desenvolvimento do **Shadow Duel** para evitar dispersão entre múltiplas frentes e preservar uma ordem de prioridades clara.
 
-## Estado de referência — 06/10/2026
+## Estado de referência — 07/10/2026
 
 | Frente | Estado conferido no repositório |
 | --- | --- |
 | Estabilização pós-TypeScript | Concluída em 06/10/2026. |
-| IAs atuais | Os nove bots têm estratégias registradas. A comparação de força entre eles precisa de benchmarks atuais em condições equivalentes. |
+| IAs atuais | Plano de arquitetura e paridade concluído para os nove bots. Comparação estatística de força e limites remanescentes continuam pendentes. |
 | Carmim Real | Catálogo proposto, com decisões de regra em aberto; cartas e IA ainda não implementadas. |
 | Suporte adicional de Burning West e Bloomrot | Planejado; escopo e necessidade dependem do diagnóstico dos decks e das IAs. |
 | Gauntlet | Planejado, ainda não implementado. |
@@ -47,6 +47,8 @@ Esta é a fundação para todas as etapas seguintes.
 
 ## 2. Aprimoramento das IAs atuais
 
+**Status:** [plano de arquitetura e paridade](Plano%20de%20Atualiza%C3%A7%C3%A3o%20das%20IAs.md) concluído em **07/10/2026**, com validação focada, corpus determinístico e matriz de 56 duelos. Pesos, prioridades, budgets, cartas, presets e balanceamento foram preservados. Mudanças de decisão por correções de paridade e limitações conhecidas estão discriminadas no plano.
+
 **Objetivo:** aproximar a qualidade dos bots antes de usar a Bot Arena como referência séria de balanceamento.
 
 Motivação:
@@ -54,7 +56,7 @@ Motivação:
 - comparar a qualidade dos bots, incluindo o Tech-Zero, com benchmarks reproduzíveis;
 - resultados de bot vs bot podem refletir qualidade da IA, não apenas força real do deck.
 
-Este documento não contém uma medição atual de desempenho relativo dos bots.
+Os controles realizados verificam refatorações e correções de simulação/execução. Eles não estabelecem a força relativa dos nove bots com confiança estatística. Essa avaliação e os limites restantes de simulação/engine continuam como trabalho futuro desta frente.
 
 Revisar principalmente:
 
@@ -247,7 +249,7 @@ A implementação deve ser feita **depois do Renderer Three.js**, para que esse 
 ## Ordem resumida
 
 1. **Estabilização pós-TypeScript — concluída**
-2. **IAs atuais**
+2. **IAs atuais — arquitetura/paridade concluídas; avaliação de força pendente**
 3. **Carmim Real**
 4. **Burning West + Bloomrot**
 5. **Modo Gauntlet**

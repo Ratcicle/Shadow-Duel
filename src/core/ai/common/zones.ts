@@ -1,13 +1,17 @@
+import { emitSimulatedMove } from "./simulatedActions/movement.js";
+import { retireTrackedDamageStepBuffsForCard } from "../../game/combat/damageStep.js";
+import type { SimulatedActionOptions, SimulatedRuntimeState } from "./simulatedActions/shared.js";
 import { restoreFaceupStatuses } from "../../Card.js";
 import { clearEffectNegation } from "../../effects/negation.js";
 import { captureEventCardPresence } from "../../game/zones/ownership.js";
 import type { EventCardPresenceSnapshot, EventEquipHostExitBinding } from "../../contracts/events.js";
 import { restoreFieldExitStatuses, restoreTemporaryStatuses } from "../../Card.js";
-import { cardMatchesFilter } from "./cardFilters.js";
+import { cardHasArchetype, cardMatchesFilter } from "./cardFilters.js";
 import { countTurnCardActivations } from "../../game/events/activationHistory.js";
 import { getCounterValue } from "./counters.js";
+import type { RuntimePassive } from "../../effects/passives/passiveBuffs.js";
 import { clearLevelModifications, clearPermanentStatBuffs, expireFaceupStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
-import { clearPassiveBuffsForCard, getModeledPassiveContributions, pruneModeledPassiveContributions, registerModeledPassiveContribution, applyPassiveBuffValue, getFieldAuraBuffKey, getFieldCounterStatAuraBuffKey, getEquippedFieldCounterBuffKeys, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
+import { clearPassiveBuffsForCard, getModeledPassiveContributions, pruneModeledPassiveContributions, registerModeledPassiveContribution, applyPassiveBuffValue, getFieldAuraBuffKey, getFieldCounterStatAuraBuffKey, getEquippedCounterBuffKey, getEquippedFieldCounterBuffKeys, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
 import {
   assignAutomaticFieldSlot,
   clearFieldSlot,
@@ -154,6 +158,53 @@ export function refreshSimulatedFieldAuras(state: Pick<AiStateShape, "bot" | "pl
       state.player.fieldSpell === source ? state.player : state.bot;
     source.effects?.forEach((effect, effectIndex) => {
       if (effect.timing !== "passive" || !("passive" in effect) || !effect.passive) return;
+      if (effect.passive.type === "archetype_count_buff" ||
+          effect.passive.type === "graveyard_card_count_buff" ||
+          effect.passive.type === "graveyard_archetype_count_buff" ||
+          effect.passive.type === "graveyard_type_count_buff") {
+        const family = effect.passive.type;
+        const passive: RuntimePassive = effect.passive;
+        const sourceOwner = [state.player, state.bot].find(player => player.id === source.owner) || owner;
+        if (source.isFacedown || source.effectsNegated ||
+            (effect.requireZone && findCardZone(sourceOwner, source) !== effect.requireZone)) return;
+        const perCard = passive.amountPerCard ?? passive.perCard ?? passive.buffPerCard ?? 0;
+        let count = 0;
+        let key: string;
+        if (passive.type === "archetype_count_buff") {
+          if (!passive.archetype) return;
+          const cardKinds = passive.cardKinds || ["monster"];
+          const owners = passive.countOwners || passive.owners || ["self", "opponent"];
+          count = field.filter(card => card.cardKind != null && cardKinds.includes(card.cardKind) &&
+            (!passive.requireFaceup || !card.isFacedown) && cardHasArchetype(card, passive.archetype) &&
+            owners.includes(card.owner === source.owner ? "self" : "opponent") &&
+            (passive.includeSelf !== false || card !== source)).length;
+          key = effect.id || `passive_${source.id}_${effectIndex}`;
+        } else if (passive.type === "graveyard_card_count_buff") {
+          const names = passive.cardNames || passive.names || passive.name || passive.cardName;
+          const cardNames = typeof names === "string" ? [names] : names || [];
+          if (!cardNames.length) return;
+          count = sourceOwner.graveyard.filter(card => (!passive.cardKind || card.cardKind === passive.cardKind) &&
+            card.name != null && cardNames.includes(card.name)).length;
+          key = effect.id || `passive_${source.id}_${effectIndex}_gy_card`;
+        } else if (passive.type === "graveyard_type_count_buff") {
+          const typeName = passive.typeName || passive.monsterType;
+          if (!typeName) return;
+          count = sourceOwner.graveyard.filter(card => card.cardKind === "monster" &&
+            (Array.isArray(card.types) ? card.types : [card.type]).includes(typeName)).length;
+          key = effect.id || `passive_${source.id}_${effectIndex}_gy_type`;
+        } else {
+          if (!passive.archetype) return;
+          const faceupMonsters = sourceOwner.field.filter(card => card.cardKind === "monster" && !card.isFacedown);
+          if (!passive.requireSoleMonster || (faceupMonsters.length === 1 && faceupMonsters[0] === source)) {
+            count = sourceOwner.graveyard.filter(card => card.cardKind === "monster" &&
+              cardHasArchetype(card, passive.archetype)).length;
+          }
+          key = effect.id || `passive_${source.id}_${effectIndex}_gy_archetype`;
+        }
+        registerModeledPassiveContribution(source, key, family);
+        refresh(source, key, count * perCard, passive.stats || ["atk", "def"]);
+        return;
+      }
       if (effect.passive.type === "field_counter_stat_aura") {
         const passive = effect.passive;
         const active = !source.isFacedown && !source.effectsNegated &&
@@ -173,6 +224,23 @@ export function refreshSimulatedFieldAuras(state: Pick<AiStateShape, "bot" | "pl
           refresh(target, key, Math.max(0, getCounterValue(target, counterType)) * amountPerCounter,
             passive.stats || ["atk", "def"]);
         }
+        return;
+      }
+      if (effect.passive.type === "equipped_counter_buff") {
+        const passive = effect.passive;
+        const target = source.equippedTo || source.equipTarget;
+        if (source.cardKind !== "spell" || source.subtype !== "equip" || !target ||
+          typeof target !== "object" || target.cardKind !== "monster" || !field.includes(target) ||
+          (effect.requireZone && findCardZone(owner, source) !== effect.requireZone) ||
+          !isActiveEquipInZone(source, target, owner.spellTrap) || source.effectsNegated ||
+          source.isFacedown ||
+          (passive.targetRequireFaceup !== false && target.isFacedown) ||
+          (passive.targetFilters && !cardMatchesFilter(target, passive.targetFilters))) return;
+        const key = getEquippedCounterBuffKey(source, effect.id, effectIndex, cards.indexOf(source));
+        registerModeledPassiveContribution(target, key, "equipped_counter_buff");
+        refresh(target, key, getCounterValue(source, passive.counterType || "default") *
+          (passive.amountPerCounter ?? passive.amount ?? 0),
+          passive.stats || ["atk", "def"]);
         return;
       }
       if (effect.passive.type === "equipped_field_counter_buff") {
@@ -325,6 +393,13 @@ export function detachSimulatedEquip(
     | null;
   if (!host) return;
 
+  equipCard.effects?.forEach((effect, index) => {
+    if (effect.timing !== "passive" || !("passive" in effect) || effect.passive?.type !== "equipped_counter_buff") return;
+    applyPassiveBuffValue(host, getEquippedCounterBuffKey(equipCard, effect.id, index, 0), 0,
+      effect.passive.stats || ["atk", "def"]);
+  });
+  pruneModeledPassiveContributions(host);
+
   if (Array.isArray(host.equips)) {
     host.equips = host.equips.filter((equip) => equip !== equipCard);
   }
@@ -437,7 +512,7 @@ export interface SimulatedMoveOptions {
   onMoveCommitted?: (receipt: SimulatedMoveReceipt) => void;
   emitSimulatedEvent?: (event: string, payload: object) => void;
   requireDestination?: boolean;
-  state?: Pick<AiStateShape, "bot" | "player">;
+  state?: Pick<AiStateShape, "bot" | "player" | "damageCalculationTempBuffs" | "endOfDamageStepTempBuffs">;
   movedByEffect?: boolean;
   sourceCard?: SimulatedCardState | null;
   sourcePlayer?: SimulatedPlayerState | null;
@@ -594,6 +669,10 @@ export function moveCardToZone(
     restoreFaceupStatuses(card);
     restoreTemporaryStatuses(card);
     if (card.cardKind === "monster") {
+      if (options.state) {
+        retireTrackedDamageStepBuffsForCard(options.state.damageCalculationTempBuffs || [], card);
+        retireTrackedDamageStepBuffsForCard(options.state.endOfDamageStepTempBuffs || [], card);
+      }
       card.summonedTurn = null;
       card.setTurn = null;
       card.positionChangedThisTurn = false;
@@ -714,4 +793,56 @@ export function findCardOwner(
     if (Array.isArray(player.extraDeck) && player.extraDeck.includes(card)) return player;
   }
   return null;
+}
+
+/** Shared placement transaction used by strategy adapters and direct simulation consumers. */
+export function placeSimulatedSpellCard(
+  state: SimulatedRuntimeState,
+  card: SimulatedCardState,
+  options: SimulatedActionOptions = {},
+): { placed: boolean; zone: "fieldSpell" | "spellTrap" | null } {
+    if (!state || !card) return { placed: false, zone: null };
+    const player = state.bot;
+    if (!player) return { placed: false, zone: null };
+
+    if (card.subtype === "field") {
+      if (player.fieldSpell === card) return { placed: true, zone: "fieldSpell" };
+      const fromZone = findCardZone(player, card);
+      const version = card.locationVersion || 0;
+      const moveOptions = { state, movedByEffect: false, sourceCard: card, sourcePlayer: player,
+        ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}) };
+      if (player.fieldSpell) {
+        const previous = player.fieldSpell;
+        const wasFaceup = previous.isFacedown !== true;
+        const negated = previous.effectsNegated === true;
+        const receipt: { value: SimulatedMoveReceipt | null } = { value: null };
+        if (!moveCardToZone(player, previous, "graveyard", player, { ...moveOptions,
+          onMoveCommitted: result => { receipt.value = result; } })) return { placed: false, zone: null };
+        emitSimulatedMove(previous, state, player, player, "fieldSpell", wasFaceup, negated,
+          options, null, false, receipt.value);
+        // Departure events may refill the slot or move the incoming source.
+        if (player.fieldSpell || (fromZone && (findCardZone(player, card) !== fromZone ||
+            (card.locationVersion || 0) !== version))) return { placed: false, zone: null };
+      }
+      const receipt: { value: SimulatedMoveReceipt | null } = { value: null };
+      if (!moveCardToZone(player, card, "fieldSpell", player, { ...moveOptions,
+        onMoveCommitted: result => { receipt.value = result; } })) return { placed: false, zone: null };
+      card.isFacedown = false;
+      emitSimulatedMove(card, state, player, player, fromZone, true, false, options, null, false, receipt.value);
+      return { placed: true, zone: "fieldSpell" };
+    }
+
+    if (
+      card.subtype === "continuous" ||
+      card.subtype === "equip" ||
+      card.subtype === "quick"
+    ) {
+      player.spellTrap = player.spellTrap || [];
+      if (!player.spellTrap.includes(card)) {
+        appendSimulatedFieldCard(player.spellTrap, card);
+      }
+      return { placed: true, zone: "spellTrap" };
+    }
+
+    return { placed: false, zone: null };
 }

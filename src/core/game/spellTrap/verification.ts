@@ -30,8 +30,8 @@ interface SpellTrapVerificationHost {
  * @returns {boolean} True if the trap can be activated.
  */
 export function canActivateTrap(
-  this: SpellTrapVerificationHost,
-  card: GameCard | null | undefined,
+  this: Pick<SpellTrapVerificationHost, "turnCounter" | "devLog">,
+  card: { [Key in "name" | "cardKind" | "isFacedown" | "turnSetOn"]?: GameCard[Key] | undefined } | null | undefined,
 ): boolean {
   this.devLog?.("CAN_ACTIVATE_TRAP", {
     summary: `Checking ${card?.name}: kind=${card?.cardKind}, facedown=${card?.isFacedown}, turnSetOn=${card?.turnSetOn}, currentTurn=${this.turnCounter}`,

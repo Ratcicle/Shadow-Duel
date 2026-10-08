@@ -11,7 +11,7 @@ export async function executeHandSummonProcedureAction(
   if (!canResolveHandSummonProcedureActionForCurrentState(bot, action, game)) return false;
   const index = bot.resolveHandIndexForAction(action, "monster");
   const card = bot.hand[index];
-  const materials = resolveHandProcedureMaterials(bot, action.materials);
+  const materials = resolveHandProcedureMaterials(bot, action.materials, action);
   if (!card || !materials) return false;
   const result = await game.performHandSummonProcedure(card, bot, {
     materials,

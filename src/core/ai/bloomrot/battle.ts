@@ -1,7 +1,14 @@
 import type { BloomrotCard, BloomrotPlayer, BloomrotAnalysis, BloomrotPlanningGame } from "./analysis.js";
 import type { AIPlanningProfile } from "../../contracts/ai.js";
-type BattleSummary = { damage?: number; destroyedCards?: Array<{ owner?: string; cardKind?: string | undefined }> };
-type BattleContext = { attacker?: BloomrotCard | null; target?: BloomrotCard | null; lethalNow?: boolean; attackerSurvived?: boolean; targetSurvived?: boolean; summary?: BattleSummary; opponent?: BloomrotPlayer; opponentLpAfter?: number; game?: BloomrotPlanningGame };
+import type { EffectDefinition } from "../../contracts/effects.js";
+import type { SimulatedCardState } from "../../contracts/aiState.js";
+import type { SimulatedActionOptions, SimulatedRuntimeState } from "../common/simulatedActions/shared.js";
+import { emitSimulatedBattleDamage, emitSimulatedBattleDestroy } from "../common/simulation.js";
+import { findCardOwner } from "../common/zones.js";
+type BattleSummary = { damage?: number; destroyedCards?: Array<{ owner?: string; cardKind?: string | undefined;
+  card?: SimulatedCardState; destroyedBy?: string; position?: string | null }> };
+type BattleContext = { attacker?: BloomrotCard | null; target?: BloomrotCard | null; lethalNow?: boolean; attackerSurvived?: boolean; targetSurvived?: boolean; summary?: BattleSummary; opponent?: BloomrotPlayer; opponentLpAfter?: number; game?: BloomrotPlanningGame;
+  state?: SimulatedRuntimeState; options?: SimulatedActionOptions; battlePlan?: { attackerCard?: BloomrotCard | null } };
 import {
   getBattleStatForAttackTarget,
   getEffectiveAtk,
@@ -62,13 +69,13 @@ function canAttack(card: BloomrotCard | null | undefined) {
   );
 }
 
-function battleAtk(attacker: BloomrotCard | null | undefined, target: BloomrotCard | null | undefined = null) {
+function battleAtk(attacker: BloomrotCard | null | undefined, target: BloomrotCard | null | undefined = null, state?: SimulatedRuntimeState) {
   let atk = getEffectiveAtk(attacker);
   if (
     attacker?.name === N.ROT_STAG &&
     target?.cardKind === "monster" &&
     getSporeCount(target) > 0 &&
-    attacker._simBloomrotRotStagBattleBoost !== true
+    !state?.damageCalculationTempBuffs?.some(buff => buff.card === attacker && Number(buff.atk || 0) > 0)
   ) {
     atk += 500;
   }
@@ -146,7 +153,7 @@ function hasMeaningfulBattleSignal(analysis: BloomrotAnalysis = {}) {
   return false;
 }
 
-export function buildBloomrotPlanningProfile(analysis: BloomrotAnalysis = {}, context: BattleContext = {}): AIPlanningProfile & { reasons: string[]; critical: boolean } {
+export function buildBloomrotPlanningProfile(analysis: BloomrotAnalysis = {}, context: Pick<BattleContext, "game"> = {}): AIPlanningProfile & { reasons: string[]; critical: boolean } {
   const game = context.game || analysis.game || {};
   const manual = game?.turnLineSearchEnabled === true;
   const phase = String(analysis.phase || game.phase || "main1").toLowerCase();
@@ -181,28 +188,28 @@ export function buildBloomrotPlanningProfile(analysis: BloomrotAnalysis = {}, co
   };
 }
 
-export function prepareBloomrotSimulatedBattle({ attacker, target }: BattleContext = {}) {
-  if (!attacker || !isBloomrotMonster(attacker) || isBloomrotToken(attacker)) {
-    return [];
-  }
-  const rewards = [];
-  if (
-    attacker.name === N.ROT_STAG &&
-    target?.cardKind === "monster" &&
-    getSporeCount(target) > 0
-  ) {
-    attacker.atk = Math.max(0, Number(attacker.atk || 0) + 500);
-    attacker._simBloomrotRotStagBattleBoost = true;
-    rewards.push("Rot-Stag +500 vs spored monster");
-  }
-  if (
-    attacker.name === N.CARRIONCAP &&
-    target?.cardKind === "monster" &&
-    getSporeCount(target) > 0
-  ) {
-    attacker._simBloomrotCarrioncapMarkedBattle = true;
-  }
-  return rewards;
+function scopedBloomrotEffects(card: SimulatedCardState, event: "battle_damage" | "battle_destroy"): EffectDefinition[] {
+  if (!isBloomrotMonster(card) || isBloomrotToken(card)) return [];
+  return card.effects?.filter(effect => effect.timing === "on_event" && effect.event === event &&
+    !!effect.actions?.length && effect.actions.every(action => event === "battle_damage"
+      ? action.type === "buff_stats_temp" && action.duration === "damage_calculation"
+      : action.type === "optional_target_actions" && action.actions?.every(nested => nested.type === "add_counter"))) || [];
+}
+
+export function prepareBloomrotSimulatedBattle({ state, attacker, target, options = {} }: BattleContext = {}): string[] {
+  if (!state || !attacker || !target) return [];
+  const physicalAttacker = [state.bot, state.player].flatMap(player => player.field).find(card => card === attacker);
+  const physicalTarget = [state.bot, state.player].flatMap(player => player.field).find(card => card === target);
+  if (!physicalAttacker || !physicalTarget) return [];
+  const attackerOwner = findCardOwner(state, physicalAttacker), defenderOwner = findCardOwner(state, physicalTarget);
+  if (!attackerOwner || !defenderOwner || attackerOwner === defenderOwner) return [];
+  const sources = [physicalAttacker, physicalTarget];
+  const effects = sources.flatMap(card => scopedBloomrotEffects(card, "battle_damage"));
+  const before = sources.map(card => Number(card.atk || 0));
+  if (effects.length) emitSimulatedBattleDamage(state, { attacker: physicalAttacker, defender: physicalTarget,
+    target: physicalTarget, attackerOwner, defenderOwner, recordNegatedBattleActivation: true }, options, sources, effects);
+  return Number(physicalAttacker.atk || 0) > before[0]!
+    ? ["Rot-Stag +500 vs spored monster"] : [];
 }
 
 function bestSporeRewardTarget(opponent: BloomrotPlayer = {}) {
@@ -211,29 +218,32 @@ function bestSporeRewardTarget(opponent: BloomrotPlayer = {}) {
     .sort((a, b) => cardThreat(b) - cardThreat(a))[0] || null;
 }
 
-export function applyBloomrotSimulatedBattleRewards({
-  battlePlan,
-  summary,
-  opponent,
-}: { battlePlan?: { attackerCard?: BloomrotCard | null }; summary?: BattleSummary; opponent?: BloomrotPlayer } = {}) {
+export function applyBloomrotSimulatedBattleRewards({ state, battlePlan, summary, opponent, options = {} }: BattleContext = {}): string[] {
   const attacker = battlePlan?.attackerCard;
-  if (!attacker || attacker.name !== N.CARRIONCAP) return [];
-  const destroyedOpponentMonster = asArray(summary?.destroyedCards).some(
-    (card) => card?.owner === "opponent" && card?.cardKind === "monster",
-  );
-  if (!destroyedOpponentMonster || attacker._simBloomrotCarrioncapMarkedBattle !== true) {
-    return [];
+  if (!state || !attacker) return [];
+  const source = [state.bot, state.player].flatMap(player => player.field).find(card => card === attacker);
+  if (!source) return [];
+  const effects = scopedBloomrotEffects(source, "battle_destroy");
+  if (!effects.length) return [];
+  const owner = findCardOwner(state, source);
+  if (!owner) return [];
+  const other = owner === state.bot ? state.player : state.bot;
+  const target = bestSporeRewardTarget(opponent || other);
+  const targetDefinitions = effects.flatMap(effect => effect.actions?.flatMap(action =>
+    action.type === "optional_target_actions" ? action.targets || [] : []) || []);
+  const preferences = target?.instanceId == null ? {} : Object.fromEntries(targetDefinitions.map(definition =>
+    [definition.id, { preferredInstanceIds: [target.instanceId] }]));
+  const rewardOptions: SimulatedActionOptions = { ...options, actionContext: { ...options.actionContext,
+    targetPreferences: { ...preferences, ...options.actionContext?.targetPreferences } } };
+  const recipients = [...other.field, ...other.spellTrap, ...(other.fieldSpell ? [other.fieldSpell] : [])];
+  const before = recipients.map(card => getSporeCount(card));
+  for (const entry of summary?.destroyedCards || []) {
+    if (!entry.card || (entry.destroyedBy && entry.destroyedBy !== "battle")) continue;
+    emitSimulatedBattleDestroy(state, { attacker: source, destroyed: entry.card,
+      destroyedOwner: entry.owner === "opponent" ? other : owner, destroyedPosition: entry.position || null,
+      battleDestroyer: source, recordNegatedBattleActivation: true }, rewardOptions, [source], effects);
   }
-  const target = bestSporeRewardTarget(opponent);
-  if (target) {
-    if (typeof target.addCounter === "function") {
-      target.addCounter("spore", 1);
-    } else {
-      (target as { counters?: object }).counters = target.counters || {};
-      (target.counters as { spore?: number }).spore = Math.max(0, Number((target.counters as { spore?: number }).spore || 0)) + 1;
-    }
-  }
-  return ["Carrioncap battle spore reward"];
+  return recipients.some((card, index) => getSporeCount(card) > before[index]!) ? ["Carrioncap battle spore reward"] : [];
 }
 
 export function scoreBloomrotBattleAttackCandidate(context: Omit<BattleContext, "game"> = {}) {
@@ -254,7 +264,7 @@ export function scoreBloomrotBattleAttackCandidate(context: Omit<BattleContext, 
   const positiveDamage = Math.max(0, Number(summary?.damage || 0));
   const damageTaken = Math.max(0, -Number(summary?.damage || 0));
   const markedTarget = targetIsMarked(target);
-  const predictedAtk = battleAtk(attacker, target);
+  const predictedAtk = battleAtk(attacker, target, context.state);
   const predictedDestroy = Boolean(target && predictedAtk > battleStat(target));
   const destroyedTarget = Boolean(target && (!targetSurvived || predictedDestroy));
   const predictedSurvival = !target || wouldSurvive(attacker, target);

@@ -1,4 +1,6 @@
 import { getEffectiveAtk } from "../cardStats.js";
+import { clearSimulatedTemporaryControl, emitSimulatedMove, getOriginalOwner } from "./movement.js";
+import { buildEffectBlueprint, getBlueprintStorageConfig } from "../../../effects/blueprints/index.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
 import { estimateMonsterValue, hasArchetype } from "../cardValue.js";
 import {
@@ -18,6 +20,7 @@ import {
 import {
   attachSimulatedEquip,
   findCardOwner,
+  findCardZone,
   moveCardToZone,
   removeCardFromZones,
 } from "../zones.js";
@@ -35,9 +38,10 @@ import {
   STOP_SIMULATION,
 } from "./shared.js";
 import type { ActionCase } from "../../../contracts/actions.js";
-import type { SimulatedCardState } from "../../../contracts/aiState.js";
+import type { AiCardInput, SimulatedCardState, SimulatedPlayerState, SimulatedDelayedSummonAction } from "../../../contracts/aiState.js";
+import type { SimulatedMoveReceipt } from "../zones.js";
 import type {
-  DuelEventName,
+  DuelEventName, EffectDefinition,
 } from "../../../contracts/effects.js";
 import type {
   CanonicalSelectionMap,
@@ -54,6 +58,44 @@ type LegacyTemporaryEventAction = SimulatedActionHandlerContext<
 >["action"] & { readonly id?: string };
 
 type ChosenCase = ActionCase | string | number | null | undefined;
+
+/** AI storage follows runtime metadata; the pure builders never see a live Game. */
+export function storeSimulatedBlueprintAfterResolution(
+  player: SimulatedPlayerState,
+  source: AiCardInput,
+  effect: EffectDefinition | null | undefined,
+): boolean {
+  if (source.cardKind !== "spell" || !source.name || !effect) return false;
+  const holder = player.spellTrap.find(card => getBlueprintStorageConfig({ name: card.name || "", blueprintStorage: card.blueprintStorage ?? null }));
+  if (!holder) return false;
+  const config = getBlueprintStorageConfig({ name: holder.name || "", blueprintStorage: holder.blueprintStorage ?? null });
+  if (!config || (config.requireFaceup && holder.isFacedown) ||
+      (config.requireEquipped && !holder.equippedTo) || holder.effectsNegated) return false;
+  if (config.allowedCardKinds?.length && !config.allowedCardKinds.includes(source.cardKind)) return false;
+  if (config.allowedArchetypes?.length && !config.allowedArchetypes.some(archetype => hasArchetype(source, archetype))) return false;
+  if (!Reflect.get(effect, config.storableEffectFlag) && !Reflect.get(source, config.storableEffectFlag)) return false;
+  const stored = holder.state?.blueprintStorage?.storedBlueprints || [];
+  const hasSpace = stored.length < config.maxSlots;
+  if ((!hasSpace && !config.allowOverwrite) || !config.autoStoreForAI) return false;
+  const blueprint = buildEffectBlueprint({
+    ...(source.id === undefined ? {} : { id: source.id }),
+    name: source.name,
+    cardKind: source.cardKind,
+    ...(source.subtype === undefined ? {} : { subtype: source.subtype }),
+    ...(source.archetype === undefined ? {} : { archetype: source.archetype }),
+    ...(source.description === undefined ? {} : { description: source.description }),
+  }, effect);
+  if (!blueprint?.effectSnapshot) return false;
+  const entry = { ...blueprint, effectSnapshot: blueprint.effectSnapshot, respectUsageLimits: config.respectStoredEffectUsageLimits,
+    shortRulesText: blueprint.shortRulesText || "", displayName: blueprint.displayName || source.name,
+    // Legacy AI projection alias for a stored blueprint; no routing depends on a card name.
+    _simStoredByGrimoire: true };
+  holder.state ??= {};
+  holder.state.blueprintStorage ??= { storedBlueprints: [] };
+  if (hasSpace) holder.state.blueprintStorage.storedBlueprints.push(entry);
+  else holder.state.blueprintStorage.storedBlueprints[0] = entry;
+  return true;
+}
 
 export function applyRegisterSynchroMaterialFollowup(
   ctx: SimulatedActionHandlerContext<"register_synchro_material_followup">,
@@ -115,6 +157,55 @@ export function applyScheduleSpecialSummon(
     scheduledTurn: state.turnCounter || 0,
     priority: Number.isFinite(Number(action.priority)) ? Number(action.priority) : 1,
   });
+}
+
+/** Project the declared delayed exchange using normal movement and scheduling. */
+export function applyAbyssalSerpentDelayedSummon(
+  ctx: SimulatedActionHandlerContext<"abyssal_serpent_delayed_summon">,
+): boolean {
+  const { action, state, self, opponent, options, selections } = ctx;
+  const source = options.sourceCard;
+  const target = resolveTargetsForAction({ targetRef: action.targetRef || "abyssal_target" },
+    selections || {}, options, opponent)[0];
+  if (!source || !target || !self.field.includes(source) || !opponent.field.includes(target)) return false;
+  const targetWasExtraMonster = target.monsterType === "fusion" || target.monsterType === "ascension";
+  const summons: SimulatedDelayedSummonAction["payload"]["summons"] = [];
+  // Runtime schedules this action through moveCard without an effect source.
+  // Preserve those event/replacement facts instead of inferring a new rule.
+  const movementOptions: SimulatedActionOptions = {
+    sourceCard: null, effect: null,
+    ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}),
+  };
+  for (const card of [source, target]) {
+    const holder = findCardOwner(state, card);
+    if (!holder) continue;
+    const fromZone = findCardZone(holder, card);
+    const destination = fromZone === "field" ? getOriginalOwner(state, card, holder) : holder;
+    const wasFaceup = card.isFacedown !== true;
+    const wasNegated = fromZone === "field" && card.effectsNegated === true;
+    const receipt: { value: SimulatedMoveReceipt | null } = { value: null };
+    if (!moveCardToZone(destination, card, "graveyard", holder, {
+      state, movedByEffect: false, sourceCard: null, sourcePlayer: null,
+      ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}),
+      onMoveCommitted: value => { receipt.value = value; },
+    })) continue;
+    if (fromZone === "field") clearSimulatedTemporaryControl(state, card);
+    emitSimulatedMove(card, state, holder, destination, fromZone, wasFaceup, wasNegated,
+      movementOptions, null, false, receipt.value);
+    const graveOwner = [state.player, state.bot].find(player => player.graveyard.includes(card));
+    if (!graveOwner) continue;
+    summons.push({ card, owner: graveOwner.id, placementActorId: self.id,
+      fromZone: "graveyard", expectedLocationVersion: card.locationVersion || 0,
+      statusesOnSummon: null, summonMethod: "special", summonProcedure: null,
+      getsBuffIfTargetWasFusionOrAscension: card === source && targetWasExtraMonster });
+  }
+  if (!summons.length) return false;
+  state._simGeneratedInstanceCounter = (state._simGeneratedInstanceCounter || 0) + 1;
+  state.delayedActions ??= [];
+  state.delayedActions.push({ id: `sim_delayed_action_${state._simGeneratedInstanceCounter}`,
+    actionType: "delayed_summon", triggerCondition: { phase: "standby", player: opponent.id },
+    payload: { summons }, scheduledTurn: state.turnCounter || 0, priority: 1 });
+  return true;
 }
 
 export function applyNegateSummonOrActivationAndDestroy(

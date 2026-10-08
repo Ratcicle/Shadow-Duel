@@ -1,17 +1,24 @@
-import { appendSimulatedZoneCard } from "../common/zones.js";
+import { ARCHETYPE, BW } from "./knowledge.js";
+import { attachSimulatedEventEmitter, applyGenericSimulatedMainPhaseAction, applySimulatedEffectResolution, prepareSimulatedEffectActivation, recordSimulatedMaterialEffectIdentity } from "../common/simulation.js";
+import { applySimulatedActions } from "../common/simulatedActions/index.js";
+import type { SimulatedActionOptions, SimulatedRuntimeState, SimulatedTemporaryEventEffect } from "../common/simulatedActions/shared.js";
+import { markSimulatedEffectUsage } from "../common/simStateUtils.js";
+import { captureSimulatedReferences, isSimulatedReferencePresenceValid, isSimulatedSourcePresenceValid } from "../common/simulatedActions/shared.js";
+import { effectRequiresSourceAtResolution } from "../../chain/activation.js";
+import { findCardZone } from "../common/zones.js";
+import { canActivateTrap } from "../../game/spellTrap/verification.js";
 import type { SimulatedCardState, SimulatedCardShape, SimulatedPlayerState, AiStateShape } from "../../contracts/aiState.js";
-import type { CardDeclaredValue, CardDeclaredValueDetail, CardDeclaredValueMap } from "../../contracts/cards.js";
+import type { CardDeclaredValue, CardDeclaredValueDetail } from "../../contracts/cards.js";
 import type { GameCard } from "../../contracts/cards.js";
 type ReadCard = GameCard | SimulatedCardShape;
 type Player = Partial<SimulatedPlayerState>;
-type DestroyedCard = Pick<SimulatedCardShape, "id" | "name" | "type" | "archetype" | "archetypes" | "level" | "atk" | "def" | "baseAtk"> & { cardKind?: string | undefined; monsterType?: string | null; owner?: string; destroyedBy?: string };
+type DestroyedCard = Pick<SimulatedCardShape, "id" | "name" | "type" | "archetype" | "archetypes" | "level" | "atk" | "def" | "baseAtk"> & { card?: SimulatedCardState; cardKind?: string | undefined; monsterType?: string | null; owner?: string; destroyedBy?: string };
 type Summary = { damage?: number; destroyedNames?: string[]; destroyedCards?: DestroyedCard[]; rewardNames?: unknown[] };
-type TemporaryEntry = { ownerId?: string; expiresOnTurn?: number; sourceArchetypes?: string[]; sourceArchetype?: string; sourceName?: string; sourceEffectId?: string; effect?: { id?: string }; declaredValues?: CardDeclaredValueMap; usesRemaining?: number };
-type State = Partial<AiStateShape> & { temporaryEventEffects?: TemporaryEntry[] };
+type State = Partial<AiStateShape> & { temporaryEventEffects?: SimulatedTemporaryEventEffect[] };
 type Strategy = { chooseSpecialSummonPosition?(card: SimulatedCardState, context: { game: State }): string | null };
-type RewardContext = { state: State; bot: SimulatedPlayerState; opponent: SimulatedPlayerState; attacker: SimulatedCardState; destroyed: DestroyedCard; summary: Summary; strategy?: Strategy | null | undefined };
+type RewardContext = { state: SimulatedRuntimeState; bot: SimulatedPlayerState; opponent: SimulatedPlayerState; attacker: SimulatedCardState; destroyed: DestroyedCard; summary: Summary; options?: object | undefined; onEvent?: (event: string, payload: object) => void; strategy?: Strategy | null | undefined };
 type BattleContext = { state?: State; attacker?: SimulatedCardState; target?: SimulatedCardState | null; bot?: SimulatedPlayerState };
-type RewardInput = { state?: State; battlePlan?: { attackerCard?: SimulatedCardState }; summary?: Summary; bot?: SimulatedPlayerState; opponent?: SimulatedPlayerState; strategy?: Strategy | null };
+type RewardInput = { state?: SimulatedRuntimeState; battlePlan?: { attackerCard?: SimulatedCardState }; summary?: Summary; bot?: SimulatedPlayerState; opponent?: SimulatedPlayerState; options?: object; strategy?: Strategy | null };
 type ScoreContext = { attacker?: ReadCard | null; target?: ReadCard | null; lethalNow?: boolean; attackerSurvived?: boolean; targetSurvived?: boolean; opponent?: { lp?: number }; opponentLpAfter?: number; summary?: Summary };
 import {
   getBattleStatForAttackTarget,
@@ -19,27 +26,6 @@ import {
   getEffectiveDef,
 } from "../common/cardStats.js";
 import { getCardInstanceId } from "../common/targetSelection.js";
-import { moveCardToZone } from "../common/zones.js";
-
-const ARCHETYPE = "Burning West";
-
-const BW = {
-  GUNSLINGER: "Gunslinger of the Burning West",
-  WANTED: "Wanted in the Burning West",
-  UNDERTAKER: "Undertaker of the Burning West",
-  BUTCHER: "Butcher of the Burning West",
-  SPECIALIST: "Specialist of the Burning West",
-  PEACEMAKER: "Burning Peacemaker",
-  QUICK_DRAW: "Quick Draw in the Burning West",
-  FUNERAL: "Funeral at Sunset",
-  DEADEYE: "Deadeye of the Burning West",
-  PREACHER: "Preacher of the Burning West",
-  SHERIFF: "Sheriff of the Burning West",
-  AMBUSH: "Ambush in Crash Town",
-  REWARD: "Burning Reward",
-  LAW: "Law in the Burning West",
-  EXECUTIONER: "Executioner of the Burning West",
-};
 
 const RECOVERY_PRIORITY = [
   BW.LAW,
@@ -143,7 +129,7 @@ function activeDeclarationSources(state: State, bot: Player = {}) {
   return sources;
 }
 
-function sourceHasMatchingDeclaration(state: State, source: { declaredValues?: CardDeclaredValueMap } | null | undefined, destroyed: Pick<ReadCard, "type">, stateKey: string | null = null) {
+function sourceHasMatchingDeclaration(state: State, source: { declaredValues?: object } | null | undefined, destroyed: Pick<ReadCard, "type">, stateKey: string | null = null) {
   const entries = Object.entries(source?.declaredValues || {});
   return entries.some(([key, declaration]) => {
     if (stateKey && key !== stateKey) return false;
@@ -157,26 +143,13 @@ function destroyedHadAnyBurningWestDeclaredType(state: State, bot: Player, destr
   );
 }
 
-function destroyedMatchesWanted(state: State, bot: Player, destroyed: DestroyedCard) {
-  return (bot.spellTrap || []).some(
-    (card) =>
-      card?.name === BW.WANTED &&
-      isFaceUp(card) &&
-      sourceHasMatchingDeclaration(
-        state,
-        { declaredValues: card.declaredValues || {} },
-        destroyed,
-        "burning_west_wanted_type",
-      ),
-  );
-}
-
 function findDeadeyeTemporaryEffect(state: State, bot: Player, destroyed: DestroyedCard) {
   return (state.temporaryEventEffects || []).find((entry) => {
     if (!entry || entry.ownerId !== bot.id) return false;
-    if (entry.usesRemaining !== undefined && Number(entry.usesRemaining) <= 0) {
+    if (entry.usesRemaining !== null && Number(entry.usesRemaining) <= 0) {
       return false;
     }
+    if (entry.expiresOnTurn !== null && currentTurn(state) > entry.expiresOnTurn) return false;
     const sourceName = entry.sourceName || "";
     const effectId = entry.sourceEffectId || entry.effect?.id || "";
     if (sourceName !== BW.DEADEYE && !String(effectId).includes("deadeye")) {
@@ -184,11 +157,6 @@ function findDeadeyeTemporaryEffect(state: State, bot: Player, destroyed: Destro
     }
     return sourceHasMatchingDeclaration(state, entry, destroyed, "burning_west_deadeye_type");
   });
-}
-
-function ensureMeta(state: State) {
-  if (!state._simBurningWest) state._simBurningWest = {};
-  return state._simBurningWest;
 }
 
 function sameCard(a: GameCard | SimulatedCardState | null | undefined, b: GameCard | SimulatedCardState | null | undefined) {
@@ -274,27 +242,6 @@ function recordDestroyed(summary: Summary | null | undefined, card: ReadCard | n
   });
 }
 
-function summonFromCurrentZone(bot: SimulatedPlayerState, card: SimulatedCardState, strategy: Strategy | null | undefined, state: State) {
-  if (!bot || !card || (bot.field || []).length >= 5) return false;
-  const position =
-    strategy?.chooseSpecialSummonPosition?.(card, { game: state }) ||
-    "attack";
-  moveCardToZone(bot, card, "field");
-  card.position = position === "defense" ? "defense" : "attack";
-  card.isFacedown = false;
-  card.hasAttacked = false;
-  card.attacksUsedThisTurn = 0;
-  card.cannotAttackThisTurn = false;
-  card.lastSummonMethod = "special";
-  return true;
-}
-
-function recoverCard(bot: SimulatedPlayerState, card: SimulatedCardState) {
-  if (!bot || !card) return false;
-  moveCardToZone(bot, card, "hand");
-  return true;
-}
-
 function battleDestroyedOpponentMonsters(summary: Summary = {}) {
   return (summary.destroyedCards || []).filter(
     (entry) =>
@@ -316,120 +263,164 @@ function cleanupSheriffBoost(card: SimulatedCardState | null | undefined) {
   delete card._simBurningWestSheriffDamageStepBoost;
 }
 
-function applyWantedReward({ state, bot, destroyed, summary, strategy }: Pick<RewardContext, "state" | "bot" | "destroyed" | "summary" | "strategy">) {
-  const meta = ensureMeta(state);
-  if (meta.wantedRewardUsed) return [];
-  if (!destroyedMatchesWanted(state, bot, destroyed)) return [];
-  const rewards = [];
-  meta.wantedRewardUsed = true;
+/** Keep this hook's established battle choices separate from main-phase scores.
+ * The shared executor owns conditions, payable costs, usage and child events.
+ * Battle rewards are deliberately scoped; publishing battle_destroy globally
+ * would also activate rewards still handled by other strategies' hooks. */
+function rewardOptions(context: RewardContext, source?: SimulatedCardState): SimulatedActionOptions {
+  const { state, bot, opponent, attacker, destroyed, strategy } = context;
+  const destroyedCard = destroyed.card || destroyed as SimulatedCardState;
+  const options: SimulatedActionOptions = {
+    selfId: "bot", enableSimulatedEvents: true, ...(source ? { sourceCard: source } : {}),
+    actionContext: { player: bot, opponent, attacker, battleDestroyer: attacker,
+      battleDestroyers: [attacker], destroyed: destroyedCard, destroyedOwner: opponent },
+    chooseActionCase: cases => {
+      const preferred = bot.field.length < 5 && chooseBestMonster(bot.hand.filter(card => Number(card.level || 0) <= 5))
+        ? "burning_west_wanted_summon" : chooseBestMonster(bot.field.filter(isFaceUp))
+          ? "burning_west_wanted_buff" : "burning_west_wanted_recover";
+      return cases.find(entry => Reflect.get(entry, "id") === preferred) || null;
+    },
+    rankSearchCandidates: (candidates, action) => {
+      const ordered = candidates.slice();
+      if (action.type === "discard_from_hand" || (action.type === "move" && action.contextLabel === "discard")) {
+        return ordered.sort((a, b) => monsterValue(a) - monsterValue(b));
+      }
+      if (action.type === "destroy") {
+        const best = chooseSpellTrapToDestroy({ spellTrap: ordered });
+        return best ? [best, ...ordered.filter(card => card !== best)] : ordered;
+      }
+      const best = candidates.some(card => card.cardKind === "monster")
+        ? chooseBestMonster(ordered) : chooseRecovery(ordered);
+      return best ? [best, ...ordered.filter(card => card !== best)] : ordered;
+    },
+    chooseSpecialSummonCards: candidates => {
+      const best = chooseBestMonster([...candidates]);
+      return best ? [best] : [];
+    },
+    chooseSpecialSummonPosition: card => strategy?.chooseSpecialSummonPosition?.(card, { game: state }) === "defense" ? "defense" : "attack",
+  };
+  const observer: unknown = context.options && Reflect.get(context.options, "onSimulatedEvent");
+  return attachSimulatedEventEmitter(state, { ...options, onSimulatedEvent: (event, payload) => {
+    if (typeof observer === "function") observer(event, payload);
+    context.onEvent?.(event, payload);
+  } });
+}
 
-  const handSummon = chooseBestMonster(
-    (bot.hand || []).filter((card) => Number(card.level || 0) <= 5),
-  );
-  if ((bot.field || []).length < 5 && handSummon) {
-    if (summonFromCurrentZone(bot, handSummon, strategy, state)) {
-      rewards.push(`Wanted summoned ${handSummon.name}`);
-      return rewards;
+function resolveReward(context: RewardContext, source: SimulatedCardState, effectId: string): boolean {
+  if (source.effectsNegated) return false;
+  const parent = source.effects?.find(effect => effect.id === effectId);
+  if (!parent || (parent.requireFaceup && source.isFacedown)) return false;
+  const zone = findCardZone(context.bot, source);
+  if (parent.requireZone && zone !== parent.requireZone) return false;
+  const options = rewardOptions(context, source);
+  const prepared = prepareSimulatedEffectActivation(context.state, source, parent, options);
+  if (!prepared) return false;
+  const { effect, selections } = prepared;
+  const required = effectRequiresSourceAtResolution({ name: source.name || "",
+    ...(source.cardKind ? { cardKind: source.cardKind } : {}),
+    ...(source.subtype ? { subtype: source.subtype } : {}) }, effect, zone);
+  const projectedEffect = { ...effect, requiresSourceAtResolution: required };
+  const usageSource = { ...source };
+  const snapshots = captureSimulatedReferences(effect, selections, context.bot, context.opponent, { self: [source] });
+  const resolutionOptions: SimulatedActionOptions = { ...options, effect: projectedEffect, referenceSnapshots: snapshots,
+    actionResults: {}, payingActivationCosts: true };
+  if (!applySimulatedActions({ state: context.state, selfId: "bot", selections,
+    actions: effect.activationCosts || [], options: resolutionOptions })) return false;
+  resolutionOptions.payingActivationCosts = false;
+  // Usage belongs to activation, even when a subsequent action finds no card.
+  markSimulatedEffectUsage(context.state, parent, usageSource, "bot");
+  recordSimulatedMaterialEffectIdentity(context.state, usageSource, parent, "bot");
+  const samePresence = snapshots.self?.some(isSimulatedReferencePresenceValid) === true;
+  if ((samePresence && source.isFacedown !== true && source.effectsNegated) ||
+      !isSimulatedSourcePresenceValid(resolutionOptions, context.bot)) return false;
+  return applySimulatedEffectResolution({ state: context.state, selfId: "bot", effect: projectedEffect, selections, options: resolutionOptions });
+}
+
+function applyWantedReward(context: RewardContext) {
+  const { state, bot, destroyed } = context;
+  const rewards: string[] = [];
+  for (const source of [...bot.spellTrap]) {
+    if (source.name !== BW.WANTED || !sourceHasMatchingDeclaration(state, source, destroyed, "burning_west_wanted_type")) continue;
+    if (!(bot.field.length < 5 && chooseBestMonster(bot.hand.filter(card => Number(card.level || 0) <= 5))) &&
+        !chooseBestMonster(bot.field.filter(isFaceUp)) &&
+        !chooseRecovery(bot.graveyard.filter(card => card.cardKind === "spell" || card.cardKind === "trap"))) continue;
+    const hand = [...bot.hand], grave = [...bot.graveyard];
+    const before = new Map(bot.field.map(card => [card, Number(card.atk || 0)]));
+    if (!resolveReward(context, source, "burning_west_wanted_reward")) continue;
+    const summoned = hand.find(card => bot.field.includes(card));
+    const buffed = bot.field.find(card => before.has(card) && Number(card.atk || 0) > before.get(card)!);
+    const recovered = grave.find(card => bot.hand.includes(card));
+    if (summoned) rewards.push(`Wanted summoned ${summoned.name}`);
+    else if (buffed) rewards.push(`Wanted buffed ${buffed.name}`);
+    else if (recovered) rewards.push(`Wanted recovered ${recovered.name}`);
+  }
+  return rewards;
+}
+
+function applyDeadeyeReward(context: RewardContext) {
+  const { state, bot, opponent, destroyed, summary } = context;
+  const entry = findDeadeyeTemporaryEffect(state, bot, destroyed);
+  if (!entry) return [];
+  if (entry.usesRemaining !== null) entry.usesRemaining = Math.max(0, entry.usesRemaining - 1);
+  const beforeHand = bot.hand.length, beforeLp = opponent.lp;
+  // Registrations retain their declared value independently of the source's
+  // current zone. Matching above reads that captured declaration; actions use
+  // the same opaque draw and sequential stop contract as other effects.
+  const options = rewardOptions(context);
+  applySimulatedActions({ actions: entry.effect.actions || [], state, selfId: "bot", options: { ...options, effect: entry.effect } });
+  const rewards: string[] = [];
+  if (bot.hand.length > beforeHand) rewards.push("Deadeye drew 1");
+  if (opponent.lp < beforeLp) {
+    const damage = beforeLp - opponent.lp;
+    summary.damage = Number(summary.damage || 0) + damage;
+    rewards.push(`Deadeye burned ${damage}`);
+  }
+  return rewards;
+}
+
+function applyGunslingerReward(context: RewardContext) {
+  const { bot, opponent, attacker } = context;
+  if (attacker.name !== BW.GUNSLINGER || !attackerStillOnField(bot, attacker) || !chooseDiscard(bot.hand) || !chooseDiscard(opponent.hand)) return [];
+  const beforeOwn = bot.hand.length, beforeOpp = opponent.hand.length;
+  resolveReward(context, attacker, "burning_west_gunslinger_battle_discard");
+  return bot.hand.length < beforeOwn && opponent.hand.length < beforeOpp ? ["Gunslinger discarded from both hands"] : [];
+}
+
+function applyBurningReward(context: RewardContext) {
+  const { bot, state, destroyed } = context;
+  const source = bot.spellTrap.find(card => card.name === BW.REWARD && !card.effectsNegated);
+  if (!source || !chooseBestMonster(bot.graveyard)) return [];
+  if (!canActivateTrap.call(state, source)) return [];
+  const grave = [...bot.graveyard];
+  applyGenericSimulatedMainPhaseAction(state, { type: "spellTrapEffect", zoneIndex: bot.spellTrap.indexOf(source),
+    effectId: "burning_reward" }, rewardOptions(context, source));
+  const recovered = grave.find(card => bot.hand.includes(card) || bot.field.includes(card));
+  if (!recovered) return [];
+  const rewards = [`Reward recovered ${recovered.name}`];
+  if (bot.field.includes(recovered) && destroyedHadAnyBurningWestDeclaredType(state, bot, destroyed)) rewards.push(`Reward summoned ${recovered.name}`);
+  return rewards;
+}
+
+function applyPeacemakerReward(context: RewardContext) {
+  const { bot, opponent, attacker, summary } = context;
+  if (!attackerStillOnField(bot, attacker)) return [];
+  const rewards: string[] = [];
+  for (const source of [...bot.spellTrap]) {
+    if (source.name !== BW.PEACEMAKER || !sameCard(source.equippedTo, attacker)) continue;
+    const targets = [...opponent.spellTrap, ...(opponent.fieldSpell ? [opponent.fieldSpell] : [])];
+    const destroyed = new Set<SimulatedCardState>();
+    if (!resolveReward({ ...context, onEvent: (event, payload) => {
+      if (event !== "card_moved" || Reflect.get(payload, "wasDestroyed") !== true || Reflect.get(payload, "destroyCause") !== "effect") return;
+      const card: unknown = Reflect.get(payload, "card");
+      const target = targets.find(candidate => candidate === card);
+      if (target) destroyed.add(target);
+    } }, source, "burning_peacemaker_battle_destroy_spelltrap")) continue;
+    for (const target of destroyed) {
+      recordDestroyed(summary, target, "opponent", "effect");
+      rewards.push(`Peacemaker destroyed ${target.name}`);
     }
   }
-
-  const buffTarget =
-    chooseBestMonster((bot.field || []).filter((card) => isFaceUp(card))) || null;
-  if (buffTarget) {
-    buffTarget.atk = Math.max(0, Number(buffTarget.atk || 0) + 800);
-    rewards.push(`Wanted buffed ${buffTarget.name}`);
-    return rewards;
-  }
-
-  const recovery = chooseRecovery(
-    (bot.graveyard || []).filter((card) =>
-      ["spell", "trap"].includes(card?.cardKind!),
-    ),
-  );
-  if (recovery && recoverCard(bot, recovery)) {
-    rewards.push(`Wanted recovered ${recovery.name}`);
-  }
   return rewards;
-}
-
-function applyDeadeyeReward({ state, bot, opponent, destroyed, summary }: Pick<RewardContext, "state" | "bot" | "opponent" | "destroyed" | "summary">) {
-  const meta = ensureMeta(state);
-  if (meta.deadeyeRewardUsed) return [];
-  const effect = findDeadeyeTemporaryEffect(state, bot, destroyed);
-  if (!effect) return [];
-  meta.deadeyeRewardUsed = true;
-  if (effect.usesRemaining !== undefined) {
-    effect.usesRemaining = Math.max(0, Number(effect.usesRemaining || 0) - 1);
-  }
-  const rewards = [];
-  const drawn = bot.deck?.shift?.();
-  if (drawn) {
-    if (!Array.isArray(bot.hand)) bot.hand = [];
-    appendSimulatedZoneCard(bot.hand, drawn);
-    rewards.push("Deadeye drew 1");
-  }
-  if (isExtraDeckMonster(destroyed)) {
-    opponent.lp = Math.max(0, Number(opponent.lp || 0) - 1000);
-    summary.damage = Math.max(0, Number(summary.damage || 0)) + 1000;
-    rewards.push("Deadeye burned 1000");
-  }
-  return rewards;
-}
-
-function applyGunslingerReward({ state, bot, opponent, attacker }: Pick<RewardContext, "state" | "bot" | "opponent" | "attacker">) {
-  const meta = ensureMeta(state);
-  if (meta.gunslingerRewardUsed) return [];
-  if (attacker?.name !== BW.GUNSLINGER || !attackerStillOnField(bot, attacker)) {
-    return [];
-  }
-  const ownDiscard = chooseDiscard(bot.hand || []);
-  const oppDiscard = chooseDiscard(opponent.hand || []);
-  if (!ownDiscard || !oppDiscard) return [];
-  meta.gunslingerRewardUsed = true;
-  moveCardToZone(bot, ownDiscard, "graveyard");
-  moveCardToZone(opponent, oppDiscard, "graveyard");
-  return ["Gunslinger discarded from both hands"];
-}
-
-function applyBurningReward({ state, bot, destroyed, strategy }: Pick<RewardContext, "state" | "bot" | "destroyed" | "strategy">) {
-  const meta = ensureMeta(state);
-  if (meta.burningRewardUsed) return [];
-  const rewardAvailable = (bot.spellTrap || []).some(
-    (card) => card?.name === BW.REWARD,
-  );
-  if (!rewardAvailable) return [];
-  const target = chooseBestMonster(bot.graveyard || []);
-  if (!target) return [];
-  meta.burningRewardUsed = true;
-  recoverCard(bot, target);
-  const rewards = [`Reward recovered ${target.name}`];
-  if (
-    destroyedHadAnyBurningWestDeclaredType(state, bot, destroyed) &&
-    (bot.field || []).length < 5 &&
-    summonFromCurrentZone(bot, target, strategy, state)
-  ) {
-    rewards.push(`Reward summoned ${target.name}`);
-  }
-  return rewards;
-}
-
-function applyPeacemakerReward({ state, bot, opponent, attacker, summary }: Pick<RewardContext, "state" | "bot" | "opponent" | "attacker" | "summary">) {
-  const meta = ensureMeta(state);
-  if (meta.peacemakerRewardUsed) return [];
-  if (!attackerStillOnField(bot, attacker)) return [];
-  const hasPeacemaker = (attacker.equips || []).some(
-    (equip) => equip?.name === BW.PEACEMAKER,
-  ) ||
-    (bot.spellTrap || []).some(
-      (card) => card?.name === BW.PEACEMAKER && sameCard(card.equippedTo, attacker),
-    );
-  if (!hasPeacemaker) return [];
-  const target = chooseSpellTrapToDestroy(opponent);
-  if (!target) return [];
-  meta.peacemakerRewardUsed = true;
-  recordDestroyed(summary, target, "opponent", "effect");
-  moveCardToZone(opponent, target, "graveyard");
-  return [`Peacemaker destroyed ${target.name}`];
 }
 
 export function prepareBurningWestSimulatedBattle({
@@ -462,6 +453,7 @@ export function prepareBurningWestSimulatedBattle({
 
   if (
     attacker.name === BW.EXECUTIONER &&
+    !attacker.effectsNegated && isFaceUp(attacker) &&
     target?.cardKind === "monster" &&
     target.position === "attack" &&
     getEffectiveAtk(attacker) === getEffectiveAtk(target)
@@ -479,6 +471,7 @@ export function applyBurningWestSimulatedBattleRewards({
   bot,
   opponent,
   strategy,
+  options,
 }: RewardInput = {}) {
   const attacker = battlePlan?.attackerCard;
   cleanupSheriffBoost(attacker);
@@ -490,12 +483,13 @@ export function applyBurningWestSimulatedBattleRewards({
   const destroyed = destroyedMonsters[0];
   if (!destroyed) return [];
   const rewards = [];
-
-  rewards.push(...applyWantedReward({ state, bot, destroyed, summary, strategy }));
-  rewards.push(...applyDeadeyeReward({ state, bot, opponent, destroyed, summary }));
-  rewards.push(...applyGunslingerReward({ state, bot, opponent, attacker }));
-  rewards.push(...applyBurningReward({ state, bot, destroyed, strategy }));
-  rewards.push(...applyPeacemakerReward({ state, bot, opponent, attacker, summary }));
+  if (!state.bot || !state.player) return [];
+  const context: RewardContext = { state, bot, opponent, attacker, destroyed, summary, strategy, options };
+  rewards.push(...applyWantedReward(context));
+  rewards.push(...applyDeadeyeReward(context));
+  rewards.push(...applyGunslingerReward(context));
+  rewards.push(...applyBurningReward(context));
+  rewards.push(...applyPeacemakerReward(context));
   return rewards;
 }
 

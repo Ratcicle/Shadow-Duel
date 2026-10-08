@@ -1,4 +1,6 @@
 import { appendSimulatedFieldCard, appendSimulatedZoneCard, clearSimulatedFieldPosition } from "./zones.js";
+import { canUseOncePerDuelEffect, markOncePerDuelEffectUsed } from "../../effects/triggers/registration.js";
+import type { TriggerEffectLike } from "../../effects/triggers/runtime.js";
 
 /**
  * Remove a card reference from a simulated player zone.
@@ -216,13 +218,18 @@ export interface SimulatedUsageEffect {
   usesPerTurn?: number;
   maxUsesPerTurn?: number;
   usagePolicy?: UsagePolicy;
+  oncePerDuel?: boolean;
+  oncePerDuelName?: string;
+  oncePerDuelLimit?: number;
+  oncePerDuelMax?: number;
 }
 
-type SimulatedUsageCard = Pick<SimulatedCardState,
+export type SimulatedUsageCard = Pick<SimulatedCardState,
   "name" | "id" | "instanceId" | "duelCardId" | "oncePerTurnResetVersion" | "oncePerTurnUsageByName">;
 interface SimulatedUsagePlayer {
   id?: string | null;
   oncePerTurnUsageByName?: EffectUsageMap | undefined;
+  oncePerDuelUsageByName?: Record<string, number | boolean>;
 }
 export interface SimulatedUsageState extends SimOncePerTurnState {
   turnCounter?: number;
@@ -270,6 +277,17 @@ function simulatedUsageLimit(effect: SimulatedUsageEffect): number {
   return Number.isFinite(limit) && limit > 0 ? limit : 1;
 }
 
+/** Delegate duel-wide key, limit and legacy boolean counts to the runtime. */
+function simulatedDuelUsageEffect(effect: SimulatedUsageEffect): TriggerEffectLike {
+  return {
+    oncePerDuel: effect.oncePerDuel === true,
+    ...(effect.id ? { id: effect.id } : {}),
+    ...(effect.oncePerDuelName ? { oncePerDuelName: effect.oncePerDuelName } : {}),
+    ...(effect.oncePerDuelLimit !== undefined ? { oncePerDuelLimit: effect.oncePerDuelLimit } : {}),
+    ...(effect.oncePerDuelMax !== undefined ? { oncePerDuelMax: effect.oncePerDuelMax } : {}),
+  };
+}
+
 /** Shared by activated effects and passives; copied runtime records remain read-only. */
 export function canUseSimulatedEffectUsage(
   state: SimulatedUsageState | null | undefined,
@@ -278,9 +296,20 @@ export function canUseSimulatedEffectUsage(
   selfId = "bot",
   ownerIsPhysical = false,
 ): boolean {
-  if (!state || !effect || (!effect.oncePerTurn && !effect.oncePerTurnName)) return true;
-  const turn = prepareSimulatedUsageTurn(state);
+  if (!state || !effect) return true;
   const player = simulatedUsagePlayer(state, selfId, ownerIsPhysical);
+  if (effect.oncePerDuel && !canUseOncePerDuelEffect(card?.name ? { name: card.name } : null,
+    player ? { oncePerDuelUsageByName: player.oncePerDuelUsageByName || {} } : null,
+    simulatedDuelUsageEffect(effect)).ok) return false;
+  if (!effect.oncePerTurn && !effect.oncePerTurnName) return true;
+  // A preview must not reset the caller's turn or normalize its legacy buckets.
+  // Normalization only replaces owner entries; Map contents are read here.
+  const usageView: SimulatedUsageState = {
+    ...state,
+    _simOncePerTurn: state._simOncePerTurn && !Array.isArray(state._simOncePerTurn)
+      ? { ...state._simOncePerTurn } : {},
+  };
+  const turn = prepareSimulatedUsageTurn(usageView);
   const key = getSimulatedEffectUsageKey(effect, card);
   if (!key) return true;
   const cardScoped = effect.oncePerTurnScope === "card" || effect.oncePerTurnPerCard === true;
@@ -288,11 +317,11 @@ export function canUseSimulatedEffectUsage(
     ? card?.oncePerTurnUsageByName : player?.oncePerTurnUsageByName;
   const base = effect.oncePerTurnName || effect.id || card?.name || "";
   const used = simulatedUsageCount(persisted?.[base], turn);
-  const bucket = ensureSimOncePerTurnBucket(state, player?.id || selfId, true);
+  const bucket = ensureSimOncePerTurnBucket(usageView, player?.id || selfId, true);
   // A control change retains this card's presence and usage across owner buckets.
   const simulated = cardScoped
-    ? Object.keys(state._simOncePerTurn || {}).reduce((count, ownerId) =>
-      count + Number(ensureSimOncePerTurnBucket(state, ownerId, true).get(key) || 0), 0)
+    ? Object.keys(usageView._simOncePerTurn || {}).reduce((count, ownerId) =>
+      count + Number(ensureSimOncePerTurnBucket(usageView, ownerId, true).get(key) || 0), 0)
     : Number(bucket.get(key) || 0);
   return used + simulated < simulatedUsageLimit(effect);
 }
@@ -305,10 +334,16 @@ export function markSimulatedEffectUsage(
   ownerIsPhysical = false,
   outcome: { activationNegated?: boolean; cancelled?: boolean } = {},
 ): void {
-  if (!state || !effect || (!effect.oncePerTurn && !effect.oncePerTurnName)) return;
+  if (!state || !effect) return;
   if (outcome.cancelled || (outcome.activationNegated && effect.usagePolicy === "activate")) return;
-  prepareSimulatedUsageTurn(state);
   const player = simulatedUsagePlayer(state, selfId, ownerIsPhysical);
+  if (effect.oncePerDuel && player) {
+    const duelPlayer = { oncePerDuelUsageByName: player.oncePerDuelUsageByName || {} };
+    markOncePerDuelEffectUsed(card?.name ? { name: card.name } : null, duelPlayer, simulatedDuelUsageEffect(effect));
+    player.oncePerDuelUsageByName = duelPlayer.oncePerDuelUsageByName;
+  }
+  if (!effect.oncePerTurn && !effect.oncePerTurnName) return;
+  prepareSimulatedUsageTurn(state);
   const key = getSimulatedEffectUsageKey(effect, card);
   if (key) markSimOncePerTurnUsed(state, key, simulatedUsageLimit(effect), player?.id || selfId, true);
 }

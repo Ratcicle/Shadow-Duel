@@ -27,6 +27,7 @@ function install(game: RuntimeGame, actor: Seat, family: Family, variant: Varian
     };
     placeFieldCards(owner.field, take(owner, 27));
     owner.hand.push(take(owner, 357), take(owner, 4));
+    if (variant.startsWith('locked')) owner.hand.push(take(owner, 3));
     const target = take(opponent, 1); placeFieldCards(opponent.field, target);
     if (variant === 'facedown') { target.position = 'defense'; target.isFacedown = true; }
     if (family === 'horizon') {
@@ -80,7 +81,7 @@ for (const actor of ['player', 'bot'] as const) for (const family of ['priestess
       playback.ui.showChainResponseModal = async () => assert.fail('playback cannot request responses');
       playback.ui.showTargetSelection = () => assert.fail('playback cannot request targets');
       playback.autoSelector.select = () => assert.fail('playback cannot rerun selection AI');
-      const deck = [357, 360, 4, 1, 4, 1, 4, 1, 4, 1];
+      const deck = [357, 360, 4, 1, 4, 1, 4, 1, 4, 3];
       await game.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true, startAtDrawPhase: true,
         startingPlayer: actor, announceStartingPlayer: false, playerDeck: deck, botDeck: deck, playerExtraDeck: [27], botExtraDeck: [27] });
       const owner = game[actor], opponent = game[actor === 'player' ? 'bot' : 'player'];
@@ -89,6 +90,17 @@ for (const actor of ['player', 'bot'] as const) for (const family of ['priestess
       const summon = game.performNormalSummon(owner, owner.hand.indexOf(priestess), 'attack', false);
       await drive(game, summon, variant);
       assert.equal((await summon)?.success, true);
+      if (variant.startsWith('locked')) {
+        // Generic Quick Effects do not respond to summon-success windows.
+        // A real Spell command opens a legal Chain and is captured for replay.
+        const spell = required(owner.hand.find(card => card.id === 3));
+        const activation = game.tryActivateSpell(spell, owner.hand.indexOf(spell), null, { owner });
+        await drive(game, activation, variant);
+        assert.equal((await activation).success, true);
+        assert.equal(choseLock, true, 'prepare the lock through a legal response to the Spell activation');
+        assert.equal(target.isFacedown, true);
+        assert.equal(target.position, 'defense');
+      }
       assert.equal(target.battlePositionLocked, variant.startsWith('locked'));
       if (variant.startsWith('locked')) assert.equal(owner.graveyard.some(card => card.id === 4), true);
       const shifts: unknown[] = [], returns: unknown[] = [];

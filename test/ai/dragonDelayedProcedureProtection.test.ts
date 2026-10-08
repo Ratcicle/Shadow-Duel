@@ -110,7 +110,7 @@ test("Dragon planner simulates Luminous procedure with success-only usage and no
   const summoned = required(state.bot.field[0]);
   assert.equal(summoned.lastSummonProcedure, "luminous_dragon_empty_field_summon");
   assert.equal(summoned.position, "defense");
-  assert.equal(state.bot._simMaterialEffectActivationsByMaterialId, undefined);
+  assert.equal(Reflect.get(state.bot, "_simMaterialEffectActivationsByMaterialId"), undefined);
   assert.equal(moveCardToZone(state.bot, summoned, "graveyard", state.bot, { state }), true);
   strategy.simulateMainPhaseAction(state, action);
   assert.equal(state.bot.field.length, 0, "the successful procedure spends its shared name limit");
@@ -119,7 +119,7 @@ test("Dragon planner simulates Luminous procedure with success-only usage and no
   strategy.simulateMainPhaseAction(state, action);
   assert.equal(state.bot.field.length, 1);
   assert.equal(state.bot.hand.length, 0);
-  assert.equal(state.bot._simMaterialEffectActivationsByMaterialId, undefined);
+  assert.equal(Reflect.get(state.bot, "_simMaterialEffectActivationsByMaterialId"), undefined);
 });
 
 test("Dragon planner rejects the removed Luminous hand ignition", t => {
@@ -246,7 +246,7 @@ test("Dragon planner consumes Purified procedure use without recording an effect
     }) });
   assert.equal(state.bot.field.length, 1);
   assert.equal(state.bot.graveyard.length, 3);
-  assert.equal(state.bot._simMaterialEffectActivationsByMaterialId, undefined);
+  assert.equal(Reflect.get(state.bot, "_simMaterialEffectActivationsByMaterialId"), undefined);
 });
 
 test("Dragon planner schedules Abyssal's two exact presences and delayed fusion-target bonus", t => {

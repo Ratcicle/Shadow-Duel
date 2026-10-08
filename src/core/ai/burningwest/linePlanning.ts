@@ -1,25 +1,7 @@
+import { ARCHETYPE, BW, getDeclaredType, hasPeacemakerAttachment } from "./knowledge.js";
 import type { AiStateShape } from "../../contracts/aiState.js";
 import type { BurningWestGame, BurningWestDeclaration, BurningWestCard, BurningWestReadPlayer, BurningWestAnalysis, BurningWestContext, BurningWestLineAction, BurningWestMilestone, BurningWestLineScoreContext, BurningWestProfile, BurningWestArrayZone } from "./contracts.js";
-const ARCHETYPE = "Burning West";
 
-const BW = {
-  GUNSLINGER: "Gunslinger of the Burning West",
-  WANTED: "Wanted in the Burning West",
-  UNDERTAKER: "Undertaker of the Burning West",
-  BUTCHER: "Butcher of the Burning West",
-  SPECIALIST: "Specialist of the Burning West",
-  PEACEMAKER: "Burning Peacemaker",
-  QUICK_DRAW: "Quick Draw in the Burning West",
-  FUNERAL: "Funeral at Sunset",
-  DEADEYE: "Deadeye of the Burning West",
-  PREACHER: "Preacher of the Burning West",
-  SHERIFF: "Sheriff of the Burning West",
-  CRASH_TOWN: "Crash Town, the Burning City",
-  AMBUSH: "Ambush in Crash Town",
-  REWARD: "Burning Reward",
-  LAW: "Law in the Burning West",
-  EXECUTIONER: "Executioner of the Burning West",
-};
 
 const DEFAULT_PROFILE: BurningWestProfile = {
   enabled: false,
@@ -222,25 +204,7 @@ function hasPeacemakerAccess(player: BurningWestReadPlayer = {}) {
 }
 
 function cardHasPeacemaker(card: BurningWestCard = {}, player: BurningWestReadPlayer = {}) {
-  return (
-    asArray(card.equips).some((equip) => equip?.name === BW.PEACEMAKER) ||
-    getCards(player, "spellTrap").some(
-      (entry) => entry?.name === BW.PEACEMAKER && entry.equippedTo === card,
-    )
-  );
-}
-
-function getDeclaredType(card: BurningWestCard = {}, stateKey: string, turnCounter = 0) {
-  const declaration = card?.declaredValues?.[stateKey] as BurningWestDeclaration | undefined;
-  if (!declaration?.value) return null;
-  if (
-    declaration.expiresOnTurn !== null &&
-    declaration.expiresOnTurn !== undefined &&
-    Number(declaration.expiresOnTurn) < Number(turnCounter || 0)
-  ) {
-    return null;
-  }
-  return declaration.value;
+  return hasPeacemakerAttachment<BurningWestCard>(asArray(card.equips), getCards(player, "spellTrap"), entry => entry.equippedTo === card, entry => entry?.name);
 }
 
 function hasSpecialistPeacemakerPressure(player: BurningWestReadPlayer = {}) {

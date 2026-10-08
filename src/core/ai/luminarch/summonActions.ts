@@ -1,6 +1,7 @@
-import type { AIAction } from "../../contracts/ai.js";
+﻿import type { AIAction, AIActionOf } from "../../contracts/ai.js";
 import type { SimulatedCardState, SimulatedPlayerState } from "../../contracts/aiState.js";
 import type { LuminarchHooks, LuminarchGame, LuminarchActionGenerationContext, LuminarchActivationContext } from "./contracts.js";
+import { canUseNormalSummonForCard } from "../../Player.js";
 import { assessActionSafety } from "../ChainAwareness.js";
 import { calculateMacroPriorityBonus } from "../MacroPlanning.js";
 import {
@@ -11,8 +12,9 @@ import {
   fieldHasTributeValue,
   getTributeValueTotal,
 } from "../../game/summon/tributeValue.js";
-import { buildPrioritizedAction } from "../common/actionGeneration.js";
+import { buildPrioritizedAction, getGenericNormalSummonActions } from "../common/actionGeneration.js";
 import { evaluateRadiantLancerBattlePlan } from "./priorities.js";
+import { forecastLuminarchEffectLpCost } from "./resourceEconomy.js";
 import {
   evaluateLuminarchTributeSummonCost,
   isRadiantLancer,
@@ -210,12 +212,8 @@ function getNormalSummonActions(context: LuminarchActionGenerationContext) {
     verboseEval,
     hooks = {} as Required<LuminarchHooks>,
   } = context;
-  const actions: AIAction[] = [];
-
-  if (bot.summonCount >= 1) return actions;
-
-  bot.hand.forEach((card, index) => {
-    if (card.cardKind !== "monster") return;
+  const decideNormal = (card: SimulatedCardState, index: number): AIActionOf<"summon"> | null => {
+    if (card.cardKind !== "monster") return null;
     const tributeInfo = hooks.getTributeRequirementFor(card, bot);
     if (verboseEval && bot?.debug) {
       console.log(`\n[LuminarchStrategy] Evaluating monster: ${card.name}`);
@@ -230,7 +228,7 @@ function getNormalSummonActions(context: LuminarchActionGenerationContext) {
           `  Rejected: insufficient tributes (${tributeInfo.tributesNeeded}/${bot.field.length})`,
         );
       }
-      return;
+      return null;
     }
     const projectedTributeIndices =
       tributesNeeded > 0
@@ -248,7 +246,7 @@ function getNormalSummonActions(context: LuminarchActionGenerationContext) {
           `  Rejected: insufficient selected tribute value (${tributeInfo.tributesNeeded})`,
         );
       }
-      return;
+      return null;
     }
     const projectedFieldCount =
       (bot.field?.length || 0) - projectedTributes.length + 1;
@@ -256,7 +254,7 @@ function getNormalSummonActions(context: LuminarchActionGenerationContext) {
       if (verboseEval && bot?.debug) {
         console.log(`  Rejected: no monster zone after tributes`);
       }
-      return;
+      return null;
     }
 
     const shouldSummon = hooks.shouldSummonMonsterSafely(
@@ -271,7 +269,7 @@ function getNormalSummonActions(context: LuminarchActionGenerationContext) {
         }`,
       );
     }
-    if (!shouldSummon.yes) return;
+    if (!shouldSummon.yes) return null;
 
     let tributeCostPenalty = 0;
     let tributeCostReason: string | null = null;
@@ -287,7 +285,7 @@ function getNormalSummonActions(context: LuminarchActionGenerationContext) {
         if (verboseEval && bot?.debug) {
           console.log(`  Rejected tribute summon: ${tributeCost.reason}`);
         }
-        return;
+        return null;
       }
     }
 
@@ -310,7 +308,7 @@ function getNormalSummonActions(context: LuminarchActionGenerationContext) {
               "  Rejected: Radiant Lancer would spend defensive core without payoff",
             );
           }
-          return;
+          return null;
         }
 
         if (
@@ -358,8 +356,7 @@ function getNormalSummonActions(context: LuminarchActionGenerationContext) {
       priority -= 10;
     }
 
-    actions.push(
-      buildPrioritizedAction({
+    return buildPrioritizedAction({
         type: "summon",
         index,
         card,
@@ -375,11 +372,20 @@ function getNormalSummonActions(context: LuminarchActionGenerationContext) {
           tributeCostReason,
           safetyScore: summonSafety.riskScore,
         },
-      }),
-    );
-  });
+      });
+  };
 
-  return actions;
+  let candidate: AIActionOf<"summon"> | null = null;
+  return getGenericNormalSummonActions({
+    player: bot,
+    analysis: { canNormalSummon: context.analysis?.summonAvailable ?? bot.hand.some(card => canUseNormalSummonForCard(bot, card)) },
+    getTributeRequirement: (card, player) => hooks.getTributeRequirementFor(card, player),
+    shouldSummon: card => {
+      candidate = decideNormal(card, bot.hand.indexOf(card));
+      return { yes: candidate !== null, priority: candidate?.priority };
+    },
+    extra: () => candidate || {},
+  });
 }
 
 function getSanctumProtectorActions(context: LuminarchActionGenerationContext) {
@@ -513,12 +519,17 @@ function getCelestialMarshalHandIgnitionActions(context: LuminarchActionGenerati
       ),
     );
   const createsPayoff = hasHalberdFollowUp || opensFusion;
+  const effect = marshal.effects?.find(entry => entry.timing === "ignition" && entry.activationZones?.includes("hand"));
+  if (!effect) return actions;
+  const quotedCost = forecastLuminarchEffectLpCost({
+    ...context.analysis, bot, opponent, game, lp: bot.lp,
+  }, marshal, effect).finalAmount;
 
   if (
     !canPayLpForLuminarchAction({
       bot,
       opponent,
-      cost: 2000,
+      cost: quotedCost,
       createsWall,
       createsPayoff,
     })
@@ -607,12 +618,17 @@ function getFortressAegisReviveActions(context: LuminarchActionGenerationContext
       "Luminarch Sanctified Arbiter",
       "Luminarch Aegisbearer",
     ].includes(bestTarget.name!);
+    const effect = card.effects?.find(entry => entry.id === "luminarch_fortress_aegis_revive");
+    if (!effect) return;
+    const quotedCost = forecastLuminarchEffectLpCost({
+      ...context.analysis, bot, opponent, game, lp: bot.lp,
+    }, card, effect).finalAmount;
 
     if (
       !canPayLpForLuminarchAction({
         bot,
         opponent,
-        cost: 1000,
+        cost: quotedCost,
         createsWall,
         createsPayoff,
       })
