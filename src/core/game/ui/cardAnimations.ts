@@ -112,6 +112,7 @@ export function waitForAiPresentationStep(
 ): Promise<void> {
   if (!isAI(player)) return Promise.resolve();
   if (this.gameOver) return Promise.resolve();
+  if (this.disablePresentationDelays === true) return Promise.resolve();
 
   const delayMs = typeof options.delayMs === "number" && Number.isFinite(options.delayMs)
     ? options.delayMs

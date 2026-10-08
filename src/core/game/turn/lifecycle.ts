@@ -32,7 +32,14 @@ interface LifecycleProgressTracker {
 }
 
 type LifecycleHost = PhaseTransitionHost &
-  Pick<FullGameHost, "phaseDelayMs" | "effectEngine" | "cardActivationHistory" | "replayMode"> & {
+  Pick<
+    FullGameHost,
+    | "phaseDelayMs"
+    | "disablePresentationDelays"
+    | "effectEngine"
+    | "cardActivationHistory"
+    | "replayMode"
+  > & {
   _arenaTracker?: LifecycleProgressTracker | null;
   devLog?(code: string, detail?: unknown): void;
   resetOncePerTurnUsage(reason?: string): void;
@@ -330,5 +337,7 @@ export async function endTurn(this: LifecycleHost) {
  */
 export function waitForPhaseDelay(this: LifecycleHost): Promise<void> {
   if (this.isDisposed?.()) return Promise.resolve();
-  return new Promise((resolve) => setTimeout(resolve, this.phaseDelayMs || 0));
+  const delay =
+    this.disablePresentationDelays === true ? 0 : this.phaseDelayMs || 0;
+  return new Promise((resolve) => setTimeout(resolve, delay));
 }

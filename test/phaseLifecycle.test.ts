@@ -268,6 +268,38 @@ test("pending normal draw keeps its single draw and explicit advance resumes at 
   assert.equal(standbyEvents, 1);
 });
 
+async function flushMicrotasks() {
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+}
+
+function trackSettled(promise: Promise<unknown>) {
+  const state = { settled: false };
+  void promise.then(() => { state.settled = true; });
+  return state;
+}
+
+for (const disabled of [true, false] as const) {
+  test(`phase delay ${disabled ? "yields one macrotask" : "waits phaseDelayMs"} when presentation delays are ${disabled ? "disabled" : "enabled"}`, async t => {
+    const game = setup(t);
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    game.phaseDelayMs = 400;
+    game.disablePresentationDelays = disabled;
+    const wait = trackSettled(game.waitForPhaseDelay());
+    await flushMicrotasks();
+    assert.equal(wait.settled, false, "the phase delay always yields through setTimeout");
+    t.mock.timers.tick(0);
+    await flushMicrotasks();
+    assert.equal(wait.settled, disabled);
+    if (disabled) return;
+    t.mock.timers.tick(399);
+    await flushMicrotasks();
+    assert.equal(wait.settled, false);
+    t.mock.timers.tick(1);
+    await flushMicrotasks();
+    assert.equal(wait.settled, true);
+  });
+}
+
 test("a new selection during the automatic phase delay prevents entering the next phase", async t => {
   const game = setup(t);
   game.waitForPhaseDelay = async () => { game.selectionState = "selecting"; };

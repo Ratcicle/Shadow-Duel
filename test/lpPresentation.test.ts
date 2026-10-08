@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
-import Renderer from "../src/ui/Renderer.js";
+import "../scripts/register_node_asset_loader.js";
+import type Renderer from "../src/ui/Renderer.js";
 import Card from "../src/core/Card.js";
 import { ensureLpDisplayState, getDisplayedLp, setDisplayedLp, animateLpOdometer, showLpDamageSequence, waitForLpPresentation, hasActiveLpPresentation, showFieldDamageHit, showLpChange } from "../src/ui/renderer/animations.js";
 import { cardDefinition, unsafeFixture } from "./helpers/fixtures.js";
 import { createRuntimeGame } from "./helpers/game.js";
+
+const { default: RendererClass } = await import("../src/ui/Renderer.js");
 
 function lpLifecycleFixture(t: TestContext, animationApi = true) {
   t.mock.timers.enable({ apis: ["setTimeout"] });
@@ -59,7 +62,7 @@ function lpLifecycleFixture(t: TestContext, animationApi = true) {
     destroyed: false, elements: { playerLP: lp }, lpDisplayState: {},
     ensureLpDisplayState, getDisplayedLp, setDisplayedLp, animateLpOdometer,
     showLpDamageSequence, waitForLpPresentation, hasActiveLpPresentation, showFieldDamageHit, showLpChange,
-    cancelFieldPlacement() {}, destroy: Renderer.prototype.destroy,
+    cancelFieldPlacement() {}, destroy: RendererClass.prototype.destroy,
   }, "Real LP presentation and Renderer.destroy with controlled DOM, RAF and Web Animations; Pixi initialization and unrelated modals are absent.");
   const renderer = makeRenderer();
   t.after(() => renderer.destroy());
