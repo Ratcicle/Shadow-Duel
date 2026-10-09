@@ -361,6 +361,8 @@ interface OpeningEntry {
 }
 interface StrategicMatchup {
   totalDuels: number;
+  /** Timeouts: counted in totalDuels, excluded from wins, winRate and averages. */
+  notCompleted: number;
   wins: Seats<number> & {
     draw: number;
   };
@@ -446,7 +448,18 @@ export const END_REASONS = {
   CANCELLED: "cancelled",
 } as const;
 
-const REPORT_VERSION = 5;
+/**
+ * A wall-clock timeout is not a completed duel: normal duels have no time
+ * limit, so it is never a win or a draw and stays out of every rate and
+ * average (turns, final LP, duration). It is still recorded and reported
+ * separately (endReason/timeoutKind, notCompleted).
+ */
+export function isCompletedArenaDuel(endReason: string | null | undefined): boolean {
+  return endReason !== END_REASONS.TIMEOUT;
+}
+
+// 6: win rates and averages are taken over completed duels (timeouts excluded).
+const REPORT_VERSION = 6;
 const SEATS: Seat[] = ["player", "bot"];
 const DIAGNOSTIC_PROGRESS_LIMIT = 80;
 const DIAGNOSTIC_SNAPSHOT_LIMIT = 3;
@@ -653,6 +666,11 @@ function round(value: number, digits = 1) {
   if (!Number.isFinite(value)) return 0;
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
+}
+
+/** Matchup win rate over completed duels only (see isCompletedArenaDuel). */
+function ratedWinRate(wins: number, completed: number): string | number {
+  return completed > 0 ? ((wins / completed) * 100).toFixed(1) : 0;
 }
 
 function cardName(card: CardRef) {
@@ -1115,18 +1133,18 @@ export class ArenaAnalytics {
 
     const stats = this.matchupStats.get(key)!;
     stats.total += 1;
-    stats.totalTurns += record.turns;
-    stats.totalFinalLP.player += record.finalLP.player;
-    stats.totalFinalLP.bot += record.finalLP.bot;
     stats.errors += record.endReason === END_REASONS.ERROR ? 1 : 0;
     stats.warnings += (record.warnings || []).length;
 
-    if (record.winner === "player") {
-      stats.wins1 += 1;
-    } else if (record.winner === "bot") {
-      stats.wins2 += 1;
+    if (!isCompletedArenaDuel(record.endReason)) {
+      stats.notCompleted += 1;
     } else {
-      stats.draws += 1;
+      stats.totalTurns += record.turns;
+      stats.totalFinalLP.player += record.finalLP.player;
+      stats.totalFinalLP.bot += record.finalLP.bot;
+      if (record.winner === "player") stats.wins1 += 1;
+      else if (record.winner === "bot") stats.wins2 += 1;
+      else stats.draws += 1;
     }
 
     // Categorizar razão de término
@@ -1154,6 +1172,7 @@ export class ArenaAnalytics {
       wins1: 0,
       wins2: 0,
       draws: 0,
+      notCompleted: 0,
       totalTurns: 0,
       totalFinalLP: { player: 0, bot: 0 },
       endReasons: {} as Counter,
@@ -1196,6 +1215,7 @@ export class ArenaAnalytics {
    * @private
    */
   updateDuelDurationDistribution(record: DuelRecord) {
+    if (!isCompletedArenaDuel(record.endReason)) return;
     const turns = record.turns || 0;
     if (turns <= 5) this.duelDurationDistribution.veryShort += 1;
     else if (turns <= 10) this.duelDurationDistribution.short += 1;
@@ -1246,7 +1266,7 @@ export class ArenaAnalytics {
   updateOpeningBook(record: DuelRecord) {
     const arch = record.archetype1;
     const seq = record.openingSequence;
-    if (!arch || !seq) return;
+    if (!arch || !seq || !isCompletedArenaDuel(record.endReason)) return;
 
     const seqHash = this.hashOpeningSequence(seq);
     const isWin = record.winner === "player";
@@ -1299,7 +1319,8 @@ export class ArenaAnalytics {
    * @returns {Object}
    */
   calculateAggressiveness() {
-    const total = this.duelRecords.length;
+    const completedRecords = this.duelRecords.filter((r) => isCompletedArenaDuel(r.endReason));
+    const total = completedRecords.length;
     if (total === 0) return { score: 0, rating: "unknown" };
 
     const dist = this.duelDurationDistribution;
@@ -1308,7 +1329,7 @@ export class ArenaAnalytics {
 
     // Score: quanto menor a duração média, mais agressivo
     const avgTurns =
-      this.duelRecords.reduce((sum, r) => sum + (r.turns || 0), 0) / total;
+      completedRecords.reduce((sum, r) => sum + (r.turns || 0), 0) / total;
     const score = Math.max(0, 100 - avgTurns * 3); // 10 turnos = 70 score
 
     let rating = "balanced";
@@ -1343,6 +1364,7 @@ export class ArenaAnalytics {
         wins1: 0,
         wins2: 0,
         draws: 0,
+        notCompleted: 0,
         winRate1: 0,
         winRate2: 0,
         avgTurns: 0,
@@ -1356,15 +1378,18 @@ export class ArenaAnalytics {
     let wins1 = 0;
     let wins2 = 0;
     let draws = 0;
+    let notCompleted = 0;
     let totalTurns = 0;
     const endReasons: Counter = {};
 
     for (const record of this.duelRecords) {
-      if (record.winner === "player") wins1 += 1;
-      else if (record.winner === "bot") wins2 += 1;
-      else draws += 1;
-
-      totalTurns += record.turns;
+      if (!isCompletedArenaDuel(record.endReason)) notCompleted += 1;
+      else {
+        totalTurns += record.turns;
+        if (record.winner === "player") wins1 += 1;
+        else if (record.winner === "bot") wins2 += 1;
+        else draws += 1;
+      }
       endReasons[record.endReason] = (endReasons[record.endReason] || 0) + 1;
     }
 
@@ -1380,14 +1405,16 @@ export class ArenaAnalytics {
           this.nodesPerTurn.length
         : null;
 
+    const completed = total - notCompleted;
     return {
       total,
       wins1,
       wins2,
       draws,
-      winRate1: (wins1 / total) * 100,
-      winRate2: (wins2 / total) * 100,
-      avgTurns: totalTurns / total,
+      notCompleted,
+      winRate1: completed > 0 ? (wins1 / completed) * 100 : 0,
+      winRate2: completed > 0 ? (wins2 / completed) * 100 : 0,
+      avgTurns: completed > 0 ? totalTurns / completed : 0,
       avgDecisionTimeMs: avgDecision,
       avgNodesPerTurn: avgNodes,
       batchDurationMs:
@@ -1420,23 +1447,16 @@ export class ArenaAnalytics {
   getAllMatchupStats() {
     const result: Record<string, MatchupStats & { winRate1: string | number; winRate2: string | number; avgTurns: string | number; avgFinalLP: Seats<string | number>; avgDecisionTimeMs: string | null }> = {};
     for (const [key, stats] of this.matchupStats.entries()) {
+      const completed = stats.total - stats.notCompleted;
       result[key] = {
         ...stats,
-        winRate1:
-          stats.total > 0 ? ((stats.wins1 / stats.total) * 100).toFixed(1) : 0,
-        winRate2:
-          stats.total > 0 ? ((stats.wins2 / stats.total) * 100).toFixed(1) : 0,
-        avgTurns:
-          stats.total > 0 ? (stats.totalTurns / stats.total).toFixed(1) : 0,
+        winRate1: ratedWinRate(stats.wins1, completed),
+        winRate2: ratedWinRate(stats.wins2, completed),
+        avgTurns: completed > 0 ? (stats.totalTurns / completed).toFixed(1) : 0,
         avgFinalLP: {
           player:
-            stats.total > 0
-              ? (stats.totalFinalLP.player / stats.total).toFixed(1)
-              : 0,
-          bot:
-            stats.total > 0
-              ? (stats.totalFinalLP.bot / stats.total).toFixed(1)
-              : 0,
+            completed > 0 ? (stats.totalFinalLP.player / completed).toFixed(1) : 0,
+          bot: completed > 0 ? (stats.totalFinalLP.bot / completed).toFixed(1) : 0,
         },
         avgDecisionTimeMs:
           stats.decisionTimes.length > 0
@@ -1532,6 +1552,7 @@ export class ArenaAnalytics {
       if (!matchups[key]) {
         matchups[key] = {
           totalDuels: 0,
+          notCompleted: 0,
           wins: { player: 0, bot: 0, draw: 0 },
           winRate: { player: 0, bot: 0 },
           avgTurns: 0,
@@ -1543,22 +1564,27 @@ export class ArenaAnalytics {
       }
       const stats = matchups[key];
       stats.totalDuels += 1;
-      stats.wins[record.winner] = (stats.wins[record.winner] || 0) + 1;
-      stats.avgTurns += record.turns || 0;
-      stats.avgFinalLP.player += record.finalLP?.player || 0;
-      stats.avgFinalLP.bot += record.finalLP?.bot || 0;
+      if (isCompletedArenaDuel(record.endReason)) {
+        stats.wins[record.winner] = (stats.wins[record.winner] || 0) + 1;
+        stats.avgTurns += record.turns || 0;
+        stats.avgFinalLP.player += record.finalLP?.player || 0;
+        stats.avgFinalLP.bot += record.finalLP?.bot || 0;
+      } else {
+        stats.notCompleted += 1;
+      }
       stats.endReasons[record.endReason] =
         (stats.endReasons[record.endReason] || 0) + 1;
       stats.warnings += (record.warnings || []).length;
       stats.errors += record.endReason === END_REASONS.ERROR ? 1 : 0;
     }
     for (const stats of Object.values(matchups)) {
-      const total = stats.totalDuels || 1;
-      stats.winRate.player = round((stats.wins.player / total) * 100);
-      stats.winRate.bot = round((stats.wins.bot / total) * 100);
-      stats.avgTurns = round(stats.avgTurns / total);
-      stats.avgFinalLP.player = round(stats.avgFinalLP.player / total);
-      stats.avgFinalLP.bot = round(stats.avgFinalLP.bot / total);
+      const completed = stats.totalDuels - stats.notCompleted;
+      const averageOver = completed || 1;
+      stats.winRate.player = completed > 0 ? round((stats.wins.player / completed) * 100) : 0;
+      stats.winRate.bot = completed > 0 ? round((stats.wins.bot / completed) * 100) : 0;
+      stats.avgTurns = round(stats.avgTurns / averageOver);
+      stats.avgFinalLP.player = round(stats.avgFinalLP.player / averageOver);
+      stats.avgFinalLP.bot = round(stats.avgFinalLP.bot / averageOver);
     }
     return matchups;
   }
@@ -1641,7 +1667,7 @@ export class ArenaAnalytics {
   }
 
   buildStrategicBotSummaries() {
-    const bots: Record<string, SeatStats & { duels: number; wins: number }> = {};
+    const bots: Record<string, SeatStats & { duels: number; wins: number; notCompleted: number }> = {};
     for (const record of this.duelRecords) {
       const seats: Partial<Seats<CompactSeatStats>> = record.strategic?.seats || {};
       for (const seat of SEATS) {
@@ -1649,23 +1675,27 @@ export class ArenaAnalytics {
         if (!seatStats) continue;
         const key = `${seat}:${seatStats.archetype || "unknown"}`;
         if (!bots[key]) {
-          bots[key] = createSeatStats(seatStats.archetype || "unknown") as SeatStats & { duels: number; wins: number };
+          bots[key] = createSeatStats(seatStats.archetype || "unknown") as SeatStats & { duels: number; wins: number; notCompleted: number };
           bots[key].duels = 0;
           bots[key].wins = 0;
+          bots[key].notCompleted = 0;
         }
         this.mergeSeatStats(bots[key], seatStats);
         bots[key].duels += 1;
-        if (record.winner === seat) bots[key].wins += 1;
+        if (!isCompletedArenaDuel(record.endReason)) bots[key].notCompleted += 1;
+        else if (record.winner === seat) bots[key].wins += 1;
       }
     }
 
-    const compact: Record<string, CompactSeatStats & { duels: number; wins: number; winRate: number }> = {};
+    const compact: Record<string, CompactSeatStats & { duels: number; wins: number; notCompleted: number; winRate: number }> = {};
     for (const [key, stats] of Object.entries(bots)) {
+      const completed = stats.duels - stats.notCompleted;
       compact[key] = {
         ...compactSeatStats(stats),
         duels: stats.duels,
         wins: stats.wins,
-        winRate: stats.duels > 0 ? round((stats.wins / stats.duels) * 100) : 0,
+        notCompleted: stats.notCompleted,
+        winRate: completed > 0 ? round((stats.wins / completed) * 100) : 0,
       };
     }
     return compact;

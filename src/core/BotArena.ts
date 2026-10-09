@@ -1,7 +1,8 @@
 import type { ArenaSpeed, ArenaSpeedConfig, ArenaPlannerConfig, ArenaSearchOptions, ArenaDeckData, ArenaGamePort, ArenaBotConstructor, ArenaDuelOutcome, ArenaDuelResult, ArenaWinner, ArenaProgressCallback, ArenaCompletionCallback } from "./contracts/arena.js";
 import type { AIPlanningMode, AITurnPlanningMode } from "./contracts/ai.js";
 import type { BotRuntimePort } from "./contracts/bot.js";
-import type { GameOptions, GameRendererPort } from "./contracts/game.js";
+import type { DeterministicRandomSeed, GameOptions, GameRendererPort } from "./contracts/game.js";
+import type { GameOverEventPayload } from "./contracts/events.js";
 import type { PlayerGamePort, GameUiPort } from "./contracts/gameRuntime.js";
 
 type ArenaRuntimeGame = PlayerGamePort & ArenaGamePort & {
@@ -19,6 +20,8 @@ type ArenaRuntimeGame = PlayerGamePort & ArenaGamePort & {
   ui?: GameUiPort;
   bindCardInteractions(): void;
   effectEngine?: { logTargetingCacheStats?(): void } | null;
+  randomSeed?: DeterministicRandomSeed;
+  on?(event: "game_over", handler: (payload: GameOverEventPayload) => void): void;
 };
 type RuntimeGameConstructor = new (options?: GameOptions) => Omit<ArenaRuntimeGame, "_arenaTracker">;
 
@@ -171,12 +174,35 @@ function resolveRuntimeSpeedConfig(speedConfig: ArenaSpeedConfig): ArenaSpeedCon
   };
 }
 
+/** game_over reasons of the Arena's games, observed from creation. */
+const gameOverReasons = new WeakMap<ArenaRuntimeGame, string>();
+
+/**
+ * Labels a Game-side end by its game_over reason. A gameOver without
+ * game_over was a dispose, never an LP result; an end reason the Arena does
+ * not know is surfaced as an error instead of being guessed.
+ */
+function gameOverOutcome(reason: string | null): ArenaDuelOutcome {
+  if (reason === null) return { type: "cancelled", reason: END_REASONS.CANCELLED };
+  if (reason === END_REASONS.MAX_TURNS) return { type: "draw", reason: END_REASONS.MAX_TURNS };
+  if (reason === END_REASONS.LP_ZERO) return { type: "completed", reason: END_REASONS.LP_ZERO };
+  return { type: "completed", reason: END_REASONS.ERROR };
+}
+
+/** The Arena result contract carries uint32 seeds; the Game records what it used. */
+function arenaGameSeed(game: Pick<ArenaRuntimeGame, "randomSeed"> | null): number | undefined {
+  const seed = game?.randomSeed;
+  return typeof seed === "number" ? seed : undefined;
+}
+
 export default class BotArena {
   declare GameClass: RuntimeGameConstructor;
   declare BotClass: ArenaBotConstructor;
   declare isRunning: boolean;
   declare stopRequested: boolean;
   declare activeGame: ArenaRuntimeGame | null;
+  /** Seed of the duel runDuel is running; it outlives activeGame for failure reports. */
+  declare activeDuelSeed: number | undefined;
   declare renderer: GameRendererPort | null;
   declare maxTurns: number;
   declare analytics: ArenaAnalytics;
@@ -200,6 +226,7 @@ export default class BotArena {
     this.isRunning = false;
     this.stopRequested = false;
     this.activeGame = null;
+    this.activeDuelSeed = undefined;
     this.renderer = null;
     this.maxTurns = DEFAULT_MAX_TURNS;
 
@@ -400,6 +427,8 @@ export default class BotArena {
     const game: ArenaRuntimeGame = new this.GameClass({
       renderer,
       ...(randomSeed === undefined ? {} : { randomSeed }),
+      // The Game ends the duel at this turn boundary; the Arena never polls it.
+      maxTurnCounter: this.maxTurns,
     });
     game.phaseDelayMs = speedConfig.phaseDelayMs;
     game.aiActionDelayMs = speedConfig.actionDelayMs;
@@ -448,6 +477,12 @@ export default class BotArena {
       game.ui.showAlert = () => {};
       game.ui.showGameOverModal = () => {}; // Desabilitar modal de vitória/derrota no BotArena
     }
+
+    // Subscribed before start(): the Game's own end (LP or the turn limit)
+    // carries its reason, even when it happens during start().
+    game.on?.("game_over", (payload) => {
+      gameOverReasons.set(game, payload.reason);
+    });
 
     game.bindCardInteractions = () => {};
     if (game.ui && typeof game.ui.bindPhaseClick === "function") {
@@ -510,13 +545,7 @@ export default class BotArena {
         }
 
         if (game.gameOver) {
-          resolve({ type: "completed", reason: END_REASONS.LP_ZERO });
-          return;
-        }
-
-        if (game.turnCounter >= this.maxTurns) {
-          game.gameOver = true;
-          resolve({ type: "draw", reason: END_REASONS.MAX_TURNS });
+          resolve(gameOverOutcome(gameOverReasons.get(game) ?? null));
           return;
         }
 
@@ -538,6 +567,9 @@ export default class BotArena {
 
   resolveWinner(game: ArenaRuntimeGame, outcome: ArenaDuelOutcome): ArenaWinner {
     if (outcome.type === "cancelled") return "draw";
+    // A wall-clock timeout is never decided: normal duels have no time limit.
+    // It is reported separately and stays out of win-rate accounting.
+    if (outcome.reason === END_REASONS.TIMEOUT) return "draw";
 
     // Se o jogo já determinou um vencedor
     if (game.winner === "player" || game.winner === "bot") {
@@ -548,11 +580,8 @@ export default class BotArena {
     if ((game.player?.lp || 0) <= 0) return "bot";
     if ((game.bot?.lp || 0) <= 0) return "player";
 
-    // Se terminou por MAX_TURNS ou TIMEOUT, vence quem tem mais LP
-    if (
-      outcome.reason === END_REASONS.MAX_TURNS ||
-      outcome.reason === END_REASONS.TIMEOUT
-    ) {
+    // The deterministic turn limit is decided by LP.
+    if (outcome.reason === END_REASONS.MAX_TURNS) {
       const playerLP = game.player?.lp || 0;
       const botLP = game.bot?.lp || 0;
 
@@ -566,10 +595,14 @@ export default class BotArena {
   }
 
   async runDuel(preset1: string, preset2: string, speedConfig: ArenaSpeedConfig, duelNumber: number, deckData: ArenaDeckData): Promise<ArenaDuelResult> {
-    const randomSeed = this.getDuelRandomSeed(duelNumber);
-    const seedResult = randomSeed === undefined ? {} : { randomSeed };
+    this.activeGame = null;
+    this.activeDuelSeed = undefined;
     const game = this.createGame(preset1, preset2, speedConfig, deckData, duelNumber);
     this.activeGame = game;
+    // Record the seed the Game actually uses, including its unseeded default.
+    const randomSeed = arenaGameSeed(game) ?? this.getDuelRandomSeed(duelNumber);
+    this.activeDuelSeed = randomSeed;
+    const seedResult = randomSeed === undefined ? {} : { randomSeed };
 
     // Determinar arquétipos
     const arch1 = preset1 === "default" ? "custom" : preset1;
@@ -741,7 +774,10 @@ export default class BotArena {
           result = await this.runDuel(preset1, preset2, speedConfig, i, deckData);
         }
       } catch (err) {
-        const randomSeed = this.getDuelRandomSeed(i);
+        // runDuel keeps the failed duel's seed even after it releases activeGame.
+        const randomSeed = this.activeDuelSeed ?? this.getDuelRandomSeed(i);
+        this.activeGame = null;
+        this.activeDuelSeed = undefined;
         result = {
           duelNumber: i,
           ...(randomSeed === undefined ? {} : { randomSeed }),
@@ -772,21 +808,23 @@ export default class BotArena {
         break;
       }
 
-      stats.completed += 1;
-      stats.totalTurns += result.turns || 0;
-      stats.totalTimeMs += result.totalTimeMs || 0;
-
-      if (result.winner === "player") {
-        stats.wins1 += 1;
-      } else if (result.winner === "bot") {
-        stats.wins2 += 1;
+      if (result.reason === END_REASONS.TIMEOUT) {
+        // Not completed: never a win or a draw; reported in drawsByTimeout.
+        stats.drawsByTimeout += 1;
       } else {
-        stats.draws += 1;
-        // Categorizar tipo de draw
-        if (result.reason === END_REASONS.TIMEOUT) {
-          stats.drawsByTimeout += 1;
-        } else if (result.reason === END_REASONS.MAX_TURNS) {
-          stats.drawsByMaxTurns += 1;
+        stats.completed += 1;
+        stats.totalTurns += result.turns || 0;
+        stats.totalTimeMs += result.totalTimeMs || 0;
+
+        if (result.winner === "player") {
+          stats.wins1 += 1;
+        } else if (result.winner === "bot") {
+          stats.wins2 += 1;
+        } else {
+          stats.draws += 1;
+          if (result.reason === END_REASONS.MAX_TURNS) {
+            stats.drawsByMaxTurns += 1;
+          }
         }
       }
 

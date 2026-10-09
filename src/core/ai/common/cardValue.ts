@@ -121,7 +121,8 @@ export function estimateCardCost(card: CardCostCardView, options: CardCostOption
   return applyCardValuePreference(estimateCardValue(card, options), card, options.preference, "cost");
 }
 
-function compareInstanceIds(left: CardInstanceKey | null, right: CardInstanceKey | null): number {
+/** Orders instance ids by creation (numbers numerically), independent of the process-wide id offset. */
+export function compareInstanceIds(left: CardInstanceKey | null, right: CardInstanceKey | null): number {
   if (left === right) return 0;
   if (left === null) return 1;
   if (right === null) return -1;

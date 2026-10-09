@@ -7,6 +7,7 @@ import { resolvePerspectivePlayers } from "../common/perspective.js";
 import { evaluateTechZeroVisibleBattle } from "./battle.js";
 import { TECH_ZERO_IDS as TZ, isTechZero } from "./knowledge.js";
 import { selectBestTributes } from "../common/tributePolicy.js";
+import { compareInstanceIds } from "../common/cardValue.js";
 
 /** Keep the deck's final win condition out of Normal Summon costs, even while weakened. */
 export function selectTechZeroTributes<Card extends AiCardInput>(
@@ -53,7 +54,7 @@ export function getTechZeroVisibleBattlePolicy(game: AiStateInput | undefined, p
 
 function rank<Card extends AiCardInput>(cards: readonly Card[], score: (card: Card) => number): Card[] {
   return [...cards].sort((a, b) => score(b) - score(a) ||
-    `${typeof a.instanceId}:${a.instanceId}`.localeCompare(`${typeof b.instanceId}:${b.instanceId}`));
+    compareInstanceIds(a.instanceId ?? null, b.instanceId ?? null));
 }
 
 function sameInstance(a: AiCardInput, b: AiCardInput): boolean {

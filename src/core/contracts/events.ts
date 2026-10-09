@@ -470,13 +470,32 @@ export interface ControlChangedEventPayload extends EventPayloadBase {
   temporaryControlId?: string | null;
 }
 
-export interface GameOverEventPayload extends EventPayloadBase {
+/** A rules end of the duel (LP 0): there is always a winner and a loser. */
+export interface DecidedGameOverEventPayload extends EventPayloadBase {
   winner: EventPlayer;
   winnerId: string;
   loser: EventPlayer;
   loserId: string;
   reason: string;
 }
+
+/**
+ * A harness turn limit (`GameOptions.maxTurnCounter`, Bot Arena only) ends
+ * the duel at a turn boundary without a rules winner; the harness that set
+ * the limit adjudicates the result.
+ */
+export interface TurnLimitGameOverEventPayload extends EventPayloadBase {
+  winner: null;
+  winnerId: null;
+  loser: null;
+  loserId: null;
+  reason: "max_turns";
+  turnCounter: number;
+}
+
+export type GameOverEventPayload =
+  | DecidedGameOverEventPayload
+  | TurnLimitGameOverEventPayload;
 
 export interface MonsterSetEventPayload extends EventPayloadBase {
   card: EventCard;

@@ -195,7 +195,7 @@ export function createBotArenaController({
       ArenaProgressStats["lastResult"],
       "type" | "duelNumber"
     > &
-      Partial<Pick<ArenaCompletedDuelResult, "winner" | "turns" | "message">> =
+      Partial<Pick<ArenaCompletedDuelResult, "winner" | "turns" | "message" | "reason">> =
       progress.lastResult;
     if (result) {
       if (result.type === "error") {
@@ -217,6 +217,15 @@ export function createBotArenaController({
           winnerText = "Bot 2 venceu";
           addLogEntry(
             `Duel ${result.duelNumber}: ❌ ${winnerText} (${result.turns} turnos)`,
+            className,
+          );
+          return;
+        } else if (result.reason === "timeout") {
+          // A wall-clock timeout is not a result: it stays out of the rates.
+          className = "draw";
+          winnerText = "Timeout, fora do resultado";
+          addLogEntry(
+            `Duel ${result.duelNumber}: ⏱️ ${winnerText} (${result.turns} turnos)`,
             className,
           );
           return;
@@ -260,7 +269,10 @@ export function createBotArenaController({
         !botArenaInstance?.getAnalytics?.()?.duelRecords?.length;
     }
     dom.status.textContent = "Concluído";
-    addLogEntry(`✔️ Arena concluída! ${result.completed} duelos.`);
+    const timeouts = result.drawsByTimeout > 0
+      ? `, ${result.drawsByTimeout} por timeout (fora do resultado)`
+      : "";
+    addLogEntry(`✔️ Arena concluída! ${result.completed} duelos${timeouts}.`);
     dom.modal.classList.remove("hidden");
   }
 

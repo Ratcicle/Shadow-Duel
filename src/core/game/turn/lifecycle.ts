@@ -13,6 +13,7 @@
 import { isAI } from "../../Player.js";
 import { botLogger } from "../../BotLogger.js";
 import type { FullGameHost, GamePlayer } from "../../contracts/gameRuntime.js";
+import type { TurnLimitGameOverEventPayload } from "../../contracts/events.js";
 import type { DrawCardsResult } from "../deck/draw.js";
 import type { ActionGuardResult } from "../actions/guard.js";
 import {
@@ -39,7 +40,10 @@ type LifecycleHost = PhaseTransitionHost &
     | "effectEngine"
     | "cardActivationHistory"
     | "replayMode"
+    | "winner"
   > & {
+  /** Harness turn limit (`GameOptions.maxTurnCounter`); undefined in normal duels. */
+  maxTurnCounter?: number | undefined;
   _arenaTracker?: LifecycleProgressTracker | null;
   devLog?(code: string, detail?: unknown): void;
   resetOncePerTurnUsage(reason?: string): void;
@@ -145,6 +149,23 @@ function scheduleAiMoveAfterPaint(game: LifecycleHost, actor: GamePlayer) {
  */
 export async function startTurn(this: LifecycleHost) {
   if (this.gameOver || this.isDisposed?.()) return;
+  const turnLimit = this.maxTurnCounter;
+  if (turnLimit !== undefined && this.turnCounter >= turnLimit) {
+    // Exactly `turnLimit` turns are played; the next one never starts.
+    this.gameOver = true;
+    this.winner = null;
+    this._arenaTracker?.recordProgress?.("turn_limit_reached", this, { turnLimit });
+    const payload: TurnLimitGameOverEventPayload = {
+      winner: null,
+      winnerId: null,
+      loser: null,
+      loserId: null,
+      reason: "max_turns",
+      turnCounter: this.turnCounter,
+    };
+    await this.emit("game_over", payload);
+    return;
+  }
   this.turnCounter += 1;
   this.cardActivationHistory = { turnCounter: this.turnCounter, entries: [] };
   this._arenaTracker?.recordProgress?.("turn_start", this);

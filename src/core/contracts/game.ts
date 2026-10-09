@@ -51,6 +51,14 @@ export interface GameOptions {
   botArchetype?: string;
   devMode?: boolean;
   chainResponseTimeoutMs?: number;
+  /**
+   * Harness-only turn limit (Bot Arena). Once this many turns have been
+   * played, the next turn does not start and the duel ends with `game_over`
+   * reason `"max_turns"`, without a rules winner. Normal duels have no limit.
+   * It is not part of the canonical replay setup, so captured duels must not
+   * set it.
+   */
+  maxTurnCounter?: number;
 }
 
 export interface GameRendererPort extends Partial<GameUI> {

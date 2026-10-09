@@ -19,7 +19,7 @@
 | 2 | ✅ 28 testes desatualizados alinhados às mudanças intencionais | Etapa 0 | M |
 | 3 | ✅ 3 regressões corrigidas, Regra B de ativação de Magias (bump `engine-rules-v26`), D2 na simulação, **CI verde** | Etapas 0–2 | M |
 | 4 | ✅ Pipeline único `verify` → `deploy-pages`, ruleset em `main`, **Pages atualizado** | Etapa 3, D6–D8 | S |
-| 5 | Determinismo sem bump (RNG da IA, invariantes, Tech-Zero, Arena) | Etapa 4, D3, D4 | M |
+| 5 | ✅ Determinismo sem bump (RNG da IA, invariantes, Tech-Zero, Arena) | Etapa 4, D3, D4 | M |
 | 6 | Bugs de engine sem bump e política de falhas | Etapa 5, D11–D13 | M |
 | 7 | Pacote de replay com bump único `engine-rules-v27` (broker, hash, bugs que mudam replay) | Etapas 5–6, D5, D14–D16 | L |
 | 8 | UI e i18n (rótulos PT, log sem `innerHTML`, Laboratório, vazamentos) | D17–D19 para os itens de texto | M |
@@ -99,6 +99,7 @@ As Etapas 0–3 levam o CI ao verde e já têm todas as decisões necessárias (
 
 | # | Decisão | Recomendação | Bloqueia |
 | --- | --- | --- | --- |
+| D3–D4 | **Aprovadas em 09/10/2026.** D3: stream semeado separado para a IA (`aiRandom`), mantendo o bot probabilístico. D4: um duelo da Arena encerrado por timeout de relógio nunca é decidido por PV; fica fora do win rate, porque o duelo normal não tem limite de tempo. O limite máximo de turnos continua decidindo por PV. | — | — |
 | D3 | **RNG da IA** (`determinism:1`). Opção B: stream semeado separado (`aiRandom`), mantendo o bot probabilístico. Opção A: limiar determinístico (prioridade ≥ 40). | B | Etapa 5 |
 | D4 | **Contabilidade da Arena** (`determinism:4a`): (a) TIMEOUT conta como "não concluído" (fora do win rate) ou como empate? (b) MAX_TURNS mantém a decisão por LP ou vira empate? | (a) Fora do win rate. (b) O default é implementado já na Etapa 5: MAX_TURNS mantém a decisão por LP, que é determinística depois da correção. Pode ser revista na fase 2, junto com o harness. | Etapa 5 |
 | D5 | **Bump do pacote `engine-rules-v27`** (o `v26` é o da Etapa 3, por D1). Aprovar; definir o dono da branch de integração `fase15/replay-v27` (quem abre, congela e rebaseia); definir o momento em que replays v26 deixam de carregar. | Um único bump na Etapa 7. Cada item entra na branch por um PR próprio, e o bump é o último PR. O dono é nomeado aqui antes da Etapa 5. | Etapa 7 (e regra de golden das Etapas 5–6) |
@@ -509,7 +510,7 @@ Remota:
 
 **Tarefas**
 
-- [ ] **`determinism:1`** (D3 = B): stream de IA separado.
+- [x] **`determinism:1`** (D3 = B): stream de IA separado.
   - `src/core/Game.ts`: depois de `:180`, `this.aiRandomGenerator = createDeterministicRandom(`${this.randomSeed}:ai`)`; `aiRandom()` junto de `random()` (`:353`). Fica fora de `getRandomState`, `captureReplaySetup` e do snapshot.
   - `src/core/contracts/chainRuntime.ts:1570`: `aiRandom?(): number`. `src/core/contracts/gameRuntime.ts:769`: declarar `aiRandomGenerator`.
   - `src/core/chain/botResponsePolicy.ts:328-329`: usar `game.aiRandom()`, com fallback determinístico de 0,5 e nunca `Math.random`. Documentar no plano de testes que hosts sem `aiRandom` passam a ter outras probabilidades: prioridade ≥ 70 sempre ativa, o resto nunca ativa.
@@ -517,7 +518,7 @@ Remota:
   - Testes:
     - Em `test/chain/responseDecisionTransport.test.ts`: (1) "generic bot fallback never advances the rules RNG and replays to the same state hash", que falha hoje; (2) reprodutibilidade por seed com `Math.random` lançando.
     - Atualizar `test/ai/techZeroResponses.test.ts:125,278` para fazer stub de `game.aiRandom`.
-- [ ] **`determinism:2`**: em `src/core/game/zones/invariants.ts:267-278`, remover o early return por `Date.now`, mantendo os skips por profundidade (`:233-243`).
+- [x] **`determinism:2`**: em `src/core/game/zones/invariants.ts:267-278`, remover o early return por `Date.now`, mantendo os skips por profundidade (`:233-243`).
   - Deduplicar apenas o log, por assinatura `contextLabel|mensagens ordenadas`, em `_invariantLoggedSignatures` (no lugar de `_invariantLogCache`, `:46`), limpo em `src/core/game/state/duelReset.ts`.
   - Escopo exato da mudança:
     - No commit, a normalização de ownership já é incondicional (`operations.ts:155-157`). A dependência do throttle existe só no caminho por evento (`eventResolver.ts:238`).
@@ -527,30 +528,36 @@ Remota:
     - Em `test/contracts/gameCallbacks.test.ts`, dois `runZoneOp` raiz com o mesmo label: a segunda operação corrompida faz rollback, inclusive com `Date.now` mockado em 0.
     - Estender `test/contracts/fieldPlacement.test.ts:318` para `card_in_multiple_zones`.
   - Qualquer `STATE_INVARIANTS_FAILED` novo é triado como bug de engine (Etapa 6), nunca resolvido com um novo throttle.
-- [ ] **`determinism:3`**: exportar `compareInstanceIds` (`src/core/ai/common/cardValue.ts:124-131`) e usá-lo em `src/core/ai/techzero/priorities.ts:54-57` (`score(b) - score(a) || compareInstanceIds(...)`). Não mexer em `:98-100`.
+- [x] **`determinism:3`**: exportar `compareInstanceIds` (`src/core/ai/common/cardValue.ts:124-131`) e usá-lo em `src/core/ai/techzero/priorities.ts:54-57` (`score(b) - score(a) || compareInstanceIds(...)`). Não mexer em `:98-100`.
   - Testes:
     - `test/ai/techZeroPriorities.test.ts`: os pares (5,12), (99,100) e (1005,1012) escolhem o menor id.
     - `test/ai/arenaSeed.test.ts:66`: empurrar o contador além da próxima potência de 10 entre as repetições.
-- [ ] **`decision-broker:4`** (D21: exceção da UI vira pass gravado): em `src/core/chain/playerResponse.ts`, sempre chamar `requestDecision`.
+- [x] **`decision-broker:4`** (D21: exceção da UI vira pass gravado): em `src/core/chain/playerResponse.ts`, sempre chamar `requestDecision`.
   - O `resolveHuman` faz: mouse-hold → `null` (pass gravado); sem modal → `null`; `AbortController` e timeout criados de forma preguiçosa; exceção da UI → `null`.
   - Remover o `try/catch` externo, para que erros do broker se propaguem como no caminho da IA.
   - Apagar o ramo `offerTrapActivation` e sua declaração em `src/core/contracts/chainRuntime.ts:1478`.
   - Testes (a)–(d) em `test/chain/responseDecisionTransport.test.ts`. O (c) está vermelho em HEAD: hoje o mismatch de replay é engolido.
-- [ ] **`engine-bugs:13`**: generalizar `phaseIntentWasGuardRejected` (`src/core/game/replay/capture.ts:196-204`) para `commandWasGuardRejected`. Ele vale para qualquer comando cujo resultado tenha exatamente o formato de falha de guard: `ok === false && success === false && needsSelection === false && code` começando com `BLOCKED_`. Só `guard.ts` produz `BLOCKED_*`.
+- [x] **`engine-bugs:13`**: generalizar `phaseIntentWasGuardRejected` (`src/core/game/replay/capture.ts:196-204`) para `commandWasGuardRejected`. Ele vale para qualquer comando cujo resultado tenha exatamente o formato de falha de guard: `ok === false && success === false && needsSelection === false && code` começando com `BLOCKED_`. Só `guard.ts` produz `BLOCKED_*`.
   - Teste: "rejected attack is not recorded" em `test/replay/blockedPhaseCapture.test.ts`.
-- [ ] **`determinism:4a`** (D4), com correções:
+- [x] **`determinism:4a`** (D4), com correções:
   - `BotArena.resolveWinner` (`src/core/BotArena.ts:539-566`): TIMEOUT nunca decide por LP. MAX_TURNS mantém a decisão por LP (default de D4(b)), que é determinística depois desta correção.
   - Adicionar `maxTurnCounter?` em `src/core/contracts/game.ts` e `Game.ts`, e um guard no início de `startTurn` (`src/core/game/turn/lifecycle.ts:139-141`) que emite `game_over` com reason `"max_turns"`. Remover o poll de `BotArena.ts:517-521`. Registrar que a contagem reportada de turnos muda em cerca de 1.
   - Usar o `reason` de `game_over` apenas para rotular cancel/dispose. Não existe fim por deck-out (`src/core/game/deck/draw.ts:96-113`).
   - Seed real: `game.randomSeed` em `:580`; em `:759` (catch, sem `Game` no escopo), usar `this.activeGame?.randomSeed` ou anexar a seed ao erro.
   - `maxTurnCounter` não entra no setup de replay. A captura na Arena continua desligada; ligá-la é fase 2 (`determinism:4b`).
   - Testes em `test/ai/arenaConfiguration.test.ts` (timeout → draw; MAX_TURNS → decisão por LP) e `test/ai/arenaSeed.test.ts` (seed não nula; para exatamente no limite).
-- [ ] **`tests-ci:10`** (depois de `determinism:2`): em `src/core/game/replay/driver.ts:263-271`, só no ramo que constrói o próprio `Game`, `game.disablePresentationDelays = true` antes de `startWithDecks`.
+- [x] **`tests-ci:10`** (depois de `determinism:2`): em `src/core/game/replay/driver.ts:263-271`, só no ramo que constrói o próprio `Game`, `game.disablePresentationDelays = true` antes de `startWithDecks`.
   - Teste em `test/replay/canonicalDriver.test.ts`: com `options.game`, a flag não é tocada; sem ele, fica `true`.
 - [ ] **`tests-ci:6`, parte de concorrência** (D20; cauda da etapa): só depois que `determinism:2` estiver em `main` com 3 execuções verdes seguidas, trocar o step de testes do CI para `npm test -- --test-concurrency=2`.
   - Localmente continua 1. Nunca usar `--experimental-test-isolation=none`.
   - A estimativa de 6,5 → 3,5–4 min pressupõe a Etapa 0.
   - No primeiro flake, voltar para 1.
+
+**Resultado (09/10/2026):** todos os itens acima foram concluídos sem bump; os goldens de replay ficaram inalterados.
+- Duas execuções da Arena com a mesma seed (20261009, Arcanist × Shadow-Heart, 3 duelos) produzem relatórios idênticos byte a byte, descontados só os tempos.
+- O timeout de relógio da Arena fica fora do resultado e das médias (`isCompletedArenaDuel`, `REPORT_VERSION` 6). A UI da Arena o mostra como "Timeout, fora do resultado".
+- O limite de turnos agora é aplicado pelo próprio `Game` (`maxTurnCounter`, payload `TurnLimitGameOverEventPayload`).
+- Pendente: a parte de concorrência de `tests-ci:6` (CI com `--test-concurrency=2`), depois de 3 execuções verdes em `main` com `determinism:2`.
 
 **Validação**
 
@@ -1113,6 +1120,8 @@ Todas são corrigidas só no teste, na Etapa 1.
 - o efeito sintético das Magias publicado com `effectType` `on_activate`;
 - o import circular `chain/activationDiscovery` ↔ `effects/activation/getters`;
 - termos em inglês na linha de `Como criar uma carta.md`. | Backlog (Etapa 6 se houver folga) | Sem falha ativa; os revisores as classificaram como menores |
+| Achado da Etapa 5 (`invariants`): o reparo silencioso `resolving → idle` (`src/core/game/zones/invariants.ts`) dispara enquanto `finishTargetSelection` ainda aguarda `selection.execute()`. Isso libera cedo a trava `selectionState === "resolving"` em `actions/guard.ts` e `turn/transitions.ts`. Foram 35 ocorrências na pasta de replay, já existentes antes desta mudança. | Etapa 6 (bug de engine) | Mudar o tempo do guard exige triagem própria; nunca mascarar com throttle |
+| Achado da Etapa 5 (`ai-rng`): o snapshot canônico copia `instanceId`s locais ao processo dos links de Chain ativos (`chain.links[*].cardInstanceId`, `sourceAtActivation`, `declaredTargetSnapshots`, `declaredTargets`, `targetSelections`). Hashes tirados com um link aberto dependem de quantas cartas o processo criou antes. | Etapa 7 (`determinism:6`, bump `v27`) | Trocar por `duelCardId` muda a projeção do hash |
 | Regra: The Shadow Heart negada ainda destrói o hospedeiro? | Backlog (diretor) | `engine-bugs:1` preserva o comportamento atual |
 
 ## Descartados após verificação

@@ -130,6 +130,19 @@ test("resource protection follows exact instances and includes caller's reserved
   assert.deepEqual(chooseTechZeroResourceTargets("kaiser", [first, second], ctx, 3), [second]);
 });
 
+test("equal-score ties follow creation order independently of the process id offset", () => {
+  for (const [lower, higher] of [[5, 12], [99, 100], [1005, 1012]] as const) {
+    const older = card(504), newer = card(504);
+    older.instanceId = lower;
+    newer.instanceId = higher;
+    const ctx = context({ player: { graveyard: [older, newer] } });
+    for (const candidates of [[older, newer], [newer, older]]) {
+      assert.deepEqual(chooseTechZeroResourceTargets("kaiser", candidates, ctx, 1).map(entry => entry.instanceId),
+        [lower], `ids ${lower}/${higher} keep the older copy first`);
+    }
+  }
+});
+
 test("Kaiser and Ghost preserve graveyard tuners for a reachable Lancer's attacks", () => {
   const core = card(501), multimodal = card(503), spare = card(504);
   const ctx = context({ player: {

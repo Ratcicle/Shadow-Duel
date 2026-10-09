@@ -3,15 +3,34 @@ import { spawnSync } from "node:child_process";
 import test, { type TestContext } from "node:test";
 import "../../scripts/register_node_asset_loader.js";
 import Bot from "../../src/core/Bot.js";
+import Card from "../../src/core/Card.js";
 import Game from "../../src/core/Game.js";
 import { turnLineSearch } from "../../src/core/ai/TurnLineSearch.js";
 import type { BotCloneGamePort } from "../../src/core/bot/simulationBridge.js";
 import type { ArenaDuelResult } from "../../src/core/contracts/arena.js";
 import { createMemoryStorage } from "../helpers/game.js";
-import { required, unsafeFixture } from "../helpers/fixtures.js";
+import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js";
 
 const { default: BotArena } = await import("../../src/core/BotArena.js");
 const emptyDeck = { main: [], extra: [] };
+
+/** Initializes the duel, then ends it through the Game's own turn limit. */
+class InitializedGame extends Game {
+  override async start() {
+    await this.startWithDecks({ initializeOnly: true });
+    this.turnCounter = required(this.maxTurnCounter, "Arena turn limit");
+    await this.startTurn();
+  }
+}
+
+function useMemoryStorage(t: TestContext) {
+  const storageDescriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: createMemoryStorage() });
+  t.after(() => {
+    if (storageDescriptor) Object.defineProperty(globalThis, "localStorage", storageDescriptor);
+    else Reflect.deleteProperty(globalThis, "localStorage");
+  });
+}
 
 function createSeededGame(t: TestContext, seed: number | null, duelNumber = 1, swapped = false) {
   const arena = new BotArena(Game, Bot);
@@ -52,6 +71,13 @@ test("Arena rejects invalid seeds and preserves the Game default when omitted or
   }
 });
 
+/** Process-global ids change digit count between runs; decisions must not depend on it. */
+function pushInstanceIdsPastNextPowerOfTen() {
+  const probe = new Card(cardDefinition(501), "bot");
+  const target = 10 ** String(probe.instanceId).length;
+  while (new Card(cardDefinition(501), "bot").instanceId < target) { /* advance the shared counter */ }
+}
+
 function setupSnapshot(game: Game) {
   return {
     firstSeat: game.turn,
@@ -68,6 +94,7 @@ test("repeating an Arena seed reproduces setup and the bounded Tech-Zero decisio
   for (const swapped of [false, true]) {
     const runs = [];
     for (let repeat = 0; repeat < 2; repeat += 1) {
+      if (repeat > 0) pushInstanceIdsPastNextPowerOfTen();
       const { game } = createSeededGame(t, 20260926, 3, swapped);
       await game.startWithDecks({ initializeOnly: true });
       const setup = setupSnapshot(game);
@@ -116,18 +143,7 @@ test("repeating an Arena seed reproduces setup and the bounded Tech-Zero decisio
 
 test("Arena progress and analytics retain each derived duel seed", async t => {
   t.mock.method(console, "log", () => {});
-  const storageDescriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
-  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: createMemoryStorage() });
-  t.after(() => {
-    if (storageDescriptor) Object.defineProperty(globalThis, "localStorage", storageDescriptor);
-    else Reflect.deleteProperty(globalThis, "localStorage");
-  });
-  class InitializedGame extends Game {
-    override async start() {
-      await this.startWithDecks({ initializeOnly: true });
-      this.gameOver = true;
-    }
-  }
+  useMemoryStorage(t);
   const arena = new BotArena(InitializedGame, Bot);
   arena.setSearchParams({ randomSeed: 900 });
   const results: ArenaDuelResult[] = [];
@@ -137,6 +153,90 @@ test("Arena progress and analytics retain each derived duel seed", async t => {
   const records = arena.getAnalytics().duelRecords;
   assert.deepEqual(records.map(record => record.seed), [900, 901]);
   assert.deepEqual(arena.exportStrategicReport().duels.map(duel => duel.seed), [900, 901]);
+});
+
+test("an unseeded Arena records the seed each Game actually used", async t => {
+  t.mock.method(console, "log", () => {});
+  useMemoryStorage(t);
+  const games: Game[] = [];
+  class RecordedGame extends InitializedGame {
+    override async start() {
+      games.push(this);
+      await super.start();
+    }
+  }
+  const arena = new BotArena(RecordedGame, Bot);
+  const results: ArenaDuelResult[] = [];
+  await arena.startArena("techzero", "shadowheart", 2, "instant", false,
+    progress => results.push(progress.lastResult));
+  const seeds = games.map(game => game.randomSeed);
+  assert.equal(seeds.length, 2);
+  for (const seed of seeds) assert.equal(typeof seed, "number");
+  assert.deepEqual(results.map(result => result.randomSeed), seeds);
+  assert.deepEqual(arena.getAnalytics().duelRecords.map(record => record.seed), seeds);
+  assert.deepEqual(arena.exportStrategicReport().duels.map(duel => duel.seed), seeds);
+});
+
+test("an unseeded Arena duel that fails after the game ends still records its seed", async t => {
+  t.mock.method(console, "log", () => {});
+  useMemoryStorage(t);
+  const games: Game[] = [];
+  class RecordedGame extends InitializedGame {
+    override async start() {
+      games.push(this);
+      await super.start();
+    }
+  }
+  const arena = new BotArena(RecordedGame, Bot);
+  const recordDuel = arena.analytics.recordDuel.bind(arena.analytics);
+  let calls = 0;
+  t.mock.method(arena.analytics, "recordDuel", (...args: Parameters<typeof recordDuel>) => {
+    calls += 1;
+    if (calls === 1) throw new Error("analytics failure after the duel ended");
+    return recordDuel(...args);
+  });
+  const results: ArenaDuelResult[] = [];
+  await arena.startArena("techzero", "shadowheart", 1, "instant", false,
+    progress => results.push(progress.lastResult));
+  const seed = required(games[0]).randomSeed;
+  assert.equal(typeof seed, "number");
+  const result = required(results[0]);
+  assert.equal(result.type, "error");
+  assert.equal(result.randomSeed, seed);
+  assert.deepEqual(arena.getAnalytics().duelRecords.map(record => record.seed), [seed]);
+});
+
+test("an Arena duel plays exactly the turn limit and never starts the next turn", async t => {
+  t.mock.method(console, "log", () => {});
+  useMemoryStorage(t);
+  const games: Game[] = [];
+  const standbyPhases: number[] = [];
+  const endPhases: number[] = [];
+  class ObservedGame extends Game {
+    override async start() {
+      games.push(this);
+      this.on("standby_phase", () => standbyPhases.push(this.turnCounter));
+      this.on("end_phase", () => endPhases.push(this.turnCounter));
+      return await super.start();
+    }
+  }
+  const arena = new BotArena(ObservedGame, Bot);
+  arena.maxTurns = 1;
+  arena.setSearchParams({ randomSeed: 20261009 });
+  const results: ArenaDuelResult[] = [];
+  await arena.startArena("techzero", "shadowheart", 1, "instant", false,
+    progress => results.push(progress.lastResult));
+  const game = required(games[0]);
+  t.after(() => game.dispose("arena_turn_limit_test"));
+  const result = required(results[0]);
+  assert.ok(result.type !== "cancelled");
+  assert.equal(result.reason, "max_turns");
+  assert.equal(result.turns, 1);
+  assert.equal(game.turnCounter, 1);
+  assert.equal(game.gameOver, true);
+  assert.deepEqual(endPhases, [1], "the limited turn reaches its End Phase");
+  assert.deepEqual(standbyPhases, [1], "no Standby Phase of turn 2");
+  assert.equal(arena.getAnalytics().duelRecords[0]?.turns, 1);
 });
 
 test("smoke CLI rejects a malformed seed before attempting a matchup", () => {
