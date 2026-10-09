@@ -812,6 +812,30 @@ function validateCardSnapshot(value: unknown, path: string, onField = false): vo
   for (const key of ["treatedAsCardKinds", "trapMonsterSummonProcedure", "trapMonsterOriginalState", "types", "synchroMaterialRoles"]) {
     if (!hasOwn(characteristics, key)) invalid(`${path}.characteristics.${key}`, "a serialized value");
   }
+  const turnState = requireObject(read(card, "turnState"), `${path}.turnState`);
+  for (const key of [
+    "canMakeSecondAttackThisTurn",
+    "secondAttackUsedThisTurn",
+    "canAttackAllOpponentMonstersThisTurn",
+    "canAttackDirectlyThisTurn",
+  ]) {
+    requireBoolean(read(turnState, key), `${path}.turnState.${key}`);
+  }
+  for (const key of [
+    "cannotAttackUntilTurn",
+    "immuneToOpponentEffectsUntilTurn",
+    "battleIndestructibleOncePerTurnLastUsedTurn",
+    "setTurn",
+    "turnSetOn",
+    "revealedTurn",
+  ]) {
+    if (read(turnState, key) !== null) requireFiniteNumber(read(turnState, key), `${path}.turnState.${key}`);
+  }
+  requireNullableString(read(turnState, "lastSummonProcedure"), `${path}.turnState.lastSummonProcedure`);
+  requireArray(read(turnState, "attackedMonstersThisTurn"), `${path}.turnState.attackedMonstersThisTurn`);
+  for (const key of ["extraAttackTargetRestriction", "passiveExtraAttackTargetRestriction", "passiveExtraAttackBonuses"]) {
+    if (!hasOwn(turnState, key)) invalid(`${path}.turnState.${key}`, "a serialized value");
+  }
   const registries = requireObject(read(card, "statusRegistries"), `${path}.statusRegistries`);
   for (const key of ["temporary", "fieldExit"]) {
     requireObject(read(registries, key), `${path}.statusRegistries.${key}`);

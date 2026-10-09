@@ -170,6 +170,11 @@ Esses dados também participam dos snapshots de procedimentos e de referências.
   reescritas por monstros-armadilha, Regulador e Fichas, e os registros de
   status restaurados no fim do turno e na saída do campo
   (`statusRegistries`, com o valor a restaurar e o valor atual);
+- controle de ataques e turnos por carta (`turnState`): segundo ataque,
+  ataque a todos os monstros e ataque direto concedidos, restrições e bônus de
+  ataque extra, monstros já atacados (pela identidade do duelo), prazos de
+  ataque e imunidade, turno em que foi baixada ou revelada e último
+  procedimento de Invocação;
 - contribuições de negação, modificações de Nível, buffs e proteções;
 - usos de efeitos por nome, por cópia e por duelo, quando projetados;
 - ações agendadas e efeitos temporários de evento, controle e substituição;

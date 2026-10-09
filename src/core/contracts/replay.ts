@@ -388,6 +388,28 @@ export interface CanonicalCardCharacteristicsSnapshot {
   isToken: boolean;
 }
 
+/**
+ * Per-card attack and turn bookkeeping read by legality checks. Monsters
+ * already attacked this turn are listed by duel identity.
+ */
+export interface CanonicalCardTurnStateSnapshot {
+  canMakeSecondAttackThisTurn: boolean;
+  secondAttackUsedThisTurn: boolean;
+  canAttackAllOpponentMonstersThisTurn: boolean;
+  canAttackDirectlyThisTurn: boolean;
+  attackedMonstersThisTurn: SerializableValue;
+  extraAttackTargetRestriction: SerializableValue;
+  passiveExtraAttackTargetRestriction: SerializableValue;
+  passiveExtraAttackBonuses: SerializableValue;
+  cannotAttackUntilTurn: number | null;
+  immuneToOpponentEffectsUntilTurn: number | null;
+  battleIndestructibleOncePerTurnLastUsedTurn: number | null;
+  setTurn: number | null;
+  turnSetOn: number | null;
+  revealedTurn: number | null;
+  lastSummonProcedure: string | null;
+}
+
 /** Status baselines restored at end of turn and when the card leaves the field. */
 export interface CanonicalCardStatusRegistriesSnapshot {
   temporary: SerializableValue;
@@ -440,6 +462,7 @@ export interface CanonicalCardStateSnapshot {
   statuses: CanonicalCardStatusSnapshot;
   characteristics: CanonicalCardCharacteristicsSnapshot;
   statusRegistries: CanonicalCardStatusRegistriesSnapshot;
+  turnState: CanonicalCardTurnStateSnapshot;
 }
 
 export interface CanonicalPlayerZonesSnapshot {

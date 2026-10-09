@@ -14,6 +14,7 @@ import {
 import type {
   CanonicalCardCharacteristicsSnapshot,
   CanonicalCardStateSnapshot,
+  CanonicalCardTurnStateSnapshot,
   CanonicalGameStateSnapshot,
   CanonicalPlayerStateSnapshot,
   CanonicalPlayerZonesSnapshot,
@@ -214,6 +215,58 @@ function statusRegistryState(card: object, registryKey: string): SerializableVal
   }]))) ?? {};
 }
 
+function readTurn(value: object, key: string): number | null {
+  const field = readProperty(value, key);
+  return typeof field === "number" && Number.isFinite(field) ? field : null;
+}
+
+/**
+ * Attack bookkeeping stores process-local instance ids of the attacked
+ * monsters; they are resolved to duel identities through the cards in play.
+ */
+function attackedMonsterIdentities(
+  game: CanonicalReplayGamePort,
+  card: ReplayRuntimeCard,
+): SerializableValue {
+  const attacked = readProperty(card, "attackedMonstersThisTurn");
+  if (!(attacked instanceof Set) || attacked.size === 0) return [];
+  const cards = [game.player, game.bot].flatMap(player => player ? [
+    ...player.deck, ...player.extraDeck, ...player.hand, ...player.field,
+    ...player.spellTrap, ...player.graveyard, ...player.banished,
+    ...(player.fieldSpell ? [player.fieldSpell] : []),
+  ] : []);
+  const identities = [...attacked].map(targetId => {
+    const target = cards.find(entry => readProperty(entry, "instanceId") === targetId);
+    if (target) return game.ensureDuelCardId?.(target) ?? target.duelCardId ?? null;
+    // Legacy fallbacks store a definition id or name, which are already stable.
+    return typeof targetId === "number" || typeof targetId === "string" ? `unresolved:${String(targetId)}` : null;
+  });
+  return stableValue(new Set(identities)) ?? [];
+}
+
+function cardTurnState(
+  game: CanonicalReplayGamePort,
+  card: ReplayRuntimeCard,
+): CanonicalCardTurnStateSnapshot {
+  return {
+    canMakeSecondAttackThisTurn: readFlag(card, "canMakeSecondAttackThisTurn"),
+    secondAttackUsedThisTurn: readFlag(card, "secondAttackUsedThisTurn"),
+    canAttackAllOpponentMonstersThisTurn: readFlag(card, "canAttackAllOpponentMonstersThisTurn"),
+    canAttackDirectlyThisTurn: readFlag(card, "canAttackDirectlyThisTurn"),
+    attackedMonstersThisTurn: attackedMonsterIdentities(game, card),
+    extraAttackTargetRestriction: readSerializable(card, "extraAttackTargetRestriction", null),
+    passiveExtraAttackTargetRestriction: readSerializable(card, "passiveExtraAttackTargetRestriction", null),
+    passiveExtraAttackBonuses: readSerializable(card, "passiveExtraAttackBonuses", {}),
+    cannotAttackUntilTurn: readTurn(card, "cannotAttackUntilTurn"),
+    immuneToOpponentEffectsUntilTurn: readTurn(card, "immuneToOpponentEffectsUntilTurn"),
+    battleIndestructibleOncePerTurnLastUsedTurn: readTurn(card, "battleIndestructibleOncePerTurnLastUsedTurn"),
+    setTurn: readTurn(card, "setTurn"),
+    turnSetOn: readTurn(card, "turnSetOn"),
+    revealedTurn: readTurn(card, "revealedTurn"),
+    lastSummonProcedure: readString(card, "lastSummonProcedure"),
+  };
+}
+
 function cardCharacteristics(card: ReplayRuntimeCard): CanonicalCardCharacteristicsSnapshot {
   return {
     cardKind: readString(card, "cardKind"),
@@ -325,6 +378,7 @@ function cardState(
       temporary: statusRegistryState(card, "tempStatuses"),
       fieldExit: statusRegistryState(card, "fieldExitStatuses"),
     },
+    turnState: cardTurnState(game, card),
   };
 }
 

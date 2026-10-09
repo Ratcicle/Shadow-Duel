@@ -33,7 +33,7 @@ const V27_PLAYER_FIELDS = [
   "lpGainMultiplier",
   "opponentCannotActivateDuringBattle",
 ] as const;
-const V27_CARD_FIELDS = ["characteristics", "statusRegistries"] as const;
+const V27_CARD_FIELDS = ["characteristics", "statusRegistries", "turnState"] as const;
 const V27_CARD_STATUS_FIELDS = [
   "battleIndestructible",
   "tempBattleIndestructible",
@@ -288,10 +288,10 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   // Presence durations participate in the canonical state as well.
   assert.deepEqual(
     replay.commands.map(command => command.stateHash),
-    ["de42eb64", "f0342b98"],
+    ["aa535c6e", "71117b62"],
   );
   const replayResult = required(replay.result);
-  assert.equal(replayResult.finalStateHash, "f0342b98");
+  assert.equal(replayResult.finalStateHash, "71117b62");
   // Historical envelopes retain their exact version and declaration signature.
   // engine-rules-v26: the snapshot before the v27 hash completion.
   const beforeHashCompletion = structuredClone(replay);
@@ -358,8 +358,8 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "f60cba87", engineVersion: "engine-rules-v22" }), "b1bbca51");
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "7e5d54cb", engineVersion: "engine-rules-v23" }), "7bfe1e4a");
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "feeb687b", engineVersion: "engine-rules-v23" }), "6b0653a2");
-  assert.equal(hashCanonicalValue(replay), "a251bee0");
-  assert.equal(JSON.stringify(replay).length, 20900);
+  assert.equal(hashCanonicalValue(replay), "75eb5fd1");
+  assert.equal(JSON.stringify(replay).length, 26912);
 
   const result = await replayCanonicalDuel(replay);
   assert.equal(result.ok, true);
@@ -621,6 +621,10 @@ const RULE_FIELD_MUTATIONS: readonly RuleFieldMutation[] = [
     game.materialDuelStats.player.activatedEffectIdsByMaterialId.set(1, new Set(["effect"]));
   } },
   { field: "specialSummonTypeCounts", mutate: game => { game.specialSummonTypeCounts.player.set("Dragon", 1); } },
+  { field: "card.attackedMonstersThisTurn", mutate: game => {
+    const target = required(game.bot.hand[0]);
+    required(game.player.hand[0]).attackedMonstersThisTurn = new Set([target.instanceId]);
+  } },
   ...[
     ["cardKind", "trap"], ["originalCardKind", "trap"], ["treatedAsCardKinds", ["trap"]],
     ["isTrapMonster", true], ["trapMonsterSummonProcedure", "card_effect"],
@@ -630,6 +634,13 @@ const RULE_FIELD_MUTATIONS: readonly RuleFieldMutation[] = [
     ["battleIndestructible", true], ["tempBattleIndestructible", true],
     ["battleDamageHealsControllerThisTurn", true], ["extraAttacks", 1],
     ["tempStatuses", { battleIndestructible: false }], ["fieldExitStatuses", { isTuner: false }],
+    ["canMakeSecondAttackThisTurn", true], ["secondAttackUsedThisTurn", true],
+    ["canAttackAllOpponentMonstersThisTurn", true], ["canAttackDirectlyThisTurn", true],
+    ["extraAttackTargetRestriction", "monster"], ["passiveExtraAttackTargetRestriction", "monster"],
+    ["passiveExtraAttackBonuses", { effect: { amount: 1, targetRestriction: null } }],
+    ["cannotAttackUntilTurn", 4], ["immuneToOpponentEffectsUntilTurn", 4],
+    ["battleIndestructibleOncePerTurnLastUsedTurn", 1], ["setTurn", 1], ["turnSetOn", 1],
+    ["revealedTurn", 1], ["lastSummonProcedure", "synchro"],
   ].map(([key, value]): RuleFieldMutation => ({
     field: `card.${String(key)}`,
     mutate: game => { Reflect.set(required(game.player.hand[0]), String(key), value); },
@@ -666,6 +677,7 @@ test("rule records hash by duel identity, not by process-local instance ids", as
       id: `${String(source.instanceId)}:followup:1`, source, sourceInstanceId: source.instanceId,
     }];
     game.damageCalculationTempBuffs = [{ card: target, atk: 100, def: 0 }];
+    source.attackedMonstersThisTurn = new Set([target.instanceId]);
     return hashCanonicalGameState(game);
   };
   assert.equal(await hashWithRecords(0), await hashWithRecords(7));
