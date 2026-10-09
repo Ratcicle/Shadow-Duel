@@ -506,3 +506,53 @@ test("[CS-01][CS-02][CS-04] Summon, SEGOC, respostas, LIFO e cleanup integram em
     "graveyard",
   );
 });
+
+test("a thrown link resolution is recorded once and rethrown in strict mode only after link cleanup", async (t) => {
+  t.mock.method(console, "error", () => undefined);
+  for (const strict of [false, true]) {
+    const harness = createChainHarness({
+      onActions() {
+        throw new Error("link exploded");
+      },
+    });
+    const { chain, game, player } = harness;
+    Reflect.set(game, "strictEngineFaults", strict);
+    const link = required(
+      chain.addToChain(
+        chain.createPreparedActivation({
+          card: createTestCard({ name: "Exploding source" }),
+          controller: player,
+          effect: createTestEffect({
+            id: "exploding_effect",
+            actions: [
+              unsafeFixture<CardAction>(
+                { type: "trace_integration", name: "explode" },
+                "Synthetic action intercepted by the test harness; never dispatched to the action registry.",
+              ),
+            ],
+          }),
+          activationZone: "field",
+          committed: true,
+          costsPaid: true,
+        }),
+      ),
+    );
+
+    if (strict) {
+      await assert.rejects(async () => await chain.resolveChain(), /link exploded/);
+    } else {
+      const result = await chain.resolveChain();
+      assert.equal(Reflect.get(Object(result), "success"), false);
+    }
+
+    const faults: unknown = Reflect.get(game, "engineFaults");
+    assert.ok(Array.isArray(faults));
+    assert.equal(faults.length, 1, `strict=${strict}`);
+    assert.equal(Reflect.get(Object(faults[0]), "scope"), "chain_link_resolution");
+    // Production keeps the failed-effect fallback; strict mode fails the
+    // link itself, and its cleanup ran before the rethrow.
+    assert.equal(link.resolutionStatus, strict ? "failed" : "resolved");
+    assert.equal(chain.isResolving, false);
+    assert.equal(chain.currentResolvingLink, null);
+  }
+});

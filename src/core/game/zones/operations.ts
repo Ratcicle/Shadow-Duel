@@ -133,12 +133,19 @@ export function runZoneOp<Result>(
     });
   };
 
+  // Each operation leaves its depth level exactly once, even when a nested
+  // failure is rethrown through the finalizers of this same operation.
+  let settled = false;
+
   const finalizeFailure = (error: unknown): ZoneOpFailure => {
     if (generation !== this.fieldPlacementGeneration) return { success: false, reason: "duel_ended", rolledBack: false };
-    this.zoneOpDepth = Math.max(0, this.zoneOpDepth - 1);
-    rollback(error);
-    if (root && this.zoneOpSnapshot) {
-      this.zoneOpSnapshot = null;
+    if (!settled) {
+      settled = true;
+      this.zoneOpDepth = Math.max(0, this.zoneOpDepth - 1);
+      rollback(error);
+      if (root && this.zoneOpSnapshot) {
+        this.zoneOpSnapshot = null;
+      }
     }
     if (!root) {
       throw error;
@@ -165,6 +172,7 @@ export function runZoneOp<Result>(
     } catch (err) {
       return finalizeFailure(err);
     }
+    settled = true;
     this.zoneOpDepth = Math.max(0, this.zoneOpDepth - 1);
     if (root) {
       this.devLog("ZONE_OP_COMMIT", {
@@ -180,13 +188,14 @@ export function runZoneOp<Result>(
     return result;
   };
 
+  let result: Result | Promise<Result>;
   try {
-    const result = fn();
-    if (isPromiseLike(result)) {
-      return result.then(finalizeSuccess).catch(finalizeFailure);
-    }
-    return finalizeSuccess(result);
+    result = fn();
   } catch (error) {
     return finalizeFailure(error);
   }
+  if (isPromiseLike(result)) {
+    return result.then(finalizeSuccess, finalizeFailure);
+  }
+  return finalizeSuccess(result);
 }

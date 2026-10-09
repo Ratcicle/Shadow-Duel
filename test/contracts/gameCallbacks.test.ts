@@ -211,6 +211,70 @@ test("repeated root zone ops with the same label always run the invariant check"
   assert.equal(errors.length, 1);
 });
 
+test("a nested zone op failing its invariant check leaves its depth level once", async (t) => {
+  t.mock.method(console, "error", () => {});
+  const game = new Game({ disableChains: true, captureReplay: false });
+  t.after(() => game.dispose("zone-nested-failure-test"));
+  const card = new Card(
+    {
+      id: 9_997,
+      name: "Nested zone card",
+      cardKind: "monster",
+      atk: 1_000,
+      def: 1_000,
+      level: 4,
+      effects: [],
+    },
+    "player",
+  );
+  game.player.hand.push(card);
+  // Nested ops skip the real invariant scan, so the inner check is forced
+  // critical; the root check of the outer op still runs for real.
+  const assertStateInvariants = game.assertStateInvariants;
+  Reflect.set(
+    game,
+    "assertStateInvariants",
+    function (this: Game, ...args: Parameters<Game["assertStateInvariants"]>) {
+      if (args[0] === "nested_inner") return { hasCritical: true };
+      return Reflect.apply(assertStateInvariants, this, args);
+    },
+  );
+  const corruptInner = () => {
+    game.player.graveyard.push(card);
+    return "corrupted";
+  };
+
+  for (const mode of ["sync", "async"] as const) {
+    let depthAfterInner = -1;
+    let innerError: unknown = null;
+    const outer = async () => {
+      try {
+        await (mode === "sync"
+          ? game.runZoneOp("nested_inner", corruptInner)
+          : game.runZoneOp("nested_inner", async () => corruptInner()));
+      } catch (error) {
+        innerError = error;
+      }
+      depthAfterInner = game.zoneOpDepth;
+      return "outer";
+    };
+
+    const result = await game.runZoneOp("nested_outer", outer);
+
+    assert.equal(depthAfterInner, 1, `${mode}: the outer level stays open`);
+    assert.ok(innerError instanceof Error);
+    assert.equal(innerError.message, "STATE_INVARIANTS_FAILED");
+    assert.deepEqual(result, {
+      success: false,
+      reason: "STATE_INVARIANTS_FAILED",
+      rolledBack: true,
+    });
+    assert.equal(game.zoneOpDepth, 0);
+    assert.deepEqual(game.player.hand, [card]);
+    assert.deepEqual(game.player.graveyard, []);
+  }
+});
+
 test("root invariant checks keep a pending selection and an active resolution lock", (t) => {
   const game = new Game({ disableChains: true, captureReplay: false });
   t.after(() => game.dispose("zone-invariant-selection-test"));
@@ -246,4 +310,48 @@ test("zone rollback preserves messages from non-Error throwables", () => {
   } finally {
     game.dispose("zone-error-test");
   }
+});
+
+test("a failed summon cleanup records its move fault and still releases the summon guard", async (t) => {
+  t.mock.method(console, "error", () => {});
+  // The cleanup contains the fault even in strict mode: rethrowing here
+  // would skip the release of the summon procedure guard.
+  const game = new Game({ captureReplay: false, strictEngineFaults: true });
+  t.after(() => game.dispose("summon-cleanup-fault-test"));
+  const card = new Card(
+    {
+      id: 9_998,
+      name: "Failed summon card",
+      cardKind: "monster",
+      atk: 1_000,
+      def: 1_000,
+      level: 4,
+      effects: [],
+    },
+    "player",
+  );
+  game.player.hand.push(card);
+  Reflect.set(game, "moveCard", async () => {
+    throw new Error("cleanup move exploded");
+  });
+
+  const result = await game.executeSummonTransaction(
+    game.createPreparedSummon({
+      card,
+      controller: game.player,
+      sourceZone: "hand",
+      summonOrigin: "effect_resolution",
+      summonMode: "summon",
+      summonMethod: "special",
+      position: "attack",
+      perform: () => ({ success: false, reason: "perform_failed" }),
+    }),
+  );
+
+  assert.equal(result.success, false);
+  assert.equal(game.engineFaults.length, 1);
+  assert.equal(game.engineFaults[0]?.scope, "summon_transaction_cleanup");
+  assert.equal(game.engineFaults[0]?.message, "cleanup move exploded");
+  assert.equal(game.summonProcedureDepth, 0);
+  assert.equal(game.activeSummonTransaction, null);
 });

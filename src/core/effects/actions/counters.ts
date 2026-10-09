@@ -1,6 +1,7 @@
 import {
   buildFieldSelectionCandidates as buildSharedFieldSelectionCandidates,
   getUI as getSharedUI,
+  requestResolutionOption,
   resolveFieldScopeCards as resolveSharedFieldScopeCards,
   resolveTargetCards,
   selectCards as selectSharedCards,
@@ -663,32 +664,45 @@ async function resolveCounterRemovalAmount(
   const maxAmount = Math.min(configuredMax, Math.max(0, totalAvailable));
 
   if (maxAmount < minAmount) return 0;
-  if (isAI(player)) return maxAmount;
 
   const defaultAmount = Math.max(
     minAmount,
     Math.min(maxAmount, Number(action.defaultAmount ?? maxAmount)),
   );
-  const ui = getUI(game);
-  if (!ui?.showNumberPrompt) return defaultAmount;
+  const amounts = Array.from(
+    { length: maxAmount - minAmount + 1 },
+    (_, index) => minAmount + index,
+  );
+  const promptHuman = async (): Promise<number | null> => {
+    const ui = getUI(game);
+    if (!ui?.showNumberPrompt) return defaultAmount;
 
-  const prompt =
-    action.amountPrompt ||
-    getUIText("ui.counters.removeAmount", {
-      ...getCounterTextParams(action.counterType || "default", 2),
-      min: minAmount,
-      max: maxAmount,
-    });
-  const raw = ui.showNumberPrompt(prompt, defaultAmount);
-  const resolved =
-    raw && typeof raw === "object" && typeof raw.then === "function"
-      ? await raw
-      : raw;
-  if (resolved === null || resolved === undefined) return null;
+    const prompt =
+      action.amountPrompt ||
+      getUIText("ui.counters.removeAmount", {
+        ...getCounterTextParams(action.counterType || "default", 2),
+        min: minAmount,
+        max: maxAmount,
+      });
+    const raw = ui.showNumberPrompt(prompt, defaultAmount);
+    const resolved =
+      raw && typeof raw === "object" && typeof raw.then === "function"
+        ? await raw
+        : raw;
+    if (resolved === null || resolved === undefined) return null;
 
-  const parsed = Math.floor(Number(resolved));
-  if (!Number.isFinite(parsed)) return null;
-  return Math.max(minAmount, Math.min(maxAmount, parsed));
+    const parsed = Math.floor(Number(resolved));
+    if (!Number.isFinite(parsed)) return null;
+    return Math.max(minAmount, Math.min(maxAmount, parsed));
+  };
+  return requestResolutionOption(
+    game ?? {},
+    player ?? null,
+    amounts,
+    (amount) => `amount:${amount}`,
+    promptHuman,
+    () => maxAmount,
+  );
 }
 
 /**

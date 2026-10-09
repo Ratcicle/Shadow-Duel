@@ -23,6 +23,7 @@ import type {
 
 import { walkActionList } from "../../actionHandlers/actionWalker.js";
 import { evaluateActivationPreviewConditions } from "./runtime.js";
+import { reportEngineFault } from "../../game/devTools/faults.js";
 
 function getCardInstanceId(card: ConditionCard | null | undefined) {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? null;
@@ -2268,25 +2269,6 @@ export function evaluateConditions(
         }
         break;
       }
-      case "turn_player": {
-        const expected = cond.player || cond.turn || cond.owner;
-        const expectedId =
-          expected === "self"
-            ? player?.id
-            : expected === "opponent"
-              ? opponent?.id
-              : expected;
-        if (!expectedId) {
-          return { ok: false, reason: "Invalid condition configuration." };
-        }
-        if (this.game?.turn !== expectedId) {
-          return {
-            ok: false,
-            reason: cond.reason || "Not the correct turn.",
-          };
-        }
-        break;
-      }
       case "has_stored_blueprint": {
         const sourceCard = ctx?.source || null;
         const min = Number(cond.min ?? 1);
@@ -2540,8 +2522,15 @@ export function evaluateConditions(
         }
         break;
       }
-      default:
-        break;
+      default: {
+        // Unknown types (including action-scoped ones) fail closed instead of
+        // silently passing; the card database validator rejects them upfront.
+        const reason = `Unknown condition type "${String(cond.type)}".`;
+        reportEngineFault(this.game, "unknown_condition", new Error(reason), {
+          details: { type: cond.type, source: ctx?.source?.name ?? null },
+        });
+        return { ok: false, reason };
+      }
     }
   }
 

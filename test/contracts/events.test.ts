@@ -438,6 +438,56 @@ test("resolveEvent collect-only keeps listeners upstream and returns collectors"
   assert.equal(host.resolvedEntries, 0);
 });
 
+test("resolveEvent contains collector and resolution faults as ok outcomes and rethrows them only in strict mode", async (t) => {
+  t.mock.method(console, "error", () => undefined);
+  const faultsOf = (host: object): unknown[] => {
+    const faults: unknown = Reflect.get(host, "engineFaults");
+    assert.ok(Array.isArray(faults));
+    return faults;
+  };
+  const scopeOf = (fault: unknown) => Reflect.get(Object(fault), "scope");
+  const failingCollector = (host: EventResolverHost) => {
+    host.effectEngine = {
+      async collectEventTriggers() {
+        throw new Error("collector exploded");
+      },
+    };
+  };
+
+  // The collector fault keeps resolving the event without triggers.
+  const collecting = createResolverHost();
+  failingCollector(collecting);
+  const collected = await Reflect.apply(resolveEvent, collecting, ["after_summon", summonPayload()]);
+  assert.equal(collected.ok, true);
+  assert.equal(collected.fault, true);
+  assert.equal(collecting.resolvedEntries, 1);
+  assert.deepEqual(faultsOf(collecting).map(scopeOf), ["event_trigger_collection"]);
+
+  // A resolution fault is never `ok: false`, which callers read as an interruption.
+  const resolving = createResolverHost();
+  resolving.resolveEventEntries = async () => {
+    throw new Error("resolution exploded");
+  };
+  const resolved = await Reflect.apply(resolveEvent, resolving, ["after_summon", summonPayload()]);
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.fault, true);
+  assert.equal(resolved.reason, "engine_fault");
+  assert.equal(resolving.eventResolutionDepth, 0);
+  assert.deepEqual(faultsOf(resolving).map(scopeOf), ["event_resolution"]);
+
+  const strict = createResolverHost();
+  Reflect.set(strict, "strictEngineFaults", true);
+  failingCollector(strict);
+  await assert.rejects(
+    async () => await Reflect.apply(resolveEvent, strict, ["after_summon", summonPayload()]),
+    /collector exploded/,
+  );
+  assert.equal(strict.resolvedEntries, 0);
+  assert.equal(strict.eventResolutionDepth, 0);
+  // Rethrown through the resolution containment without a second record.
+  assert.deepEqual(faultsOf(strict).map(scopeOf), ["event_trigger_collection"]);
+});
+
 test("resolveEventEntries copies attack redirects back to the original payload", async () => {
   const host = createResolverHost();
   const attackerOwner = createPlayer("player");

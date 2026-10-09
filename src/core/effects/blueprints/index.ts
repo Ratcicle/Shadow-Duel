@@ -23,7 +23,10 @@ import type {
 } from "../../contracts/selection.js";
 import type { GameUI } from "../../contracts/ui.js";
 import type { DecisionBrokerPort } from "../../contracts/decisions.js";
-import { requestOptionalConfirmation } from "../../actionHandlers/shared.js";
+import {
+  requestOptionalConfirmation,
+  requestResolutionOption,
+} from "../../actionHandlers/shared.js";
 
 type BlueprintEffect = EffectDefinition & {
   readonly activatedBlueprint?: StoredEffectBlueprint;
@@ -70,6 +73,8 @@ interface BlueprintCard extends ActionRuntimeCard {
 }
 interface BlueprintActivationState {
   blueprintId?: string;
+  /** Storage slot of the chosen blueprint; blueprintId alone is not unique. */
+  blueprintIndex?: number;
   logged?: boolean;
 }
 type BlueprintActionContext = NonNullable<EffectContext["actionContext"]> & {
@@ -198,7 +203,10 @@ const resolvePromptResult = async (
   return !!promptResult;
 };
 
-const buildBlueprintDisplayCard = (blueprint: StoredEffectBlueprint) => ({
+const buildBlueprintDisplayCard = (
+  blueprint: StoredEffectBlueprint,
+  storageIndex: number,
+) => ({
   id: blueprint.sourceCardId || blueprint.blueprintId,
   name: blueprint.displayName || blueprint.sourceCardName || "Stored Effect",
   description: blueprint.shortRulesText || "",
@@ -206,7 +214,13 @@ const buildBlueprintDisplayCard = (blueprint: StoredEffectBlueprint) => ({
   subtype: blueprint.sourceCardSubtype || "normal",
   image: blueprint.sourceImage || "assets/card-back.png",
   __blueprintId: blueprint.blueprintId,
+  // blueprintId is not unique across slots; the storage index is.
+  __blueprintIndex: storageIndex,
 });
+
+/** Replay key of a stored blueprint: storage index plus blueprintId. */
+const blueprintOptionKey = (blueprint: StoredEffectBlueprint, index: number) =>
+  `blueprint:${index}:${blueprint.blueprintId}`;
 
 const renderBlueprintCard = (
   card: ReturnType<typeof buildBlueprintDisplayCard>,
@@ -249,8 +263,9 @@ const pickBlueprintFromModal = async (
     cancelLabel?: string;
   } = {},
 ) => {
+  // Without a selection UI there is no human answer; never pick for the player.
   if (!ui || typeof ui.showCardGridSelectionModal !== "function") {
-    return blueprints[0] || null;
+    return null;
   }
 
   const displayCards = blueprints.map(buildBlueprintDisplayCard);
@@ -266,13 +281,15 @@ const pickBlueprintFromModal = async (
       cancelLabel: options.cancelLabel || "Cancelar",
       renderCard: renderBlueprintCard,
       onConfirm: (chosen) => {
-        const chosenCard = Array.isArray(chosen) ? chosen[0] : null;
-        const blueprintId = chosenCard?.__blueprintId;
-        const blueprint =
-          blueprints.find((bp) => bp.blueprintId === blueprintId) ||
-          blueprints[0] ||
-          null;
-        resolve(blueprint);
+        const chosenCard = Array.isArray(chosen) ? chosen[0] : undefined;
+        const blueprint = chosenCard
+          ? blueprints[chosenCard.__blueprintIndex]
+          : undefined;
+        resolve(
+          blueprint && blueprint.blueprintId === chosenCard?.__blueprintId
+            ? blueprint
+            : null,
+        );
       },
       onCancel: () => resolve(null),
     });
@@ -609,22 +626,31 @@ export async function activateStoredBlueprint(
 
   let blueprint: StoredEffectBlueprint | null | undefined = null;
   if (activationState.blueprintId) {
-    blueprint = stored.find(
-      (bp) => bp.blueprintId === activationState.blueprintId,
-    );
+    const resumed =
+      activationState.blueprintIndex !== undefined
+        ? stored[activationState.blueprintIndex]
+        : stored.find((bp) => bp.blueprintId === activationState.blueprintId);
+    blueprint =
+      resumed?.blueprintId === activationState.blueprintId ? resumed : null;
   }
 
   if (!blueprint) {
     if (stored.length === 1) {
       blueprint = stored[0];
-    } else if (isAI(player)) {
-      blueprint = stored[0];
     } else {
-      blueprint = await pickBlueprintFromModal(this.ui, stored, {
-        title: "Escolha o efeito armazenado",
-        subtitle: "Selecione 1 efeito para ativar.",
-        confirmLabel: "Ativar",
-      });
+      blueprint = await requestResolutionOption(
+        this.game ?? {},
+        player,
+        stored,
+        blueprintOptionKey,
+        () =>
+          pickBlueprintFromModal(this.ui, stored, {
+            title: "Escolha o efeito armazenado",
+            subtitle: "Selecione 1 efeito para ativar.",
+            confirmLabel: "Ativar",
+          }),
+        () => stored[0] ?? null,
+      );
     }
   }
 
@@ -637,6 +663,7 @@ export async function activateStoredBlueprint(
 
   if (activationState) {
     activationState.blueprintId = blueprint.blueprintId;
+    activationState.blueprintIndex = stored.indexOf(blueprint);
   }
 
   const execResult = await this.executeEffectBlueprint(
@@ -767,21 +794,33 @@ export async function handleBlueprintStorageAfterResolution(
       return false;
     }
 
-    if (storedBlueprints.length > 1 && !isAI(player)) {
-      const replacement = await pickBlueprintFromModal(
-        this.ui,
+    if (storedBlueprints.length > 1) {
+      const replacement = await requestResolutionOption(
+        this.game,
+        player,
         storedBlueprints,
-        {
-          title: "Substituir efeito armazenado",
-          subtitle: "Selecione 1 efeito para substituir.",
-          confirmLabel: "Substituir",
-        },
+        blueprintOptionKey,
+        () =>
+          pickBlueprintFromModal(this.ui, storedBlueprints, {
+            title: "Substituir efeito armazenado",
+            subtitle: "Selecione 1 efeito para substituir.",
+            confirmLabel: "Substituir",
+          }),
+        () => storedBlueprints[0] ?? null,
       );
-      replaceIndex = replacement
-        ? storedBlueprints.findIndex(
-            (bp) => bp.blueprintId === replacement.blueprintId,
-          )
-        : null;
+      // Cancelling the slot choice declines the storage; never pick a slot for the player.
+      if (!replacement) {
+        this.game.notify?.("grimoire_storage_decision", {
+          player,
+          storageCard,
+          sourceCard,
+          blueprint,
+          stored: false,
+          replaced: false,
+        });
+        return false;
+      }
+      replaceIndex = storedBlueprints.indexOf(replacement);
     }
 
     if (replaceIndex == null || replaceIndex < 0) {

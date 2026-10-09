@@ -1,5 +1,4 @@
 import { applyCostSummonMarker } from "../../effects/costs/summonMarkers.js";
-import { isAI } from "../../Player.js";
 import type { ActionOf } from "../../contracts/actions.js";
 import type {
   ActionHandlerEnginePort,
@@ -16,6 +15,7 @@ import {
   buildFieldSelectionCandidates,
   getUI,
   payCostAndThen,
+  requestResolutionOption,
   resolveTargetCards,
   selectCards,
   selectCardsFromZone,
@@ -350,10 +350,12 @@ export async function handleSpecialSummonFromHandWithCost(
           typeof engine.findCardZone === "function"
             ? engine.findCardZone(player, costCard) || fallbackCostZone
             : fallbackCostZone,
-        fallbackZone: fallbackCostZone,
-        useResolvedZoneOnFallback: false,
       });
-      paidCostCards.push(...(sendResult?.movedCards || []));
+      paidCostCards.push(...sendResult.movedCards);
+      if (sendResult.movedCount < costTargets.length) {
+        getUI(game)?.log("Could not send every cost card to the GY.");
+        return false;
+      }
     }
 
     const success = await performSummon();
@@ -372,10 +374,12 @@ export async function handleSpecialSummonFromHandWithCost(
     return true;
   }
 
-  const filters = action.costFilters || {
-    name: "Void Hollow",
-    cardKind: "monster",
-  };
+  // costFilters is required by the action contract; there is no default.
+  const filters = action.costFilters;
+  if (!filters) {
+    getUI(game)?.log("Tiered cost summon requires cost filters.");
+    return false;
+  }
 
   const matchesFilters = (card: ActionRuntimeCard) => {
     if (!card) return false;
@@ -431,30 +435,37 @@ export async function handleSpecialSummonFromHandWithCost(
     getTierEffectChoiceKey(action, ctx),
   );
 
-  let chosenCount: number | null = null;
-
-  if (isAI(player)) {
-    chosenCount = allowedMax;
-  } else if (getUI(game)?.showTierChoiceModal) {
-    const tierChoice: unknown = await getUI(game).showTierChoiceModal!({
-      title: action.tierTitle || getCardDisplayName(source) || source.name,
-      options: tierOptions,
-    });
-    chosenCount = typeof tierChoice === "number" ? tierChoice : null;
-  } else if (getUI(game)?.showNumberPrompt) {
-    const parsed: unknown = getUI(game).showNumberPrompt!(
-      getUIText("ui.tieredCost.costPrompt", { max: allowedMax }),
-      String(allowedMax),
-    );
-
-    if (
-      typeof parsed === "number" &&
-      parsed >= minCost &&
-      parsed <= allowedMax
-    ) {
-      chosenCount = parsed;
+  const costCounts = Array.from(
+    { length: allowedMax - minCost + 1 },
+    (_, index) => minCost + index,
+  );
+  const promptHumanTier = async (): Promise<number | null> => {
+    if (getUI(game)?.showTierChoiceModal) {
+      const tierChoice: unknown = await getUI(game).showTierChoiceModal!({
+        title: action.tierTitle || getCardDisplayName(source) || source.name,
+        options: tierOptions,
+      });
+      return typeof tierChoice === "number" ? tierChoice : null;
     }
-  }
+    if (getUI(game)?.showNumberPrompt) {
+      const parsed: unknown = getUI(game).showNumberPrompt!(
+        getUIText("ui.tieredCost.costPrompt", { max: allowedMax }),
+        String(allowedMax),
+      );
+      return typeof parsed === "number" ? parsed : null;
+    }
+    return null;
+  };
+
+  // Out-of-range answers are not offered options and resolve as a cancel.
+  const chosenCount = await requestResolutionOption(
+    game,
+    player,
+    costCounts,
+    (count) => `cost:${count}`,
+    promptHumanTier,
+    () => allowedMax,
+  );
 
   if (!chosenCount) {
     return false;
@@ -464,7 +475,7 @@ export async function handleSpecialSummonFromHandWithCost(
     {
       player,
       engine,
-      sendOptions: { fromZone: "field", fallbackZone: "field" },
+      sendOptions: { fromZone: "field" },
       selectCost: async () => {
         const selection = await selectCardsFromZone({
           game,

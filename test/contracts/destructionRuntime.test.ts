@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+import Card from "../../src/core/Card.js";
+import type { ActionOf, CardAction } from "../../src/core/contracts/actions.js";
+import type { ReplayDecisionInput } from "../../src/core/contracts/decisions.js";
+import { cardDefinition, required } from "../helpers/fixtures.js";
+import { createRuntimeGame, placeFieldCards } from "../helpers/game.js";
 
 import {
   handleBanish,
   handleBanishCardFromGraveyard,
   handleRegisterReplacementEffect,
 } from "../../src/core/actionHandlers/destruction.js";
-import type { ActionOf } from "../../src/core/contracts/actions.js";
-import { required } from "../helpers/fixtures.js";
 
 type RuntimeCallable = (...arguments_: unknown[]) => unknown;
 
@@ -408,4 +411,95 @@ test("graveyard banish fails when the human cancels a required choice", async ()
   assert.equal(result, false);
   assert.equal(moves.length, 0);
   assert.deepEqual(player.graveyard, [first, second]);
+});
+
+function humanSessionGame(t: TestContext, seat: "player" | "bot") {
+  const game = createRuntimeGame({ laboratoryMode: true, randomSeed: 31 });
+  t.after(() => game.dispose());
+  game.turn = seat; game.phase = "main1"; game.turnCounter = 2;
+  game.disablePresentationDelays = true;
+  game.waitForBoardPresentation = async () => {};
+  game.waitForPresentationDelay = async () => {};
+  game.player.controllerType = game.bot.controllerType = "ai";
+  const owner = game[seat], opponent = game[seat === "player" ? "bot" : "player"];
+  owner.controllerType = "human";
+  const make = (player = owner) => new Card({ ...cardDefinition(402), effects: [] }, player.id);
+  return { game, owner, opponent, make };
+}
+
+async function waitForSelection(game: ReturnType<typeof humanSessionGame>["game"]) {
+  for (let attempt = 0; attempt < 200 && !game.targetSelection; attempt++) {
+    await new Promise<void>(resolve => setImmediate(resolve));
+  }
+  return required(game.targetSelection, "human selection session");
+}
+
+for (const seat of ["player", "bot"] as const) {
+  test(`a human graveyard banish cost uses a recorded selection session (${seat})`, async t => {
+    const { game, owner, opponent, make } = humanSessionGame(t, seat);
+    const cards = [make(), make(), make()];
+    owner.graveyard.push(...cards);
+    const decisions: ReplayDecisionInput[] = [];
+    game.on("decision_made", decision => { decisions.push(decision); });
+    const first = required(cards[0]);
+    const action = { type: "banish_card_from_graveyard", cardName: first.name,
+      cardType: required(first.type), count: 2 } satisfies ActionOf<"banish_card_from_graveyard">;
+    const pending = game.effectEngine.applyActions([action], { player: owner, opponent, source: first }, {});
+    const session = await waitForSelection(game);
+    assert.equal(session.owner, owner);
+    const requirement = required(session.requirements[0]);
+    assert.deepEqual([requirement.min, requirement.max], [2, 2]);
+    session.selections[requirement.id] = requirement.candidates
+      .filter(candidate => candidate.cardRef !== first).map(candidate => candidate.key);
+    await game.finishTargetSelection();
+    await pending;
+    assert.deepEqual(owner.graveyard, [first]);
+    assert.deepEqual(owner.banished.slice(-2), cards.slice(1));
+    assert.deepEqual(decisions.map(decision => [decision.kind, decision.actorId]), [["cost", seat]]);
+  });
+}
+
+test("a human tie-breaker is a mandatory selection session that cannot be cancelled", async t => {
+  const { game, owner, opponent, make } = humanSessionGame(t, "player");
+  const first = make(), second = make(), enemy = make(opponent);
+  placeFieldCards(owner.field, first, second);
+  placeFieldCards(opponent.field, enemy);
+  const action: CardAction = { type: "selective_field_destruction", keepPerSide: 1 };
+  const pending = game.effectEngine.applyActions([action], { player: owner, opponent, source: first }, {});
+  const session = await waitForSelection(game);
+  assert.equal(session.allowCancel, false);
+  assert.equal(session.preventCancel, true);
+  game.cancelTargetSelection();
+  assert.equal(game.targetSelection, session);
+  const requirement = required(session.requirements[0]);
+  session.selections[requirement.id] = requirement.candidates
+    .filter(candidate => candidate.cardRef === second).map(candidate => candidate.key);
+  await game.finishTargetSelection();
+  await pending;
+  assert.deepEqual(owner.field, [second]);
+  assert.ok(owner.graveyard.includes(first));
+  assert.deepEqual(opponent.field, [enemy]);
+});
+
+test("a human bounce_and_summon choice uses a mandatory hand selection session", async t => {
+  const { game, owner, opponent, make } = humanSessionGame(t, "player");
+  const source = make(), first = make(), chosen = make();
+  placeFieldCards(owner.field, source);
+  owner.hand.push(first, chosen);
+  const decisions: ReplayDecisionInput[] = [];
+  game.on("decision_made", decision => { decisions.push(decision); });
+  const action: CardAction = { type: "bounce_and_summon", bounceSource: true,
+    filters: { cardKind: "monster" }, position: "attack" };
+  const pending = game.effectEngine.applyActions([action], { player: owner, opponent, source }, {});
+  const session = await waitForSelection(game);
+  assert.equal(session.preventCancel, true);
+  const requirement = required(session.requirements[0]);
+  session.selections[requirement.id] = requirement.candidates
+    .filter(candidate => candidate.cardRef === chosen).map(candidate => candidate.key);
+  await game.finishTargetSelection();
+  await pending;
+  assert.deepEqual(owner.field, [chosen]);
+  assert.ok(owner.hand.includes(source));
+  assert.ok(owner.hand.includes(first));
+  assert.equal(decisions[0]?.kind, "choice");
 });

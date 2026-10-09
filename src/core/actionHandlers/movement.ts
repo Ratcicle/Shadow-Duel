@@ -15,7 +15,13 @@ import type {
   LegacyActionHandlerResult,
   ResolvedTargetMap,
 } from "../contracts/actionRuntime.js";
-import { getUI, resolveTargetCards } from "./shared.js";
+import { getCardDisplayName, getUIText } from "../i18n.js";
+import {
+  buildZoneSelectionCandidates,
+  getUI,
+  resolveTargetCards,
+  selectCardsFromZone,
+} from "./shared.js";
 
 type ReturnToHandAction = ActionOf<"return_to_hand"> & {
   readonly player?: "self" | "opponent";
@@ -510,47 +516,60 @@ export async function handleBounceAndSummon(
     return await bounceAndSummonCard(source, best, player, action, engine, ctx);
   }
 
-  // Player selection
-  const renderer = getUI(game);
-  const searchModal = renderer?.getSearchModalElements?.();
-  const defaultCardName = validTargets[0]?.name || "";
-
-  if (searchModal) {
-    return new Promise<boolean>((resolve) => {
-      game.isResolvingEffect = true;
-
-      renderer.showSearchModalVisual!(
-        searchModal,
-        validTargets,
-        defaultCardName,
-        async (selectedName: string) => {
-          const target =
-            validTargets.find((c) => c && c.name === selectedName) ||
-            validTargets[0]!;
-
-          const result = await bounceAndSummonCard(
-            source,
-            target,
-            player,
-            action,
-            engine,
-            ctx,
-          );
-
-          game.isResolvingEffect = false;
-
-          resolve(result);
+  // A human controller picks the monster through a canonical selection session.
+  const selection = await selectCardsFromZone({
+    game,
+    player,
+    candidates: validTargets,
+    minSelect: 1,
+    maxSelect: 1,
+    selectionContractBuilder: (cards, range) => {
+      const requirementId = "bounce_and_summon_target";
+      const decorated = buildZoneSelectionCandidates(player, game, cards, "hand");
+      return {
+        kind: "choice",
+        requirementId,
+        decorated,
+        selectionContract: {
+          kind: "choice",
+          message: getUIText("ui.selection.chooseTargetCount", {
+            count: range.max,
+            label: getCardDisplayName(source) || source.name,
+          }),
+          requirements: [
+            {
+              id: requirementId,
+              min: range.min,
+              max: range.max,
+              zones: ["hand"],
+              owner: "player",
+              filters: {},
+              allowSelf: true,
+              distinct: true,
+              candidates: decorated,
+            },
+          ],
+          ui: { useFieldTargeting: false, allowCancel: false, preventCancel: true },
+          metadata: {
+            context: "bounce_and_summon",
+            sourceCard: source,
+            sourceCardName: source.name,
+            effectId: ctx?.effect?.id || null,
+          },
         },
-      );
-    });
-  }
+      };
+    },
+  });
 
-  // Fallback
-  const fallback = validTargets[0]!;
+  const target = selection.cancelled ? undefined : selection.selected[0];
+  if (!target || !validTargets.includes(target)) {
+    getUI(game)?.log("No monster selected to summon.");
+    return false;
+  }
 
   return await bounceAndSummonCard(
     source,
-    fallback,
+    target,
     player,
     action,
     engine,

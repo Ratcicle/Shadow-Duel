@@ -6,7 +6,7 @@ import { getUIText } from "../i18n.js";
  */
 
 import { isAI } from "../Player.js";
-import { assignAutomaticFieldSlot, clearFieldSlot } from "../game/zones/placement.js";
+import { assignAutomaticFieldSlot } from "../game/zones/placement.js";
 import { cardMatchesKind } from "../Card.js";
 import type { CardFilter } from "../contracts/effects.js";
 import type { CardAction, ContextNumberSource, SelectionCount } from "../contracts/actions.js";
@@ -104,6 +104,60 @@ export async function requestResolutionCards(
     .filter((card): card is ActionRuntimeCard => !!card);
 }
 
+/**
+ * Preserve a non-card resolution option (amount, tier, stored effect) in the
+ * canonical decision stream. `keyOf` must be unique per option; replay only
+ * accepts a recorded key that is still offered, otherwise the broker rejects it.
+ * A `null` choice is recorded as a pass (cancel).
+ */
+export async function requestResolutionOption<Option>(
+  game: Pick<ActionRuntimeGamePort, "requestDecision">,
+  player: DecisionActor | null,
+  options: readonly Option[],
+  keyOf: (option: Option, index: number) => string,
+  resolveHuman: () => MaybePromise<Option | null>,
+  resolveAI: () => MaybePromise<Option | null>,
+): Promise<Option | null> {
+  const keys = options.map(
+    (option, index) => `option:${keyOf(option, index)}` as SelectionCandidateKey,
+  );
+  if (new Set(keys).size !== keys.length) {
+    throw new Error("requestResolutionOption requires unique option keys.");
+  }
+  const keyFor = (option: Option | null): SelectionCandidateKey | null =>
+    option === null ? null : keys[options.indexOf(option)] ?? null;
+  const optionFor = (key: string | undefined): Option | null => {
+    const index = keys.findIndex(candidate => candidate === key);
+    return index < 0 ? null : options[index] ?? null;
+  };
+  if (!game.requestDecision) {
+    const chosen = await (isAI(player) ? resolveAI() : resolveHuman());
+    return optionFor(keyFor(chosen) ?? undefined);
+  }
+  const toResult = (option: Option | null) => {
+    const key = keyFor(option);
+    return key ? { option: [key] } : null;
+  };
+  const result = await game.requestDecision({
+    kind: "choice",
+    actor: player,
+    candidates: [],
+    requireCandidate: false,
+    resolveHuman: async () => toResult(await resolveHuman()),
+    resolveAI: async () => toResult(await resolveAI()),
+    serializeResult: value => {
+      const key = value?.option?.[0];
+      return key ? { pass: false, candidateKey: key, effectId: null } : { pass: true };
+    },
+    deserializeReplayValue: value => {
+      if (!("candidateKey" in value)) return null;
+      const key = keys.find(candidate => candidate === String(value.candidateKey));
+      return key ? { option: [key] } : null;
+    },
+  });
+  return optionFor(result?.option?.[0]);
+}
+
 interface ExclusionFilters {
   readonly excludeCards?: readonly ActionRuntimeCard[];
   readonly excludeInstanceId?: RuntimeCardId;
@@ -173,10 +227,6 @@ interface SendCardsToGraveyardOptions {
   readonly game?: ActionRuntimeGamePort | null;
   readonly resolveFromZone?: (card: ActionRuntimeCard) => ZoneInput | null;
   readonly fromZone?: ZoneInput;
-  readonly fallbackZone?: ZoneInput;
-  readonly allowFallback?: boolean;
-  readonly useResolvedZoneOnFallback?: boolean;
-  readonly pushIfMissing?: boolean;
 }
 
 interface CollectZoneCandidatesOptions {
@@ -728,65 +778,42 @@ export async function sendCardsToGraveyard(
   const game = options.game || engine?.game;
 
   if (!game || !player || !Array.isArray(cards)) {
-    return { movedCount: 0, movedCards: [] };
+    return { movedCount: 0, movedCards: [], failed: [] };
   }
 
   const resolveFromZone = options.resolveFromZone;
-  const fallbackZone = options.fallbackZone || "field";
-  const allowFallback = options.allowFallback !== false;
-  const useResolvedZoneOnFallback = options.useResolvedZoneOnFallback !== false;
-  const pushIfMissing = options.pushIfMissing === true;
-
   const movedCards: ActionRuntimeCard[] = [];
+  const failed: ActionRuntimeCard[] = [];
 
+  // Every card goes through moveCard; a card it does not move (including a
+  // move that asks for a selection) is never spliced into the GY by hand.
+  // Callers treat `movedCount` below the required amount as a failed cost:
+  // the cards already moved stay paid and the effect fails, without rollback.
   for (const card of cards) {
     if (!card) continue;
 
     const resolvedZone = resolveFromZone ? resolveFromZone(card) : null;
-    const fromZone = resolvedZone || options.fromZone || fallbackZone;
+    const fromZone = resolvedZone || options.fromZone || "field";
 
-    if (typeof game.moveCard === "function") {
-      const moveResult = await game.moveCard(card, player, "graveyard", {
-        fromZone,
-      });
+    const moveResult =
+      typeof game.moveCard === "function"
+        ? await game.moveCard(card, player, "graveyard", { fromZone })
+        : false;
+    const moved =
+      moveResult === true ||
+      (typeof moveResult === "object" &&
+        moveResult !== null &&
+        moveResult.success !== false &&
+        moveResult.needsSelection !== true);
 
-      const moveFailed =
-        moveResult === false ||
-        (typeof moveResult === "object" && moveResult?.success === false);
-
-      if (!moveFailed) {
-        movedCards.push(card);
-        continue;
-      }
+    if (moved) {
+      movedCards.push(card);
+    } else {
+      failed.push(card);
     }
-
-    if (!allowFallback) {
-      continue;
-    }
-
-    const fallbackSource = useResolvedZoneOnFallback ? fromZone : fallbackZone;
-    const fallbackValue: unknown = Reflect.get(player, fallbackSource);
-    const defaultFallbackValue: unknown = Reflect.get(player, fallbackZone);
-    const zoneArr = Array.isArray(fallbackValue)
-      ? fallbackValue
-      : Array.isArray(defaultFallbackValue)
-        ? defaultFallbackValue
-        : [];
-    const idx = zoneArr.indexOf(card);
-
-    if (idx !== -1) {
-      zoneArr.splice(idx, 1);
-    } else if (!pushIfMissing) {
-      continue;
-    }
-
-    player.graveyard = player.graveyard || [];
-    clearFieldSlot(card);
-    player.graveyard.push(card);
-    movedCards.push(card);
   }
 
-  return { movedCount: movedCards.length, movedCards };
+  return { movedCount: movedCards.length, movedCards, failed };
 }
 
 export function collectZoneCandidates(
@@ -983,6 +1010,61 @@ export function buildFieldSelectionCandidates(
   });
 }
 
+export interface ZoneSelectionCandidate extends RawSelectionCandidate {
+  idx: number;
+  key: string;
+  name: string;
+  owner: string;
+  controller: string;
+  zone: SelectionZone;
+  zoneIndex: number;
+  position: string;
+  atk?: number | undefined;
+  def?: number | undefined;
+  level?: number | undefined;
+  cardKind?: ActionRuntimeCard["cardKind"];
+  cardRef: ActionRuntimeCard;
+}
+
+/** Decorate cards of one of the selecting player's own zones for a selection session. */
+export function buildZoneSelectionCandidates(
+  player: ActionRuntimePlayer,
+  game: ActionRuntimeGamePort,
+  cards: readonly ActionRuntimeCard[],
+  zoneName: SelectionZone,
+): ZoneSelectionCandidate[] {
+  const zoneValue = Reflect.get(player, zoneName);
+  const zone = Array.isArray(zoneValue) ? zoneValue : [];
+  const controller = player?.id || "player";
+
+  return cards.map((card, idx) => {
+    const candidate: ZoneSelectionCandidate = {
+      idx,
+      key: "",
+      name: card?.name || "Card",
+      owner: "player",
+      controller,
+      zone: zoneName,
+      zoneIndex: zone.indexOf(card),
+      position: card?.position || "",
+      atk: card?.atk,
+      def: card?.def,
+      level: card?.level,
+      cardKind: card?.cardKind,
+      cardRef: card,
+    };
+
+    candidate.key =
+      typeof game?.buildSelectionCandidateKey === "function"
+        ? game.buildSelectionCandidateKey(candidate, idx)
+        : `${controller}:${zoneName}:${candidate.zoneIndex}:${
+            card?.id || card?.name || idx
+          }`;
+
+    return candidate;
+  });
+}
+
 export async function selectCardsFromZone({
   game,
   player,
@@ -1139,7 +1221,8 @@ export async function payCostAndThen<Result>(
     return false;
   }
 
-  await sendCardsToGraveyard(selected, player, engine, sendOptions);
+  const sent = await sendCardsToGraveyard(selected, player, engine, sendOptions);
+  if (sent.movedCount < selected.length) return false;
 
   if (typeof next === "function") {
     return await next(selected);

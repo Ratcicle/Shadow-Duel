@@ -3,6 +3,7 @@ import {
   FAST_EFFECT_STATES,
 } from "../contracts/chain.js";
 import type { FastEffectStateName } from "../contracts/chain.js";
+import { isStrictEngineFaultMode, reportEngineFault } from "../game/devTools/faults.js";
 import type {
   ChainOperationResult,
   ChainPhaseIntent,
@@ -590,6 +591,10 @@ export async function runFastEffectTiming(
       resolutionResult: rootResolutionResult,
     });
   } catch (error) {
+    reportEngineFault(this.game, "fast_effect_timing", error, {
+      details: { origin, chainBuilt, rootChainResolved: rootResolutionResult != null },
+      rethrow: false,
+    });
     // Cancellation is the canonical error cleanup: it aborts any prompt,
     // clears stack/selection state and deliberately preserves monotonic IDs.
     this.cancelChain?.();
@@ -603,6 +608,16 @@ export async function runFastEffectTiming(
       consecutivePasses: 0,
       phaseIntent: null,
     });
+    if (isStrictEngineFaultMode(this.game)) throw error;
+    // A fault in a later window (e.g. post-Chain) must not report a Chain
+    // that already resolved as failed.
+    if (rootResolutionResult != null) {
+      return timingResult(this, {
+        chainBuilt,
+        phaseTransitionInterrupted,
+        resolutionResult: rootResolutionResult,
+      });
+    }
     return timingResult(this, {
       ok: false,
       chainBuilt,

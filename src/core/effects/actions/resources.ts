@@ -51,11 +51,11 @@ interface ResourceActionHost {
  * @param {Object} ctx - Context object
  * @returns {boolean} Whether cards were drawn
  */
-export function applyDraw(
+export async function applyDraw(
   this: ResourceActionHost,
   action: ActionOf<"draw">,
   ctx: EffectContext,
-): boolean {
+): Promise<boolean> {
   const targetPlayer = (action.player === "opponent"
     ? ctx.opponent
     : ctx.player) as ResourcePlayer;
@@ -67,7 +67,7 @@ export function applyDraw(
 
       // v3: Emit event for replay capture - track drawn cards from effects
       if (typeof this.game.emit === "function" && result.drawn.length > 0) {
-        this.game.emit("cards_added_to_hand", {
+        await this.game.emit("cards_added_to_hand", {
           player: targetPlayer,
           cards: result.drawn,
           fromZone: "deck",

@@ -59,6 +59,7 @@ import type { ChainSourceZone } from "../../contracts/chainRuntime.js";
 import type { ActionRuntimeCard } from "../../contracts/actionRuntime.js";
 import type { EventCardPresenceSnapshot, EventEquipHostExitBinding } from "../../contracts/events.js";
 import { captureEventCardPresence } from "./ownership.js";
+import { reportEngineFault } from "../devTools/faults.js";
 import type { CardAction } from "../../contracts/actions.js";
 import type {
   CardFilter,
@@ -825,7 +826,14 @@ async function emitCardMovedEvent(
   }
 
   if (eventResult && typeof eventResult.then === "function") {
-    void eventResult;
+    // Side branch only: callers that await the returned promise still see a
+    // strict-mode rejection, but a detached one is never unhandled.
+    eventResult.then(undefined, (error: unknown) =>
+      reportEngineFault(game, "detached_event_emit", error, {
+        details: { eventName: "card_moved", card: card.name },
+        rethrow: false,
+      }),
+    );
   }
   return eventResult || null;
 }
@@ -3526,7 +3534,12 @@ export async function moveCardInternal(
       ) {
         cardToGraveResult = await duringCurrentDuel(cardToGraveEvent);
       } else {
-        void cardToGraveEvent;
+        Promise.resolve(cardToGraveEvent).catch((error: unknown) =>
+          reportEngineFault(this, "detached_event_emit", error, {
+            details: { eventName: "card_to_grave", card: card.name },
+            rethrow: false,
+          }),
+        );
       }
     } finally {
       if (presentedDestroyedGraveyardTrigger) {

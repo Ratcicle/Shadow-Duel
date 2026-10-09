@@ -45,6 +45,7 @@ import {
   resolveCountFromSelectionDefinitions,
 } from "./selection.js";
 import { hasEquipHostExitProof, matchesEquipHostExitSourcePresence } from "../effects/triggers/collectors/shared.js";
+import { isStrictEngineFaultMode, reportEngineFault } from "../game/devTools/faults.js";
 
 const PERSISTENT_SPELL_TRAP_SUBTYPES = new Set([
   "continuous",
@@ -733,12 +734,20 @@ export async function completeActivationTriggerPackages(
   const callbacks = Array.isArray(this.chainEventCompletions)
     ? this.chainEventCompletions.splice(0)
     : [];
+  // Every completion runs; strict mode rethrows the first fault afterwards.
+  const faults: unknown[] = [];
   for (const callback of callbacks) {
     try {
       await callback();
     } catch (error) {
-      console.error("[ChainSystem] Activation trigger completion failed:", error);
+      reportEngineFault(this.game, "activation_trigger_completion", error, {
+        rethrow: false,
+      });
+      faults.push(error);
     }
+  }
+  if (faults.length > 0 && isStrictEngineFaultMode(this.game)) {
+    throw faults[0];
   }
 }
 

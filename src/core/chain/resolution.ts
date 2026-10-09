@@ -18,6 +18,7 @@ import { recordMaterialEffectIdentity } from "../game/summon/materialStats.js";
 import { resolveAfterResolutionActions } from "./afterResolution.js";
 import { captureChainResponseDecisionCards } from "../game/decisions/chainResponse.js";
 import { CHAIN_ACTIVATION_KINDS } from "../contracts/chain.js";
+import { isStrictEngineFaultMode, reportEngineFault } from "../game/devTools/faults.js";
 import type { CanonicalZone } from "../contracts/zones.js";
 import type { ChainLinkResolutionOutcome } from "../contracts/events.js";
 import type {
@@ -220,10 +221,11 @@ export async function resolveChain(
         this.setChainLinkResolutionStatus?.(link, "failed", {
           finalizationStatus: "failed",
         });
-        console.error(
-          `[ChainSystem] Error resolving ${link.card.name}:`,
-          error,
-        );
+        // Recorded now, rethrown in strict mode only after the link cleanup.
+        reportEngineFault(this.game, "chain_link_resolution", error, {
+          details: { card: link.card.name, chainId: link.chainId, linkId: link.linkId },
+          rethrow: false,
+        });
         result = {
           success: false,
           needsSelection: false,
@@ -237,6 +239,7 @@ export async function resolveChain(
           ...result,
         });
         notifyChainLinkOutcome(this, link, result, "failed");
+        if (isStrictEngineFaultMode(this.game)) throw error;
       } finally {
         if (this.currentResolvingLink === link) {
           this.currentResolvingLink = null;
@@ -1169,11 +1172,10 @@ async function applyChainEffect(
         actionsCount: resolutionActions.length,
         actionTypes: resolutionActions.map((a) => a?.type).filter(Boolean),
       };
-      console.error(
-        `[ChainSystem] Action error resolving chain link:`,
-        linkContext,
-        error,
-      );
+      // Strict mode rethrows; the link-level containment records it only once.
+      reportEngineFault(cs.game, "chain_link_resolution", error, {
+        details: linkContext,
+      });
       cs.log(
         `Chain resolution failed for ${linkContext.cardName} (CL${linkContext.chainLevel}):`,
         caughtErrorMessage(error),

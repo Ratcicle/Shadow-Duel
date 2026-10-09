@@ -77,6 +77,7 @@ import {
   TRIGGER_REQUIREMENTS,
   TRIGGER_TIMINGS,
   USAGE_POLICIES,
+  isEvaluatedEffectConditionType,
 } from "./contracts/effects.js";
 import { validateBanlistDefinition } from "./game/deck/banlist.js";
 import { getImmediateEventEffectValidationError } from "./effects/passives/passiveBuffs.js";
@@ -184,6 +185,38 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
 
 function targetDefinitions(value: unknown): readonly Readonly<Record<string, unknown>>[] {
   return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
+/**
+ * Every `conditions` array anywhere in a card definition reaches
+ * `evaluateConditions` (effects, activation cases, nested actions and cases,
+ * after-resolution actions, hand summon procedures, passives and nested
+ * `any_of`), which fails closed on types it does not interpret. Singular
+ * `condition` fields belong to their action and are validated there.
+ */
+function collectConditionTypeIssues(value: unknown, path: string, messages: string[]) {
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => collectConditionTypeIssues(entry, `${path}[${index}]`, messages));
+    return;
+  }
+  if (!isRecord(value)) return;
+  for (const [key, child] of Object.entries(value)) {
+    if (key === "conditions" && Array.isArray(child)) {
+      child.forEach((condition, index) => {
+        const type = isRecord(condition) ? condition.type : undefined;
+        if (type !== undefined && !isEvaluatedEffectConditionType(type)) {
+          messages.push(`[${path}.conditions[${index}]] Unsupported condition type "${String(type)}" in a conditions list.`);
+        }
+      });
+    }
+    collectConditionTypeIssues(child, path ? `${path}.${key}` : key, messages);
+  }
+}
+
+export function validateCardConditionTypes(card: unknown): string[] {
+  const messages: string[] = [];
+  collectConditionTypeIssues(card, "", messages);
+  return messages;
 }
 
 function validateActivationCases(effect: unknown): ActionValidationIssue[] {
@@ -555,6 +588,9 @@ export function validateCardDatabase() {
   const seenNames = new Map<string, number | undefined>();
 
   for (const card of cardDatabase as readonly ValidatorCard[]) {
+    for (const message of validateCardConditionTypes(card)) {
+      errors.push(formatIssue(card, message));
+    }
     if (card.mustFirstBeSpecialSummonedBy !== undefined) {
       const procedures = card.mustFirstBeSpecialSummonedBy;
       const validProcedures = new Set([

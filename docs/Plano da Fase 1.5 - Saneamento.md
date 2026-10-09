@@ -20,7 +20,7 @@
 | 3 | ✅ 3 regressões corrigidas, Regra B de ativação de Magias (bump `engine-rules-v26`), D2 na simulação, **CI verde** | Etapas 0–2 | M |
 | 4 | ✅ Pipeline único `verify` → `deploy-pages`, ruleset em `main`, **Pages atualizado** | Etapa 3, D6–D8 | S |
 | 5 | ✅ Determinismo sem bump (RNG da IA, invariantes, Tech-Zero, Arena) | Etapa 4, D3, D4 | M |
-| 6 | Bugs de engine sem bump e política de falhas | Etapa 5, D11–D13 | M |
+| 6 | ✅ Bugs de engine sem bump e política de falhas | Etapa 5, D11–D13 | M |
 | 7 | Pacote de replay com bump único `engine-rules-v27` (broker, hash, bugs que mudam replay) | Etapas 5–6, D5, D14–D16 | L |
 | 8 | UI e i18n (rótulos PT, log sem `innerHTML`, Laboratório, vazamentos) | D17–D19 para os itens de texto | M |
 | 9 | Encerramento e passagem para a fase 2 (harness de benchmark) | Etapas 0–8 | S |
@@ -107,6 +107,7 @@ As Etapas 0–3 levam o CI ao verde e já têm todas as decisões necessárias (
 | D6 | **CI** (`tests-ci:3`): (1) pipeline único ou manter `deploy.yml` com `workflow_run`; (2) remover CI em push de branches não-`main`; (3) pin de actions por SHA; (4) pin de `ubuntu-24.04`; (5) Dependabot para actions. | Pipeline único, SHA e `ubuntu-24.04`. Remover push em branches só depois de adotar PRs. | Etapa 4 |
 | D7 | **Revisada em 09/10/2026: ruleset leve, push direto permitido (ver D6–D8 acima).** Proposta original, substituída: **Ruleset** (`tests-ci:4`), aplicado pelo usuário: exigir PR ou permitir fast-forward de SHA verificado; strict up-to-date; lista de bypass; auto-merge (agentes podem usar `gh pr merge --auto`?); apagar head branches. | PR obrigatório, strict ligado, bypass do admin "só via PR" | Etapa 4 |
 | D8 | **Emenda ao `AGENTS.md`** (`tests-ci:5`): texto final, e se agentes podem abrir PR rascunho por iniciativa própria. | Texto proposto na Etapa 4, com PR só a pedido | Etapa 4 |
+| D11–D13 | **Aprovadas em 09/10/2026** com as recomendações abaixo: modo estrito = devMode ou opt-in `strictEngineFaults`, e produção registra e mantém o fallback; loop de batalha com 32 tentativas por Battle Phase e 3 seguidas sem progresso; `costFilters` obrigatório já na 1.5. D21(2) também aprovada: `engine-bugs:5` vai para a fase 2 e `engine-bugs:14` para o backlog. | — | — |
 | D11 | **Política de falhas de engine** (`engine-bugs:9`/`:2`): modo estrito = devMode mais opt-in de testes; produção registra a falha e mantém o fallback atual. | Aprovar | Etapa 6 |
 | D12 | Limites do loop de batalha do bot (`engine-bugs:12`). | 32 tentativas por Battle Phase; 3 tentativas seguidas sem progresso | Etapa 6 |
 | D13 | Remover o default `costFilters: { name: "Void Hollow" }` (`engine-bugs:11`) já na 1.5. | Sim (esforço S; nenhuma carta usa) | Etapa 6 |
@@ -116,7 +117,7 @@ As Etapas 0–3 levam o CI ao verde e já têm todas as decisões necessárias (
 | D17 | **Texto do diretor para `effectChoices`** (`ui-i18n:4`): rótulo e descrição de `miragebound_oasis_return_weaken` (sugestão sem palavras novas: reaproveitar o bullet PT aprovado em `public/locales/pt-br.json:1114`); apagar o órfão `miragebound_oasis_recycle_search`; ressincronizar `shift_weaken` com "face-up"/"com a face para cima"; mensagem e rótulos PT de Bloomrot Root Network (2 casos) e Bloomrot Queen of the Hollow Grove (3 casos). | Aguardar texto | Etapa 8 (`ui-i18n:4`) |
 | D18 | **Defaults EN de `effectChoices`** (`ui-i18n:5`): remover os defaults por caso, deixando valer o texto inline aprovado da carta, ou manter cópia EN separada. A decisão vem antes da mudança. | Remover | Etapa 8 (`ui-i18n:5`) |
 | D19 | **Cópia de UI** (não é texto de carta): aviso do Laboratório (`ui-i18n:6`), textos EN da Arena/Laboratório (`ui-i18n:10`), e se "Jogador 1/2" (`src/ui/main/gameLauncher.ts:101-102`) deve ser localizado. | Revisão do diretor antes do merge | Etapa 8 |
-| D20 | Concorrência do CI em 2 ou 3, depois de medir (`tests-ci:6`). | 2 | Etapa 5 (cauda, depois de `determinism:2` em `main` com 3 execuções verdes) |
+| D20 | **Aprovada em 09/10/2026: concorrência 2.** Concorrência do CI em 2 ou 3, depois de medir (`tests-ci:6`). | 2 | Etapa 5 (cauda, depois de `determinism:2` em `main` com 3 execuções verdes) |
 | D21 | **Confirmar adiamentos e opcionais:** (1) `tests-ci:2` (d): aplicar ou não o gate a `mainPhaseSession.presentationDelay` e `aiSuccessfulActionDelayMs`; (2) adiar `engine-bugs:5` (fase 2) e `engine-bugs:14` (backlog); (3) `decision-broker:10` na 1.5 ou na fase 2; (4) `decision-broker:4`: exceção da UI vira pass gravado; (5) descartar `tests-ci:9`. | (1) Medir depois da Etapa 0 e decidir; (2) adiar os dois; (3) fase 2; (4) manter como pass gravado; (5) descartar | Etapas 0, 5 e 6 |
 
 ---
@@ -638,12 +639,12 @@ O portão global é o PR com `verify`.
 
 **Tarefas**
 
-- [ ] **`engine-bugs:7`**: finalização de uma única vez em `src/core/game/zones/operations.ts`.
+- [x] **`engine-bugs:7`**: finalização de uma única vez em `src/core/game/zones/operations.ts`.
   - Caminho assíncrono: `result.then(finalizeSuccess, finalizeFailure)`.
   - Caminho síncrono: `finalizeSuccess` fora do `try`.
   - Um booleano local `settled` torna `finalizeFailure` idempotente.
   - Teste: `runZoneOp` aninhado (sync e async) com `assertStateInvariants` → `hasCritical`, em `test/contracts/gameCallbacks.test.ts`, junto do caso existente da linha 170.
-- [ ] **`engine-bugs:9`** (D11): novo `src/core/game/devTools/faults.ts` com a função livre `reportEngineFault(host, scope, error, details?)` e o tipo `EngineFault`. Não é método anexado, então o manifest de 222 não muda.
+- [x] **`engine-bugs:9`** (D11): novo `src/core/game/devTools/faults.ts` com a função livre `reportEngineFault(host, scope, error, details?)` e o tipo `EngineFault`. Não é método anexado, então o manifest de 222 não muda.
   - Registro limitado a 50 entradas, criado de forma preguiçosa para tolerar hosts sem `engineFaults` (perfis de clone, `unsafeFixture`). Também emite `console.error` e `devLog("ENGINE_FAULT")`.
   - O modo estrito é resolvido **no momento da chamada**: `host.strictEngineFaults ?? host.devModeEnabled`. Motivo: `setDevMode(true)` é usado depois da construção em `gameMovementContracts.test.ts:189`, `damageStepBuffLifecycle.test.ts:215` e `voidArchetype.test.ts:1182`.
   - Chamar em:
@@ -657,12 +658,12 @@ O portão global é o PR com `verify`.
       - quando o erro ocorre na janela `post_chain` depois da resolução do CL1, descarta `rootResolutionResult` e relata como falha uma Chain que resolveu.
   - Sem rollback em `applyActions`.
   - **Baseline:** rodar `test/chain/integration.test.ts` antes da mudança.
-- [ ] **`engine-bugs:2`**: em `src/core/game/events/eventResolver.ts`, aplicar a política em `:151-154`, `:199-201` e `:523-525`.
+- [x] **`engine-bugs:2`**: em `src/core/game/events/eventResolver.ts`, aplicar a política em `:151-154`, `:199-201` e `:523-525`.
   - No `.catch` da coleta (`:151-154`), **registrar sem relançar**, ou marcar o erro como já reportado, para evitar relato duplo.
   - Em produção, o resultado vira `{ ok: true, fault: true, reason: "engine_fault", … }`, inclusive no caminho de resume, antes de `finishPendingSynchroMaterialTriggerContinuation`. Nunca `ok:false`: `damageStep.ts:518,1023,1057` e `synchro.ts:807` tratam `ok:false` como interrupção.
   - `fault?: boolean` em `EventResolutionOutcome` (`src/core/contracts/events.ts:1096`); `strictEngineFaults?` em `GameOptions`.
   - **Contenção** nos emits destacados (`src/core/game/zones/movement.ts:819-828` e `:3518-3529`): `.catch(err => reportEngineFault(..., { rethrow: false }))`, para que o modo estrito não gere rejeições não tratadas sob `node --test`.
-- [ ] **`engine-bugs:8`**: em `src/core/contracts/effects.ts`, `EVALUATED_EFFECT_CONDITION_TYPES` e `ACTION_SCOPED_CONDITION_TYPES = ["empty_field","match_card_props"]`, com asserção de completude no padrão de `src/core/contracts/events.ts:582-590`.
+- [x] **`engine-bugs:8`**: em `src/core/contracts/effects.ts`, `EVALUATED_EFFECT_CONDITION_TYPES` e `ACTION_SCOPED_CONDITION_TYPES = ["empty_field","match_card_props"]`, com asserção de completude no padrão de `src/core/contracts/events.ts:582-590`.
   - `default` de `src/core/effects/conditions/evaluateConditions.ts:2541-2546`: falha fechada (`ok:false`) mais `reportEngineFault`. O caso `turn_player` (`:2269`) só fica ou sai depois de `git log -S turn_player`.
   - Em `src/core/CardDatabaseValidator.ts`, um walker **recursivo** sobre todo array `conditions` que chega a `evaluateConditions`:
     - `effects[].conditions`
@@ -676,28 +677,36 @@ O portão global é o PR com `verify`.
     - `any_of` aninhado
   - Campos singulares `condition` ficam fora.
   - Teste de `validateCardDatabase()` sobre o banco inteiro.
-- [ ] **`engine-bugs:4`**: `await` em `src/core/actionHandlers/stats.ts:908`, `:1070` e `:1262`. `applyDraw` (`src/core/effects/actions/resources.ts:54-77`) vira `async` e aguarda `emit`. A especificação já prevê um golden movido aqui. Se ele mudar nos testes focados, o item vai para `fase15/replay-v27` pela regra de golden.
-- [ ] **`engine-bugs:12`** (D12; absorve `determinism:8`), em `src/core/bot/battleController.ts`:
+- [x] **`engine-bugs:4`**: `await` em `src/core/actionHandlers/stats.ts:908`, `:1070` e `:1262`. `applyDraw` (`src/core/effects/actions/resources.ts:54-77`) vira `async` e aguarda `emit`. A especificação já prevê um golden movido aqui. Se ele mudar nos testes focados, o item vai para `fase15/replay-v27` pela regra de golden.
+- [x] **`engine-bugs:12`** (D12; absorve `determinism:8`), em `src/core/bot/battleController.ts`:
   - `waitUntilBattleReady` antes de `resolveCombat`, via `canStartAction({ … silent: true })`. Códigos de ocupado (`BLOCKED_SELECTION_ACTIVE`, `BLOCKED_RESOLVING`, `BLOCKED_CHAIN_WINDOW_OPEN`, `BLOCKED_FAST_EFFECT_TIMING`) esperam 20 ms sem gastar orçamento e sem gravar comando.
   - Códigos que não são de ocupado (`BLOCKED_WRONG_PHASE`, `BLOCKED_NOT_YOUR_TURN`, `BLOCKED_GAME_DISPOSED`, …) **param o laço sem chamar `nextPhase`**.
   - Fingerprint de progresso: `attacksUsedThisTurn`, LPs, instanceIds dos campos e o conjunto de atacados. A falha transitória de guard (`resolution.ts:545-555`) não conta como rejeição; a falha de disponibilidade (`:558`) ou o estado inalterado contam.
   - Pares rejeitados por fase; limites de tentativas e de tentativas sem progresso; `nextPhase` só com `phase === "battle"`, turno do bot e limite atingido.
   - O `.catch` em `:253-260` também precisa encerrar a fase, porque hoje deixa o bot preso na Battle Phase.
   - Testes em `test/ai/techZeroBattle.test.ts` com `t.mock.timers`: (a) Arctroth Pursuer faz exatamente 2 ataques; (b) guard ocupado por 200 ms; (c) `resolveCombat` sem efeito avança a fase. Manter o teste de ocupado curto, mesmo com o prazo já endurecido na Etapa 4.
-  - **`INV-4`:** existe carta real em que `resolveCombat` rejeita sem consumir o ataque? Não foi verificado. O loop sem limite foi reproduzido com o guard ocupado.
-- [ ] **`engine-bugs:10`**: em `sendCardsToGraveyard` (`src/core/actionHandlers/shared.ts:722-786`), remover o fallback de splice/push.
+  - **`INV-4`:** existe carta real em que `resolveCombat` rejeita sem consumir o ataque? **Não** (verificado em 09/10/2026). As rejeições sem consumo são o guard transitório, a falha de disponibilidade (já filtrada pelo bot) e as checagens de ataque direto, que o filtro do bot espelha; os únicos produtores de `forbid_direct_attack_this_turn` (Shadow-Heart Rage, Tech-Zero Assembly Line) ativam fora da batalha. Os limites cobrem cartas futuras.
+- [x] **`engine-bugs:10`**: em `sendCardsToGraveyard` (`src/core/actionHandlers/shared.ts:722-786`), remover o fallback de splice/push.
   - Tratar `{ needsSelection: true }` como "não movido".
   - Devolver `failed`. Os callers tratam `movedCount < required` como falha de custo (`shared.ts:1142`, `summon/handWithCost.ts:348-355`, `summon/transmutate.ts:89-93`).
   - Documentar que o resultado é "custo parcial pago, efeito falha", sem rollback. Remover `pushIfMissing`, `allowFallback` e `useResolvedZoneOnFallback` quando ficarem sem uso.
-- [ ] **`engine-bugs:11`, parte `costFilters`** (D13): tornar `costFilters` obrigatório para `special_summon_from_hand_with_tiered_cost` em `src/core/contracts/actions/summon.ts` e `src/core/actionHandlers/actionCatalog.ts`, e apagar os defaults em `summon/handWithCost.ts:374-377` e `src/core/effects/actions/core.ts:2508-2511`.
-- [ ] **`decision-broker:6`**: helper genérico `requestResolutionOption` em `src/core/actionHandlers/shared.ts` (kind `choice`, chave validada no replay), aplicado em `src/core/effects/actions/counters.ts:641-690`, `src/core/actionHandlers/summon/handWithCost.ts:436-456` e `src/core/effects/blueprints/index.ts:242-279,605-626,776-790`.
+- [x] **`engine-bugs:11`, parte `costFilters`** (D13): tornar `costFilters` obrigatório para `special_summon_from_hand_with_tiered_cost` em `src/core/contracts/actions/summon.ts` e `src/core/actionHandlers/actionCatalog.ts`, e apagar os defaults em `summon/handWithCost.ts:374-377` e `src/core/effects/actions/core.ts:2508-2511`.
+- [x] **`decision-broker:6`**: helper genérico `requestResolutionOption` em `src/core/actionHandlers/shared.ts` (kind `choice`, chave validada no replay), aplicado em `src/core/effects/actions/counters.ts:641-690`, `src/core/actionHandlers/summon/handWithCost.ts:436-456` e `src/core/effects/blueprints/index.ts:242-279,605-626,776-790`.
   - As opções de blueprint usam **índice de armazenamento + `blueprintId`**, porque `blueprintId` não é único (`blueprints/index.ts:360-363`). Alternativa: rejeitar duplicatas ao armazenar.
   - `pickBlueprintFromModal` devolve `null` em vez de `blueprints[0]`.
-- [ ] **`decision-broker:7`**: três caminhos passam por sessão de seleção (`selectCardsFromZone` + `selectionContractBuilder`):
+- [x] **`decision-broker:7`**: três caminhos passam por sessão de seleção (`selectCardsFromZone` + `selectionContractBuilder`):
   - custo de banimento do GY (`src/core/actionHandlers/destruction.ts:856-887`), com gate por `!isAI(player)` em vez de `game.player`;
   - tie-breaker (`:1310-1400`), obrigatório e sem cancelar;
   - `bounce_and_summon` (`src/core/actionHandlers/movement.ts:514-552`).
   - Remover `showCardSelectionPrompt` de `src/core/contracts/actionRuntime.ts:276`.
+
+**Resultado (09/10/2026):** todos os itens acima foram concluídos sem bump. Goldens, checkpoints de hash e decisões gravadas ficaram inalterados em todo `test/replay/`, inclusive no `engine-bugs:4`, que portanto não foi para a Etapa 7.
+- `reportEngineFault` cobre também `resolveChainLink` (`src/core/chain/resolution.ts`), onde um erro de action do link virava falha silenciosa. A transação de summon contém a falha mesmo em modo estrito, para preservar a liberação do guard.
+- `engine-bugs:8`: o case legado `turn_player` saiu de `evaluateConditions`. Ele nunca fez parte de `EffectConditionType`, e o walker do validador passa a rejeitá-lo.
+- `engine-bugs:10`: nenhum caller tratava `movedCount` antes. Agora `payCostAndThen`, o custo em tiers e Transmutate falham quando o custo não é pago por inteiro.
+- `decision-broker:6`: no armazenamento cheio com mais de um blueprint, cancelar a escolha do slot recusa o armazenamento em vez de sobrescrever o slot 0.
+- `decision-broker:7`: `GameUI.showTieBreakerSelection` ficou sem chamadas na engine; foi mantido para não alterar o manifest de 114 métodos da UI.
+- Fora do escopo, registrados para depois: `handleBanishCardFromGraveyard` filtra por `action.cardType || action.type` e não encontra candidatos sem `cardType`; o `UIAdapter` headless devolve `undefined` em `showCardGridSelectionModal`, o que deixaria um humano esperando com mais de um blueprint armazenado. Nenhuma carta atual alcança esses caminhos.
 
 **Validação**
 

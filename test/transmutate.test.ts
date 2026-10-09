@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import type { TestContext } from "node:test";
 import test from "node:test";
 import type { GamePlayer } from "../src/core/contracts/player.js";
-import { required, selectedCards } from "./helpers/fixtures.js";
+import { required, selectedCards, unsafeFixture } from "./helpers/fixtures.js";
+import { payCostAndThen, sendCardsToGraveyard } from "../src/core/actionHandlers/shared.js";
 import { createRuntimeGame } from "./helpers/game.js";
 import { simulationCard, simulationState } from "./helpers/simulation.js";
 
@@ -417,4 +418,42 @@ test("a simulação escolhe custo e alvo com o mesmo contrato de Nível original
   assert.equal(self.field.includes(target), true);
   assert.equal(self.graveyard.includes(wrongLevel), true);
   assert.equal(self.graveyard.includes(sameName), true);
+});
+
+test("cost cards that moveCard does not move stay put and fail the cost without rollback", async () => {
+  const player = { id: "player", graveyard: [] as unknown[], field: [] as unknown[] };
+  const moved = { name: "Moved cost", instanceId: 1 };
+  const refused = { name: "Refused cost", instanceId: 2 };
+  const pending = { name: "Selection cost", instanceId: 3 };
+  player.field.push(moved, refused, pending);
+  const results = new Map<unknown, unknown>([
+    [moved, { success: true }],
+    [refused, { success: false, reason: "replaced" }],
+    [pending, { needsSelection: true }],
+  ]);
+  const engine = unsafeFixture<Parameters<typeof sendCardsToGraveyard>[2]>({
+    game: {
+      async moveCard(card: unknown) {
+        return results.get(card);
+      },
+    },
+  }, "Only moveCard is reached by the GY cost helper.");
+  const owner = unsafeFixture<Parameters<typeof sendCardsToGraveyard>[1]>(player, "Plain zone arrays.");
+  const cards = unsafeFixture<Parameters<typeof sendCardsToGraveyard>[0]>([moved, refused, pending], "Identity-only cards.");
+
+  const sent = await sendCardsToGraveyard(cards, owner, engine, { fromZone: "field" });
+
+  assert.equal(sent.movedCount, 1);
+  assert.deepEqual(sent.failed, [refused, pending]);
+  // No manual splice/push: the refused cards are still where moveCard left them.
+  assert.deepEqual(player.field, [moved, refused, pending]);
+  assert.deepEqual(player.graveyard, []);
+
+  let continued = false;
+  const paid = await payCostAndThen(
+    { selectCost: () => cards, player: owner, engine },
+    () => { continued = true; return true; },
+  );
+  assert.equal(paid, false);
+  assert.equal(continued, false);
 });

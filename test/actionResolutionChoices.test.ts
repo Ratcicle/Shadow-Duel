@@ -5,8 +5,9 @@ import type { ReplayDecisionInput } from "../src/core/contracts/decisions.js";
 import type { ActionRuntimeGamePort } from "../src/core/contracts/actionRuntime.js";
 import type { SelectionSessionInput } from "../src/core/contracts/selection.js";
 import { cardDefinition, required, unsafeFixture } from "./helpers/fixtures.js";
-import { createRuntimeGame, completeTestSelections } from "./helpers/game.js";
-import { selectResolutionCards } from "../src/core/actionHandlers/shared.js";
+import { createRuntimeGame, completeTestSelections, placeFieldCards } from "./helpers/game.js";
+import { requestResolutionOption, selectResolutionCards } from "../src/core/actionHandlers/shared.js";
+import type { CardAction } from "../src/core/contracts/actions.js";
 
 function setup(t: TestContext, human = false, seat: "player" | "bot" = "player") {
   const game = createRuntimeGame({ laboratoryMode: true, randomSeed: 267 });
@@ -232,4 +233,109 @@ test("cancelling an optional human resolution choice records empty and replays i
   playback.game.autoSelector.select = () => assert.fail("Replay must not consult the AI selector");
   assert.deepEqual(await run(playback), []);
   assert.equal(playback.game.decisionBroker.replayCursor, 1);
+});
+
+for (const controller of ["human", "ai"] as const) {
+  test(`a resolution option records a validated choice key and replays without resolvers (${controller})`, async t => {
+    const live = setup(t, controller === "human"), playback = setup(t, controller === "human");
+    const decisions: ReplayDecisionInput[] = [];
+    live.game.on("decision_made", decision => { decisions.push(decision); });
+    const expected = controller === "human" ? 2 : 3;
+    const run = (fixture: typeof live, human: () => number | null, ai: () => number | null) =>
+      requestResolutionOption(fixture.game, fixture.owner, [1, 2, 3], amount => `amount:${amount}`, human, ai);
+    assert.equal(await run(live, () => 2, () => 3), expected);
+    assert.equal(decisions.length, 1);
+    assert.equal(decisions[0]?.kind, "choice");
+    assert.equal(decisions[0]?.actorId, "player");
+    assert.deepEqual(decisions[0]?.value, { pass: false, candidateKey: `option:amount:${expected}`, effectId: null });
+    playback.game.decisionBroker.loadReplayDecisions(decisions);
+    const fail = () => assert.fail("Replay must not consult a live resolver");
+    assert.equal(await run(playback, fail, fail), expected);
+    assert.equal(playback.game.decisionBroker.replayCursor, 1);
+  });
+}
+
+test("a resolution option records a cancel as pass and rejects keys that are not offered", async t => {
+  const live = setup(t, true), playback = setup(t, true);
+  const decisions: ReplayDecisionInput[] = [];
+  live.game.on("decision_made", decision => { decisions.push(decision); });
+  const fail = () => assert.fail("Replay must not consult a live resolver");
+  const run = (fixture: typeof live, human: () => number | null) =>
+    requestResolutionOption(fixture.game, fixture.owner, [1, 2], amount => `amount:${amount}`, human, fail);
+  assert.equal(await run(live, () => null), null);
+  // An answer outside the offered options is never accepted as a choice.
+  assert.equal(await run(live, () => 7), null);
+  assert.deepEqual(decisions.map(decision => decision.value), [{ pass: true }, { pass: true }]);
+  playback.game.decisionBroker.loadReplayDecisions([
+    { kind: "choice", actorId: "player", value: { pass: true } },
+    { kind: "choice", actorId: "player", value: { pass: false, candidateKey: "option:amount:3", effectId: null } },
+  ]);
+  assert.equal(await run(playback, fail), null);
+  await assert.rejects(run(playback, fail), /no longer legal/);
+  await assert.rejects(requestResolutionOption(live.game, live.owner, [1, 1], amount => String(amount), fail, fail),
+    /unique option keys/);
+});
+
+for (const controller of ["human", "ai"] as const) {
+  test(`a ranged counter removal amount is a replayed resolution option (${controller})`, async t => {
+    const fixture = () => {
+      const base = setup(t, controller === "human");
+      const holder = new Card({ ...cardDefinition(402), effects: [] }, base.owner.id);
+      holder.addCounter("spore", 4);
+      placeFieldCards(base.owner.field, holder);
+      return { ...base, holder };
+    };
+    const action: CardAction = { type: "remove_counters_from_field", counterType: "spore", owner: "self",
+      zones: ["field"], variableAmount: true, minAmount: 1, maxAmount: 4, haltOnFailure: true };
+    const run = (current: ReturnType<typeof fixture>) => current.game.effectEngine.applyActions([action],
+      { player: current.owner, opponent: current.game.bot, source: current.holder }, {});
+    const live = fixture(), playback = fixture();
+    const decisions: ReplayDecisionInput[] = [];
+    live.game.on("decision_made", decision => { decisions.push(decision); });
+    live.game.ui.showNumberPrompt = () => 2;
+    await run(live);
+    const removed = controller === "human" ? 2 : 4;
+    assert.equal(live.holder.getCounter("spore"), 4 - removed);
+    assert.deepEqual(decisions.map(decision => [decision.kind, decision.value]),
+      [["choice", { pass: false, candidateKey: `option:amount:${removed}`, effectId: null }]]);
+    playback.game.ui.showNumberPrompt = () => assert.fail("Replay must not prompt for the amount");
+    playback.game.decisionBroker.loadReplayDecisions(decisions);
+    await run(playback);
+    assert.equal(playback.holder.getCounter("spore"), 4 - removed);
+    assert.equal(playback.game.decisionBroker.replayCursor, 1);
+  });
+}
+
+test("a human tiered cost is a resolution option recorded before the cost selection", async t => {
+  const { game, owner } = setup(t, true);
+  const make = () => new Card({ ...cardDefinition(402), effects: [] }, owner.id);
+  const source = make(), first = make(), second = make(), third = make();
+  owner.hand.push(source);
+  placeFieldCards(owner.field, first, second, third);
+  const decisions: ReplayDecisionInput[] = [];
+  game.on("decision_made", decision => { decisions.push(decision); });
+  let offered = false;
+  game.ui.showTierChoiceModal = async () => { offered = true; return 2; };
+  const action: CardAction = { type: "special_summon_from_hand_with_tiered_cost",
+    costFilters: { cardKind: "monster" }, minCost: 1, maxCost: 3, position: "attack" };
+  const pending = game.effectEngine.applyActions([action], { player: owner, opponent: game.bot, source }, {});
+  await completeTestSelections(game, pending);
+  assert.equal(offered, true);
+  assert.ok(owner.field.includes(source));
+  assert.equal(owner.graveyard.filter(card => [first, second, third].includes(card)).length, 2);
+  assert.equal(decisions[0]?.kind, "choice");
+  assert.deepEqual(decisions[0]?.value, { pass: false, candidateKey: "option:cost:2", effectId: null });
+});
+
+test("a tiered cost without costFilters fails closed instead of using a card-name default", async t => {
+  const { game, owner } = setup(t, true);
+  const source = new Card({ ...cardDefinition(402), effects: [] }, owner.id);
+  owner.hand.push(source);
+  placeFieldCards(owner.field, new Card({ ...cardDefinition("Void Hollow"), effects: [] }, owner.id));
+  game.ui.showTierChoiceModal = async () => assert.fail("No tier may be offered without cost filters");
+  const action = unsafeFixture<CardAction>({ type: "special_summon_from_hand_with_tiered_cost", minCost: 1 },
+    "costFilters is required by the contract; this checks the runtime refuses a legacy action without it");
+  const result = await game.effectEngine.applyActions([action], { player: owner, opponent: game.bot, source }, {});
+  assert.equal(typeof result === "object" && result !== null ? result.success : result, false);
+  assert.ok(owner.hand.includes(source));
 });

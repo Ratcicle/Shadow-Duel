@@ -752,6 +752,35 @@ export interface ReplayCommandDescriptorCarrier {
   replayCommandDescriptor?: unknown;
 }
 
+/** Engine paths that contain an unexpected internal error instead of crashing the duel. */
+export const ENGINE_FAULT_SCOPES = [
+  "action_handler",
+  "apply_actions",
+  "chain_link_resolution",
+  "summon_transaction_cleanup",
+  "trigger_occurrence_completion",
+  "activation_trigger_completion",
+  "fast_effect_timing",
+  "event_trigger_collection",
+  "event_resolution",
+  "detached_event_emit",
+  "unknown_condition",
+] as const;
+
+export type EngineFaultScope = (typeof ENGINE_FAULT_SCOPES)[number];
+
+/**
+ * One contained engine error. Outside strict mode the engine keeps its
+ * fallback and records the fault; strict mode (`GameOptions.strictEngineFaults`,
+ * or dev mode when that option is absent) rethrows it after recording.
+ */
+export interface EngineFault {
+  scope: EngineFaultScope;
+  message: string;
+  error: unknown;
+  details: Record<string, unknown> | null;
+}
+
 /**
  * Exact constructor-owned state of Game. Late properties are optional and
  * erased through interface merging; they must not become emitted class fields.
@@ -838,6 +867,8 @@ export interface GameRuntimeState {
   pendingSynchroMaterialTriggerContinuation: unknown;
   synchroSummonContextCounter: number;
   devModeEnabled: boolean;
+  strictEngineFaults: boolean | undefined;
+  engineFaults: EngineFault[];
   zoneOpDepth: number;
   zoneOpSnapshot: ZoneSnapshot | null;
   devFailAfterZoneMutation: boolean;
