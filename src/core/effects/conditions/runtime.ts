@@ -18,6 +18,7 @@ import type {
 import type { FilterCard, RuntimeCardFilter } from "../filters/cardFilters.js";
 import type { TemporaryEventEffect } from "../triggers/runtime.js";
 import type { resolveTargets } from "../targeting/resolution.js";
+import type { EngineFaultHost } from "../../game/devTools/faults.js";
 
 // These conditions only inspect existing state in both canonical interpreters.
 // Impact predictions recurse into actions; declaration expiry and blueprint
@@ -273,7 +274,8 @@ export interface ConditionSourceData
   archetypes?: readonly string[];
 }
 
-export interface ConditionGame {
+/** Conditions report unknown types through the engine fault policy. */
+export interface ConditionGame extends EngineFaultHost {
   player?: ConditionPlayer;
   bot?: ConditionPlayer;
   turnCounter: number;

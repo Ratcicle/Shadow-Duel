@@ -31,6 +31,7 @@ import type { SummonId } from "../../contracts/primitives.js";
 import type { SummonOrigin } from "../../contracts/summon.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
 import { isCanonicalZone } from "../../contracts/zones.js";
+import { reportEngineFault } from "../devTools/faults.js";
 import {
   checkSpecialSummonEligibility,
   establishProperSummon,
@@ -613,8 +614,13 @@ async function finalizeFailedCommittedCard(
       await game.emit?.("card_to_grave", payload);
       await game.emit?.("card_moved", payload);
     }
-  } catch {
-    // Transaction cleanup must still release the action guard after a move error.
+  } catch (error) {
+    // Transaction cleanup must still release the action guard after a move
+    // error, so the fault is recorded but never rethrown here.
+    reportEngineFault(game, "summon_transaction_cleanup", error, {
+      details: { card: card.name, summonId: transaction.summonId },
+      rethrow: false,
+    });
   }
   return null;
 }

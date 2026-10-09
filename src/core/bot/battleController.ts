@@ -1,5 +1,59 @@
 import type { BotRuntimePort, BotGamePort } from "../contracts/bot.js";
 import type { GameCard } from "../contracts/cards.js";
+import type { GamePlayer } from "../contracts/player.js";
+
+/** Attack attempts (resolveCombat calls) the bot may spend in one Battle Phase. */
+export const BOT_BATTLE_MAX_ATTEMPTS = 32;
+/** Consecutive attempts that leave the battle state unchanged before the bot gives up. */
+export const BOT_BATTLE_MAX_ATTEMPTS_WITHOUT_PROGRESS = 3;
+/** Poll interval while the duel is busy; waiting spends no budget and records nothing. */
+export const BOT_BATTLE_BUSY_RETRY_MS = 20;
+
+// Guard codes that clear on their own once the pending selection/effect/window ends.
+const BOT_BATTLE_BUSY_GUARD_CODES: ReadonlySet<string> = new Set([
+  "BLOCKED_SELECTION_ACTIVE",
+  "BLOCKED_RESOLVING",
+  "BLOCKED_CHAIN_WINDOW_OPEN",
+  "BLOCKED_FAST_EFFECT_TIMING",
+]);
+
+type BattlePlayerSnapshot = Pick<GamePlayer, "lp" | "field">;
+
+/**
+ * Battle progress fingerprint: LPs, field instanceIds, attack counters and the
+ * monsters each attacker already attacked. An attempt that leaves it unchanged
+ * made no progress.
+ */
+export function getBattleProgressFingerprint(
+  players: readonly BattlePlayerSnapshot[],
+): string {
+  return players
+    .map((player) =>
+      [
+        String(player.lp),
+        ...player.field.map(
+          (card) =>
+            `${card.instanceId}:${card.attacksUsedThisTurn || 0}:` +
+            [...(card.attackedMonstersThisTurn || [])].map(String).join(","),
+        ),
+      ].join("|"),
+    )
+    .join("#");
+}
+
+function getBattlePairKey(attacker: GameCard, target: GameCard | null): string {
+  return `${attacker.instanceId}>${target ? target.instanceId : "direct"}`;
+}
+
+function getGuardFailureCode(result: unknown): string | null {
+  if (!result || typeof result !== "object") return null;
+  if (Reflect.get(result, "ok") !== false) return null;
+  const code: unknown = Reflect.get(result, "code");
+  return typeof code === "string" ? code : null;
+}
+
+const waitBattleDelay = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 type BattleCardIdentity = {
   id?: number | undefined;
@@ -35,17 +89,41 @@ export function playBotBattlePhase(
   console.log(`[Bot.playBattlePhase] ✅ Starting battle phase evaluation`);
   const opponent = bot.resolveOpponent(game);
   if (!opponent) return;
-  const battleDelayMs = Number.isFinite(game?.aiBattleDelayMs)
-    ? game.aiBattleDelayMs
-    : 800;
+  const battleDelayMs =
+    typeof game.aiBattleDelayMs === "number" &&
+    Number.isFinite(game.aiBattleDelayMs)
+      ? game.aiBattleDelayMs
+      : 800;
   const minDeltaToAttack = 0.05;
+  const battleTurnCounter = game.turnCounter;
+  // Pairs whose attempt changed nothing are not retried in this Battle Phase.
+  const rejectedPairs = new Set<string>();
+  let attempts = 0;
+  let attemptsWithoutProgress = 0;
 
-  const performAttack = () => {
-    // Verificar se ainda podemos atacar
-    if (game.isDisposed?.()) return;
-    if (game.gameOver) return;
-    if (game.phase !== "battle") return; // Fase mudou durante resolução
+  const isBattleOngoing = () =>
+    !game.isDisposed?.() && !game.gameOver && game.phase === "battle";
 
+  // Only the bot's own Battle Phase is ever ended here.
+  const endBattlePhase = () => {
+    if (!isBattleOngoing()) return;
+    if (game.turn !== bot.id || game.turnCounter !== battleTurnCounter) return;
+    game.nextPhase();
+  };
+
+  const checkBattleReadiness = (): "ready" | "busy" | "stop" => {
+    if (game.isDisposed?.() || game.gameOver) return "stop";
+    const readiness = game.canStartAction({
+      actor: bot,
+      kind: "bot_attack",
+      phaseReq: "battle",
+      silent: true,
+    });
+    if (readiness.ok) return "ready";
+    return BOT_BATTLE_BUSY_GUARD_CODES.has(readiness.code) ? "busy" : "stop";
+  };
+
+  const selectAttack = () => {
     const availableAttackers = bot.field.filter((m) => {
       if (!m || m.cardKind !== "monster") return false;
       if (m.position !== "attack") return false;
@@ -53,12 +131,7 @@ export function playBotBattlePhase(
       return game.getAttackAvailability?.(m)?.ok ?? true;
     });
 
-    if (!availableAttackers.length) {
-      setTimeout(() => {
-        if (!game.isDisposed?.()) game.nextPhase();
-      }, battleDelayMs);
-      return;
-    }
+    if (!availableAttackers.length) return null;
 
     let bestAttack: {
       attacker: GameCard;
@@ -115,6 +188,7 @@ export function playBotBattlePhase(
         ) {
           continue;
         }
+        if (rejectedPairs.has(getBattlePairKey(attacker, target))) continue;
 
         const simState = bot.cloneGameState(game);
         const simAttacker = simState.bot.field.find((c) =>
@@ -221,46 +295,80 @@ export function playBotBattlePhase(
       bestAttack?.threshold ?? minDeltaToAttack,
       0.05,
     );
-    if (bestAttack && bestDelta > finalThreshold) {
-      // Verificar se atacante ainda está no campo antes de atacar
-      const attackerStillOnField = bot.field.includes(bestAttack.attacker);
-      const targetStillOnField =
-        bestAttack.target === null ||
-        opponent.field.includes(bestAttack.target);
+    return bestAttack && bestDelta > finalThreshold ? bestAttack : null;
+  };
 
-      if (!attackerStillOnField || !targetStillOnField) {
-        // Cartas foram removidas, recalcular na próxima iteração
-        setTimeout(() => {
-          if (!game.isDisposed?.()) performAttack();
-        }, battleDelayMs);
+  // Each iteration is one complete attack attempt. Readiness, selection and the
+  // resolveCombat call run synchronously, so the chosen pair is never stale.
+  const runBattleLoop = async (): Promise<void> => {
+    while (isBattleOngoing()) {
+      const readiness = checkBattleReadiness();
+      // A non-busy block (wrong phase/turn, disposed) is not ours to end.
+      if (readiness === "stop") return;
+      if (readiness === "busy") {
+        await waitBattleDelay(BOT_BATTLE_BUSY_RETRY_MS);
+        continue;
+      }
+
+      const bestAttack = selectAttack();
+      if (!bestAttack) {
+        await waitBattleDelay(battleDelayMs);
+        endBattlePhase();
         return;
       }
 
-      // IMPORTANTE: resolveCombat é async, devemos aguardar antes de verificar gameOver
-      Promise.resolve(
-        game.resolveCombat(bestAttack.attacker, bestAttack.target),
-      )
-        .then(() => {
-          // Verificar todas as condições antes de continuar atacando
-          if (
-            !game.gameOver &&
-            !game.isDisposed?.() &&
-            game.phase === "battle"
-          ) {
-            setTimeout(() => {
-              if (!game.isDisposed?.()) performAttack();
-            }, battleDelayMs);
-          }
-        })
-        .catch((err: unknown) => {
-          console.error("[Bot.playBattlePhase] resolveCombat error:", err);
+      attempts++;
+      const fingerprintBefore = getBattleProgressFingerprint([bot, opponent]);
+      let result: unknown;
+      try {
+        // IMPORTANTE: resolveCombat é async, devemos aguardar antes de verificar gameOver
+        result = await game.resolveCombat(bestAttack.attacker, bestAttack.target);
+      } catch (err: unknown) {
+        console.error("[Bot.playBattlePhase] resolveCombat error:", err);
+        await waitBattleDelay(battleDelayMs);
+        endBattlePhase();
+        return;
+      }
+
+      const guardCode = getGuardFailureCode(result);
+      if (guardCode !== null && !BOT_BATTLE_BUSY_GUARD_CODES.has(guardCode)) {
+        return;
+      }
+      // A transient guard block is not a rejection; anything else must move the state.
+      if (guardCode === null) {
+        if (
+          getBattleProgressFingerprint([bot, opponent]) === fingerprintBefore
+        ) {
+          rejectedPairs.add(
+            getBattlePairKey(bestAttack.attacker, bestAttack.target),
+          );
+          attemptsWithoutProgress++;
+        } else {
+          attemptsWithoutProgress = 0;
+        }
+      }
+
+      if (!isBattleOngoing()) return;
+      if (
+        attempts >= BOT_BATTLE_MAX_ATTEMPTS ||
+        attemptsWithoutProgress >= BOT_BATTLE_MAX_ATTEMPTS_WITHOUT_PROGRESS
+      ) {
+        console.warn("[Bot.playBattlePhase] Attack attempt limit reached", {
+          attempts,
+          attemptsWithoutProgress,
         });
-    } else {
-      setTimeout(() => {
-        if (!game.isDisposed?.()) game.nextPhase();
-      }, battleDelayMs);
+        await waitBattleDelay(battleDelayMs);
+        endBattlePhase();
+        return;
+      }
+      await waitBattleDelay(
+        guardCode === null ? battleDelayMs : BOT_BATTLE_BUSY_RETRY_MS,
+      );
     }
   };
 
-  performAttack();
+  runBattleLoop().catch((err: unknown) => {
+    console.error("[Bot.playBattlePhase] Battle loop error:", err);
+    endBattlePhase();
+  });
 }

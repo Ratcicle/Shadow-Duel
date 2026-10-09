@@ -31,10 +31,8 @@ import {
 } from "../contracts/actionRuntime.js";
 import type { CardFilter } from "../contracts/effects.js";
 import type {
-  RawSelectionCandidate,
   RawSelectionContract,
   SelectionKind,
-  SelectionZone,
 } from "../contracts/selection.js";
 import type { ZoneInput } from "../contracts/zones.js";
 import {
@@ -43,11 +41,13 @@ import {
   getUIText,
 } from "../i18n.js";
 import {
+  buildZoneSelectionCandidates,
   getUI,
   requestOptionalConfirmation,
   collectZoneCandidates,
   selectCardsFromZone,
   summonFromHandCore,
+  type ZoneSelectionCandidate,
 } from "./shared.js";
 
 type SearchAction = ActionOf<"add_from_zone_to_hand" | "search_any">;
@@ -79,22 +79,6 @@ type MutableRuntimeSearchFilter = {
 interface SelectionRange {
   readonly min: number;
   readonly max: number;
-}
-
-interface ZoneSelectionCandidate extends RawSelectionCandidate {
-  idx: number;
-  key: string;
-  name: string;
-  owner: string;
-  controller: string;
-  zone: SelectionZone;
-  zoneIndex: number;
-  position: string;
-  atk?: number | undefined;
-  def?: number | undefined;
-  level?: number | undefined;
-  cardKind?: ActionRuntimeCard["cardKind"];
-  cardRef: ActionRuntimeCard;
 }
 
 interface SelectionContractData {
@@ -352,44 +336,6 @@ function getSelectionMessageForSource(
     return "Select target(s) for the spell effect.";
   }
   return "Select target(s) for the spell/trap effect.";
-}
-
-function buildZoneSelectionCandidates(
-  player: ActionRuntimePlayer,
-  game: ActionRuntimeGamePort,
-  cards: readonly ActionRuntimeCard[],
-  zoneName: SelectionZone,
-): ZoneSelectionCandidate[] {
-  const zoneValue = Reflect.get(player, zoneName);
-  const zone = Array.isArray(zoneValue) ? zoneValue : [];
-  const controller = player?.id || "player";
-
-  return cards.map((card, idx) => {
-    const candidate: ZoneSelectionCandidate = {
-      idx,
-      key: "",
-      name: card?.name || "Card",
-      owner: "player",
-      controller,
-      zone: zoneName,
-      zoneIndex: zone.indexOf(card),
-      position: card?.position || "",
-      atk: card?.atk,
-      def: card?.def,
-      level: card?.level,
-      cardKind: card?.cardKind,
-      cardRef: card,
-    };
-
-    candidate.key =
-      typeof game?.buildSelectionCandidateKey === "function"
-        ? game.buildSelectionCandidateKey(candidate, idx)
-        : `${controller}:${zoneName}:${candidate.zoneIndex}:${
-            card?.id || card?.name || idx
-          }`;
-
-    return candidate;
-  });
 }
 
 function buildAddToHandSelectionContract(

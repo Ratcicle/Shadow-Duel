@@ -59,9 +59,8 @@ export interface SummonActionMap {
   >;
   special_summon_from_hand_with_tiered_cost: DefineAction<
     "special_summon_from_hand_with_tiered_cost",
-    never,
-    | "costFilters" | "maxCost" | "minCost" | "position" | "tier1AtkBoost"
-    | "tierOptions"
+    "costFilters",
+    "maxCost" | "minCost" | "position" | "tier1AtkBoost" | "tierOptions"
   >;
   special_summon_from_zone: DefineAction<
     "special_summon_from_zone",

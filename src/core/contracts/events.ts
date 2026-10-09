@@ -1114,6 +1114,12 @@ export interface EmitOptions {
  */
 export interface EventResolutionOutcome {
   ok?: boolean;
+  /**
+   * A contained engine fault interrupted part of the event. The outcome stays
+   * `ok: true` (with `reason: "engine_fault"` when resolution itself failed)
+   * because callers treat `ok: false` as a rules interruption.
+   */
+  fault?: boolean;
   success?: boolean;
   cancelled?: boolean;
   reason?: string | null;

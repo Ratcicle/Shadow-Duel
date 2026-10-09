@@ -1432,7 +1432,7 @@ Special Summons from hand with variable/tiered cost.
 
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
-| `costFilters` | nao | object | Card filter object evaluated by the handler. |
+| `costFilters` | sim | object | Card filter object evaluated by the handler. |
 | `maxCost` | nao | number |  |
 | `minCost` | nao | number |  |
 | `position` | nao | enum: attack, defense, choice | Battle position: "attack", "defense", or "choice". |
@@ -1444,6 +1444,10 @@ Special Summons from hand with variable/tiered cost.
 ```json
 {
   "type": "special_summon_from_hand_with_tiered_cost",
+  "costFilters": {
+    "archetype": "Void",
+    "cardKind": "monster"
+  },
   "minCost": 1,
   "maxCost": 2,
   "position": "attack"

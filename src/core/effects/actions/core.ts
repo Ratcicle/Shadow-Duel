@@ -10,6 +10,7 @@ import { getSendToGraveReplacementDestination } from "../passives/passiveBuffs.j
 import { hasSynchroSummonPreviewCandidate } from "../../actionHandlers/summon/synchroEffects.js";
 import { mergeCanonicalSelections } from "../../game/selection/contract.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
+import { reportEngineFault } from "../../game/devTools/faults.js";
 import { checkTrapMonsterSummon } from "./summon.js";
 import type { ActionHandlerRegistry } from "../../actionHandlers/registry.js";
 import type {
@@ -790,14 +791,13 @@ export async function applyActions(
           ...actionInfo,
           error: errorMessage(error, `Action "${action.type}" threw.`),
         });
-        console.error(
-          `Error executing registered handler for action type "${action.type}":`,
-          error,
-        );
-        console.error(`Action config:`, action);
-        console.error(`Context:`, {
-          player: ctx?.player?.id,
-          source: ctx?.source?.name,
+        reportEngineFault(game, "action_handler", error, {
+          details: {
+            actionType: action.type,
+            action,
+            player: ctx?.player?.id ?? null,
+            source: ctx?.source?.name ?? null,
+          },
         });
         return createActionResult({
           success: false,
@@ -811,7 +811,8 @@ export async function applyActions(
       }
     }
   } catch (err) {
-    console.error("Error while applying actions:", err);
+    // A handler fault rethrown in strict mode was already recorded above.
+    reportEngineFault(game, "apply_actions", err);
     return createActionResult({
       success: false,
       executed,
@@ -2505,10 +2506,11 @@ export function checkActionPreviewRequirements(
         return { ok: false, reason: "Field is full." };
       }
 
-      const filters = action.costFilters || {
-        name: "Void Hollow",
-        cardKind: "monster",
-      };
+      // costFilters is required by the action contract; there is no default.
+      const filters = action.costFilters;
+      if (!filters) {
+        return { ok: false, reason: "Missing cost filters." };
+      }
       const matchesFilters = (card: ActionRuntimeCard | null): boolean => {
         if (!card) return false;
         if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) {

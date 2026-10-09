@@ -82,6 +82,7 @@ type ExpectedGameOptionKey =
   | "playerArchetype"
   | "botArchetype"
   | "devMode"
+  | "strictEngineFaults"
   | "chainResponseTimeoutMs"
   | "maxTurnCounter"
   | "getFieldPlacementMode"

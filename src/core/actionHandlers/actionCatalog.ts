@@ -2650,7 +2650,8 @@ export const ACTION_CATALOG = {
     category: "summon",
     summary: "Special Summons from hand with variable/tiered cost.",
     handler: "handleSpecialSummonFromHandWithCost",
-    optional: ["costFilters", "maxCost", "minCost", "position", "tier1AtkBoost", "tierOptions"],
+    required: ["costFilters"],
+    optional: ["maxCost", "minCost", "position", "tier1AtkBoost", "tierOptions"],
     fields: {
       costFilters: field("filters"),
       maxCost: { type: "number" },
@@ -2663,7 +2664,7 @@ export const ACTION_CATALOG = {
     mutates: ["hand", "field", "graveyard"],
     emits: ["after_summon", "card_to_grave"],
     preview: "covered",
-    examples: [{ type: "special_summon_from_hand_with_tiered_cost", minCost: 1, maxCost: 2, position: "attack" }],
+    examples: [{ type: "special_summon_from_hand_with_tiered_cost", costFilters: { archetype: "Void", cardKind: "monster" }, minCost: 1, maxCost: 2, position: "attack" }],
   }),
   special_summon_from_zone: action({
     category: "summon",

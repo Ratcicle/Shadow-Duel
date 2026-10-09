@@ -50,6 +50,11 @@ export interface GameOptions {
   playerArchetype?: string;
   botArchetype?: string;
   devMode?: boolean;
+  /**
+   * Rethrow contained engine faults after recording them. When absent, strict
+   * mode follows dev mode at the moment of each fault.
+   */
+  strictEngineFaults?: boolean;
   chainResponseTimeoutMs?: number;
   /**
    * Harness-only turn limit (Bot Arena). Once this many turns have been

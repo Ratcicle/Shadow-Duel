@@ -39,6 +39,7 @@ import type {
 import type { SegocGroup } from "../contracts/chain.js";
 import { getCardDisplayName, getUIText } from "../i18n.js";
 import { resolvePhysicalSourceLocation } from "./link.js";
+import { isStrictEngineFaultMode, reportEngineFault } from "../game/devTools/faults.js";
 import { hasEquipHostExitProof, matchesEquipHostExitSourcePresence } from "../effects/triggers/collectors/shared.js";
 import { captureReferencePresence, matchesFrozenReferencePresence, getEventEffectOrigin } from "../effects/targeting/references.js";
 
@@ -944,15 +945,25 @@ export async function prepareTriggerOpportunity(
 }
 
 async function completeOccurrences(
+  chainSystem: FullChainHost,
   occurrences: ChainTriggerOccurrence[],
 ): Promise<void> {
+  // Every completion runs; strict mode rethrows the first fault afterwards.
+  const faults: unknown[] = [];
   for (const occurrence of occurrences || []) {
     if (typeof occurrence?.onComplete !== "function") continue;
     try {
       await occurrence.onComplete();
     } catch (error) {
-      console.error("[ChainSystem] Trigger occurrence completion failed:", error);
+      reportEngineFault(chainSystem.game, "trigger_occurrence_completion", error, {
+        details: { occurrenceId: occurrence.occurrenceId ?? null },
+        rethrow: false,
+      });
+      faults.push(error);
     }
+  }
+  if (faults.length > 0 && isStrictEngineFaultMode(chainSystem.game)) {
+    throw faults[0];
   }
 }
 
@@ -1048,7 +1059,7 @@ export async function resolveTriggerOccurrences(
         deferPostChainWindow: options.deferPostChainWindow === true,
       });
     }
-    await completeOccurrences(opportunity.occurrences);
+    await completeOccurrences(this, opportunity.occurrences);
     this.activeTriggerOpportunity = null;
     return {
       ...timingResult,

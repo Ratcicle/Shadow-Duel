@@ -19,6 +19,7 @@ import type {
 import { captureTriggerEventSnapshot } from "../../chain/segoc.js";
 import { captureEventReferenceSnapshots } from "../../effects/targeting/references.js";
 import { hasChainPostEffectSummonCapability } from "../../contracts/chainRuntime.js";
+import { isStrictEngineFaultMode, reportEngineFault } from "../devTools/faults.js";
 
 /**
  * Resolve an event by collecting and executing triggers
@@ -130,6 +131,11 @@ export async function resolveEvent<Name extends ResolvableEventName>(
   let onComplete: EventTriggerCompletion | null = null;
 
   let resolutionResult: EventResolutionOutcome | null = null;
+  // Filled by the collector containment below; read after its promise settles.
+  const collectionFault: { failed: boolean; error: unknown } = {
+    failed: false,
+    error: null,
+  };
   try {
     // This must precede the first await: immediate effects and presentation can
     // move a referenced card or replace an Equip's current host.
@@ -148,8 +154,14 @@ export async function resolveEvent<Name extends ResolvableEventName>(
     const collection = this.effectEngine?.collectEventTriggers?.(
       eventName, { ...triggerPayload, deferActivationChecks: deferred || payload.deferActivationChecks === true },
     );
+    // Recorded without rethrowing: the promise may settle while immediate
+    // effects are still running, and strict mode rethrows once it is awaited.
     const capturedCollection = Promise.resolve(collection).catch(err => {
-      console.error(`[Game] Failed to collect triggers for "${eventName}":`, err);
+      reportEngineFault(this, "event_trigger_collection", err, {
+        details: { eventName }, rethrow: false,
+      });
+      collectionFault.failed = true;
+      collectionFault.error = err;
       return null;
     });
     await this.effectEngine?.applyImmediateEventEffects?.(eventName, payload);
@@ -160,6 +172,9 @@ export async function resolveEvent<Name extends ResolvableEventName>(
       },
     );
     const triggerPackage = (await capturedCollection) ?? null;
+    if (collectionFault.failed && isStrictEngineFaultMode(this)) {
+      throw collectionFault.error;
+    }
     const metadata = getTriggerPackageMetadata(triggerPackage);
     entries = Array.isArray(triggerPackage) ? triggerPackage
       : Array.isArray(triggerPackage?.entries) ? triggerPackage.entries : [];
@@ -197,7 +212,11 @@ export async function resolveEvent<Name extends ResolvableEventName>(
       });
     }
   } catch (err) {
-    console.error(`[Game] Error resolving event "${eventName}":`, err);
+    reportEngineFault(this, "event_resolution", err, { details: { eventName } });
+    resolutionResult = {
+      ok: true, fault: true, reason: "engine_fault",
+      triggerCount: entries.length, results: [],
+    };
   } finally {
     this.eventResolutionDepth = Math.max(0, this.eventResolutionDepth - 1);
 
@@ -245,13 +264,12 @@ export async function resolveEvent<Name extends ResolvableEventName>(
     });
   }
 
-  return (
-    resolutionResult || {
-      ok: true,
-      triggerCount: entries.length,
-      results: [],
-    }
-  );
+  const outcome = resolutionResult || {
+    ok: true,
+    triggerCount: entries.length,
+    results: [],
+  };
+  return collectionFault.failed ? { ...outcome, fault: true } : outcome;
 }
 
 /** Queue a canonical event occurrence for the next post-Chain Trigger check. */
@@ -522,7 +540,13 @@ export async function resumePendingEventSelection(
       },
     );
   } catch (err) {
-    console.error(`[Game] Error resuming event "${pending.eventName}":`, err);
+    reportEngineFault(this, "event_resolution", err, {
+      details: { eventName: pending.eventName, resumed: true },
+    });
+    resolutionResult = {
+      ok: true, fault: true, reason: "engine_fault",
+      triggerCount: pending.entries?.length || 0, results: pending.results || [],
+    };
   } finally {
     this.eventResolutionDepth = Math.max(0, this.eventResolutionDepth - 1);
     this.devLog("EVENT_RESUME_END", {

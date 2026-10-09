@@ -5,15 +5,19 @@ import Card from "../../src/core/Card.js";
 import { getTechZeroVisibleBattlePolicy } from "../../src/core/ai/techzero/priorities.js";
 import { evaluateTechZeroVisibleBattle } from "../../src/core/ai/techzero/battle.js";
 import { scoreTechZeroLineTerminal } from "../../src/core/ai/techzero/linePlanning.js";
+import {
+  BOT_BATTLE_BUSY_RETRY_MS,
+  BOT_BATTLE_MAX_ATTEMPTS_WITHOUT_PROGRESS,
+} from "../../src/core/bot/battleController.js";
 import type { AiLiveGamePort } from "../../src/core/contracts/aiState.js";
 import type { BotGamePort } from "../../src/core/contracts/bot.js";
 import type { BotCloneGamePort } from "../../src/core/bot/simulationBridge.js";
 import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js";
 import { createRuntimeGame, placeFieldCards, runtimeCard } from "../helpers/game.js";
 
-function scenario(t: TestContext, actor: "player" | "bot") {
-  const first = new Bot("techzero"); first.id = "player";
-  const second = new Bot("techzero");
+function scenario(t: TestContext, actor: "player" | "bot", archetype = "techzero") {
+  const first = new Bot(archetype); first.id = "player";
+  const second = new Bot(archetype);
   const game = createRuntimeGame({ opponentOverride: second, captureReplay: false, laboratoryMode: true });
   game.player = unsafeFixture<typeof game.player>(first, "Concrete Bot supplies the Player runtime and clone interface");
   t.after(() => game.dispose("tech_zero_battle_test"));
@@ -40,6 +44,28 @@ async function finishBattle(game: ReturnType<typeof scenario>["game"], bot: Bot,
     await new Promise(resolve => setTimeout(resolve, 5));
   }
   assert.ok(!battleInProgress(), "Bot must complete the real battle sequence");
+}
+
+// Mocked-clock battle driver: bounded by tick count, never by wall clock.
+function startMockedBattle(t: TestContext, game: ReturnType<typeof scenario>["game"], bot: Bot, botGame: BotGamePort) {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  game.phase = "battle"; botGame.aiBattleDelayMs = 0;
+  bot.playBattlePhase(botGame);
+}
+
+async function advanceMockedClock(t: TestContext, ms: number) {
+  for (let elapsed = 0; elapsed < ms; elapsed += BOT_BATTLE_BUSY_RETRY_MS) {
+    t.mock.timers.tick(BOT_BATTLE_BUSY_RETRY_MS);
+    await new Promise(resolve => setImmediate(resolve));
+  }
+}
+
+async function finishMockedBattle(t: TestContext, game: ReturnType<typeof scenario>["game"]) {
+  const battleInProgress = () => !game.gameOver && game.phase === "battle";
+  for (let tick = 0; tick < 2000 && battleInProgress(); tick++) {
+    await advanceMockedClock(t, BOT_BATTLE_BUSY_RETRY_MS);
+  }
+  assert.ok(!battleInProgress(), "Bot must leave its Battle Phase");
 }
 
 for (const actor of ["player", "bot"] as const) {
@@ -175,5 +201,62 @@ for (const actor of ["player", "bot"] as const) {
     const projection = evaluateTechZeroVisibleBattle(bot, opponent, 2);
     assert.equal(projection.lethal, false);
     assert.ok(projection.uncertainties.includes("battle_triggers"));
+  });
+
+  test(`Bot battle loop stops after Arctroth Pursuer's two granted attacks (${actor})`, async t => {
+    const { game, bot, opponent, botGame, make } = scenario(t, actor, "shadowheart");
+    const pursuer = make(123), first = runtimeCard({ cardKind: "monster", atk: 1000, def: 1000,
+      position: "attack", isFacedown: false }, opponent.id);
+    const revived = runtimeCard({ cardKind: "monster", atk: 500, def: 500, level: 1, isFacedown: false }, opponent.id);
+    placeFieldCards(bot.field, pursuer); placeFieldCards(opponent.field, first);
+    opponent.graveyard.push(revived); opponent.lp = 8000;
+    const attacks: Array<number | string | null> = [];
+    game.on("attack_declared", ({ target: attacked }) => { attacks.push(attacked?.instanceId ?? null); });
+    startMockedBattle(t, game, bot, botGame);
+    await finishMockedBattle(t, game);
+    assert.deepEqual(attacks, [first.instanceId, revived.instanceId]);
+    assert.equal(pursuer.attacksUsedThisTurn, 2);
+  });
+
+  test(`Bot battle loop waits on a busy guard without spending attempts (${actor})`, async t => {
+    const { game, bot, opponent, botGame } = scenario(t, actor);
+    const attacker = runtimeCard({ cardKind: "monster", atk: 1500, def: 0, position: "attack" }, bot.id);
+    placeFieldCards(bot.field, attacker); opponent.lp = 8000;
+    let busy = true, busyChecks = 0;
+    const canStartAction = game.canStartAction.bind(game);
+    t.mock.method(game, "canStartAction", (options?: Parameters<typeof canStartAction>[0]) => {
+      if (!busy || options?.silent !== true) return canStartAction(options);
+      busyChecks++;
+      return { ok: false as const, success: false as const, needsSelection: false as const,
+        code: "BLOCKED_RESOLVING", reason: "busy fixture" };
+    });
+    const resolveCombat = t.mock.method(game, "resolveCombat");
+    startMockedBattle(t, game, bot, botGame);
+    await advanceMockedClock(t, 200);
+    assert.equal(resolveCombat.mock.callCount(), 0, "no attack command while the duel is busy");
+    assert.equal(game.phase, "battle");
+    assert.ok(busyChecks >= 200 / BOT_BATTLE_BUSY_RETRY_MS);
+    busy = false;
+    await finishMockedBattle(t, game);
+    assert.equal(resolveCombat.mock.callCount(), 1);
+    assert.equal(opponent.lp, 6500);
+    assert.equal(game.phase, "main2");
+  });
+
+  test(`Bot battle loop ends the phase when resolveCombat changes nothing (${actor})`, async t => {
+    const { game, bot, opponent, botGame, blocker } = scenario(t, actor);
+    const attackers = [3000, 2900].map(atk =>
+      runtimeCard({ cardKind: "monster", atk, def: 0, position: "attack" }, bot.id));
+    placeFieldCards(bot.field, ...attackers); placeFieldCards(opponent.field, blocker(1000), blocker(1000));
+    const pairs: string[] = [];
+    t.mock.method(game, "resolveCombat", async (attacker: { instanceId: number } | null, target: { instanceId: number } | null) => {
+      pairs.push(`${attacker?.instanceId}>${target?.instanceId ?? "direct"}`);
+      return { ok: true };
+    });
+    startMockedBattle(t, game, bot, botGame);
+    await finishMockedBattle(t, game);
+    assert.equal(pairs.length, BOT_BATTLE_MAX_ATTEMPTS_WITHOUT_PROGRESS);
+    assert.equal(new Set(pairs).size, pairs.length, "a rejected pair is not retried");
+    assert.equal(game.phase, "main2");
   });
 }

@@ -905,7 +905,7 @@ export async function handleBuffStatsTemp(
       });
 
       // Emit buff event for replay capture
-      game.emit?.("stat_buff_applied", {
+      await game.emit?.("stat_buff_applied", {
         card,
         previousAtk: originalAtk,
         newAtk: card.atk!,
@@ -1067,7 +1067,7 @@ export async function handleSetOriginalStats(
     getUI(game)?.log(
       `${card.name}'s original stats became ${card.baseAtk} ATK / ${card.baseDef} DEF.`,
     );
-    game?.emit?.("original_stats_changed", {
+    await game?.emit?.("original_stats_changed", {
       card,
       previousAtk,
       previousDef,
@@ -1259,7 +1259,7 @@ export async function handleModifyStatsTempThenDestroyIfZeroed(
         tone: weakensStats ? "red" : "green",
       });
 
-      game.emit?.("stat_buff_applied", {
+      await game.emit?.("stat_buff_applied", {
         card,
         previousAtk,
         newAtk: card.atk!,

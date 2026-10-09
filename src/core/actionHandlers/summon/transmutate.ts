@@ -86,14 +86,17 @@ export async function resolveTransmutate(
     action.costFromZone ||
     "field";
 
-  await sendCardsToGraveyard([costCard], player, engine, {
+  const sent = await sendCardsToGraveyard([costCard], player, engine, {
     fromZone,
-    fallbackZone: "field",
-    pushIfMissing: true,
   });
 
   if (typeof game.updateBoard === "function") {
     game.updateBoard();
+  }
+
+  if (sent.movedCount < 1) {
+    getUI(game)?.log("Could not send the Transmutate cost to the GY.");
+    return false;
   }
 
   const summonFilters = {

@@ -273,7 +273,6 @@ export interface ActionRuntimeUiPort {
   } | null;
   showConfirmPrompt?(message: string, options?: object): MaybePromise<boolean>;
   showCardGridSelectionModal?(...arguments_: unknown[]): unknown;
-  showCardSelectionPrompt?(...arguments_: unknown[]): unknown;
   showCardSelectionModal?(...arguments_: unknown[]): unknown;
   showMultiSelectModal?(...arguments_: unknown[]): unknown;
   showNumberPrompt?(...arguments_: unknown[]): unknown;

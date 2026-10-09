@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { validateEffectActionTree } from "../../src/core/CardDatabaseValidator.js";
+import {
+  validateCardConditionTypes,
+  validateCardDatabase,
+  validateEffectActionTree,
+} from "../../src/core/CardDatabaseValidator.js";
+import { evaluateConditions } from "../../src/core/effects/conditions/evaluateConditions.js";
+import { unsafeFixture } from "../helpers/fixtures.js";
 
 function messages(
   result: ReturnType<typeof validateEffectActionTree>,
@@ -215,5 +221,67 @@ test("replacement and negation roots receive deep shape validation", () => {
         message.includes("negationCost[0]") &&
         message.includes("does not match any effect target id"),
     ),
+  );
+});
+
+test("every conditions list reaching evaluateConditions only declares evaluated types", () => {
+  const issues = validateCardConditionTypes({
+    effects: [{
+      conditions: [{ type: "field_card_count" }, { type: "turn_player" }],
+      activationCases: [{ conditions: [{ type: "empty_field" }] }],
+      actions: [{
+        conditions: [{ type: "any_of", conditions: [{ type: "made_up" }] }],
+        cases: [{ conditions: [{ type: "match_card_props" }] }],
+        actions: [{ conditions: [{ type: "nested_unknown" }] }],
+      }],
+      afterResolutionActions: [{ conditions: [{ type: "after_unknown" }] }],
+      passive: { conditions: [{ type: "passive_unknown" }] },
+      // Singular action-owned conditions are validated by their action.
+      condition: { type: "destroyed_by_battle" },
+    }],
+    handSummonProcedure: { conditions: [{ type: "procedure_unknown" }] },
+  });
+
+  assert.deepEqual(issues, [
+    '[effects[0].conditions[1]] Unsupported condition type "turn_player" in a conditions list.',
+    '[effects[0].activationCases[0].conditions[0]] Unsupported condition type "empty_field" in a conditions list.',
+    '[effects[0].actions[0].conditions[0].conditions[0]] Unsupported condition type "made_up" in a conditions list.',
+    '[effects[0].actions[0].cases[0].conditions[0]] Unsupported condition type "match_card_props" in a conditions list.',
+    '[effects[0].actions[0].actions[0].conditions[0]] Unsupported condition type "nested_unknown" in a conditions list.',
+    '[effects[0].afterResolutionActions[0].conditions[0]] Unsupported condition type "after_unknown" in a conditions list.',
+    '[effects[0].passive.conditions[0]] Unsupported condition type "passive_unknown" in a conditions list.',
+    '[handSummonProcedure.conditions[0]] Unsupported condition type "procedure_unknown" in a conditions list.',
+  ]);
+});
+
+test("the card database declares no unsupported condition types", () => {
+  const conditionErrors = validateCardDatabase().errors.filter((issue) =>
+    issue.message.includes("Unsupported condition type"),
+  );
+  assert.deepEqual(conditionErrors, []);
+});
+
+test("evaluateConditions fails closed on an unknown type and records an engine fault", (t) => {
+  t.mock.method(console, "error", () => undefined);
+  const evaluate = (game: object) =>
+    evaluateConditions.call(
+      unsafeFixture<ThisParameterType<typeof evaluateConditions>>(
+        { game },
+        "Unit host only needs the fault policy fields of the game.",
+      ),
+      [{ type: "field_card_count_typo" }],
+      {},
+    );
+
+  const contained = { devModeEnabled: false, engineFaults: [] as unknown[] };
+  const result = evaluate(contained);
+  assert.equal(result.ok, false);
+  assert.match(String(result.reason), /Unknown condition type "field_card_count_typo"/);
+  assert.equal(contained.engineFaults.length, 1);
+  assert.equal(Reflect.get(Object(contained.engineFaults[0]), "scope"), "unknown_condition");
+
+  assert.throws(
+    () => evaluate({ devModeEnabled: true }),
+    /Unknown condition type "field_card_count_typo"/,
   );
 });

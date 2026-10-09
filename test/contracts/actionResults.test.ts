@@ -356,3 +356,40 @@ test("applyActions reports missing handlers and thrown errors", async (t) => {
   assert.equal(resultValue(legacyThrown, "reason"), legacyThrownValue.message);
   assert.strictEqual(resultValue(legacyThrown, "error"), legacyThrownValue);
 });
+
+test("a thrown action handler is recorded once and rethrown only in strict mode", async (t) => {
+  t.mock.method(console, "error", () => undefined);
+  const hostWithGame = (game: object) => {
+    const actionHandlers = new ActionHandlerRegistry();
+    actionHandlers.register("draw", () => {
+      throw new Error("handler exploded");
+    });
+    return { ...createHost(undefined), game, actionHandlers };
+  };
+
+  const contained = { devModeEnabled: false, engineFaults: [] as unknown[] };
+  const result = asResultRecord(
+    await invokeApplyActions(hostWithGame(contained), [DRAW_ACTION]),
+  );
+  assert.equal(resultValue(result, "success"), false);
+  assert.equal(contained.engineFaults.length, 1);
+  assert.equal(resultValue(asResultRecord(contained.engineFaults[0]), "scope"), "action_handler");
+
+  // The strict option wins over dev mode in both directions.
+  const optedOut = { devModeEnabled: true, strictEngineFaults: false, engineFaults: [] };
+  await invokeApplyActions(hostWithGame(optedOut), [DRAW_ACTION]);
+  assert.equal(optedOut.engineFaults.length, 1);
+
+  for (const strict of [
+    { devModeEnabled: true, engineFaults: [] as unknown[] },
+    { strictEngineFaults: true, engineFaults: [] as unknown[] },
+  ]) {
+    await assert.rejects(
+      invokeApplyActions(hostWithGame(strict), [DRAW_ACTION]),
+      /handler exploded/,
+    );
+    // The outer containment point sees the same error and does not record it again.
+    assert.equal(strict.engineFaults.length, 1);
+    assert.equal(resultValue(asResultRecord(strict.engineFaults[0]), "scope"), "action_handler");
+  }
+});

@@ -19,7 +19,6 @@ import type {
   ActionRuntimeRegistration,
   ActionHandlerEnginePort,
   EffectContext,
-  NeedsSelectionResult,
   ResolvedTargetMap,
   ReplacementTargetPresence,
 } from "../contracts/actionRuntime.js";
@@ -31,7 +30,9 @@ import {
   resolveFieldScopeCards,
   resolveTargetCards,
   buildFieldSelectionCandidates,
+  buildZoneSelectionCandidates,
   selectCards,
+  selectCardsFromZone,
   selectResolutionCards,
 } from "./shared.js";
 
@@ -97,11 +98,6 @@ interface SelectiveModalConfig {
   infoText?: string;
 }
 
-interface TieBreakerSelectionResult extends NeedsSelectionResult {
-  actionType?: string;
-  activationContext?: object | null;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -136,10 +132,6 @@ function isRuntimePlayer(value: unknown): value is ActionRuntimePlayer {
 
 function isMoveSuccess(value: unknown): boolean {
   return value !== false && (!isRecord(value) || value.success !== false);
-}
-
-function isNeedsSelectionResult(value: unknown): value is NeedsSelectionResult {
-  return isRecord(value) && value.needsSelection === true;
 }
 
 function readRecordValue(value: unknown, key: string): unknown {
@@ -859,30 +851,57 @@ export async function handleBanishCardFromGraveyard(
     // Exactly enough cards, no choice needed
 
     toBanish = candidates.slice(0, count);
-  } else if (action.promptPlayer !== false && player === game.player) {
-    // Player can choose which cards to banish
+  } else if (action.promptPlayer !== false && !isAI(player)) {
+    // A human controller chooses the cost through a canonical selection session.
+    const selection = await selectCardsFromZone({
+      game,
+      player,
+      candidates,
+      minSelect: count,
+      maxSelect: count,
+      selectionContractBuilder: (cards, range) => {
+        const requirementId = "graveyard_banish_cost";
+        const decorated = buildZoneSelectionCandidates(
+          player,
+          game,
+          cards,
+          "graveyard",
+        );
+        return {
+          kind: "cost",
+          requirementId,
+          decorated,
+          selectionContract: {
+            kind: "cost",
+            message: `Select ${count} card(s) to banish from graveyard as cost`,
+            requirements: [
+              {
+                id: requirementId,
+                min: range.min,
+                max: range.max,
+                zones: ["graveyard"],
+                owner: "player",
+                filters: {},
+                allowSelf: true,
+                distinct: true,
+                candidates: decorated,
+              },
+            ],
+            ui: { useFieldTargeting: false },
+            metadata: {
+              context: "graveyard_banish_cost",
+              sourceCard: ctx?.source || null,
+              sourceCardName: ctx?.source?.name || null,
+              effectId: ctx?.effect?.id || null,
+            },
+          },
+        };
+      },
+    });
 
-    const ui = getUI(game);
-
-    if (ui?.showCardSelectionPrompt) {
-      const selected = await ui.showCardSelectionPrompt({
-        cards: candidates,
-
-        min: count,
-
-        max: count,
-
-        message: `Select ${count} card(s) to banish from graveyard as cost`,
-
-        zone: "graveyard",
-      });
-
-      toBanish = Array.isArray(selected)
-        ? selected.filter(isRuntimeCard)
-        : [];
-    } else {
-      toBanish = candidates.slice(0, count);
-    }
+    toBanish = selection.cancelled
+      ? []
+      : selection.selected.filter(isRuntimeCard);
   } else {
     // Bot or auto-select: take first matching cards
 
@@ -1160,22 +1179,16 @@ async function destroySelectiveField(
       } else {
         const tieBreakerResult = await promptTieBreaker(
           game,
-
+          player,
+          player,
           playerHighest,
-
           keepPerSide,
-
           "your",
-
           modalConfig,
         );
-        // Check if this is a needsSelection result (network mode)
-        if (isNeedsSelectionResult(tieBreakerResult)) {
-          return {
-            ...tieBreakerResult,
-            actionType: action.type,
-            activationContext: ctx?.activationContext || null,
-          };
+        if (!tieBreakerResult) {
+          getUI(game)?.log("Tie-breaker selection was aborted.");
+          return false;
         }
         playerToKeep = tieBreakerResult;
       }
@@ -1193,22 +1206,16 @@ async function destroySelectiveField(
       } else {
         const opponentTieBreakerResult = await promptTieBreaker(
           game,
-
+          player,
+          opponent,
           opponentHighest,
-
           keepPerSide,
-
           "opponent's",
-
           modalConfig,
         );
-        // Check if this is a needsSelection result (network mode)
-        if (isNeedsSelectionResult(opponentTieBreakerResult)) {
-          return {
-            ...opponentTieBreakerResult,
-            actionType: action.type,
-            activationContext: ctx?.activationContext || null,
-          };
+        if (!opponentTieBreakerResult) {
+          getUI(game)?.log("Tie-breaker selection was aborted.");
+          return false;
         }
         opponentToKeep = opponentTieBreakerResult;
       }
@@ -1304,97 +1311,69 @@ async function destroySelectiveField(
 }
 
 /**
- * Helper function to prompt player for tie-breaker selection
- * @param {Object} modalConfig - Configuration for modal text (title, subtitle, infoText)
+ * Mandatory tie-breaker: the human controller picks which tied monsters on
+ * one side survive through a canonical selection session (no cancel).
+ * Returns null only if the session is aborted (for example on dispose).
  */
 async function promptTieBreaker(
   game: ActionRuntimeGamePort,
+  player: ActionRuntimePlayer,
+  sideOwner: ActionRuntimePlayer,
   candidates: readonly ActionRuntimeCard[],
   keepCount: number,
   sideDescription: string,
   modalConfig: SelectiveModalConfig = {},
-): Promise<ActionRuntimeCard[] | TieBreakerSelectionResult> {
-  const ui = getUI(game);
-  if (!ui.showCardGridSelectionModal) {
-    // Fallback: auto-select first N
+): Promise<ActionRuntimeCard[] | null> {
+  const maxAtk = candidates[0]?.atk || 0;
+  const subtitle =
+    modalConfig.subtitle ||
+    `Multiple monsters on ${sideDescription} side have ${maxAtk} ATK. Choose ${keepCount} to keep on the field.`;
+  const infoText =
+    modalConfig.infoText || "All other monsters will be destroyed.";
+  const sideLabel = sideOwner === player ? "player" : "opponent";
 
-    return candidates.slice(0, keepCount);
-  }
-
-  return new Promise<ActionRuntimeCard[] | TieBreakerSelectionResult>((resolve) => {
-    const maxAtk = candidates[0]?.atk || 0;
-
-    // Use custom subtitle or generate default one
-
-    const subtitle =
-      modalConfig.subtitle ||
-      `Multiple monsters on ${sideDescription} side have ${maxAtk} ATK. Choose ${keepCount} to keep on the field.`;
-
-    const baseOptions = {
-      title: modalConfig.title || "Choose Survivor",
-
-      subtitle,
-
-      cards: candidates,
-
-      keepCount,
-
-      infoText: modalConfig.infoText || "All other monsters will be destroyed.",
-
-      onConfirm: (selected: unknown) => {
-        if (isNeedsSelectionResult(selected)) {
-          resolve(selected);
-          return;
-        }
-        resolve(
-          Array.isArray(selected)
-            ? selected.filter(isRuntimeCard)
-            : candidates.slice(0, keepCount),
-        );
-      },
-
-      onCancel: () => {
-        resolve(candidates.slice(0, keepCount));
-      },
-    };
-
-    const showTieBreakerSelection = Reflect.get(ui, "showTieBreakerSelection");
-    if (typeof showTieBreakerSelection === "function") {
-      Reflect.apply(showTieBreakerSelection, ui, [baseOptions]);
-
-      return;
-    }
-
-    ui.showCardGridSelectionModal!({
-      title: baseOptions.title,
-
-      subtitle: baseOptions.subtitle,
-
-      cards: baseOptions.cards,
-
-      minSelect: keepCount,
-
-      maxSelect: keepCount,
-
-      confirmLabel: "Confirm",
-
-      cancelLabel: "Cancel",
-
-      overlayClass: "tie-breaker-overlay",
-
-      modalClass: "tie-breaker-modal",
-
-      gridClass: "tie-breaker-grid",
-
-      cardClass: "tie-breaker-card",
-
-      infoText: baseOptions.infoText,
-
-      onConfirm: baseOptions.onConfirm,
-
-      onCancel: baseOptions.onCancel,
-    });
+  const selection = await selectCardsFromZone({
+    game,
+    player,
+    candidates,
+    minSelect: keepCount,
+    maxSelect: keepCount,
+    selectionContractBuilder: (cards, range) => {
+      const requirementId = `tie_breaker_${sideLabel}`;
+      const decorated = buildFieldSelectionCandidates(sideOwner, game, cards, {
+        ownerLabel: sideLabel,
+      });
+      return {
+        kind: "choice",
+        requirementId,
+        decorated,
+        selectionContract: {
+          kind: "choice",
+          message: `${subtitle} ${infoText}`,
+          requirements: [
+            {
+              id: requirementId,
+              label: modalConfig.title || "Choose Survivor",
+              min: range.min,
+              max: range.max,
+              zones: ["field"],
+              owner: sideLabel,
+              filters: {},
+              allowSelf: true,
+              distinct: true,
+              candidates: decorated,
+            },
+          ],
+          ui: { useFieldTargeting: true, allowCancel: false, preventCancel: true },
+          metadata: { context: "tie_breaker" },
+        },
+      };
+    },
   });
+
+  const survivors = selection.selected.filter(isRuntimeCard);
+  if (selection.cancelled || survivors.length !== keepCount) return null;
+  return survivors;
 }
 
 /**

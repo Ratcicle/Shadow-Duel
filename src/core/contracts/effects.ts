@@ -299,6 +299,75 @@ export type EffectConditionType =
   | "targetRefMatchesFilters";
 
 /**
+ * Condition types read by the action that owns them (a singular `condition`
+ * or `summonCondition`), never by `evaluateConditions`.
+ */
+export const ACTION_SCOPED_CONDITION_TYPES = Object.freeze([
+  "empty_field",
+  "match_card_props",
+] as const satisfies readonly EffectConditionType[]);
+
+/** Condition types `evaluateConditions` interprets; any other type fails closed. */
+export const EVALUATED_EFFECT_CONDITION_TYPES = Object.freeze([
+  "activation_would_banish_cards_matching_filters",
+  "activation_would_destroy_cards_matching_filters",
+  "activation_would_make_card_leave_field",
+  "any_of",
+  "attacker_matches",
+  "battle_destroyer_matches_filters",
+  "battle_opponent_matches_declared_value",
+  "battle_participant_matches_filters",
+  "context_number_compare",
+  "control_card",
+  "control_card_filters",
+  "control_card_max",
+  "control_card_type",
+  "control_type_min_level",
+  "destroyed_card_matches_declared_value",
+  "equipped_with_filters",
+  "event_card_matches_declared_value_from_effect_sources",
+  "event_card_matches_filters",
+  "field_card_count",
+  "field_card_count_comparison",
+  "field_counters_at_least",
+  "graveyardHasMatch",
+  "has_stored_blueprint",
+  "opponentMonstersMin",
+  "playerFieldCount",
+  "playerFieldEmpty",
+  "playerLpMin",
+  "source_counters_at_least",
+  "source_has_marker",
+  "summoned_card_has_marker",
+  "targetRefMatchesFilters",
+] as const satisfies readonly EffectConditionType[]);
+
+export type EvaluatedEffectConditionType =
+  (typeof EVALUATED_EFFECT_CONDITION_TYPES)[number];
+type MissingConditionType = Exclude<
+  EffectConditionType,
+  EvaluatedEffectConditionType | (typeof ACTION_SCOPED_CONDITION_TYPES)[number]
+>;
+type OverlappingConditionType = Extract<
+  EvaluatedEffectConditionType,
+  (typeof ACTION_SCOPED_CONDITION_TYPES)[number]
+>;
+type ConditionManifestsAreExact =
+  [MissingConditionType | OverlappingConditionType] extends [never] ? true : never;
+const conditionManifestsAreExact: ConditionManifestsAreExact = true;
+void conditionManifestsAreExact;
+
+const EVALUATED_CONDITION_TYPE_SET: ReadonlySet<string> = new Set(
+  EVALUATED_EFFECT_CONDITION_TYPES,
+);
+
+export function isEvaluatedEffectConditionType(
+  value: unknown,
+): value is EvaluatedEffectConditionType {
+  return typeof value === "string" && EVALUATED_CONDITION_TYPE_SET.has(value);
+}
+
+/**
  * Conditions remain composable (including recursive any_of) but reject
  * unknown declarative fields and unknown condition discriminants.
  */

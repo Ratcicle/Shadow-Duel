@@ -1,5 +1,5 @@
 import type { CardAction } from "./actions.js";
-import type { DeferredCardToGraveTriggerPackage, MaterialDuelStats } from "./gameRuntime.js";
+import type { DeferredCardToGraveTriggerPackage, EngineFault, MaterialDuelStats } from "./gameRuntime.js";
 import type { EventEquipHostExitBinding, EventTriggerOccurrence, TurnCardActivationHistory } from "./events.js";
 import type {
   BattlePosition,
@@ -1549,6 +1549,11 @@ export interface ChainMoveCardOptions {
 /** Minimal Game surface consumed by Chain modules. */
 export interface ChainGamePort {
   readonly selectionAbortGeneration?: number;
+  /** Engine fault policy (`reportEngineFault`). */
+  devModeEnabled?: boolean;
+  strictEngineFaults?: boolean | undefined;
+  engineFaults?: EngineFault[];
+  devLog?(tag: string, detail?: unknown): void;
   materialDuelStats?: MaterialDuelStats;
   player: ChainPlayer;
   bot: ChainPlayer;

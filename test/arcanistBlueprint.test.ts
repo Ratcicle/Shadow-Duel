@@ -5,6 +5,7 @@ import { cardDefinition, required } from "./helpers/fixtures.js";
 import { completeTestSelections, createRuntimeGame, placeFieldCards } from "./helpers/game.js";
 import { hashCanonicalGameState } from "../src/core/game/replay/canonical.js";
 import { getTurnCardActivations } from "../src/core/game/events/activationHistory.js";
+import type { ReplayDecisionInput } from "../src/core/contracts/decisions.js";
 
 function setup(t: TestContext) {
   const game = createRuntimeGame({ laboratoryMode: true, laboratoryUseBot: false, randomSeed: 42 });
@@ -269,6 +270,65 @@ test("Grimoire paying itself retains the cost and usage, but its copied effect d
   assert.ok(game.bot.field.includes(enemy));
   assert.equal(game.effectEngine.checkOncePerTurn(grimoire, game.player, required(grimoire.effects?.find(effect => effect.timing === "ignition"))).ok, false);
   assert.equal(game.chainSystem.pendingChainSelection, null);
+});
+
+function storeDuplicateBlueprints(game: ReturnType<typeof setup>) {
+  const grimoire = make(301), source = make(309);
+  placeFieldCards(game.player.spellTrap, grimoire);
+  const storage = game.effectEngine.getBlueprintStorageState(grimoire, true);
+  // Both copies share blueprintId; only the storage index tells them apart.
+  for (const amount of [1, 2]) {
+    storage.storedBlueprints.push(required(game.effectEngine.buildEffectBlueprint(source, {
+      id: `copy_draw_${amount}`, timing: "on_activate", blueprintId: "duplicate",
+      actions: [{ type: "draw", amount, player: "self" }],
+    })));
+  }
+  const activate = () => game.effectEngine.activateStoredBlueprint(
+    { type: "activate_stored_blueprint" }, { source: grimoire, player: game.player, opponent: game.bot });
+  return { grimoire, activate };
+}
+
+test("a human stored-blueprint choice is keyed by storage index and replays without the modal", async t => {
+  const live = setup(t), playback = setup(t);
+  const decisions: ReplayDecisionInput[] = [];
+  live.on("decision_made", decision => { decisions.push(decision); });
+  live.ui.showCardGridSelectionModal = options => { options?.onConfirm?.([required(options.cards?.[1])]); };
+  const liveHand = live.player.hand.length;
+  assert.equal(await storeDuplicateBlueprints(live).activate(), true);
+  assert.equal(live.player.hand.length, liveHand + 2);
+  assert.equal(decisions.length, 1);
+  assert.equal(decisions[0]?.kind, "choice");
+  assert.deepEqual(decisions[0]?.value, { pass: false, candidateKey: "option:blueprint:1:duplicate", effectId: null });
+  playback.ui.showCardGridSelectionModal = () => assert.fail("Replay must not open the blueprint modal");
+  playback.decisionBroker.loadReplayDecisions(decisions);
+  const playbackHand = playback.player.hand.length;
+  assert.equal(await storeDuplicateBlueprints(playback).activate(), true);
+  assert.equal(playback.player.hand.length, playbackHand + 2);
+  assert.equal(playback.decisionBroker.replayCursor, 1);
+});
+
+test("an unmatched blueprint modal answer is a cancel, never the first stored blueprint", async t => {
+  const game = setup(t);
+  const decisions: ReplayDecisionInput[] = [];
+  game.on("decision_made", decision => { decisions.push(decision); });
+  game.ui.showCardGridSelectionModal = options => { options?.onConfirm?.([]); };
+  const hand = game.player.hand.length;
+  assert.equal(await storeDuplicateBlueprints(game).activate(), false);
+  assert.equal(game.player.hand.length, hand);
+  assert.deepEqual(decisions.map(decision => decision.value), [{ pass: true }]);
+});
+
+test("an AI stored-blueprint choice keeps its first-slot policy through the broker", async t => {
+  const game = setup(t);
+  game.player.controllerType = "ai";
+  const decisions: ReplayDecisionInput[] = [];
+  game.on("decision_made", decision => { decisions.push(decision); });
+  game.ui.showCardGridSelectionModal = () => assert.fail("The AI must not open the blueprint modal");
+  const hand = game.player.hand.length;
+  assert.equal(await storeDuplicateBlueprints(game).activate(), true);
+  assert.equal(game.player.hand.length, hand + 1);
+  assert.deepEqual(decisions.map(decision => decision.value),
+    [{ pass: false, candidateKey: "option:blueprint:0:duplicate", effectId: null }]);
 });
 
 test("legacy blueprint execution cannot bypass copied payment or declare targets during resolution", async t => {
