@@ -102,6 +102,7 @@ As Etapas 0–3 levam o CI ao verde e já têm todas as decisões necessárias (
 | D3–D4 | **Aprovadas em 09/10/2026.** D3: stream semeado separado para a IA (`aiRandom`), mantendo o bot probabilístico. D4: um duelo da Arena encerrado por timeout de relógio nunca é decidido por PV; fica fora do win rate, porque o duelo normal não tem limite de tempo. O limite máximo de turnos continua decidindo por PV. | — | — |
 | D3 | **RNG da IA** (`determinism:1`). Opção B: stream semeado separado (`aiRandom`), mantendo o bot probabilístico. Opção A: limiar determinístico (prioridade ≥ 40). | B | Etapa 5 |
 | D4 | **Contabilidade da Arena** (`determinism:4a`): (a) TIMEOUT conta como "não concluído" (fora do win rate) ou como empate? (b) MAX_TURNS mantém a decisão por LP ou vira empate? | (a) Fora do win rate. (b) O default é implementado já na Etapa 5: MAX_TURNS mantém a decisão por LP, que é determinística depois da correção. Pode ser revista na fase 2, junto com o harness. | Etapa 5 |
+| D5, D14–D16 | **Aprovadas em 09/10/2026** com as recomendações: um único bump `engine-rules-v27`; replays v26 deixam de carregar a partir do merge da Etapa 7 em `main`; D14 roteia humano e IA; D15 usa a UI genérica de seleção; D16 é a regra AST dentro de `audit:typescript-escapes`. Também aprovados o `contextSnapshot` opcional e manter `decision-broker:9` no backlog. **Fluxo da branch revisado:** em vez de um PR por item, commits diretos em `fase15/replay-v27` (dono: o usuário, com Claude executando), um único PR rascunho para `main` aberto no início só para o `verify` rodar a cada push, e um único merge no fim, com o bump como último commit e a branch apagada depois. | — | — |
 | D5 | **Bump do pacote `engine-rules-v27`** (o `v26` é o da Etapa 3, por D1). Aprovar; definir o dono da branch de integração `fase15/replay-v27` (quem abre, congela e rebaseia); definir o momento em que replays v26 deixam de carregar. | Um único bump na Etapa 7. Cada item entra na branch por um PR próprio, e o bump é o último PR. O dono é nomeado aqui antes da Etapa 5. | Etapa 7 (e regra de golden das Etapas 5–6) |
 | D6–D8 | **Aprovadas em 09/10/2026** com as recomendações abaixo: pipeline único, actions fixadas por SHA e `ubuntu-24.04`; emenda ao `AGENTS.md` como proposta. **D7 revisada no mesmo dia:** o usuário mantém o push direto em `main`, sem branch ou PR obrigatórios. O ruleset fica leve: bloqueia só force push e exclusão do `main`. O `verify` roda em todo push para `main` e só um `verify` verde publica o site. O "Gate de CI" do `AGENTS.md` foi ajustado para esse fluxo. O merge da branch `fase15/etapa-0-1` acontece na Etapa 4. | — | — |
 | D6 | **CI** (`tests-ci:3`): (1) pipeline único ou manter `deploy.yml` com `workflow_run`; (2) remover CI em push de branches não-`main`; (3) pin de actions por SHA; (4) pin de `ubuntu-24.04`; (5) Dependabot para actions. | Pipeline único, SHA e `ubuntu-24.04`. Remover push em branches só depois de adotar PRs. | Etapa 4 |
@@ -782,11 +783,11 @@ O portão global é o PR com `verify`.
 
 **Objetivo:** concentrar num **único merge em `main`** tudo o que muda a interpretação de replays: hash, fluxo de decisões e ordem de eventos. Os itens de engine `:1`, `:3` e `:6` entram aqui, e não na Etapa 6, justamente para dividir o mesmo bump. Também entram aqui os itens das Etapas 5–6 desviados pela regra de golden.
 
-**Regra da etapa (branch de integração `fase15/replay-v27`, dono definido em D5):**
-- Cada item entra na branch por um **PR próprio com base em `fase15/replay-v27`**. O `pull_request` dispara o `verify` global e o PR carrega a validação focada do item. Push direto na branch não é usado, porque depois da Etapa 4 push fora de `main` não dispara CI.
-- O dono da branch abre, congela e rebaseia. Antes do PR final, a branch é rebaseada sobre `main`.
-- O bump (`determinism:7` + `decision-broker:5`) é o **último PR** para a branch. Depois dele a branch é congelada e vai para `main` num PR único.
-- Enquanto a branch estiver aberta, nenhum PR das Etapas 5/6 que toque caminhos de replay (`src/core/game/replay/`, `src/core/contracts/replay.ts`, goldens ou testes em `test/replay/`) entra em `main`. Esses PRs têm base em `fase15/replay-v27`.
+**Regra da etapa (branch de integração `fase15/replay-v27`, fluxo revisado em D5):**
+- Os itens entram por **commits diretos** na branch `fase15/replay-v27`, criada a partir de `main`. Um único **PR rascunho** da branch para `main`, aberto no início, faz o `verify` rodar a cada push (o workflow dispara em `pull_request`; push fora de `main` não dispara CI). Cada commit carrega a validação focada do item.
+- Antes do merge, a branch é atualizada com a `main`.
+- O bump (`determinism:7` + `decision-broker:5`) é o **último commit**. Depois dele a branch é congelada e vai para `main` num **merge único**; a branch é apagada em seguida.
+- Enquanto a branch estiver aberta, mudanças em caminhos de replay (`src/core/game/replay/`, `src/core/contracts/replay.ts`, goldens ou testes em `test/replay/`) entram nela, e não em `main`.
 - Nenhum item desta etapa entra em `main` sem o bump.
 
 **Tarefas**
@@ -813,7 +814,7 @@ O portão global é o PR com `verify`.
   - `shouldPerformOptionalSummon` (`:1580-1609`) passa a usar `requestOptionalConfirmation`. O `return true` final, que automatiza a escolha do humano sem UI, é removido.
   - Testes em `test/replay/optionalEffectsReplay.test.ts`: o humano escolhe o segundo candidato; playback com locales EN→PT.
   - Verificar uma vez no navegador (`npm run dev`).
-- [ ] **Opcional recomendado:** um `contextSnapshot` mínimo (`{ type, sourceDuelCardId, effectId }`) em `requestOptionalConfirmation` (`src/core/actionHandlers/shared.ts:59`), conferido pelo broker no replay. Assim, uma escolha consumida pelo ator ou pelo prompt errado falha na própria decisão, e não só no hash.
+- [ ] **`contextSnapshot`** (opcional aprovado em D5): um `contextSnapshot` mínimo (`{ type, sourceDuelCardId, effectId }`) em `requestOptionalConfirmation` (`src/core/actionHandlers/shared.ts:59`), conferido pelo broker no replay. Assim, uma escolha consumida pelo ator ou pelo prompt errado falha na própria decisão, e não só no hash.
 - [ ] **`engine-bugs:1`**: em `src/core/game/zones/movement.ts:2922-2949`, trocar o `destroyCard(host).then(...)` destacado por `pendingBoundDestruction.push({ target: host, source: card, zone: "field" })`, aproveitando o flush aguardado em `:3567`.
   - A mensagem de log vai para um `logMessage` opcional da entrada pendente, porque o flush ignora o resultado de `destroyCard`.
   - O comportamento atual com The Shadow Heart negada é mantido.
@@ -838,7 +839,7 @@ O portão global é o PR com `verify`.
     - chamadas de UI que não são decisão: `winCondition.ts:80`, `selection/session.ts:450`, `positionChoice.ts:175`;
     - `shared.ts:1078-1084` (`promptPlayer === false`) e `resources.ts:2157`;
     - sites mortos mantidos por `decision-broker:9` (backlog), com o motivo "morto, remoção rastreada em `decision-broker:9` (backlog)": o wrapper `showSickleSelectionModal` (`src/core/effects/actions/equip.ts:224-252`) e `showShadowHeartCathedralModal`/`showIgnitionActivateModal` (`src/core/game/ui/modals.ts:33-85`).
-  - Alternativa: trazer `decision-broker:9` (esforço S) para esta etapa, antes de `:12`. Nesse caso, editar as contagens de `AGENTS.md:113` e `docs/Estrutura do Projeto.md:397` (222 → 220 métodos, 61 → 60 grupos), o que exige aprovação.
+  - Alternativa descartada em 09/10/2026 (`decision-broker:9` fica no backlog): trazer `decision-broker:9` (esforço S) para esta etapa, antes de `:12`. Nesse caso, editar as contagens de `AGENTS.md:113` e `docs/Estrutura do Projeto.md:397` (222 → 220 métodos, 61 → 60 grupos), o que exige aprovação.
 - [ ] **`determinism:7` + `decision-broker:5`** (D5), último PR para a branch:
   - Antes: `git log --all -S'engine-rules-v27'` vazio.
   - `src/core/contracts/replay.ts:27` → `engine-rules-v27`.
@@ -892,7 +893,7 @@ git grep -n "engine-rules-v2[56]" -- src test   # só as projeções históricas
 npm run replay -- <replay v27 recém-capturado>   # arquivo exportado pelo usuário de um duelo novo
 ```
 
-Nos testes de playback desta etapa, as políticas de IA movidas para `resolveAI` ficam em `assert.fail`. Cada PR para a branch de integração passa pelo `verify` via `pull_request`. O portão final é o PR único da branch para `main`, também com `verify`.
+Nos testes de playback desta etapa, as políticas de IA movidas para `resolveAI` ficam em `assert.fail`. Cada push na branch passa pelo `verify` via o PR rascunho. O portão final é o merge único da branch em `main`, com `verify` verde.
 
 **Critério de saída:**
 - Merge único em `main` com o bump.
