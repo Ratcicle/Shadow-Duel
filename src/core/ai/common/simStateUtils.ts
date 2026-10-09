@@ -304,8 +304,13 @@ export function canUseSimulatedEffectUsage(
   if (!effect.oncePerTurn && !effect.oncePerTurnName) return true;
   // A preview must not reset the caller's turn or normalize its legacy buckets.
   // Normalization only replaces owner entries; Map contents are read here.
+  // Project only the usage fields: spreading the whole state would read every
+  // enumerable property, including a planning clone's live `_gameRef`. Owner
+  // slots are unnecessary because both bucket lookups below use physical ids.
   const usageView: SimulatedUsageState = {
-    ...state,
+    ...(state.turnCounter !== undefined ? { turnCounter: state.turnCounter } : {}),
+    ...(state._simOncePerTurnTurn !== undefined
+      ? { _simOncePerTurnTurn: state._simOncePerTurnTurn } : {}),
     _simOncePerTurn: state._simOncePerTurn && !Array.isArray(state._simOncePerTurn)
       ? { ...state._simOncePerTurn } : {},
   };

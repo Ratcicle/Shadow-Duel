@@ -6,7 +6,8 @@ import { simulateMainPhaseAction } from "../../src/core/ai/shadowheart/simulatio
 import { cloneBotGameState } from "../../src/core/bot/simulationBridge.js";
 import * as usage from "../../src/core/ai/common/simStateUtils.js";
 import { createGameTreeCopy } from "../../src/core/ai/common/gameTreeSimulation.js";
-import { cardDefinition, required } from "../helpers/fixtures.js";
+import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js";
+import type { SimulatedOptBucket } from "../../src/core/contracts/aiState.js";
 import type { EffectDefinition } from "../../src/core/contracts/effects.js";
 
 function usageFixture(actor: "bot" | "player") {
@@ -61,6 +62,29 @@ test("use and activate consume different outcomes, while unlimited effects remai
   usage.markSimulatedEffectUsage(state, unlimited, source, "bot");
   usage.markSimulatedEffectUsage(state, unlimited, source, "bot");
   assert.equal(usage.canUseSimulatedEffectUsage(state, unlimited, source, "bot"), true);
+});
+
+test("an OPT preview reads only the usage ledger, never the clone's live Game reference", () => {
+  const state = usageFixture("bot");
+  const source = required(state.bot.field[0]);
+  Object.defineProperty(state, "_gameRef", {
+    configurable: true, enumerable: true,
+    get() { throw new Error("OPT preview read the live Game reference"); },
+  });
+  const legacyBucket = new Set(["shared-effect"]);
+  state._simOncePerTurn = { bot: unsafeFixture<SimulatedOptBucket>(legacyBucket,
+    "Older planners cloned OPT buckets as Sets; the usage boundary still accepts them.") };
+  state._simOncePerTurnTurn = 7;
+  const shared = { id: "shared", oncePerTurn: true, oncePerTurnName: "shared-effect", usagePolicy: "use" as const };
+  assert.equal(usage.canUseSimulatedEffectUsage(state, shared, source, "bot"), false,
+    "the current turn keeps the recorded legacy usage");
+  state.turnCounter = 8;
+  assert.equal(usage.canUseSimulatedEffectUsage(state, shared, source, "bot"), true,
+    "a ledger recorded on an earlier turn has expired");
+  assert.equal(state._simOncePerTurnTurn, 7, "the preview must not advance the caller's ledger turn");
+  assert.equal(required(state._simOncePerTurn).bot, legacyBucket,
+    "the preview must not reset or normalize the caller's buckets");
+  assert.deepEqual([...legacyBucket], ["shared-effect"]);
 });
 
 interface TestCard {

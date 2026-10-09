@@ -118,10 +118,20 @@ for (const seat of ["player", "bot"] as const) {
         await game.moveCard(actualMaterial, game[seat], "hand", { fromZone: "graveyard", awaitCardMovedEvent: true });
         await game.moveCard(actualMaterial, game[seat], "graveyard", { fromZone: "hand", awaitCardMovedEvent: true });
       });
+      const rejections: [string, string | null | undefined, string | null | undefined][] = [];
+      game.on("trigger_candidate_rejected", event => {
+        const role = event.cardInstanceId === actualMaterial.instanceId ? "material"
+          : event.cardInstanceId === actualObserver.instanceId ? "observer" : String(event.cardName);
+        rejections.push([role, event.effectId, event.rejectionReason]);
+      });
       assert.equal((await game.tryActivateSpell(spell, game[seat].hand.indexOf(spell), null, { owner: game[seat] })).success, true);
       assert.equal(actualMoved, true);
       assert.equal(game[seat].lp, 8000);
-      assert.equal(game[seat].deck.includes(deckCard), !isSelfExit);
+      // D2 (official rule): a "leaves the field" trigger is lost when its source moves again before
+      // activation. The material went GY -> hand -> GY, so the runtime refuses the self-exit search.
+      assert.equal(game[seat].deck.includes(deckCard), true);
+      assert.deepEqual(rejections, isSelfExit
+        ? [["material", "bloomrot_sporeling_leave_field_search_spell", "source_location_changed"]] : []);
       assert.equal(actualMaterial.getCounter("spore"), 0);
 
       const fusion = simulationCard(projected.fusion), simDeckCard = simulationCard(deckCard);
@@ -142,6 +152,11 @@ for (const seat of ["player", "bot"] as const) {
       assert.equal(applySimulatedActions({ state, selfId: seat, actions: [{ type: "polymerization_fusion_summon" }], options }), true);
       assert.equal(moved, true); assert.equal(observed, 1);
       assert.equal(state[seat].lp, game[seat].lp);
+      // Known divergence, fixed in Phase 1.5 Etapa 7: in self-exit the simulation still searches while the
+      // runtime refuses it. The runtime snapshots the source's current locationVersion after the synchronous
+      // listener prefix; the synchronous simulation already sees the card back in the GY. Etapa 7 moves both
+      // to the payload locationVersion; only then this expects `true` and self-exit-late drops the
+      // deferred_trigger_source_presence fallback asserted below.
       assert.equal(state[seat].deck.includes(simDeckCard), sourceRole !== "self-exit");
       assert.equal(getCounterValue(material, "spore"), 0);
       assert.equal(fusion.atk, actual.fusion.atk);
