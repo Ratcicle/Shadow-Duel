@@ -836,6 +836,42 @@ function validateCardSnapshot(value: unknown, path: string, onField = false): vo
   for (const key of ["extraAttackTargetRestriction", "passiveExtraAttackTargetRestriction", "passiveExtraAttackBonuses"]) {
     if (!hasOwn(turnState, key)) invalid(`${path}.turnState.${key}`, "a serialized value");
   }
+  const stats = requireObject(read(card, "statBookkeeping"), `${path}.statBookkeeping`);
+  for (const key of [
+    "tempAtkBoost",
+    "tempDefBoost",
+    "equipAtkBonus",
+    "equipDefBonus",
+    "equipExtraAttacks",
+    "equipExtraAttacksApplied",
+  ]) {
+    requireFiniteNumber(read(stats, key), `${path}.statBookkeeping.${key}`);
+  }
+  for (const key of ["originalAtk", "originalDef"]) {
+    if (read(stats, key) !== null) requireFiniteNumber(read(stats, key), `${path}.statBookkeeping.${key}`);
+  }
+  for (const key of [
+    "turnBasedBuffs",
+    "originalStatsOverride",
+    "dynamicBuffs",
+    "suppressedDynamicBuffStatsByKey",
+    "temporarySuppressedDynamicBuffStatsByKey",
+  ]) {
+    if (!hasOwn(stats, key)) invalid(`${path}.statBookkeeping.${key}`, "a serialized value");
+  }
+  const bindings = requireObject(read(card, "bindings"), `${path}.bindings`);
+  requireBoolean(read(bindings, "grantsBattleIndestructible"), `${path}.bindings.grantsBattleIndestructible`);
+  requireArray(read(bindings, "equips"), `${path}.bindings.equips`)
+    .forEach((equip, index) => requireIdentity(equip, `${path}.bindings.equips[${index}]`, true));
+  for (const key of ["boundTrapSource", "boundMonsterTarget"]) {
+    requireIdentity(read(bindings, key), `${path}.bindings.${key}`, true);
+  }
+  for (const key of ["ascensionMaterials", "synchroMaterials"]) {
+    requireArray(read(bindings, key), `${path}.bindings.${key}`);
+  }
+  for (const key of ["effectMarkers", "pendingSpellTrapFinalization", "lastSentToGraveAsMaterial"]) {
+    if (!hasOwn(bindings, key)) invalid(`${path}.bindings.${key}`, "a serialized value");
+  }
   const registries = requireObject(read(card, "statusRegistries"), `${path}.statusRegistries`);
   for (const key of ["temporary", "fieldExit"]) {
     requireObject(read(registries, key), `${path}.statusRegistries.${key}`);

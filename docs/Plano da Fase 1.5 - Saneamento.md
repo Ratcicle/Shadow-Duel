@@ -792,7 +792,10 @@ O portão global é o PR com `verify`.
 
 **Tarefas**
 
-- [ ] **`determinism:6`**: completar o hash canônico (`src/core/game/replay/canonical.ts`).
+- [x] **`determinism:6`**: completar o hash canônico (`src/core/game/replay/canonical.ts`).
+  - **Escopo ampliado em 09/10/2026 (aprovado):** a auditoria prévia encontrou, além dos 9 campos listados abaixo, cerca de 55 campos de regras fora do hash. Todos entraram, em 4 commits: estado do jogador e `ruleState` do duelo; características e registros de status das cartas; controle de ataques e turnos (`turnState`); base de reversão de stats (`statBookkeeping`) e vínculos/materiais (`bindings`). Referências de carta e `instanceId` locais ao processo são projetados para `duelCardId`. Ficaram de fora, com motivo registrado na auditoria: campos mortos, estado só de UI/IA, guards de reentrância e dados estáticos cobertos pela assinatura do banco.
+  - Vazamentos de `instanceId` encontrados pelos replays e corrigidos: o `id` dos `turnBasedBuffs` (sem uso pelas regras) fica fora do hash; as chaves de aura (`getFieldAuraBuffKey` e variantes, compartilhadas com a simulação) usam `fieldPresenceId || duelCardId || instanceId`; Fichas recebem `duelCardId` na criação, como as demais cartas. As chaves de `permanentBuffsBySource` continuam fora do hash, pelo contrato existente (`test/statBuffSerialization.test.ts`).
+  - `test/replay/discardDestinationReplay.test.ts` falhou uma vez de forma intermitente numa bateria longa e passou em três reexecuções; acompanhar.
   - `playerState` (`:271-300`): `damageReceivedThisTurn`, `normalSummonsThisTurn`, `additionalNormalSummonPermissions` e **`lpGainMultiplier`** (lido em `Player.ts:991`, resetado em `:1027`).
   - Snapshot do jogo (`:395-436`):
     - `materialDuelStats` por lado, incluindo o `Map<number, Set<string>>` `activatedEffectIdsByMaterialId`. Ordenar as chaves externas e os Sets internos com `compareCodeUnits`.

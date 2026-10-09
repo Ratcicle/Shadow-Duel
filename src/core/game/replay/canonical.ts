@@ -6,6 +6,7 @@ import { projectOncePerTurnUsage } from "../turn/oncePerTurn.js";
 import { getTurnCardActivations } from "../events/activationHistory.js";
 import { cardDatabase } from "../../../data/cards.js";
 import type { RawCardDefinition } from "../../contracts/cards.js";
+import type { DuelCardId } from "../../contracts/primitives.js";
 import {
   CANONICAL_REPLAY_EVENT_NAMES,
   CANONICAL_REPLAY_FORMAT,
@@ -13,6 +14,8 @@ import {
 } from "../../contracts/replay.js";
 import type {
   CanonicalCardCharacteristicsSnapshot,
+  CanonicalCardBindingsSnapshot,
+  CanonicalCardStatBookkeepingSnapshot,
   CanonicalCardStateSnapshot,
   CanonicalCardTurnStateSnapshot,
   CanonicalGameStateSnapshot,
@@ -224,24 +227,122 @@ function readTurn(value: object, key: string): number | null {
  * Attack bookkeeping stores process-local instance ids of the attacked
  * monsters; they are resolved to duel identities through the cards in play.
  */
+function cardsInPlay(game: CanonicalReplayGamePort): ReplayRuntimeCard[] {
+  return [game.player, game.bot].flatMap(player => player ? [
+    ...player.deck, ...player.extraDeck, ...player.hand, ...player.field,
+    ...player.spellTrap, ...player.graveyard, ...player.banished,
+    ...(player.fieldSpell ? [player.fieldSpell] : []),
+  ] : []);
+}
+
+/** Duel identity of the card holding a process-local instance id, if it is still in a zone. */
+function identityForInstance(
+  game: CanonicalReplayGamePort,
+  cards: readonly ReplayRuntimeCard[],
+  instanceId: unknown,
+): DuelCardId | number | null {
+  if (instanceId == null) return null;
+  const card = cards.find(entry => readProperty(entry, "instanceId") === instanceId);
+  return card ? game.ensureDuelCardId?.(card) ?? card.duelCardId ?? null : null;
+}
+
+function identityForCard(
+  game: CanonicalReplayGamePort,
+  value: unknown,
+): DuelCardId | number | null {
+  if (!value || typeof value !== "object") return null;
+  game.ensureDuelCardId?.(value);
+  const duelCardId = readProperty(value, "duelCardId");
+  return typeof duelCardId === "number" ? duelCardId : null;
+}
+
 function attackedMonsterIdentities(
   game: CanonicalReplayGamePort,
   card: ReplayRuntimeCard,
 ): SerializableValue {
   const attacked = readProperty(card, "attackedMonstersThisTurn");
   if (!(attacked instanceof Set) || attacked.size === 0) return [];
-  const cards = [game.player, game.bot].flatMap(player => player ? [
-    ...player.deck, ...player.extraDeck, ...player.hand, ...player.field,
-    ...player.spellTrap, ...player.graveyard, ...player.banished,
-    ...(player.fieldSpell ? [player.fieldSpell] : []),
-  ] : []);
+  const cards = cardsInPlay(game);
   const identities = [...attacked].map(targetId => {
-    const target = cards.find(entry => readProperty(entry, "instanceId") === targetId);
-    if (target) return game.ensureDuelCardId?.(target) ?? target.duelCardId ?? null;
+    const identity = identityForInstance(game, cards, targetId);
+    if (identity != null) return identity;
     // Legacy fallbacks store a definition id or name, which are already stable.
     return typeof targetId === "number" || typeof targetId === "string" ? `unresolved:${String(targetId)}` : null;
   });
   return stableValue(new Set(identities)) ?? [];
+}
+
+/** Material records keep their facts with the material's duel identity, not its runtime id or name. */
+function materialRecords(
+  game: CanonicalReplayGamePort,
+  card: ReplayRuntimeCard,
+  key: string,
+): SerializableValue {
+  const records = readProperty(card, key);
+  if (!Array.isArray(records) || records.length === 0) return [];
+  const cards = cardsInPlay(game);
+  return records.map(record => {
+    if (!record || typeof record !== "object") return null;
+    const projection: SerializableObject = {
+      duelCardId: identityForInstance(game, cards, readProperty(record, "instanceId")),
+    };
+    for (const field of Object.keys(record).sort(compareCodeUnits)) {
+      if (field === "instanceId" || field === "name") continue;
+      const value = stableValue(readProperty(record, field));
+      if (value !== undefined) projection[field] = value;
+    }
+    return projection;
+  });
+}
+
+/**
+ * Turn-based buff ids embed the process-local instance id of the card; rules
+ * never read them, so only the stat, amount and expiry participate, in order.
+ */
+function turnBasedBuffState(card: ReplayRuntimeCard): SerializableValue {
+  const buffs = readProperty(card, "turnBasedBuffs");
+  if (!Array.isArray(buffs)) return [];
+  return buffs.map(buff => buff && typeof buff === "object" ? {
+    stat: stableValue(readProperty(buff, "stat")) ?? null,
+    value: numericValue(readProperty(buff, "value")),
+    expiresOnTurn: stableValue(readProperty(buff, "expiresOnTurn")) ?? null,
+  } : null);
+}
+
+function cardStatBookkeeping(card: ReplayRuntimeCard): CanonicalCardStatBookkeepingSnapshot {
+  return {
+    tempAtkBoost: numericValue(readProperty(card, "tempAtkBoost")),
+    tempDefBoost: numericValue(readProperty(card, "tempDefBoost")),
+    turnBasedBuffs: turnBasedBuffState(card),
+    originalAtk: readTurn(card, "originalAtk"),
+    originalDef: readTurn(card, "originalDef"),
+    originalStatsOverride: readSerializable(card, "originalStatsOverride", null),
+    dynamicBuffs: readSerializable(card, "dynamicBuffs", {}),
+    suppressedDynamicBuffStatsByKey: readSerializable(card, "suppressedDynamicBuffStatsByKey", {}),
+    temporarySuppressedDynamicBuffStatsByKey: readSerializable(card, "temporarySuppressedDynamicBuffStatsByKey", {}),
+    equipAtkBonus: numericValue(readProperty(card, "equipAtkBonus")),
+    equipDefBonus: numericValue(readProperty(card, "equipDefBonus")),
+    equipExtraAttacks: numericValue(readProperty(card, "equipExtraAttacks")),
+    equipExtraAttacksApplied: numericValue(readProperty(card, "equipExtraAttacksApplied")),
+  };
+}
+
+function cardBindings(
+  game: CanonicalReplayGamePort,
+  card: ReplayRuntimeCard,
+): CanonicalCardBindingsSnapshot {
+  const equips = readProperty(card, "equips");
+  return {
+    equips: Array.isArray(equips) ? equips.map(equip => identityForCard(game, equip)) : [],
+    grantsBattleIndestructible: readFlag(card, "grantsBattleIndestructible"),
+    boundTrapSource: identityForCard(game, readProperty(card, "boundTrapSource")),
+    boundMonsterTarget: identityForCard(game, readProperty(card, "boundMonsterTarget")),
+    effectMarkers: serializeRuleRecords(game, readProperty(card, "effectMarkers") ?? {}),
+    pendingSpellTrapFinalization: serializeRuleRecords(game, readProperty(card, "pendingSpellTrapFinalization") ?? null),
+    ascensionMaterials: materialRecords(game, card, "ascensionMaterials"),
+    synchroMaterials: materialRecords(game, card, "synchroMaterials"),
+    lastSentToGraveAsMaterial: readSerializable(card, "lastSentToGraveAsMaterial", null),
+  };
 }
 
 function cardTurnState(
@@ -379,6 +480,8 @@ function cardState(
       fieldExit: statusRegistryState(card, "fieldExitStatuses"),
     },
     turnState: cardTurnState(game, card),
+    statBookkeeping: cardStatBookkeeping(card),
+    bindings: cardBindings(game, card),
   };
 }
 

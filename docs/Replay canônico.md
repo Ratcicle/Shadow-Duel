@@ -175,6 +175,14 @@ Esses dados também participam dos snapshots de procedimentos e de referências.
   ataque extra, monstros já atacados (pela identidade do duelo), prazos de
   ataque e imunidade, turno em que foi baixada ou revelada e último
   procedimento de Invocação;
+- base de reversão de stats (`statBookkeeping`): buffs temporários e por
+  turno, stats originais e substituições, buffs dinâmicos e suas supressões
+  e bônus de equipamento. As chaves de origem dos buffs permanentes não
+  participam; só suas contribuições, ordenadas;
+- vínculos e registros das cartas (`bindings`): equipamentos, vínculos de
+  monstro-armadilha, marcadores de efeito, finalização pendente de
+  Magia/Armadilha, materiais de Ascensão e de Sincro (pela identidade do
+  duelo, sem nome nem ID runtime) e o último envio ao Cemitério como material;
 - contribuições de negação, modificações de Nível, buffs e proteções;
 - usos de efeitos por nome, por cópia e por duelo, quando projetados;
 - ações agendadas e efeitos temporários de evento, controle e substituição;

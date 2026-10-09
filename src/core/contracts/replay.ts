@@ -410,6 +410,39 @@ export interface CanonicalCardTurnStateSnapshot {
   lastSummonProcedure: string | null;
 }
 
+/** Values later subtracted or restored when temporary and passive modifiers end. */
+export interface CanonicalCardStatBookkeepingSnapshot {
+  tempAtkBoost: number;
+  tempDefBoost: number;
+  turnBasedBuffs: SerializableValue;
+  originalAtk: number | null;
+  originalDef: number | null;
+  originalStatsOverride: SerializableValue;
+  dynamicBuffs: SerializableValue;
+  suppressedDynamicBuffStatsByKey: SerializableValue;
+  temporarySuppressedDynamicBuffStatsByKey: SerializableValue;
+  equipAtkBonus: number;
+  equipDefBonus: number;
+  equipExtraAttacks: number;
+  equipExtraAttacksApplied: number;
+}
+
+/**
+ * Links to other cards and records kept for later rules. Cards and material
+ * records use duel identities; process-local instance ids are dropped.
+ */
+export interface CanonicalCardBindingsSnapshot {
+  equips: SerializableValue;
+  grantsBattleIndestructible: boolean;
+  boundTrapSource: DuelCardId | number | null;
+  boundMonsterTarget: DuelCardId | number | null;
+  effectMarkers: SerializableValue;
+  pendingSpellTrapFinalization: SerializableValue;
+  ascensionMaterials: SerializableValue;
+  synchroMaterials: SerializableValue;
+  lastSentToGraveAsMaterial: SerializableValue;
+}
+
 /** Status baselines restored at end of turn and when the card leaves the field. */
 export interface CanonicalCardStatusRegistriesSnapshot {
   temporary: SerializableValue;
@@ -463,6 +496,8 @@ export interface CanonicalCardStateSnapshot {
   characteristics: CanonicalCardCharacteristicsSnapshot;
   statusRegistries: CanonicalCardStatusRegistriesSnapshot;
   turnState: CanonicalCardTurnStateSnapshot;
+  statBookkeeping: CanonicalCardStatBookkeepingSnapshot;
+  bindings: CanonicalCardBindingsSnapshot;
 }
 
 export interface CanonicalPlayerZonesSnapshot {

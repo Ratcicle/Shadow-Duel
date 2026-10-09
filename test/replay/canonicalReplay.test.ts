@@ -33,7 +33,13 @@ const V27_PLAYER_FIELDS = [
   "lpGainMultiplier",
   "opponentCannotActivateDuringBattle",
 ] as const;
-const V27_CARD_FIELDS = ["characteristics", "statusRegistries", "turnState"] as const;
+const V27_CARD_FIELDS = [
+  "characteristics",
+  "statusRegistries",
+  "turnState",
+  "statBookkeeping",
+  "bindings",
+] as const;
 const V27_CARD_STATUS_FIELDS = [
   "battleIndestructible",
   "tempBattleIndestructible",
@@ -288,10 +294,10 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   // Presence durations participate in the canonical state as well.
   assert.deepEqual(
     replay.commands.map(command => command.stateHash),
-    ["aa535c6e", "71117b62"],
+    ["0a69cfa6", "a196a87e"],
   );
   const replayResult = required(replay.result);
-  assert.equal(replayResult.finalStateHash, "71117b62");
+  assert.equal(replayResult.finalStateHash, "a196a87e");
   // Historical envelopes retain their exact version and declaration signature.
   // engine-rules-v26: the snapshot before the v27 hash completion.
   const beforeHashCompletion = structuredClone(replay);
@@ -358,8 +364,8 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "f60cba87", engineVersion: "engine-rules-v22" }), "b1bbca51");
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "7e5d54cb", engineVersion: "engine-rules-v23" }), "7bfe1e4a");
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "feeb687b", engineVersion: "engine-rules-v23" }), "6b0653a2");
-  assert.equal(hashCanonicalValue(replay), "75eb5fd1");
-  assert.equal(JSON.stringify(replay).length, 26912);
+  assert.equal(hashCanonicalValue(replay), "212c205a");
+  assert.equal(JSON.stringify(replay).length, 33776);
 
   const result = await replayCanonicalDuel(replay);
   assert.equal(result.ok, true);
@@ -621,6 +627,29 @@ const RULE_FIELD_MUTATIONS: readonly RuleFieldMutation[] = [
     game.materialDuelStats.player.activatedEffectIdsByMaterialId.set(1, new Set(["effect"]));
   } },
   { field: "specialSummonTypeCounts", mutate: game => { game.specialSummonTypeCounts.player.set("Dragon", 1); } },
+  { field: "card.equips", mutate: game => {
+    required(game.player.hand[0]).equips = [required(game.player.hand[1])];
+  } },
+  { field: "card.boundTrapSource", mutate: game => {
+    required(game.player.hand[0]).boundTrapSource = required(game.player.hand[1]);
+  } },
+  { field: "card.boundMonsterTarget", mutate: game => {
+    required(game.player.hand[0]).boundMonsterTarget = required(game.player.hand[1]);
+  } },
+  { field: "card.ascensionMaterials", mutate: game => {
+    const material = required(game.player.hand[1]);
+    required(game.player.hand[0]).ascensionMaterials = [{
+      instanceId: material.instanceId, cardId: material.id ?? null, name: material.name,
+      ownerId: "player", controllerId: "player", usedOnTurn: 1,
+    }];
+  } },
+  { field: "card.synchroMaterials", mutate: game => {
+    const material = required(game.player.hand[1]);
+    required(game.player.hand[0]).synchroMaterials = [{
+      instanceId: material.instanceId, cardId: material.id ?? null, name: material.name, level: 1,
+      isTuner: true, ownerId: "player", controllerId: "player", usedOnTurn: 1,
+    }];
+  } },
   { field: "card.attackedMonstersThisTurn", mutate: game => {
     const target = required(game.bot.hand[0]);
     required(game.player.hand[0]).attackedMonstersThisTurn = new Set([target.instanceId]);
@@ -641,6 +670,17 @@ const RULE_FIELD_MUTATIONS: readonly RuleFieldMutation[] = [
     ["cannotAttackUntilTurn", 4], ["immuneToOpponentEffectsUntilTurn", 4],
     ["battleIndestructibleOncePerTurnLastUsedTurn", 1], ["setTurn", 1], ["turnSetOn", 1],
     ["revealedTurn", 1], ["lastSummonProcedure", "synchro"],
+    ["tempAtkBoost", 300], ["tempDefBoost", 300],
+    ["turnBasedBuffs", [{ id: "buff_1_1", stat: "atk", value: 300, expiresOnTurn: 2 }]],
+    ["originalAtk", 1000], ["originalDef", 1000], ["originalStatsOverride", { atk: 0, def: 0 }],
+    ["dynamicBuffs", { aura: { value: 300, stats: ["atk"], appliedValues: { atk: 300 } } }],
+    ["suppressedDynamicBuffStatsByKey", { aura: { atk: 300 } }],
+    ["temporarySuppressedDynamicBuffStatsByKey", { aura: { atk: 300 } }],
+    ["equipAtkBonus", 500], ["equipDefBonus", 500], ["equipExtraAttacks", 1], ["equipExtraAttacksApplied", 1],
+    ["grantsBattleIndestructible", true],
+    ["effectMarkers", { marker: { key: "marker", sourceEffectId: "effect", createdOnTurn: 1 } }],
+    ["pendingSpellTrapFinalization", { destination: "graveyard", ownerId: "player", activationZone: "spellTrap" }],
+    ["lastSentToGraveAsMaterial", { method: "synchro", turn: 1 }],
   ].map(([key, value]): RuleFieldMutation => ({
     field: `card.${String(key)}`,
     mutate: game => { Reflect.set(required(game.player.hand[0]), String(key), value); },
@@ -678,6 +718,11 @@ test("rule records hash by duel identity, not by process-local instance ids", as
     }];
     game.damageCalculationTempBuffs = [{ card: target, atk: 100, def: 0 }];
     source.attackedMonstersThisTurn = new Set([target.instanceId]);
+    source.ascensionMaterials = [{
+      instanceId: target.instanceId, cardId: target.id ?? null, name: target.name,
+      ownerId: "bot", controllerId: "bot", usedOnTurn: 1,
+    }];
+    Reflect.set(source, "effectMarkers", { marker: { key: "marker", sourceInstanceId: target.instanceId } });
     return hashCanonicalGameState(game);
   };
   assert.equal(await hashWithRecords(0), await hashWithRecords(7));
