@@ -55,6 +55,7 @@ interface SpellTrapActivationContext {
   trapActivationFromSet?: boolean;
   quickSpellActivationFromSet?: boolean;
   quickSpellContext?: QuickSpellContext | null;
+  sourceWasFacedown?: boolean;
 }
 
 interface ActionGuardConfig {
@@ -470,6 +471,9 @@ export async function tryActivateSpellTrapEffect(
     fromHand: false,
     activationZone: "spellTrap",
     sourceZone: "spellTrap",
+    // The Trap confirmation flips the card before the pipeline; the Set
+    // state still classifies this as a Card Activation.
+    sourceWasFacedown: fieldActivationFromSet || card.isFacedown === true,
     committed: false,
     trapActivationFromSet,
     quickSpellActivationFromSet,

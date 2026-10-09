@@ -17,7 +17,7 @@
 | 0 | ✅ Runner confiável e rápido (loader, glob, filtro, timeout, delays de IA) | — | S |
 | 1 | ✅ 20 testes de texto alinhados ao texto atual das cartas | — | S |
 | 2 | ✅ 28 testes desatualizados alinhados às mudanças intencionais | Etapa 0 | M |
-| 3 | 3 regressões corrigidas, Regra B de ativação de Magias (bump `engine-rules-v26`), D2 na simulação, **CI verde** | Etapas 0–2 | M |
+| 3 | ✅ 3 regressões corrigidas, Regra B de ativação de Magias (bump `engine-rules-v26`), D2 na simulação, **CI verde** | Etapas 0–2 | M |
 | 4 | Pipeline único `verify` → `deploy-pages`, ruleset em `main`, **Pages atualizado** | Etapa 3, D6–D8 | S |
 | 5 | Determinismo sem bump (RNG da IA, invariantes, Tech-Zero, Arena) | Etapa 4, D3, D4 | M |
 | 6 | Bugs de engine sem bump e política de falhas | Etapa 5, D11–D13 | M |
@@ -86,6 +86,10 @@ As Etapas 0–3 levam o CI ao verde e já têm todas as decisões necessárias (
 5. **D1: seguir a regra do Yu-Gi-Oh! (Regra B).** Decidido em 08/10/2026.
    - Colocar com a face para cima, vinda da mão, uma Magia de Campo ou Contínua sem efeito de ativação **é ativá-la**: conta como "ativar uma Magia", registra histórico e dispara `spell_activated`. Vale tanto para Campo (312) quanto para Contínua (309/311).
    - Muda o runtime e é implementada na Etapa 3, com bump próprio para `engine-rules-v26`. O pacote de replay da Etapa 7 passa a ser `engine-rules-v27`.
+   - **Fidelidade total** (decidido em 08/10/2026, depois da `INV-6`). A ativação forma um Chain Link sem efeito, abre a janela de resposta `card_activation` e pode ser negada; por exemplo, a 275 Supreme Bahamut nega e manda a carta ao GY.
+     - Vale para Magias de Campo e Contínuas vindas da mão e para Magias viradas do Set.
+     - Vale também para as **Armadilhas Contínuas sem efeito de ativação** (17 Court of the Dead, 417 Bloomrot Rotting Ground), que passam a formar o link também fora das janelas de resposta.
+     - A versão mínima (só evento + histórico) foi descartada por ser meia regra.
    - Cartas afetadas: Arcanist Grand Library (312), Meeting of the Arcanists (309), Arcanist Ink River (311), a carta 314 ("Each time you activate an \"Arcanist\" Spell", `src/data/cards/arcanist.ts:1129-1138`), Elementalist Master Arcanist (`arcanist.ts:1053,1072`) e os Campos 115, 354, 410, 462 e 518.
 6. **D2: seguir a regra do Yu-Gi-Oh!** Decidido em 08/10/2026. Um gatilho "if this card leaves the field" se perde quando a carta se move de novo antes de o efeito ser ativado. Exemplo: Sporeling 401 (`src/data/cards/bloomrot.ts:63-89`) indo do GY para a mão e voltando ao GY. Esse já é o comportamento do runtime (`source_location_changed`, `src/core/chain/segoc.ts:489-493`), que vira o oráculo. A simulação se ajusta na Etapa 3, e o snapshot por payload é corrigido na Etapa 7.
 7. **D9: higiene aprovada** em 08/10/2026. As quatro ações de `tests-ci:7`.
@@ -350,11 +354,14 @@ O CI global de branch deve mostrar 11 falhas restantes (Lab ×4, Devourer ×4, `
 
 **Tarefas**
 
-- [ ] **`ai-misc:gameref`** (3 testes, regressão de `9a94d94`).
+- [x] **`ai-misc:gameref`** (3 testes, regressão de `9a94d94`).
   - Em `src/core/ai/common/simStateUtils.ts:307-311`, trocar o spread `{...state}` pela projeção mínima `{ turnCounter, _simOncePerTurnTurn, _simOncePerTurn: cópia rasa }`, com spreads condicionais por causa de `exactOptionalPropertyTypes`. `bot`, `player` e `_gameTreeActors` são desnecessários (`ownerIsPhysical=true` em `:320,:324`).
   - Não enfraquecer `test/ai/synchroBot.test.ts:509` nem `test/ai/synchroMaterialRoles.test.ts:28`.
-- [ ] **`INV-3`:** `src/core/ai/techzero/linePlanning.ts:100` faz `{ ...state, _isPerspectiveState: true }`. Verificar se um clone de planejamento com `_gameRef` enumerável chega ali. Se chegar, aplicar a mesma projeção.
-- [ ] **`techzero-ai:lab`** (4 testes; D1 = Regra B). Colocar com a face para cima, vinda da mão, uma Magia de Campo ou Contínua sem efeito de ativação passa a ser **ativação**.
+- [x] **`INV-3`:** `src/core/ai/techzero/linePlanning.ts:100` faz `{ ...state, _isPerspectiveState: true }`. Verificar se um clone de planejamento com `_gameRef` enumerável chega ali. Se chegar, aplicar a mesma projeção.
+- [x] **`INV-6`** concluída em 08/10/2026. Hoje a colocação não forma link, não abre janela, não emite evento e não registra histórico. A fidelidade total reaproveita o pipeline com um efeito sintético vazio (cerca de 4 arquivos). O comparativo de histórico em `techZeroPriorityTwoSimulation.test.ts:91-92` passa a ignorar `chainId`/`linkId`, porque o simulador não modela a identidade de Chain, como já acontece com as Magias Normais.
+- [x] **`techzero-ai:lab`** (4 testes; D1 = Regra B com fidelidade total). Implementado com um efeito sintético sem ações (`getCardActivationOnlyEffect`, em `src/core/effects/activation/getters.ts`) e coberto por `test/cardActivationPlacement.test.ts` (28 testes, com provas por mutação).
+  - Valores `v26` congelados para o passo histórico da Etapa 7: hash `bbfb1fb5`, comprimento 14016 e hashes de comando `387cada4`/`f9154acc`.
+  - Efeito colateral aceito por seguir a regra do Yu-Gi-Oh!: ativar em estado aberto uma Armadilha Setada **com** efeito (por exemplo, Call of the Haunted) agora é ativação de card (`card_activation`), como já acontecia dentro das janelas de resposta. Ela pode ser negada pela 275. Colocar com a face para cima, vinda da mão, uma Magia de Campo ou Contínua sem efeito de ativação passa a ser **ativação**.
   - **`INV-6` (antes de codificar):** levantar como o runtime trata hoje o caminho `placementOnly`:
     - se abre janela de resposta / Chain Link;
     - o que é registrado no histórico de ativações;
@@ -365,14 +372,14 @@ O CI global de branch deve mostrar 11 falhas restantes (Lab ×4, Devourer ×4, `
   - **Simulador:** os emits de `src/core/ai/common/simulation.ts:3066-3067` (Campo) e `:3076` (Contínua) passam a estar corretos e ficam. Os casos de `test/ai/arcanistDesignDecisions.test.ts:675-690` continuam asserindo que a colocação conta. Os 4 testes P2 Lab de `test/ai/techZeroPriorityTwoSimulation.test.ts` voltam a ter paridade com o runtime; confirmar que passam sem editar as asserções.
   - **Oráculo de runtime novo:** a carta 314 testemunha a ativação de 312 (Campo) e de 309/311 (Contínua) vindas da mão, num `Game` real.
   - **Bump `engine-rules-v26`**, no mesmo PR da mudança de runtime:
-    - Antes: `git log --all -S'engine-rules-v26'` vazio.
+    - Antes: `git log --all -S'engine-rules-v26' -- src test` vazio. Sem o filtro de caminho, a busca encontra o próprio plano.
     - `src/core/contracts/replay.ts:27` → `engine-rules-v26`.
     - `test/replay/canonicalReplay.test.ts`: regenerar os goldens executando o teste uma vez.
     - Adicionar um passo histórico v25: `hashCanonicalValue({ ...replay, engineVersion: "engine-rules-v25" }) === "5569d130"`, comprimento 14016, hashes de comando `387cada4`/`f9154acc`. São os valores medidos em 08/10/2026; reconfirmar antes de fixar.
     - `test/replay/canonicalValidation.test.ts:46` e `test/replay/canonicalDriver.test.ts:153,170-175` (`latestPrevious` = v25): incluir v25 nas listas de rejeição.
     - Congelar os valores v26 resultantes para o passo histórico da Etapa 7.
     - Em `docs/Replay canônico.md`, apenas o texto de contrato, sem changelog.
-- [ ] **`bloomrot:devourer`** (4 testes, `2224ef2`; D2 = regra do Yu-Gi-Oh!, o gatilho se perde).
+- [x] **`bloomrot:devourer`** (4 testes, `2224ef2`; D2 = regra do Yu-Gi-Oh!, o gatilho se perde).
   - Em `test/ai/bloomrotDevourerFusion.test.ts:124`, `!isSelfExit` → `true` para todos os papéis. Opcional: asserir o motivo `source_location_changed` via `game.on("trigger_candidate_rejected")`, no padrão de `test/chain/deferredSummonTriggers.test.ts:308-325`.
   - **Manter** `:145`, `:148-149`, `:180` (flag `custom_emitter`) e o fallback `deferred_trigger_source_presence` (`src/core/ai/common/simulation.ts:1852-1855`). Comentar no teste a divergência conhecida em self-exit (a simulação busca, o runtime recusa), com referência à Etapa 7.
 
@@ -1101,6 +1108,13 @@ Todas são corrigidas só no teste, na Etapa 1.
 | Ordenação por `localeCompare` de candidatos de Chain (`chain/activationDiscovery.ts:610-612`, `chain/legality.ts:300-303`) | Backlog | Determinística dentro do duelo; trocar por `compareCodeUnits` por consistência |
 | Unificar o alias de turno de set: `canActivateTrap` lê só `turnSetOn` (`src/core/game/spellTrap/verification.ts:41-43`), enquanto a descoberta da Chain usa `setTurn ?? turnSetOn` (`src/core/chain/activationDiscovery.ts:338`) | Backlog (hardening opcional da triagem Scrapyard) | Sem falha ativa: `techzero-ai:scrapyard` é resolvido no teste. Validar com os testes focados de Chain e de trap (`test/chain/consumerContracts.test.ts`, `test/trapChainResponse.test.ts`, `--test-name-pattern="Scrapyard"` em `test/ai/techZeroPriorityTwoSimulation.test.ts`) |
 | Bloomrot: replay de ponta a ponta que retoma a trava do 412 ao fim de uma negação real | Backlog | Cobertura perdida em `bloomrot:B07`, coberta parcialmente por `test/bloomrotPriorityOneAttackLock.test.ts:24` |
+| Pendências menores da Regra B (revisão da Etapa 3):
+- testes de negação para Magia virada do Set e para Armadilhas Contínuas 17/417;
+- teste pelo executor real do bot (`bot/actionExecutors/spellTrap.ts`);
+- teste da classificação no ArenaAnalytics;
+- o efeito sintético das Magias publicado com `effectType` `on_activate`;
+- o import circular `chain/activationDiscovery` ↔ `effects/activation/getters`;
+- termos em inglês na linha de `Como criar uma carta.md`. | Backlog (Etapa 6 se houver folga) | Sem falha ativa; os revisores as classificaram como menores |
 | Regra: The Shadow Heart negada ainda destrói o hospedeiro? | Backlog (diretor) | `engine-bugs:1` preserva o comportamento atual |
 
 ## Descartados após verificação

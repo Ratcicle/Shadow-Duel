@@ -14,8 +14,15 @@ import type { BotGamePort } from "../../src/core/contracts/bot.js";
 import type { AiLiveGamePort } from "../../src/core/contracts/aiState.js";
 import type { BotCloneGamePort } from "../../src/core/bot/simulationBridge.js";
 import type { EffectDefinition } from "../../src/core/contracts/effects.js";
+import type { TurnCardActivationHistory } from "../../src/core/contracts/events.js";
 import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js";
 import { createRuntimeGame, placeFieldCards } from "../helpers/game.js";
+
+// The simulator does not model Chain identity, as for Normal Spells; every
+// other part of the history entry must match the runtime.
+function withoutChainIdentity(history: TurnCardActivationHistory | undefined) {
+  return history && { ...history, entries: history.entries.map(({ chainId: _chainId, linkId: _linkId, ...entry }) => entry) };
+}
 
 function scenario(actor: "player" | "bot") {
   const player = (id: "player" | "bot") => ({ id, lp: 8000, hand: [], deck: [], field: [], graveyard: [],
@@ -88,7 +95,7 @@ for (const actor of ["player", "bot"] as const) {
     assert.equal(bot.fieldSpell, lab);
     assert.equal(clone.bot.fieldSpell?.id, 518);
     assert.equal(clone.bot.fieldSpell?.locationVersion, lab.locationVersion);
-    assert.deepEqual(clone.cardActivationHistory, game.cardActivationHistory,
+    assert.deepEqual(withoutChainIdentity(clone.cardActivationHistory), withoutChainIdentity(game.cardActivationHistory),
       "placement without an activation effect must preserve the runtime card activation history");
     if (previous) {
       assert.ok(bot.graveyard.includes(previous));

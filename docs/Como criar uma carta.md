@@ -291,8 +291,8 @@ O validador aceita:
 
 | Timing | Uso |
 | --- | --- |
-| `on_play` | Ativação de Magia da mão. Magias Normais, Rápidas e de Equipamento Baixadas também podem usar esse timing na Zona de Magias/Armadilhas. Field/continuous spells sem `on_play` podem ser apenas colocadas. |
-| `on_activate` | Trap ativada do campo/setada. |
+| `on_play` | Ativação de Magia da mão. Magias Normais, Rápidas e de Equipamento Baixadas também podem usar esse timing na Zona de Magias/Armadilhas. Field/continuous spells sem `on_play` continuam sendo ativadas como card, da mão ou Baixadas: a ativação forma um Chain Link sem efeito, publica `spell_activated` e `effect_activated` com `placementOnly: true`, entra no histórico de ativações do turno, abre a janela `card_activation` e pode ser negada. |
+| `on_activate` | Trap ativada do campo/setada. Continuous Traps sem `on_activate` também formam um Chain Link sem efeito ao serem ativadas, dentro ou fora de janelas de resposta. |
 | `on_field_activate` | Efeito de Field Spell já em `fieldSpell`. |
 | `ignition` | Efeito manual de Main Phase. Declara `activationZones` para mão, campo, Cemitério, Spell/Trap Zone ou Field Zone. |
 | `on_event` | Trigger disparado por evento do jogo. Requer `event`. |

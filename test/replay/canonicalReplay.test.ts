@@ -253,6 +253,10 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   const replayResult = required(replay.result);
   assert.equal(replayResult.finalStateHash, "f9154acc");
   // Historical envelopes retain their exact version and declaration signature.
+  const beforeEffectlessCardActivations = { ...replay, engineVersion: "engine-rules-v25" };
+  assert.deepEqual(beforeEffectlessCardActivations.commands.map(command => command.stateHash), ["387cada4", "f9154acc"]);
+  assert.equal(hashCanonicalValue(beforeEffectlessCardActivations), "5569d130");
+  assert.equal(JSON.stringify(beforeEffectlessCardActivations).length, 14016);
   const beforeTurnActionState = structuredClone(replay);
   for (const player of Object.values(required(required(beforeTurnActionState.result).finalState).players)) {
     for (const zone of Object.values(player.zones)) {
@@ -306,7 +310,7 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "f60cba87", engineVersion: "engine-rules-v22" }), "b1bbca51");
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "7e5d54cb", engineVersion: "engine-rules-v23" }), "7bfe1e4a");
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "feeb687b", engineVersion: "engine-rules-v23" }), "6b0653a2");
-  assert.equal(hashCanonicalValue(replay), "5569d130");
+  assert.equal(hashCanonicalValue(replay), "bbfb1fb5");
   assert.equal(JSON.stringify(replay).length, 14016);
 
   const result = await replayCanonicalDuel(replay);

@@ -24,7 +24,7 @@ export const CANONICAL_REPLAY_SCHEMA_VERSION = 2 as const;
  * Change only when existing replay interpretation becomes incompatible.
  * Card definition changes are tracked separately by cardDatabaseSignature.
  */
-export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v25" as const;
+export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v26" as const;
 
 export type SerializablePrimitive = string | number | boolean | null;
 

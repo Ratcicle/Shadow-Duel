@@ -16,6 +16,7 @@ import type { ActivationAfterResolutionState, ActivationZone } from "../../contr
 import type { EffectDefinition } from "../../contracts/effects.js";
 import type { CanonicalSelectionMap } from "../../contracts/selection.js";
 import { asQuickSpellWindowContext } from "./runtime.js";
+import { getCardActivationOnlyEffect, isCardActivationOnlyEffect } from "./getters.js";
 import type {
   ActivationActionExecutionContext,
   ActivationBlueprintContext,
@@ -766,22 +767,11 @@ export async function activateSpellTrapEffect(
         card.subtype === "continuous" &&
         (normalizedActivationContext.trapActivationFromSet === true ||
           flipAfterChecks);
-      if (placementOnly) {
-        if (flipAfterChecks) {
-          card.isFacedown = false;
-        }
-        logDev?.("SPELL_TRAP_PLACEMENT_ONLY", {
-          card: card.name,
-          player: player.id,
-          activationZone,
-        });
-        return {
-          success: true,
-          needsSelection: false,
-          placementOnly: true,
-        };
+      if (!placementOnly) {
+        return fail("No trap activation effect defined.");
       }
-      return fail("No trap activation effect defined.");
+      // The card activation still forms an effectless Chain Link.
+      effect = getCardActivationOnlyEffect(card);
     }
   } else if (!effect && card.cardKind === "spell") {
     if (fromHand) {
@@ -789,19 +779,10 @@ export async function activateSpellTrapEffect(
       const placementOnly =
         !effect && (card.subtype === "field" || card.subtype === "continuous");
       if (!effect) {
-        if (placementOnly) {
-          logDev?.("SPELL_TRAP_PLACEMENT_ONLY", {
-            card: card.name,
-            player: player.id,
-            activationZone,
-          });
-          return {
-            success: true,
-            needsSelection: false,
-            placementOnly: true,
-          };
+        if (!placementOnly) {
+          return fail("No on_play effect defined.");
         }
-        return fail("No on_play effect defined.");
+        effect = getCardActivationOnlyEffect(card);
       }
     } else {
       effect = this.getSpellTrapActivationEffect(card, {
@@ -812,19 +793,20 @@ export async function activateSpellTrapEffect(
         const placementOnly =
           flipAfterChecks &&
           (card.subtype === "continuous" || card.subtype === "field");
-        if (placementOnly) {
-          if (flipAfterChecks) {
-            card.isFacedown = false;
-          }
-          return {
-            success: true,
-            needsSelection: false,
-            placementOnly: true,
-          };
+        if (!placementOnly) {
+          return fail("No ignition effect defined.");
         }
-        return fail("No ignition effect defined.");
+        effect = getCardActivationOnlyEffect(card);
       }
     }
+  }
+  const placementOnly = isCardActivationOnlyEffect(effect);
+  if (placementOnly) {
+    logDev?.("SPELL_TRAP_PLACEMENT_ONLY", {
+      card: card.name,
+      player: player.id,
+      activationZone,
+    });
   }
 
   if (!effect) {
@@ -914,7 +896,7 @@ export async function activateSpellTrapEffect(
       success: true,
       needsSelection: false,
       prepared: true,
-      placementOnly: false,
+      placementOnly,
       effect,
       targets: targetResult.targets || {},
       activationContext: ctx.activationContext,
@@ -994,6 +976,7 @@ export async function activateSpellTrapEffect(
   return {
     success: true,
     needsSelection: false,
+    ...(placementOnly ? { placementOnly } : {}),
     activationContext: ctx.activationContext,
   };
 }

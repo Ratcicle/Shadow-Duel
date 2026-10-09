@@ -461,6 +461,7 @@ export async function publishChainLinkActivation(
     effect: link.effect,
     effectId: link.effect?.id || null,
     effectType: link.effect?.timing || "chain",
+    placementOnly: link.effect?.placementOnly === true,
     activationZone: link.activationZone || null,
     fromZone:
       link.sourceAtTrigger?.zone ||

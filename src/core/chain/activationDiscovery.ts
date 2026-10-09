@@ -17,6 +17,10 @@ import type {
 import type { CanonicalZone } from "../contracts/zones.js";
 import { matchesAfterSummonTrigger } from "../effects/triggers/collectors/shared.js";
 import {
+  canActivateCardWithoutEffect,
+  getCardActivationOnlyEffect,
+} from "../effects/activation/getters.js";
+import {
   buildActivationQuery,
   getCanonicalActivationCandidateKey,
   getCanonicalEffectActivationZones,
@@ -296,22 +300,8 @@ function genericExplicitEffectCheck(
   return true;
 }
 
-function buildPlacementOnlyEffect(card: ChainCard): ChainEffect {
-  return {
-    id: `${card?.id || "trap"}_placement_only_activation`,
-    timing: "on_activate",
-    speed: 2,
-    placementOnly: true,
-    actions: [],
-  };
-}
-
 function canUsePlacementOnly(card: ChainCard): boolean {
-  return (
-    card?.cardKind === "trap" &&
-    card?.subtype === "continuous" &&
-    !(card.effects || []).some((effect) => effect?.timing === "on_activate")
-  );
+  return card?.cardKind === "trap" && canActivateCardWithoutEffect(card);
 }
 
 function zoneEntries(player: ChainPlayer): [CanonicalZone, ChainCard[]][] {
@@ -591,7 +581,7 @@ function collectActivationCandidates(
         card.isFacedown === true &&
         canUsePlacementOnly(card)
       ) {
-        const placement = buildPlacementOnlyEffect(card);
+        const placement = getCardActivationOnlyEffect(card);
         const candidate = candidateForEffect(
           chainSystem,
           player,

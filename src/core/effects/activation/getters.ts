@@ -6,7 +6,7 @@
 
 import { getCanonicalEffectActivationZones } from "../../chain/legality.js";
 import { getBlueprintStorageState, projectStoredBlueprintActivation } from "../blueprints/index.js";
-import type { EffectDefinition } from "../../contracts/effects.js";
+import type { EffectDefinition, OtherTimedActiveEffect } from "../../contracts/effects.js";
 import type { ActivationZone } from "../../contracts/activation.js";
 import type {
   ActivatableMonsterEffectEntry,
@@ -18,6 +18,71 @@ import type {
   MonsterEffectLookupOptions,
   SpellTrapActivationOptions,
 } from "./runtime.js";
+
+/** Minimal card projection shared by the runtime and Chain discovery. */
+interface CardActivationOnlySource {
+  readonly id?: number | undefined;
+  readonly cardKind?: string | null | undefined;
+  readonly subtype?: string | null | undefined;
+  readonly effects?: readonly ({ readonly timing?: string | undefined } | null | undefined)[] | null | undefined;
+}
+
+/**
+ * The effectless Chain Link formed by activating a face-up Field/Continuous
+ * Spell or a Continuous Trap that declares no activation effect.
+ */
+export type CardActivationOnlyEffect = OtherTimedActiveEffect & {
+  readonly placementOnly: true;
+  readonly actions: readonly [];
+};
+
+const cardActivationOnlyEffects = new WeakMap<CardActivationOnlySource, CardActivationOnlyEffect>();
+const cardActivationOnlyEffectSet = new WeakSet<object>();
+
+/**
+ * Field/Continuous Spells without on_play and Continuous Traps without
+ * on_activate are still activated as cards; they only lack an effect to resolve.
+ */
+export function canActivateCardWithoutEffect(
+  card: CardActivationOnlySource | null | undefined,
+): boolean {
+  if (!card) return false;
+  const effects = card.effects || [];
+  if (card.cardKind === "spell") {
+    return (card.subtype === "field" || card.subtype === "continuous") &&
+      !effects.some((effect) => effect?.timing === "on_play");
+  }
+  return card.cardKind === "trap" && card.subtype === "continuous" &&
+    !effects.some((effect) => effect?.timing === "on_activate");
+}
+
+/**
+ * Returns the memoized effectless card-activation effect of this card
+ * instance. It never belongs to `card.effects`, so the public activation
+ * getters and AI action generation cannot return it.
+ */
+export function getCardActivationOnlyEffect(
+  card: CardActivationOnlySource,
+): CardActivationOnlyEffect {
+  const existing = cardActivationOnlyEffects.get(card);
+  if (existing) return existing;
+  const effect: CardActivationOnlyEffect = {
+    id: `${card.id ?? card.cardKind ?? "card"}_placement_only_activation`,
+    timing: "on_activate",
+    speed: card.cardKind === "trap" ? 2 : 1,
+    placementOnly: true,
+    actions: [],
+  };
+  cardActivationOnlyEffects.set(card, effect);
+  cardActivationOnlyEffectSet.add(effect);
+  return effect;
+}
+
+export function isCardActivationOnlyEffect(
+  effect: object | null | undefined,
+): boolean {
+  return !!effect && cardActivationOnlyEffectSet.has(effect);
+}
 
 /**
  * Get the on_play activation effect for a card played from hand.

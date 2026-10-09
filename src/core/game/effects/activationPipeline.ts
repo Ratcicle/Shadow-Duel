@@ -1028,15 +1028,20 @@ export async function runActivationPipeline(
     const preparingForExistingChain = config.prepareForExistingChain === true;
     const shouldUseChain =
       !preparingForExistingChain &&
-      normalized.placementOnly !== true &&
       !!preparedEffect &&
       config.openActivationWindow !== false &&
       config.activationContext?.skipActivationWindow !== true &&
       this.disableChains !== true &&
       this.chainSystem?.chainsDisabled !== true &&
       typeof this.chainSystem?.openActivationChain === "function";
+    // A card activation without an activation effect exists only as its
+    // effectless Chain Link; without a Chain it remains a plain placement.
+    const formsActivationLink =
+      normalized.placementOnly !== true ||
+      shouldUseChain ||
+      preparingForExistingChain;
 
-    if (normalized.placementOnly !== true && preparedEffect && !resumedAfterResolution) {
+    if (formsActivationLink && preparedEffect && !resumedAfterResolution) {
       const preparedActivationContext: ActivationPipelineContext = {
         ...activationContext,
         ...(normalized.activationContext || {}),
