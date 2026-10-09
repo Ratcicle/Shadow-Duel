@@ -33,11 +33,13 @@ function scenario(t: TestContext, actor: "player" | "bot") {
 async function finishBattle(game: ReturnType<typeof scenario>["game"], bot: Bot, botGame: BotGamePort) {
   game.phase = "battle"; botGame.aiBattleDelayMs = 0;
   bot.playBattlePhase(botGame);
-  const deadline = Date.now() + 3000;
-  while (!game.gameOver && game.phase === "battle") {
-    assert.ok(Date.now() < deadline, "Bot must complete the real battle sequence");
+  // Bounded by poll count, not by wall clock: 6000 polls of at least 5 ms each
+  // wait at least 30 s, so a slow runner does not flake while a hang still fails.
+  const battleInProgress = () => !game.gameOver && game.phase === "battle";
+  for (let attempt = 0; attempt < 6000 && battleInProgress(); attempt++) {
     await new Promise(resolve => setTimeout(resolve, 5));
   }
+  assert.ok(!battleInProgress(), "Bot must complete the real battle sequence");
 }
 
 for (const actor of ["player", "bot"] as const) {

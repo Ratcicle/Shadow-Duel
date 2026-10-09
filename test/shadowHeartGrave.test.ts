@@ -18,7 +18,12 @@ function makeGame() {
 }
 
 async function select(game: RuntimeGame, indices: number[]) {
-  for (let i = 0; i < 100 && !game.targetSelection; i++) await new Promise<void>(resolve => setTimeout(resolve, 10));
+  // Bounded poll (at least 10 s) so a slow runner does not flake; the indices
+  // stay explicit because this test submits specific human choices.
+  for (let attempt = 0; attempt < 1000 && !game.targetSelection; attempt++) {
+    await new Promise<void>(resolve => setTimeout(resolve, 10));
+  }
+  assert.ok(game.targetSelection, "the pending action must open a human selection");
   const session = required(game.targetSelection);
   const requirement = required(session.requirements[0]);
   session.selections[requirement.id] = indices.map(index => required(requirement.candidates[index]).key);

@@ -1,27 +1,103 @@
 name: Verify
 
+# Single pipeline: `verify` runs every check and, on a push to main, uploads
+# the Pages artifact built from the same commit; `deploy-pages` publishes it.
+# The job id and name `verify` are the required status check context of the
+# main ruleset; renaming the job blocks merges.
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# Pull requests cancel their previous run. Pushes to main never cancel a run
+# in progress, but GitHub keeps only one pending run per group: in a burst of
+# pushes to main, a newer run supersedes the pending one, so an intermediate
+# commit can end up without verify and without deploy.
+concurrency:
+  group: verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  check:
-    runs-on: ubuntu-latest
+  verify:
+    name: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
+        id: install
         run: npm ci
 
-      - name: Check
-        run: npm run check
+      # The checks below are independent: each runs after a successful install
+      # even when an earlier check failed, so one run shows every failure. Any
+      # failed step still fails the job. `npm run check` keeps the same checks
+      # chained for local parity.
+      - name: Typecheck
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run typecheck
+
+      - name: Audit TypeScript escapes
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run audit:typescript-escapes
+
+      - name: Audit Chain metadata
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run audit:chain
+
+      - name: Validate action catalog
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run validate:actions
+
+      - name: Check action catalog doc
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run check:actions-doc
+
+      - name: Build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run build
+
+      - name: Tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm test -- --test-concurrency=1
+
+      # Only a fully green run on a push to main publishes `dist`. Vite's base
+      # is static, so configure-pages is not needed.
+      - name: Upload Pages artifact
+        if: ${{ success() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dist
+
+  deploy-pages:
+    name: deploy-pages
+    needs: verify
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

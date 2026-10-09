@@ -102,6 +102,7 @@ As Etapas 0–3 levam o CI ao verde e já têm todas as decisões necessárias (
 | D3 | **RNG da IA** (`determinism:1`). Opção B: stream semeado separado (`aiRandom`), mantendo o bot probabilístico. Opção A: limiar determinístico (prioridade ≥ 40). | B | Etapa 5 |
 | D4 | **Contabilidade da Arena** (`determinism:4a`): (a) TIMEOUT conta como "não concluído" (fora do win rate) ou como empate? (b) MAX_TURNS mantém a decisão por LP ou vira empate? | (a) Fora do win rate. (b) O default é implementado já na Etapa 5: MAX_TURNS mantém a decisão por LP, que é determinística depois da correção. Pode ser revista na fase 2, junto com o harness. | Etapa 5 |
 | D5 | **Bump do pacote `engine-rules-v27`** (o `v26` é o da Etapa 3, por D1). Aprovar; definir o dono da branch de integração `fase15/replay-v27` (quem abre, congela e rebaseia); definir o momento em que replays v26 deixam de carregar. | Um único bump na Etapa 7. Cada item entra na branch por um PR próprio, e o bump é o último PR. O dono é nomeado aqui antes da Etapa 5. | Etapa 7 (e regra de golden das Etapas 5–6) |
+| D6–D8 | **Aprovadas em 09/10/2026** com as recomendações abaixo: pipeline único, actions fixadas por SHA e `ubuntu-24.04`; ruleset com PR obrigatório, `verify` obrigatório, strict ligado e bypass do admin só via PR; emenda ao `AGENTS.md` como proposta. O merge da branch `fase15/etapa-0-1` acontece na Etapa 4. | — | — |
 | D6 | **CI** (`tests-ci:3`): (1) pipeline único ou manter `deploy.yml` com `workflow_run`; (2) remover CI em push de branches não-`main`; (3) pin de actions por SHA; (4) pin de `ubuntu-24.04`; (5) Dependabot para actions. | Pipeline único, SHA e `ubuntu-24.04`. Remover push em branches só depois de adotar PRs. | Etapa 4 |
 | D7 | **Ruleset** (`tests-ci:4`), aplicado pelo usuário: exigir PR ou permitir fast-forward de SHA verificado; strict up-to-date; lista de bypass; auto-merge (agentes podem usar `gh pr merge --auto`?); apagar head branches. | PR obrigatório, strict ligado, bypass do admin "só via PR" | Etapa 4 |
 | D8 | **Emenda ao `AGENTS.md`** (`tests-ci:5`): texto final, e se agentes podem abrir PR rascunho por iniciativa própria. | Texto proposto na Etapa 4, com PR só a pedido | Etapa 4 |
@@ -438,7 +439,7 @@ npm run audit:chain
 
 **Tarefas**
 
-- [ ] **`tests-ci:3`** (D6): substituir `.github/workflows/verify.yml` e apagar `.github/workflows/deploy.yml`.
+- [x] **`tests-ci:3`** (D6): substituir `.github/workflows/verify.yml` e apagar `.github/workflows/deploy.yml`.
   - Gatilhos `push: branches: [main]`, `pull_request` e `workflow_dispatch`.
   - `permissions: contents: read` no topo; `pages: write` e `id-token: write` apenas no job `deploy-pages`.
   - Job `verify` (substitui `check`), com esse nome exato, porque é o contexto exigido pelo ruleset. `runs-on: ubuntu-24.04`, `timeout-minutes: 25`.
@@ -460,12 +461,12 @@ npm run audit:chain
   - Em Settings → General: "Allow auto-merge" e "Automatically delete head branches".
   - Equivalente por API: `gh api -X POST repos/Ratcicle/Shadow-Duel/rulesets --input ruleset.json`. O JSON está na especificação `tests-ci:4`.
   - Fluxo: branch `agent/<tema>` → `git push -u origin HEAD` → `gh pr create --draft` → `gh pr checks` / `gh run view --log-failed` → merge pelo usuário ou `gh pr merge --squash --auto`.
-- [ ] **`tests-ci:5`** (D8, aprovação explícita do texto): em `AGENTS.md:173`, trocar a frase "Confira o runner: argumentos extras de `npm test` podem não filtrar os arquivos." por:
+- [x] **`tests-ci:5`** (D8, aprovação explícita do texto): em `AGENTS.md:173`, trocar a frase "Confira o runner: argumentos extras de `npm test` podem não filtrar os arquivos." por:
 
   > `npm test -- <arquivos ou globs em test/>` executa somente os arquivos indicados e aceita apenas as flags `--test-*` da allowlist do runner, no formato `--flag=valor`; sem argumentos, executa a suíte global e continua proibido localmente sem pedido explícito.
 
   Depois do bloco do comando focado (`AGENTS.md:175-177`), acrescentar o parágrafo **Gate de CI** da especificação `tests-ci:5`, que cobre: `verify` obrigatório; branch própria e PR; testes locais apenas focados; leitura de falhas via `gh pr checks` / `gh run view --log-failed`; não desativar nem enfraquecer testes; não alterar textos de cartas; commit, push, PR e merge só a pedido do usuário.
-- [ ] **`tests-ci:6`, parte de endurecimento** (cauda da etapa): depois de 3 execuções verdes seguidas em `main`, endurecer os dois testes de relógio de parede.
+- [x] **`tests-ci:6`, parte de endurecimento** (cauda da etapa): depois de 3 execuções verdes seguidas em `main`, endurecer os dois testes de relógio de parede.
   - `test/ai/techZeroBattle.test.ts:33-40` (prazo de 3 s em `finishBattle`): prazo de 30 s ou contagem limitada de iterações.
   - `test/shadowHeartGrave.test.ts:21`: aumentar o orçamento de iterações, copiando só o **formato** de laço limitado de `test/helpers/game.ts:103-125`. Não copiar o `completeTestSelections`, que escolhe automaticamente.
   - A subida da concorrência do CI **não** acontece aqui. Ela fica na cauda da Etapa 5, depois de `determinism:2` (D20).
