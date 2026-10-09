@@ -13,7 +13,6 @@ import { cardMatchesKind } from "../Card.js";
 import type {
   ActionOf,
   ActionOwner,
-  SelectionCount,
 } from "../contracts/actions.js";
 import type {
   ActionRuntimeCard,
@@ -46,6 +45,7 @@ import {
   getUI,
   requestOptionalConfirmation,
   collectZoneCandidates,
+  normalizeSelectionCount,
   selectCardsFromZone,
   summonFromHandCore,
 } from "./shared.js";
@@ -447,30 +447,6 @@ function buildAddToHandSelectionContract(
         },
       },
     };
-  };
-}
-
-function normalizeSelectionCount(
-  count: number | SelectionCount | null | undefined,
-  fallback = 1,
-): SelectionRange {
-  if (typeof count === "number" && Number.isFinite(count)) {
-    return { min: count, max: count };
-  }
-  const structuredCount = typeof count === "object" ? count : null;
-  const min =
-    typeof structuredCount?.min === "number" &&
-    Number.isFinite(structuredCount.min)
-      ? structuredCount.min
-      : fallback;
-  const max =
-    typeof structuredCount?.max === "number" &&
-    Number.isFinite(structuredCount.max)
-      ? structuredCount.max
-      : min;
-  return {
-    min: Math.max(0, min),
-    max: Math.max(0, max),
   };
 }
 

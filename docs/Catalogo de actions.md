@@ -1799,8 +1799,10 @@ Banishes a card from a graveyard using handler-side selection.
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
 | `filters` | nao | object | Card filter object evaluated by the handler. |
-| `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
-| `count` | nao | object | Selection count object, usually { min, max }. |
+| `player` | nao | enum: self, opponent, both | Graveyard scope: "self", "opponent", or "both"; the resolving player always chooses. |
+| `count` | nao | object | Exact number or { min, max }; defaults to 1. |
+| `cardName` | nao | string | Exact card name; ignored when filters.name is set. |
+| `cardType` | nao | string | Monster type; ignored when filters.type is set. Omit for no type filter. |
 
 **Exemplos**
 

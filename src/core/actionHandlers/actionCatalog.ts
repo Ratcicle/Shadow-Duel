@@ -450,11 +450,23 @@ export const ACTION_CATALOG = {
     category: "destruction",
     summary: "Banishes a card from a graveyard using handler-side selection.",
     handler: "handleBanishCardFromGraveyard",
-    optional: ["filters", "player", "count"],
+    optional: ["filters", "player", "count", "cardName", "cardType"],
     fields: {
       filters: field("filters"),
-      player: field("player"),
-      count: field("count"),
+      player: field("scope", {
+        description: 'Graveyard scope: "self", "opponent", or "both"; the resolving player always chooses.',
+      }),
+      count: field("count", {
+        description: "Exact number or { min, max }; defaults to 1.",
+      }),
+      cardName: {
+        type: "string",
+        description: "Exact card name; ignored when filters.name is set.",
+      },
+      cardType: {
+        type: "string",
+        description: "Monster type; ignored when filters.type is set. Omit for no type filter.",
+      },
     },
     selection: "dynamic",
     mutates: ["graveyard", "banished"],

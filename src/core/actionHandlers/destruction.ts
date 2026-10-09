@@ -32,6 +32,7 @@ import {
   resolveTargetCards,
   buildFieldSelectionCandidates,
   selectCards,
+  normalizeSelectionCount,
   selectResolutionCards,
 } from "./shared.js";
 
@@ -64,9 +65,6 @@ type BanishAction = ActionOf<"banish" | "banish_destroyed_monster"> & {
   readonly stopOnFailure?: boolean;
 };
 type GraveyardBanishAction = ActionOf<"banish_card_from_graveyard"> & {
-  readonly cardName?: string;
-  readonly cardType?: string;
-  readonly promptPlayer?: boolean;
   readonly contextLabel?: string;
   readonly effectId?: string;
   readonly movedByEffect?: boolean;
@@ -797,112 +795,129 @@ export async function handleScheduleReturnFromBanished(
 }
 
 /**
- * Handler for banishing a specific card from the graveyard as a cost.
+ * Handler for banishing cards from a graveyard, usually as a cost.
  * This is used for destruction negation costs and similar effects.
  *
  * Action properties:
- * - cardName: name of the card to banish (required)
- * - count: number of cards to banish (default: 1)
- * - cardType: optional type filter (e.g., "Dragon")
- * - promptPlayer: whether to let player choose (default: true for multiple matches)
+ * - player: graveyard scope, "self" | "opponent" | "both" (default: "self");
+ *   the resolving player always chooses
+ * - filters: optional card filters for the candidates
+ * - cardName: optional exact name filter (ignored when filters.name is set)
+ * - cardType: optional type filter, e.g. "Dragon" (ignored when filters.type
+ *   is set); without it, candidates are not filtered by type
+ * - count: exact number or { min, max } (default: 1); a real choice goes
+ *   through the canonical decision broker
  */
 export async function handleBanishCardFromGraveyard(
   action: GraveyardBanishAction,
 
   ctx: EffectContext,
 
-  targets: ResolvedTargetMap,
+  _targets: ResolvedTargetMap,
 
   engine: ActionHandlerEnginePort,
 ) {
-  const { player } = ctx;
+  const { player, opponent } = ctx;
 
   const game = engine.game;
 
   if (!player || !game) return false;
 
-  const cardName = action.cardName;
+  const count = normalizeSelectionCount(action.count, 1);
 
-  const cardType = action.cardType || action.type;
+  // Find matching cards in the graveyards in scope
 
-  const count = typeof action.count === "number" ? action.count : 1;
+  const owners = resolveGraveyardBanishOwners(
+    action.player || "self",
+    player,
+    opponent,
+  );
 
-  // Find matching cards in the graveyard
+  const filters = buildGraveyardBanishFilters(action);
 
-  const graveyard = player.graveyard || [];
+  const candidates = owners.flatMap((owner) =>
+    (owner.graveyard || []).filter(
+      (card) => !!card && matchesGraveyardBanishFilters(card, filters, engine),
+    ),
+  );
 
-  let candidates = graveyard.filter((card) => {
-    if (!card) return false;
+  const ownerOf = (card: ActionRuntimeCard) =>
+    owners.find((owner) => (owner.graveyard || []).includes(card)) ?? null;
 
-    if (cardName && card.name !== cardName) return false;
-
-    if (cardType && card.type !== cardType) return false;
-
-    return true;
-  });
-
-  if (candidates.length < count) {
-    const filterDesc = cardName || cardType || "matching card";
+  if (candidates.length < count.min) {
+    const filterDesc = filters.name || filters.type || "matching card";
 
     getUI(game)?.log(
-      `Not enough ${filterDesc} in graveyard to banish (need ${count}, found ${candidates.length}).`,
+      `Not enough ${filterDesc} in graveyard to banish (need ${count.min}, found ${candidates.length}).`,
     );
 
     return false;
   }
 
+  const maxSelect = Math.min(count.max, candidates.length);
+
+  if (maxSelect <= 0) return count.min === 0;
+
   // Select cards to banish
 
-  let toBanish: ActionRuntimeCard[] = [];
+  let toBanish: readonly ActionRuntimeCard[];
 
-  if (candidates.length === count) {
+  if (candidates.length === count.min && maxSelect === count.min) {
     // Exactly enough cards, no choice needed
 
-    toBanish = candidates.slice(0, count);
-  } else if (action.promptPlayer !== false && player === game.player) {
-    // Player can choose which cards to banish
-
-    const ui = getUI(game);
-
-    if (ui?.showCardSelectionPrompt) {
-      const selected = await ui.showCardSelectionPrompt({
-        cards: candidates,
-
-        min: count,
-
-        max: count,
-
-        message: `Select ${count} card(s) to banish from graveyard as cost`,
-
-        zone: "graveyard",
-      });
-
-      toBanish = Array.isArray(selected)
-        ? selected.filter(isRuntimeCard)
-        : [];
-    } else {
-      toBanish = candidates.slice(0, count);
-    }
+    toBanish = candidates;
   } else {
-    // Bot or auto-select: take first matching cards
+    const requirementId = "graveyard_banish";
 
-    toBanish = candidates.slice(0, count);
+    const selected = await selectResolutionCards({
+      game,
+      player,
+      cards: candidates,
+      requirementId,
+      min: count.min,
+      max: maxSelect,
+      message: `Select ${count.min === maxSelect ? count.min : `${count.min}-${maxSelect}`} card(s) to banish from the graveyard.`,
+      locate: (card) => {
+        const owner = ownerOf(card) ?? player;
+        return {
+          player: owner,
+          zone: "graveyard",
+          index: (owner.graveyard || []).indexOf(card),
+        };
+      },
+      resolveAI: () => {
+        const exact = ctx.activationContext?.decisions?.selections?.[requirementId];
+        if (exact !== undefined) {
+          return resolveExactInstanceSelection(candidates, exact, {
+            min: count.min,
+            max: maxSelect,
+          });
+        }
+        return candidates.slice(0, maxSelect);
+      },
+    });
+
+    if (selected === null) {
+      getUI(game)?.log(`Cost not paid: not enough cards selected to banish.`);
+
+      return false;
+    }
+
+    if (selected.length === 0) return count.min === 0;
+
+    toBanish = selected;
   }
 
-  if (toBanish.length < count) {
-    getUI(game)?.log(`Cost not paid: not enough cards selected to banish.`);
-
-    return false;
-  }
-
-  // Perform the banish
+  // Perform the banish, one card at a time
 
   let banishedCount = 0;
 
   for (const card of toBanish) {
-    if (!player.graveyard.includes(card)) continue;
+    const owner = ownerOf(card);
 
-    const moveResult = await game.moveCard(card, player, "banished", {
+    if (!owner) continue;
+
+    const moveResult = await game.moveCard(card, owner, "banished", {
       fromZone: "graveyard",
       contextLabel: action.contextLabel || "graveyard_banish_cost",
       sourceCard: ctx?.source || null,
@@ -924,11 +939,48 @@ export async function handleBanishCardFromGraveyard(
 
   if (banishedCount > 0) {
     game.updateBoard();
-
-    return true;
   }
 
-  return false;
+  return banishedCount > 0 && banishedCount >= count.min;
+}
+
+type GraveyardBanishFilters = Omit<
+  NonNullable<GraveyardBanishAction["filters"]>,
+  "type"
+> & {
+  readonly type?: string;
+};
+
+/**
+ * Merges the shorthand cardName/cardType into the action filters, with the
+ * same precedence used by activation-condition previews: explicit filters win.
+ */
+function buildGraveyardBanishFilters(
+  action: GraveyardBanishAction,
+): GraveyardBanishFilters {
+  const filters: GraveyardBanishFilters = { ...(action.filters ?? {}) };
+  return {
+    ...filters,
+    ...(action.cardName && filters.name === undefined
+      ? { name: action.cardName }
+      : {}),
+    ...(action.cardType && filters.type === undefined
+      ? { type: action.cardType }
+      : {}),
+  };
+}
+
+function matchesGraveyardBanishFilters(
+  card: ActionRuntimeCard,
+  filters: GraveyardBanishFilters,
+  engine: ActionHandlerEnginePort,
+) {
+  if (typeof engine.cardMatchesFilters === "function") {
+    return engine.cardMatchesFilters(card, filters);
+  }
+  if (filters.name !== undefined && card.name !== filters.name) return false;
+  if (filters.type !== undefined && card.type !== filters.type) return false;
+  return true;
 }
 
 function resolveGraveyardBanishOwners(

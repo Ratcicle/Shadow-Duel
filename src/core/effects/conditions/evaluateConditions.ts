@@ -719,9 +719,11 @@ function collectGraveyardBanishCandidates(
     filters.type = action.cardType;
   }
   const cards: ConditionCard[] = [];
-  for (const card of ctx.player?.graveyard || []) {
-    if (!engine.cardMatchesFilters(card, filters)) continue;
-    appendUniqueCard(cards, card);
+  for (const owner of getConditionOwnersFromRule(action.player || "self", ctx)) {
+    for (const card of owner.graveyard || []) {
+      if (!engine.cardMatchesFilters(card, filters)) continue;
+      appendUniqueCard(cards, card);
+    }
   }
   return cards;
 }

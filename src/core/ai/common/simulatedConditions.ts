@@ -636,6 +636,7 @@ interface SimulatedActionView {
   filters?: object | null;
   cardName?: string | null;
   cardType?: string | null;
+  player?: string | null;
   to?: string | null;
   toZone?: string | null;
   destination?: string | null;
@@ -754,6 +755,7 @@ function simMoveBanishes(action: SimulatedActionView | null | undefined): boolea
 function simCollectGraveyardBanishCandidates(
   action: SimulatedActionView,
   activationPlayer: SimulatedPlayerState,
+  activationOpponent: SimulatedPlayerState,
 ): SimulatedCardState[] {
   const filters = { ...(action.filters || {}) };
   if (action.cardName && (filters as DynamicObject).name === undefined) {
@@ -762,8 +764,14 @@ function simCollectGraveyardBanishCandidates(
   if (action.cardType && (filters as DynamicObject).type === undefined) {
     (filters as DynamicObject).type = action.cardType;
   }
-  return getZoneCards(activationPlayer, "graveyard").filter((card) =>
-    matchesTargetFilters(card, filters, null)
+  return simOwnersFromRule(
+    action.player || "self",
+    activationPlayer,
+    activationOpponent,
+  ).flatMap((owner) =>
+    getZoneCards(owner, "graveyard").filter((card) =>
+      matchesTargetFilters(card, filters, null)
+    )
   );
 }
 
@@ -838,6 +846,7 @@ function simCollectBanishCandidates(
       for (const card of simCollectGraveyardBanishCandidates(
         action,
         activationPlayer,
+        activationOpponent,
       )) {
         simAppendUnique(cards, card);
       }

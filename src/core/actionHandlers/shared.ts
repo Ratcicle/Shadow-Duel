@@ -1200,6 +1200,31 @@ export async function selectCards({
   });
 }
 
+/** A number is an exact count; an object without max selects exactly min. */
+export function normalizeSelectionCount(
+  count: number | SelectionCount | null | undefined,
+  fallback = 1,
+): SelectionRange {
+  if (typeof count === "number" && Number.isFinite(count)) {
+    return { min: count, max: count };
+  }
+  const structuredCount = typeof count === "object" ? count : null;
+  const min =
+    typeof structuredCount?.min === "number" &&
+    Number.isFinite(structuredCount.min)
+      ? structuredCount.min
+      : fallback;
+  const max =
+    typeof structuredCount?.max === "number" &&
+    Number.isFinite(structuredCount.max)
+      ? structuredCount.max
+      : min;
+  return {
+    min: Math.max(0, min),
+    max: Math.max(0, max),
+  };
+}
+
 /** A resolution choice uses instance keys and the same broker for both controllers. */
 export async function selectResolutionCards(options: {
   game: ActionRuntimeGamePort;

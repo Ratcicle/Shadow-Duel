@@ -342,11 +342,7 @@ export function getDestructionNegationCostDescription(
     } else if (action.type === "damage") {
       descriptions.push(`sofrer ${action.amount} de dano`);
     } else if (action.type === "banish_card_from_graveyard") {
-      const cardDesc =
-        action.cardName ||
-        (typeof Reflect.get(action, "cardType") === "string"
-          ? Reflect.get(action, "cardType")
-          : "carta");
+      const cardDesc = action.cardName || action.cardType || "carta";
       const count = action.count || 1;
       descriptions.push(`banir ${count} '${cardDesc}' do Cemitério`);
     } else {

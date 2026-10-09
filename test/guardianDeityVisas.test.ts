@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import type { CardConstructorData } from "../src/core/contracts/cards.js";
 import type { GamePlayer } from "../src/core/contracts/player.js";
+import type { ActionOf } from "../src/core/contracts/actions.js";
 import type { EffectCondition } from "../src/core/contracts/effects.js";
 import { chainSelections, required } from "./helpers/fixtures.js";
 import { createRuntimeGame } from "./helpers/game.js";
@@ -183,6 +184,76 @@ test("Guardian Deity Visas responds only when an opponent effect would banish an
   assert.equal(evaluateSimulation(validContext), true);
   assert.equal(evaluateRuntime(makeActionContext(opponentCard)), false);
   assert.equal(evaluateRuntime(makeActionContext(ownCard, game.player)), false);
+});
+
+test("Guardian Deity Visas previews the graveyard scope of banish_card_from_graveyard", (t) => {
+  const game = createRuntimeGame({ captureReplay: false, laboratoryMode: true });
+  t.after(() => game.dispose());
+
+  const visas = createCard(cardDatabaseByName.get("Guardian Deity Visas"), game.player);
+  const ownCard = createCard(
+    { id: 99214, name: "Own graveyard card", cardKind: "monster" },
+    game.player,
+  );
+  const opposingCard = createCard(
+    { id: 99215, name: "Opponent graveyard card", cardKind: "monster" },
+    game.bot,
+  );
+  const activatedCard = createCard(
+    { id: 99216, name: "Opponent graveyard banisher", cardKind: "spell" },
+    game.bot,
+  );
+  game.player.hand.push(visas);
+  game.player.graveyard.push(ownCard);
+  game.bot.graveyard.push(opposingCard);
+
+  const [responseEffect] = required(visas.effects);
+  assert.ok(responseEffect);
+  const makeActionContext = (
+    action: ActionOf<"banish_card_from_graveyard">,
+  ) => {
+    const effect = { id: "test_graveyard_banish", actions: [action] };
+    return {
+      activationAttempt: { card: activatedCard, effect, controller: game.bot },
+      card: activatedCard,
+      effect,
+      player: game.bot,
+    };
+  };
+  const evaluate = (action: ActionOf<"banish_card_from_graveyard">) => {
+    const actionContext = makeActionContext(action);
+    return [
+      game.effectEngine.evaluateConditions(responseEffect.conditions, {
+        source: visas,
+        player: game.player,
+        opponent: game.bot,
+        activationContext: { context: actionContext },
+      }).ok,
+      evaluateSimulatedConditions(responseEffect.conditions, {
+        state: { player: game.player, bot: game.bot },
+        selfId: game.player.id,
+        sourceCard: visas,
+        options: { actionContext },
+      }),
+    ];
+  };
+
+  assert.deepEqual(
+    evaluate({ type: "banish_card_from_graveyard", player: "opponent" }),
+    [true, true],
+  );
+  assert.deepEqual(
+    evaluate({ type: "banish_card_from_graveyard", player: "both" }),
+    [true, true],
+  );
+  assert.deepEqual(
+    evaluate({ type: "banish_card_from_graveyard" }),
+    [false, false],
+  );
+  assert.deepEqual(
+    evaluate({ type: "banish_card_from_graveyard", player: "self" }),
+    [false, false],
+  );
 });
 
 test("Guardian Deity Visas previews a conditional banish of the negated card", (t) => {

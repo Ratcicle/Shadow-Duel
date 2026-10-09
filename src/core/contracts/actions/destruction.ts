@@ -9,7 +9,7 @@ export interface DestructionActionMap {
   banish_card_from_graveyard: DefineAction<
     "banish_card_from_graveyard",
     never,
-    "filters" | "player" | "count"
+    "filters" | "player" | "count" | "cardName" | "cardType"
   >;
   banish_all_graveyard_and_burn: DefineAction<
     "banish_all_graveyard_and_burn",
