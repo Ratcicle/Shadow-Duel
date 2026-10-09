@@ -157,7 +157,14 @@ Esses dados também participam dos snapshots de procedimentos e de referências.
 `createCanonicalStateSnapshot` e `hashCanonicalGameState`. A projeção inclui:
 
 - turno, fase, contadores relevantes e estado do RNG;
-- jogadores, PV, PV ganhos, zonas e restrições;
+- jogadores, PV, PV ganhos, dano recebido no turno, Invocações-Normais do
+  turno e permissões adicionais, multiplicador de ganho de PV, zonas e
+  restrições;
+- estado de regras do duelo (`ruleState`): fim de jogo e vencedor, etapa de
+  batalha, ataque negado, buffs do Damage Step, efeitos de par de batalha,
+  continuações de material de Sincro, contadores de contexto, de eventos e de
+  IDs gerados, estatísticas de materiais e contagens de Invocação-Especial por
+  tipo;
 - identidade, presença, posição, stats, contadores, vínculos e status das cartas;
 - contribuições de negação, modificações de Nível, buffs e proteções;
 - usos de efeitos por nome, por cópia e por duelo, quando projetados;
@@ -168,6 +175,10 @@ Esses dados também participam dos snapshots de procedimentos e de referências.
 Os snapshots projetam dados serializáveis, com cópias dos campos previstos
 pelo contrato. Referências runtime e IDs locais ao processo são tratados pelas
 projeções específicas de cartas, procedimentos e efeitos temporários.
+Nos registros de regras do `ruleState`, cartas viram a identidade do duelo;
+campos terminados em `instanceId` e IDs de registro derivados deles não
+participam, e os contadores determinísticos que compõem esses IDs entram por
+`generatedIdCounters`. `Map` e `Set` são ordenados por code units.
 Campos com duração participam do hash conforme seu estado atual.
 
 Cada snapshot de carta também registra `attacksUsedThisTurn`, `hasAttacked`,

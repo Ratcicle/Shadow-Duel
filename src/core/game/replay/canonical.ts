@@ -19,6 +19,7 @@ import type {
   CanonicalProcedureStateSnapshot,
   CanonicalReplayEventName,
   CanonicalReplayGamePort,
+  CanonicalRuleStateSnapshot,
   ReplayRuntimeCard,
   ReplayRuntimePlayer,
   SerializableObject,
@@ -41,6 +42,9 @@ const SKIPPED_RUNTIME_KEYS: ReadonlySet<string> = new Set([
   "effects",
   "image",
 ]);
+
+// Process-local runtime ids (`instanceId`, `sourceInstanceId`, `firstInstanceId`, ...).
+const INSTANCE_ID_KEY = /instanceId$/i;
 
 type SpecialProjection = (
   value: object,
@@ -289,6 +293,12 @@ function playerState(
     zones,
     summonCount: Number(player?.summonCount || 0),
     additionalNormalSummons: Number(player?.additionalNormalSummons || 0),
+    damageReceivedThisTurn: numericValue(player?.damageReceivedThisTurn),
+    normalSummonsThisTurn: stableValue(player?.normalSummonsThisTurn || []) ?? [],
+    additionalNormalSummonPermissions: stableValue(player?.additionalNormalSummonPermissions || []) ?? [],
+    // Derived from face-up passives on board refresh, but read between refreshes.
+    lpGainMultiplier: Number(player?.lpGainMultiplier ?? 1),
+    opponentCannotActivateDuringBattle: player?.opponentCannotActivateDuringBattle === true,
     oncePerDuelUsage: stableValue(player?.oncePerDuelUsageByName || {}) ?? {},
     restrictions: stableValue({
       specialSummon: player?.specialSummonRestrictions || [],
@@ -343,6 +353,72 @@ function procedureState(value: unknown): CanonicalProcedureStateSnapshot | null 
     active: normalized.active,
     last: normalized.last,
     transaction: normalized.transaction,
+  };
+}
+
+/**
+ * Rule records keep their facts; cards become duel identities, and process-local
+ * instance ids, plus record ids built from them, are dropped. The deterministic
+ * counters behind those record ids are hashed through `generatedIdCounters`.
+ */
+function serializeRuleRecords(
+  game: CanonicalReplayGamePort,
+  value: unknown,
+): SerializableValue {
+  const project: SpecialProjection = (entry) => {
+    const card = projectRuntimeCardReference(game, entry);
+    if (card !== undefined) return card;
+    if (Array.isArray(entry) || entry instanceof Map || entry instanceof Set) return undefined;
+    const keys = Object.keys(entry);
+    const derivesFromInstance = keys.includes("sourceInstanceId");
+    if (!derivesFromInstance && !keys.some(key => INSTANCE_ID_KEY.test(key))) return undefined;
+    const record: SerializableObject = {};
+    for (const key of keys.sort(compareCodeUnits)) {
+      if (INSTANCE_ID_KEY.test(key) || (derivesFromInstance && key === "id")) continue;
+      if (SKIPPED_RUNTIME_KEYS.has(key)) continue;
+      const field = normalizeValue(readProperty(entry, key), new WeakSet(), project);
+      if (field !== undefined) record[key] = field;
+    }
+    return record;
+  };
+  return normalizeValue(value, new WeakSet(), project) ?? null;
+}
+
+function synchroContinuationState(
+  game: CanonicalReplayGamePort,
+  value: unknown,
+): SerializableValue {
+  if (!value || typeof value !== "object") return null;
+  const summonedCard = readProperty(value, "summonedCard");
+  return {
+    stage: stableValue(readProperty(value, "stage")) ?? null,
+    synchroSummonContextId: stableValue(readProperty(value, "synchroSummonContextId")) ?? null,
+    summonedCard: summonedCard && typeof summonedCard === "object"
+      ? projectRuntimeCardReference(game, summonedCard) ?? null
+      : null,
+    playerId: stableValue(readProperty(value, "playerId")) ?? null,
+  };
+}
+
+function ruleState(game: CanonicalReplayGamePort): CanonicalRuleStateSnapshot {
+  return {
+    gameOver: game.gameOver === true,
+    winner: game.winner ?? null,
+    battleStep: game.battleStep ?? null,
+    lastAttackNegated: game.lastAttackNegated === true,
+    damageCalculationStatChangePending: game.damageCalculationStatChangePending === true,
+    damageCalculationTempBuffs: serializeRuleRecords(game, game.damageCalculationTempBuffs || []),
+    endOfDamageStepTempBuffs: serializeRuleRecords(game, game.endOfDamageStepTempBuffs || []),
+    temporaryBattlePairEffects: serializeRuleRecords(game, game.temporaryBattlePairEffects || []),
+    pendingSynchroMaterialFollowups: serializeRuleRecords(game, game.pendingSynchroMaterialFollowups || []),
+    pendingSynchroMaterialTriggerContinuation:
+      synchroContinuationState(game, game.pendingSynchroMaterialTriggerContinuation),
+    synchroSummonContextCounter: Number(game.synchroSummonContextCounter || 0),
+    eventResolutionCounter: Number(game.eventResolutionCounter || 0),
+    generatedIdCounters: stableValue(game.generatedIdCounters || new Map()) ?? [],
+    // Keyed by player and card definition id; inner Sets are sorted canonically.
+    materialDuelStats: stableValue(game.materialDuelStats || {}) ?? {},
+    specialSummonTypeCounts: stableValue(game.specialSummonTypeCounts || {}) ?? {},
   };
 }
 
@@ -420,6 +496,7 @@ export function createCanonicalStateSnapshot(
     delayedActions: serializeReplayEventPayload(game, game.delayedActions || []) ?? [],
     temporaryEventEffects: canonicalEventEffects ?? [],
     temporaryControlEffects: canonicalControl ?? [],
+    ruleState: ruleState(game),
     ...(game.temporaryReplacementEffects?.length ? { temporaryReplacementEffects: canonicalReplacements ?? [] } : {}),
     ...(replacementSequence ? { temporaryReplacementSequence: replacementSequence } : {}),
     chain: {
@@ -468,37 +545,42 @@ export function getDirectAfterResolutionSnapshot(game: Pick<CanonicalReplayGameP
     actionIndex: state.actionIndex, selectionGeneration: state.selectionGeneration, results } };
 }
 
+/** Physical cards and players referenced from runtime records, by duel identity. */
+function projectRuntimeCardReference(
+  game: CanonicalReplayGamePort,
+  value: object,
+): SerializableValue | undefined {
+  const identity = projectCardIdentitySnapshot(value);
+  if (identity !== undefined) return identity;
+  const duelCardId = readProperty(value, "duelCardId");
+  const cardKind = readProperty(value, "cardKind");
+  const name = readProperty(value, "name");
+  // Declarative filters and Token templates also carry a name and kind.
+  // Only physical runtime instances may receive a new duel identity.
+  const runtimeInstance = typeof readProperty(value, "instanceId") === "number" &&
+    typeof cardKind === "string" && typeof name === "string";
+  if (duelCardId != null || runtimeInstance) {
+    game.ensureDuelCardId?.(value);
+    const projection: SerializableObject = {
+      duelCardId: stableValue(readProperty(value, "duelCardId")) ?? null,
+      cardId: stableValue(readProperty(value, "id")) ?? null,
+      locationVersion: Number(readProperty(value, "locationVersion") ?? 0),
+    };
+    return projection;
+  }
+  const id = readProperty(value, "id");
+  if (id === "player" || id === "bot") {
+    const projection: SerializableObject = { playerId: id };
+    return projection;
+  }
+  return undefined;
+}
+
 export function serializeReplayEventPayload(
   game: CanonicalReplayGamePort,
   payload: unknown,
 ): SerializableValue | undefined {
-  const project: SpecialProjection = (value) => {
-    const identity = projectCardIdentitySnapshot(value);
-    if (identity !== undefined) return identity;
-    const duelCardId = readProperty(value, "duelCardId");
-    const cardKind = readProperty(value, "cardKind");
-    const name = readProperty(value, "name");
-    // Declarative filters and Token templates also carry a name and kind.
-    // Only physical runtime instances may receive a new duel identity.
-    const runtimeInstance = typeof readProperty(value, "instanceId") === "number" &&
-      typeof cardKind === "string" && typeof name === "string";
-    if (duelCardId != null || runtimeInstance) {
-      game.ensureDuelCardId?.(value);
-      const projection: SerializableObject = {
-        duelCardId: stableValue(readProperty(value, "duelCardId")) ?? null,
-        cardId: stableValue(readProperty(value, "id")) ?? null,
-        locationVersion: Number(readProperty(value, "locationVersion") ?? 0),
-      };
-      return projection;
-    }
-    const id = readProperty(value, "id");
-    if (id === "player" || id === "bot") {
-      const projection: SerializableObject = { playerId: id };
-      return projection;
-    }
-    return undefined;
-  };
-  return normalizeValue(payload, new WeakSet(), project);
+  return normalizeValue(payload, new WeakSet(), value => projectRuntimeCardReference(game, value));
 }
 
 export function isReplayEvent(

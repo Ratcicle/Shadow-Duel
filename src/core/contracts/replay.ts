@@ -426,8 +426,36 @@ export interface CanonicalPlayerStateSnapshot {
   zones: CanonicalPlayerZonesSnapshot;
   summonCount: number;
   additionalNormalSummons: number;
+  damageReceivedThisTurn: number;
+  normalSummonsThisTurn: SerializableValue;
+  additionalNormalSummonPermissions: SerializableValue;
+  lpGainMultiplier: number;
+  opponentCannotActivateDuringBattle: boolean;
   oncePerDuelUsage: SerializableValue;
   restrictions: SerializableValue;
+}
+
+/**
+ * Duel-level rule state outside the turn, chain and procedure snapshots. Card
+ * references are projected to duel identities; process-local instance ids
+ * (and record ids derived from them) never participate.
+ */
+export interface CanonicalRuleStateSnapshot {
+  gameOver: boolean;
+  winner: string | null;
+  battleStep: string | null;
+  lastAttackNegated: boolean;
+  damageCalculationStatChangePending: boolean;
+  damageCalculationTempBuffs: SerializableValue;
+  endOfDamageStepTempBuffs: SerializableValue;
+  temporaryBattlePairEffects: SerializableValue;
+  pendingSynchroMaterialFollowups: SerializableValue;
+  pendingSynchroMaterialTriggerContinuation: SerializableValue;
+  synchroSummonContextCounter: number;
+  eventResolutionCounter: number;
+  generatedIdCounters: SerializableValue;
+  materialDuelStats: SerializableValue;
+  specialSummonTypeCounts: SerializableValue;
 }
 
 export interface CanonicalChainStateSnapshot {
@@ -465,6 +493,7 @@ export interface CanonicalGameStateSnapshot {
   temporaryControlEffects: SerializableValue;
   temporaryReplacementEffects?: SerializableValue;
   temporaryReplacementSequence?: number;
+  ruleState: CanonicalRuleStateSnapshot;
   chain: CanonicalChainStateSnapshot;
   summon: CanonicalSummonStateSnapshot | null;
   combat: CanonicalCombatStateSnapshot | null;
@@ -567,6 +596,11 @@ export interface ReplayRuntimePlayer {
   effectActivationRestrictions?: unknown[];
   forbidDirectAttacksThisTurn?: boolean;
   directAttacksDeclaredThisTurn?: number;
+  damageReceivedThisTurn?: number;
+  normalSummonsThisTurn?: readonly unknown[];
+  additionalNormalSummonPermissions?: readonly unknown[];
+  lpGainMultiplier?: number;
+  opponentCannotActivateDuringBattle?: boolean;
 }
 
 export type CanonicalReplayChainPort = Partial<
@@ -593,6 +627,20 @@ export interface CanonicalReplayGamePort {
   temporaryEventEffects?: unknown[];
   temporaryControlEffects?: unknown[];
   temporaryReplacementEffects?: unknown[];
+  gameOver?: boolean;
+  winner?: string | null;
+  battleStep?: string | null;
+  lastAttackNegated?: boolean;
+  damageCalculationStatChangePending?: boolean;
+  damageCalculationTempBuffs?: unknown[];
+  endOfDamageStepTempBuffs?: unknown[];
+  temporaryBattlePairEffects?: unknown[];
+  pendingSynchroMaterialFollowups?: unknown[];
+  pendingSynchroMaterialTriggerContinuation?: unknown;
+  synchroSummonContextCounter?: number;
+  eventResolutionCounter?: number;
+  materialDuelStats?: unknown;
+  specialSummonTypeCounts?: unknown;
   chainSystem?: CanonicalReplayChainPort | null;
   ensureDuelCardId?(card: ReplayRuntimeCard): DuelCardId | number | null;
   getRandomState?(): ReplayRandomState | null;
