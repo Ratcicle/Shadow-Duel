@@ -3534,7 +3534,7 @@ export async function moveCardInternal(
       ) {
         cardToGraveResult = await duringCurrentDuel(cardToGraveEvent);
       } else {
-        cardToGraveEvent.then(undefined, (error: unknown) =>
+        Promise.resolve(cardToGraveEvent).catch((error: unknown) =>
           reportEngineFault(this, "detached_event_emit", error, {
             details: { eventName: "card_to_grave", card: card.name },
             rethrow: false,

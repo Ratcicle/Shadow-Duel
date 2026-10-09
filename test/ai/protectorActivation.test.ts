@@ -92,6 +92,11 @@ for (const seat of ["player", "bot"] as const) {
       const source = required(actor.hand[0]), cost = required(actor.field[0]);
       let offers = 0;
       game.chainSystem.offerChainResponses = async () => {
+        // Only the response window of the Protector link is scripted; the
+        // post-Chain window that follows has no link and nobody responds.
+        if (offers > 0) {
+          return { offers: 0, activations: 0, lastActivator: null, chainBuilt: false, consecutivePasses: 2 };
+        }
         const link = required(game.chainSystem.getLastChainLink());
         assert.equal(link.card, source); assert.ok(actor.hand.includes(source));
         assert.ok(actor.graveyard.includes(cost)); offers++;
@@ -106,8 +111,10 @@ for (const seat of ["player", "bot"] as const) {
         return { offers: 1, activations: 0, lastActivator: null, chainBuilt: false, consecutivePasses: 2 };
       };
       const session = new MainPhaseSession(actor, live, async () => {});
-      assert.equal(await session.execute(generatedAction(), session.capture()), false,
-        "the executor preserves the public activation's unsuccessful resolution result");
+      // A negated link still resolves (without effect), so the activation is
+      // accepted; a failed resolution (filled zone, source left) is not.
+      assert.equal(await session.execute(generatedAction(), session.capture()), interruption === "negated",
+        "the executor preserves the public activation's resolution result");
       assert.equal(offers, 1); assert.equal(actor.hand.includes(source), interruption !== "source-left");
       assert.deepEqual(actor.graveyard, interruption === "source-left" ? [cost, source] : [cost]);
       assert.equal(actor.field.length, interruption === "filled-zone" ? 5 : 4);
