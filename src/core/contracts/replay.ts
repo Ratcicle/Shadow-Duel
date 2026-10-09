@@ -360,6 +360,38 @@ export interface CanonicalCardStatusSnapshot {
   piercing: boolean;
   piercingDamageMultiplier: number;
   piercingGrantedByEffect: boolean;
+  battleIndestructible: boolean;
+  tempBattleIndestructible: boolean;
+  battleDamageHealsControllerThisTurn: boolean;
+  extraAttacks: number;
+}
+
+/**
+ * Characteristics a rule can rewrite (Trap Monsters, Tuner status, Tokens).
+ * Static definition data is covered by `cardId` and the card database
+ * signature; these are the values currently in effect.
+ */
+export interface CanonicalCardCharacteristicsSnapshot {
+  cardKind: string | null;
+  originalCardKind: string | null;
+  treatedAsCardKinds: SerializableValue;
+  isTrapMonster: boolean;
+  trapMonsterSummonProcedure: SerializableValue;
+  trapMonsterOriginalState: SerializableValue;
+  monsterType: string | null;
+  type: string | null;
+  types: SerializableValue;
+  attribute: string | null;
+  subtype: string | null;
+  isTuner: boolean;
+  synchroMaterialRoles: SerializableValue;
+  isToken: boolean;
+}
+
+/** Status baselines restored at end of turn and when the card leaves the field. */
+export interface CanonicalCardStatusRegistriesSnapshot {
+  temporary: SerializableValue;
+  fieldExit: SerializableValue;
 }
 
 export interface CanonicalStatBuffContribution {
@@ -406,6 +438,8 @@ export interface CanonicalCardStateSnapshot {
   counters: SerializableValue;
   equipTargetId: DuelCardId | number | null;
   statuses: CanonicalCardStatusSnapshot;
+  characteristics: CanonicalCardCharacteristicsSnapshot;
+  statusRegistries: CanonicalCardStatusRegistriesSnapshot;
 }
 
 export interface CanonicalPlayerZonesSnapshot {

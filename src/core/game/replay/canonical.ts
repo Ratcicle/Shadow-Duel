@@ -12,6 +12,7 @@ import {
   CANONICAL_REPLAY_SCHEMA_VERSION,
 } from "../../contracts/replay.js";
 import type {
+  CanonicalCardCharacteristicsSnapshot,
   CanonicalCardStateSnapshot,
   CanonicalGameStateSnapshot,
   CanonicalPlayerStateSnapshot,
@@ -186,6 +187,52 @@ function numericValue(value: unknown): number {
   return Number(value ?? 0);
 }
 
+function readString(value: object, key: string): string | null {
+  const field = readProperty(value, key);
+  return typeof field === "string" ? field : null;
+}
+
+function readFlag(value: object, key: string): boolean {
+  return readProperty(value, key) === true;
+}
+
+function readSerializable(
+  value: object,
+  key: string,
+  fallback: SerializableValue,
+): SerializableValue {
+  return stableValue(readProperty(value, key) ?? fallback) ?? fallback;
+}
+
+/** A status baseline registry: the value to restore and the value in effect. */
+function statusRegistryState(card: object, registryKey: string): SerializableValue {
+  const registry = readProperty(card, registryKey);
+  if (!registry || typeof registry !== "object") return {};
+  return stableValue(Object.fromEntries(Object.keys(registry).map(status => [status, {
+    previous: readProperty(registry, status) ?? null,
+    current: readProperty(card, status) ?? null,
+  }]))) ?? {};
+}
+
+function cardCharacteristics(card: ReplayRuntimeCard): CanonicalCardCharacteristicsSnapshot {
+  return {
+    cardKind: readString(card, "cardKind"),
+    originalCardKind: readString(card, "originalCardKind"),
+    treatedAsCardKinds: readSerializable(card, "treatedAsCardKinds", []),
+    isTrapMonster: readFlag(card, "isTrapMonster"),
+    trapMonsterSummonProcedure: readSerializable(card, "trapMonsterSummonProcedure", null),
+    trapMonsterOriginalState: readSerializable(card, "trapMonsterOriginalState", null),
+    monsterType: readString(card, "monsterType"),
+    type: readString(card, "type"),
+    types: readSerializable(card, "types", []),
+    attribute: readString(card, "attribute"),
+    subtype: readString(card, "subtype"),
+    isTuner: readFlag(card, "isTuner"),
+    synchroMaterialRoles: readSerializable(card, "synchroMaterialRoles", null),
+    isToken: readFlag(card, "isToken"),
+  };
+}
+
 function cardState(
   game: CanonicalReplayGamePort,
   card: ReplayRuntimeCard | null | undefined,
@@ -268,6 +315,15 @@ function cardState(
       piercing: card.piercing === true,
       piercingDamageMultiplier: Number(card.piercingDamageMultiplier ?? 1),
       piercingGrantedByEffect: card.piercingGrantedByEffect === true,
+      battleIndestructible: readFlag(card, "battleIndestructible"),
+      tempBattleIndestructible: readFlag(card, "tempBattleIndestructible"),
+      battleDamageHealsControllerThisTurn: readFlag(card, "battleDamageHealsControllerThisTurn"),
+      extraAttacks: numericValue(readProperty(card, "extraAttacks")),
+    },
+    characteristics: cardCharacteristics(card),
+    statusRegistries: {
+      temporary: statusRegistryState(card, "tempStatuses"),
+      fieldExit: statusRegistryState(card, "fieldExitStatuses"),
     },
   };
 }

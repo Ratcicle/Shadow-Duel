@@ -33,6 +33,13 @@ const V27_PLAYER_FIELDS = [
   "lpGainMultiplier",
   "opponentCannotActivateDuringBattle",
 ] as const;
+const V27_CARD_FIELDS = ["characteristics", "statusRegistries"] as const;
+const V27_CARD_STATUS_FIELDS = [
+  "battleIndestructible",
+  "tempBattleIndestructible",
+  "battleDamageHealsControllerThisTurn",
+  "extraAttacks",
+] as const;
 
 /** Project a current replay onto the engine-rules-v26 snapshot shape. */
 function stripV27SnapshotFields(replay: object): void {
@@ -44,6 +51,16 @@ function stripV27SnapshotFields(replay: object): void {
   assert.ok(players && typeof players === "object");
   for (const player of Object.values(players)) {
     for (const field of V27_PLAYER_FIELDS) Reflect.deleteProperty(player, field);
+    for (const zone of Object.values(Reflect.get(player, "zones") ?? {})) {
+      for (const card of Array.isArray(zone) ? zone : zone ? [zone] : []) {
+        if (!card || typeof card !== "object") continue;
+        for (const field of V27_CARD_FIELDS) Reflect.deleteProperty(card, field);
+        const statuses: unknown = Reflect.get(card, "statuses");
+        if (statuses && typeof statuses === "object") {
+          for (const field of V27_CARD_STATUS_FIELDS) Reflect.deleteProperty(statuses, field);
+        }
+      }
+    }
   }
 }
 
@@ -271,10 +288,10 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   // Presence durations participate in the canonical state as well.
   assert.deepEqual(
     replay.commands.map(command => command.stateHash),
-    ["21661bf0", "bb0a3c60"],
+    ["de42eb64", "f0342b98"],
   );
   const replayResult = required(replay.result);
-  assert.equal(replayResult.finalStateHash, "bb0a3c60");
+  assert.equal(replayResult.finalStateHash, "f0342b98");
   // Historical envelopes retain their exact version and declaration signature.
   // engine-rules-v26: the snapshot before the v27 hash completion.
   const beforeHashCompletion = structuredClone(replay);
@@ -341,8 +358,8 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "f60cba87", engineVersion: "engine-rules-v22" }), "b1bbca51");
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "7e5d54cb", engineVersion: "engine-rules-v23" }), "7bfe1e4a");
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "feeb687b", engineVersion: "engine-rules-v23" }), "6b0653a2");
-  assert.equal(hashCanonicalValue(replay), "9379cc9c");
-  assert.equal(JSON.stringify(replay).length, 15044);
+  assert.equal(hashCanonicalValue(replay), "a251bee0");
+  assert.equal(JSON.stringify(replay).length, 20900);
 
   const result = await replayCanonicalDuel(replay);
   assert.equal(result.ok, true);
@@ -604,6 +621,19 @@ const RULE_FIELD_MUTATIONS: readonly RuleFieldMutation[] = [
     game.materialDuelStats.player.activatedEffectIdsByMaterialId.set(1, new Set(["effect"]));
   } },
   { field: "specialSummonTypeCounts", mutate: game => { game.specialSummonTypeCounts.player.set("Dragon", 1); } },
+  ...[
+    ["cardKind", "trap"], ["originalCardKind", "trap"], ["treatedAsCardKinds", ["trap"]],
+    ["isTrapMonster", true], ["trapMonsterSummonProcedure", "card_effect"],
+    ["trapMonsterOriginalState", { cardKind: "trap" }], ["monsterType", "effect"],
+    ["type", "Machine"], ["types", ["Machine"]], ["attribute", "DARK"], ["subtype", "continuous"],
+    ["isTuner", true], ["synchroMaterialRoles", { tuner: true }], ["isToken", true],
+    ["battleIndestructible", true], ["tempBattleIndestructible", true],
+    ["battleDamageHealsControllerThisTurn", true], ["extraAttacks", 1],
+    ["tempStatuses", { battleIndestructible: false }], ["fieldExitStatuses", { isTuner: false }],
+  ].map(([key, value]): RuleFieldMutation => ({
+    field: `card.${String(key)}`,
+    mutate: game => { Reflect.set(required(game.player.hand[0]), String(key), value); },
+  })),
 ];
 
 test("every rule-relevant mutable field changes the canonical hash", async (t) => {

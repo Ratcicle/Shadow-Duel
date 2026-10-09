@@ -798,6 +798,24 @@ function validateCardSnapshot(value: unknown, path: string, onField = false): vo
   if (requireFiniteNumber(read(statuses, "piercingDamageMultiplier"), `${path}.statuses.piercingDamageMultiplier`) <= 0) {
     invalid(`${path}.statuses.piercingDamageMultiplier`, "a positive multiplier");
   }
+  for (const key of ["battleIndestructible", "tempBattleIndestructible", "battleDamageHealsControllerThisTurn"]) {
+    requireBoolean(read(statuses, key), `${path}.statuses.${key}`);
+  }
+  requireFiniteNumber(read(statuses, "extraAttacks"), `${path}.statuses.extraAttacks`);
+  const characteristics = requireObject(read(card, "characteristics"), `${path}.characteristics`);
+  for (const key of ["isTrapMonster", "isTuner", "isToken"]) {
+    requireBoolean(read(characteristics, key), `${path}.characteristics.${key}`);
+  }
+  for (const key of ["cardKind", "originalCardKind", "monsterType", "type", "attribute", "subtype"]) {
+    requireNullableString(read(characteristics, key), `${path}.characteristics.${key}`);
+  }
+  for (const key of ["treatedAsCardKinds", "trapMonsterSummonProcedure", "trapMonsterOriginalState", "types", "synchroMaterialRoles"]) {
+    if (!hasOwn(characteristics, key)) invalid(`${path}.characteristics.${key}`, "a serialized value");
+  }
+  const registries = requireObject(read(card, "statusRegistries"), `${path}.statusRegistries`);
+  for (const key of ["temporary", "fieldExit"]) {
+    requireObject(read(registries, key), `${path}.statusRegistries.${key}`);
+  }
 }
 
 function validatePlayerSnapshot(value: unknown, path: string): void {
