@@ -18,7 +18,7 @@
 | 1 | ✅ 20 testes de texto alinhados ao texto atual das cartas | — | S |
 | 2 | ✅ 28 testes desatualizados alinhados às mudanças intencionais | Etapa 0 | M |
 | 3 | ✅ 3 regressões corrigidas, Regra B de ativação de Magias (bump `engine-rules-v26`), D2 na simulação, **CI verde** | Etapas 0–2 | M |
-| 4 | Pipeline único `verify` → `deploy-pages`, ruleset em `main`, **Pages atualizado** | Etapa 3, D6–D8 | S |
+| 4 | ✅ Pipeline único `verify` → `deploy-pages`, ruleset em `main`, **Pages atualizado** | Etapa 3, D6–D8 | S |
 | 5 | Determinismo sem bump (RNG da IA, invariantes, Tech-Zero, Arena) | Etapa 4, D3, D4 | M |
 | 6 | Bugs de engine sem bump e política de falhas | Etapa 5, D11–D13 | M |
 | 7 | Pacote de replay com bump único `engine-rules-v27` (broker, hash, bugs que mudam replay) | Etapas 5–6, D5, D14–D16 | L |
@@ -454,7 +454,7 @@ npm run audit:chain
   - Concurrency por grupo `verify-${{ github.event.pull_request.number || github.ref }}`, cancelando só em PR. Documentar no workflow que, numa rajada de pushes em `main`, a execução pendente é substituída e um commit intermediário pode ficar sem verify e sem deploy.
   - Manter `npm run check` no `package.json` para paridade local.
   - Atenção: remover o push em branches tira o portão de branch. Aplicar junto com o fluxo de PR.
-- [ ] **`tests-ci:4`** (D7 revisada, **aplicado pelo usuário**). Ruleset leve `main-gate`, sem pré-condição, porque não exige check nem PR:
+- [x] **`tests-ci:4`** (D7 revisada; aplicado pelo usuário em 09/10/2026, **aplicado pelo usuário**). Ruleset leve `main-gate`, sem pré-condição, porque não exige check nem PR:
   - alvo: a branch padrão (`~DEFAULT_BRANCH`);
   - regras: `deletion` e `non_fast_forward`, ou seja, "Restrict deletions" e "Block force pushes";
   - sem bypass. Se um force push for necessário numa emergência, desative o ruleset temporariamente.
