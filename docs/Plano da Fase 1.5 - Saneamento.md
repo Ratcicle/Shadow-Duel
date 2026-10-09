@@ -549,7 +549,7 @@ Remota:
   - Testes em `test/ai/arenaConfiguration.test.ts` (timeout → draw; MAX_TURNS → decisão por LP) e `test/ai/arenaSeed.test.ts` (seed não nula; para exatamente no limite).
 - [x] **`tests-ci:10`** (depois de `determinism:2`): em `src/core/game/replay/driver.ts:263-271`, só no ramo que constrói o próprio `Game`, `game.disablePresentationDelays = true` antes de `startWithDecks`.
   - Teste em `test/replay/canonicalDriver.test.ts`: com `options.game`, a flag não é tocada; sem ele, fica `true`.
-- [ ] **`tests-ci:6`, parte de concorrência** (D20; cauda da etapa): só depois que `determinism:2` estiver em `main` com 3 execuções verdes seguidas, trocar o step de testes do CI para `npm test -- --test-concurrency=2`.
+- [x] **`tests-ci:6`, parte de concorrência** (D20; cauda da etapa): só depois que `determinism:2` estiver em `main` com 3 execuções verdes seguidas, trocar o step de testes do CI para `npm test -- --test-concurrency=2`.
   - Localmente continua 1. Nunca usar `--experimental-test-isolation=none`.
   - A estimativa de 6,5 → 3,5–4 min pressupõe a Etapa 0.
   - No primeiro flake, voltar para 1.
@@ -558,7 +558,7 @@ Remota:
 - Duas execuções da Arena com a mesma seed (20261009, Arcanist × Shadow-Heart, 3 duelos) produzem relatórios idênticos byte a byte, descontados só os tempos.
 - O timeout de relógio da Arena fica fora do resultado e das médias (`isCompletedArenaDuel`, `REPORT_VERSION` 6). A UI da Arena o mostra como "Timeout, fora do resultado".
 - O limite de turnos agora é aplicado pelo próprio `Game` (`maxTurnCounter`, payload `TurnLimitGameOverEventPayload`).
-- Pendente: a parte de concorrência de `tests-ci:6` (CI com `--test-concurrency=2`), depois de 3 execuções verdes em `main` com `determinism:2`.
+- A parte de concorrência de `tests-ci:6` foi concluída em 09/10/2026, depois de 3 execuções verdes seguidas em `main` com `determinism:2` (`cc7b900` por push e por disparo manual, e `136ce5a`). O CI passa a usar `--test-concurrency=2`; localmente continua 1, e no primeiro flake volta para 1.
 
 **Validação**
 
