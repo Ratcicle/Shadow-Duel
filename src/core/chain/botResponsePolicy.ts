@@ -325,8 +325,11 @@ export async function botChooseChainResponse(
     activationChance = 0.5;
   }
 
+  // AI rolls use the seeded AI stream and never the rules RNG, which is part
+  // of the replay state hash. A host without aiRandom uses the fixed midpoint
+  // 0.5, so priority >= 70 always activates and lower priorities never do.
   const randomValue =
-    typeof game?.random === "function" ? game.random() : Math.random();
+    typeof game?.aiRandom === "function" ? game.aiRandom() : 0.5;
   if (randomValue < activationChance) {
     this.log(
       `Bot activating ${bestOption.card.name} (priority: ${bestOption.priority})`,

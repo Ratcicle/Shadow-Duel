@@ -194,11 +194,16 @@ function resultNeedsSelection(result: unknown): boolean {
   );
 }
 
-function phaseIntentWasGuardRejected(descriptor: CanonicalReplayCommandInput, result: unknown): boolean {
-  if (descriptor.type !== "phase_intent" || typeof result !== "object" || result === null) return false;
+/**
+ * A command rejected by the action guard (`actions/guard.ts`, the only producer
+ * of `BLOCKED_*` codes) changed nothing, so recording it would make playback
+ * issue it later as a real command. Guards return before any state, Chain or
+ * decision work. Interrupted exits use a different result and must still
+ * record the effects and decisions they ran.
+ */
+function commandWasGuardRejected(result: unknown): boolean {
+  if (typeof result !== "object" || result === null) return false;
   const code = Reflect.get(result, "code");
-  // Phase guards return before any phase/Chain work. Interrupted exits use a
-  // different result and must still record the effects and decisions they ran.
   return Reflect.get(result, "ok") === false && Reflect.get(result, "success") === false &&
     Reflect.get(result, "needsSelection") === false && typeof code === "string" && code.startsWith("BLOCKED_");
 }
@@ -241,7 +246,7 @@ function installReplayCommandCapture(
     const result = await pending;
     if (
       descriptor &&
-      !phaseIntentWasGuardRejected(descriptor, result) &&
+      !commandWasGuardRejected(result) &&
       !deferredToSelection &&
       generation === this.fieldPlacementGeneration &&
       recording === this._canonicalReplay &&

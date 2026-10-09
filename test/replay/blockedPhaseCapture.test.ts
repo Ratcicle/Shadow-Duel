@@ -80,3 +80,50 @@ for (const seat of ["player", "bot"] as const) for (const route of ["control", "
     assert.deepEqual(playback.getRandomState(), live.getRandomState());
   });
 }
+
+test("rejected attack is not recorded", { timeout: 10000 }, async t => {
+  const create = (playback: boolean) => {
+    const game = createRuntimeGame(playback
+      ? { captureReplay: false, replayMode: "playback", laboratoryMode: true, laboratoryUseBot: false }
+      : { captureReplay: true, randomSeed: 141, laboratoryMode: true, laboratoryUseBot: false });
+    const start = game.startWithDecks.bind(game);
+    game.startWithDecks = async options => {
+      await start(options);
+      game.player.controllerType = "human"; game.bot.controllerType = "human";
+      game.disablePresentationDelays = true; game.phaseDelayMs = 0;
+    };
+    return game;
+  };
+  const live = create(false), playback = create(true);
+  t.after(() => { live.dispose(); playback.dispose(); });
+  await live.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true,
+    startAtDrawPhase: true, startingPlayer: "player", announceStartingPlayer: false,
+    playerDeck: Array<number>(16).fill(1), botDeck: Array<number>(16).fill(1), playerExtraDeck: [], botExtraDeck: [] });
+  await live.skipToPhase("main1");
+  await live.performNormalSummon(live.player, 0, "attack", false, null);
+  await live.skipToPhase("end");
+  await live.skipToPhase("end");
+  assert.equal(live.turn, "player");
+  await live.skipToPhase("battle");
+  assert.equal(live.phase, "battle");
+  const attacker = required(live.player.field[0]);
+  const attackCommands = () => required(live._canonicalReplay).commands.filter(command => command.type === "attack").length;
+
+  live.isResolvingEffect = true;
+  const blocked = await live.resolveCombat(attacker, null);
+  live.isResolvingEffect = false;
+  assert.ok(blocked && typeof blocked === "object");
+  assert.equal(Reflect.get(blocked, "code"), "BLOCKED_RESOLVING");
+  assert.equal(attacker.attacksUsedThisTurn, 0);
+  assert.equal(attackCommands(), 0, "a guard-rejected attack changed nothing and is not a replay command");
+
+  await live.resolveCombat(attacker, null);
+  assert.equal(attacker.attacksUsedThisTurn, 1);
+  assert.equal(attackCommands(), 1);
+  const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "blocked-attack" }))));
+  assert.equal(replay.commands.filter(command => command.type === "attack").length, 1);
+  const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback,
+    "Concrete Game with identical presentation and controller configuration.") });
+  assert.equal(result.finalStateHash, replay.result?.finalStateHash);
+  assert.deepEqual(createCanonicalStateSnapshot(playback), createCanonicalStateSnapshot(live));
+});

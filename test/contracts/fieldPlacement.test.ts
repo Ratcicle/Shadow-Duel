@@ -327,6 +327,31 @@ test("invalid occupancy is rejected rather than repaired, including repeated inv
   assert.equal(duplicate.fieldSlot, 2);
 });
 
+test("repeated invariant checks keep reporting a card in multiple zones and log it once", (t) => {
+  const game = createGame(t);
+  const errors: unknown[][] = [];
+  t.mock.method(console, "error", (...args: unknown[]) => {
+    errors.push(args);
+  });
+  const card = monster(99482);
+  game.player.hand.push(card);
+  assert.equal(game.assertStateInvariants("zones", { failFast: false }).ok, true);
+  game.player.graveyard.push(card);
+  for (let check = 0; check < 2; check++) {
+    const result = game.assertStateInvariants("zones", { failFast: false });
+    assert.equal(result.hasCritical, true);
+    assert.deepEqual(result.criticalIssues.map(issue => issue.message), ["card_in_multiple_zones"]);
+  }
+  assert.equal(errors.length, 1);
+  game.player.graveyard.length = 0;
+  assert.equal(game.assertStateInvariants("zones", { failFast: false }).ok, true);
+  game.resetDuelState("invariant-log-reset");
+  game.player.hand.push(card);
+  game.player.graveyard.push(card);
+  assert.equal(game.assertStateInvariants("zones", { failFast: false }).hasCritical, true);
+  assert.equal(errors.length, 2);
+});
+
 test("committed effect placement never offers cancellation even when a caller requests it", async (t) => {
   const game = createGame(t, { getFieldPlacementMode: () => "manual", fieldPlacementProvider: async request => {
     assert.equal(request.allowCancel, false);

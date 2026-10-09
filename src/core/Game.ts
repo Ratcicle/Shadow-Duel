@@ -178,6 +178,10 @@ class Game {
     this.disableEffectActivation = !!options.disableEffectActivation;
     this.randomSeed = options.randomSeed ?? Date.now();
     this.randomGenerator = createDeterministicRandom(this.randomSeed);
+    // AI entropy is derived from the same seed but kept in its own stream:
+    // it is never recorded, hashed or restored, because playback replays the
+    // recorded decisions instead of running the AI.
+    this.aiRandomGenerator = createDeterministicRandom(`${this.randomSeed}:ai`);
     this.nextDuelCardId = 1;
     this.generatedIdCounters = new Map();
     this.captureReplayEnabled = options.captureReplay === true;
@@ -217,6 +221,15 @@ class Game {
     this.turn = "player";
     this.phase = "draw";
     this.turnCounter = 0;
+    const maxTurnCounter = options.maxTurnCounter;
+    if (maxTurnCounter !== undefined && (!Number.isInteger(maxTurnCounter) || maxTurnCounter < 0)) {
+      throw new RangeError("maxTurnCounter must be a non-negative integer.");
+    }
+    if (maxTurnCounter !== undefined && this.captureReplayEnabled) {
+      // Playback would not stop at the limit, so the captured duel would diverge.
+      throw new RangeError("maxTurnCounter is not part of the canonical replay setup and cannot be combined with captureReplay.");
+    }
+    this.maxTurnCounter = maxTurnCounter;
     this.cardActivationHistory = { turnCounter: 0, entries: [] };
     this.disposed = false;
     this.gameOver = false;
@@ -352,6 +365,11 @@ class Game {
 
   random(): number {
     return this.randomGenerator.next();
+  }
+
+  /** Entropy for AI decisions only; rules randomness uses random(). */
+  aiRandom(): number {
+    return this.aiRandomGenerator.next();
   }
 
   shuffle<Value>(items: Value[]): Value[] {
@@ -936,7 +954,10 @@ class Game {
   // -----------------------------------------------------------------------------
 }
 
-interface Game extends GameAttachedMethods, GameRuntimeState {}
+interface Game extends GameAttachedMethods, GameRuntimeState {
+  /** Harness turn limit from `GameOptions.maxTurnCounter`; never part of replay setup. */
+  maxTurnCounter: number | undefined;
+}
 
 installGameAttachments(Game.prototype);
 installReplayCommandCaptureBindings(Game.prototype);

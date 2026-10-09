@@ -767,6 +767,7 @@ export interface GameRuntimeState {
   disableEffectActivation: boolean;
   randomSeed: DeterministicRandomSeed;
   randomGenerator: DeterministicRandomPort;
+  aiRandomGenerator: DeterministicRandomPort;
   nextDuelCardId: number;
   generatedIdCounters: Map<string, number>;
   captureReplayEnabled: boolean;

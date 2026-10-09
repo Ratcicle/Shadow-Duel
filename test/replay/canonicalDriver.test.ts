@@ -13,6 +13,7 @@ import {
   getCardDatabaseSignature,
 } from "../../src/core/game/replay/canonical.js";
 import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
+import Game from "../../src/core/Game.js";
 
 interface DriverFixture {
   game: ReplayDriverGamePort;
@@ -379,6 +380,23 @@ test("driver rejeita decisões restantes", async () => {
     () => replayCanonicalDuel(input, { game: fixture.game }),
     /finished with 1 unconsumed decision\(s\)/,
   );
+});
+
+test("driver disables presentation delays only on the Game it builds itself", async (t) => {
+  const supplied = driverFixture();
+  Reflect.set(supplied.game, "disablePresentationDelays", false);
+  const suppliedResult = await replayCanonicalDuel(replay(), { game: supplied.game });
+  assert.strictEqual(suppliedResult.game, supplied.game);
+  assert.equal(Reflect.get(supplied.game, "disablePresentationDelays"), false);
+  const untouched = driverFixture();
+  await replayCanonicalDuel(replay(), { game: untouched.game });
+  assert.equal(Reflect.has(untouched.game, "disablePresentationDelays"), false);
+
+  const built = await replayCanonicalDuel(replay());
+  const builtGame = built.game;
+  assert.ok(builtGame instanceof Game);
+  t.after(() => builtGame.dispose("driver-presentation-delay-test"));
+  assert.equal(builtGame.disablePresentationDelays, true);
 });
 
 test("driver rejeita hash final divergente", async () => {

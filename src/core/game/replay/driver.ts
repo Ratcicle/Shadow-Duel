@@ -8,6 +8,7 @@ import type {
   ReplayDriverOptions,
   ReplayRuntimeCard,
   ReplayRuntimePlayer,
+  ReplaySeed,
 } from "../../contracts/replay.js";
 import {
   hashCanonicalGameState,
@@ -255,20 +256,30 @@ async function drainReplayDecisions(game: ReplayDriverGamePort): Promise<void> {
   }
 }
 
+/**
+ * Builds the driver's own headless playback Game. Presentation delays are
+ * timing only (hashes come from canonical state), so they are skipped here; a
+ * caller-supplied Game keeps its own configuration.
+ */
+function createHeadlessPlaybackGame(seed: ReplaySeed): ReplayDriverGamePort {
+  const game = new Game({
+    renderer: null,
+    randomSeed: seed,
+    replayMode: "playback",
+    captureReplay: false,
+    chainResponseTimeoutMs: 0,
+  });
+  game.disablePresentationDelays = true;
+  return game as ReplayDriverGamePort;
+}
+
 export async function replayCanonicalDuel(
   replay: unknown,
   options: ReplayDriverOptions = {},
 ): Promise<CanonicalReplayResultSummary> {
   const canonicalReplay = validateCanonicalReplay(replay);
   const game =
-    options.game ||
-    (new Game({
-      renderer: null,
-      randomSeed: canonicalReplay.setup.seed,
-      replayMode: "playback",
-      captureReplay: false,
-      chainResponseTimeoutMs: 0,
-    }) as ReplayDriverGamePort);
+    options.game || createHeadlessPlaybackGame(canonicalReplay.setup.seed);
   game.decisionBroker.loadReplayDecisions(canonicalReplay.decisions);
   await game.startWithDecks({
     exactDecks: true,

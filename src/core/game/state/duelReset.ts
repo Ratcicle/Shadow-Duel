@@ -26,6 +26,7 @@ type DuelResetHost = FullGameHost & {
   cleanupSummonTransaction?(reason: string): void;
   releaseEffectUsageReservations?(reason: string): void;
   resetMaterialDuelStats?(reason: string): void;
+  _invariantLoggedSignatures?: Set<string>;
 };
 
 function createOncePerTurnUsage(): OncePerTurnRuntimeState {
@@ -158,6 +159,7 @@ export function resetDuelState(
   this.zoneOpDepth = 0;
   this.zoneOpSnapshot = null;
   this.devFailAfterZoneMutation = false;
+  this._invariantLoggedSignatures?.clear();
 
   this.oncePerTurnUsage = createOncePerTurnUsage();
   this.oncePerTurnTurnCounter = this.turnCounter;

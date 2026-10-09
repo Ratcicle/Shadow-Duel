@@ -43,7 +43,8 @@ interface ZoneInvariantHost extends FullGameHost {
   zoneOpDepth: number;
   eventResolutionDepth: number;
   devModeEnabled: boolean;
-  _invariantLogCache?: Record<string, number>;
+  /** Log-only de-duplication by `contextLabel|sorted issue messages`. */
+  _invariantLoggedSignatures?: Set<string>;
   normalizeZoneCardOwnership(
     contextLabel?: string,
     options?: { enforceZoneOwner?: boolean },
@@ -242,8 +243,8 @@ export function assertStateInvariants(
     return { ok: true, issues: [], hasCritical: false, criticalIssues: [] };
   }
 
-  // Canonical occupancy is never repaired from list order, even when diagnostics
-  // are throttled. Run this check at every completed top-level zone operation.
+  // Canonical occupancy is never repaired from list order. Run this check at
+  // every completed top-level zone operation.
   const positionIssues: ZoneIssue[] = [];
   for (const player of [this.player, this.bot]) {
     for (const row of ["field", "spellTrap"] as const) {
@@ -264,19 +265,8 @@ export function assertStateInvariants(
     return { ok: false, issues: positionIssues, hasCritical: true, criticalIssues: positionIssues };
   }
 
-  // CORREÇÃO: Rate limiting agressivo (500ms → 2000ms)
-  // Fix: Ainda aparecendo 17 logs em 10 duelos
-  const now = Date.now();
-  this._invariantLogCache = this._invariantLogCache || {};
-  const cacheKey = `${contextLabel}_${this.zoneOpDepth}_${this.eventResolutionDepth}`;
-  const lastLog = this._invariantLogCache[cacheKey] || 0;
-  const LOG_COOLDOWN_MS = 2000; // Max 1 log do mesmo tipo a cada 2s
-  
-  if (now - lastLog < LOG_COOLDOWN_MS) {
-    return { ok: true, issues: [], hasCritical: false, criticalIssues: [] };
-  }
-  this._invariantLogCache[cacheKey] = now;
-
+  // Every root check runs in full: rollback and repairs never depend on the
+  // wall clock. Only the diagnostic log below is de-duplicated.
   const failFast =
     options.failFast !== undefined ? options.failFast : this.devModeEnabled;
   const normalize = options.normalize !== false;
@@ -444,8 +434,16 @@ export function assertStateInvariants(
 
   if (issues.length) {
     const summary = `[Game] State invariants failed (${contextLabel})`;
-    const log = hasCritical ? console.error : console.warn;
-    log(summary, issues);
+    const signature = `${contextLabel}|${issues
+      .map((issue) => issue.message ?? "")
+      .sort()
+      .join(",")}`;
+    const loggedSignatures = (this._invariantLoggedSignatures ??= new Set());
+    if (!loggedSignatures.has(signature)) {
+      loggedSignatures.add(signature);
+      const log = hasCritical ? console.error : console.warn;
+      log(summary, issues);
+    }
     if (failFast && hasCritical) {
       throw new Error(`${summary} issues=${issues.length}`);
     }

@@ -1475,10 +1475,6 @@ export interface ChainUiPort {
     summary: readonly SerializedChainLink[],
     options?: { signal?: AbortSignal },
   ): ChainMaybePromise<ChainActivationCandidate | null>;
-  offerTrapActivation?(
-    cards: ChainCard[],
-    message: string,
-  ): ChainMaybePromise<{ card?: ChainCard } | null>;
   showTriggerOrderModal?(options: ChainTriggerOrderModalOptions): unknown;
   showConfirmPrompt?(
     message: string,
@@ -1568,6 +1564,7 @@ export interface ChainGamePort {
   effectEngine?: ChainEffectEnginePort | null;
   autoSelector?: ChainAutoSelectorPort | null;
   random?(): number;
+  aiRandom?(): number;
   getOpponent?(player: ChainPlayer | null): ChainPlayer | null;
   notify?(eventName: string, payload?: unknown): void;
   emit?(

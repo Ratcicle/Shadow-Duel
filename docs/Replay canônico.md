@@ -309,6 +309,8 @@ com erro.
 
 Toda aleatoriedade que altera regras deve passar por `Game.random()` ou
 `Game.shuffle()`. Aleatoriedade exclusivamente visual fica fora do replay.
+Decisões da IA usam `Game.aiRandom()`, um fluxo derivado do `seed` que fica
+fora do replay e do hash de estado, e nunca consomem `Game.random()`.
 Identidades de gameplay e ordem de resolução precisam ser reproduzíveis.
 
 O replay representa o setup inicial e as ações capturadas. Um cenário montado

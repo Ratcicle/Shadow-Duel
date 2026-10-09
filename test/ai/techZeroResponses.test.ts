@@ -122,7 +122,7 @@ for (const seat of ["player", "bot"] as const) {
     const phoenix = make(514);
     placeFieldCards(player.field, portal, make(507)); placeFieldCards(player.spellTrap, court);
     court.counters.set("funeral", 8); player.graveyard.push(machine, catapult, core, phoenix);
-    player.lp = 1000; game.random = () => 0;
+    player.lp = 1000; game.aiRandom = () => 0;
     const effect = required(portal.effects.find(entry => entry.id === "tech_zero_summoning_portal_synchro_revive"));
     required(chain.addToChain(chain.createPreparedActivation({ card: portal, controller: player,
       effect, activationZone: "field", committed: true, costsPaid: true,
@@ -275,7 +275,7 @@ for (const seat of ["player", "bot"] as const) {
       const court = make(17); court.isFacedown = true; court.setTurn = 2;
       placeFieldCards(player.spellTrap, court);
       player.lp = 1000;
-      game.random = () => 0;
+      game.aiRandom = () => 0;
       pending([{ type: "destroy_cards_by_scope", targetScope: { owner: "opponent", zone: "field" } }]);
       const { choice, candidates } = await choose();
       assert.ok(candidates.some(candidate => candidate.card === court));

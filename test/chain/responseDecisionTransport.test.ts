@@ -112,6 +112,68 @@ test("CS-02 AI reference provider records a choice and playback never calls poli
   assert.equal(replay.game.decisionBroker.replayCursor, 1);
 });
 
+// The default Shadow-Heart bot has no dedicated Chain-response policy, so the
+// generic priority fallback rolls its activation chance. The opponent's field
+// advantage gives the set trap a positive priority, which forces that roll.
+function fallbackScenario(t: TestContext, randomSeed: number) {
+  const game = createRuntimeGame({ captureReplay: false, randomSeed, chainResponseTimeoutMs: 0 });
+  t.after(() => game.dispose());
+  game.turn = "player"; game.phase = "main1"; game.turnCounter = 4; game.disablePresentationDelays = true;
+  assert.equal(game.bot.strategy?.chooseChainResponse, undefined);
+  const trap = new Card(cardDefinition(17), "bot");
+  trap.isFacedown = true; trap.setTurn = trap.turnSetOn = 1;
+  const monster = new Card(cardDefinition(1), "player");
+  placeFieldCards(game.bot.spellTrap, trap); placeFieldCards(game.player.field, monster);
+  for (const card of [trap, monster]) game.ensureDuelCardId(card);
+  const context: FastEffectContextInput = { type: "phase_change", player: game.player, fromPhase: "main1", toPhase: "battle" };
+  assert.equal(game.chainSystem.getActivatableCardsInChain(game.bot, context).length, 1);
+  return { game, chain: game.chainSystem, context };
+}
+
+const responseKey = (response: object | null) =>
+  response && "candidateKey" in response && typeof response.candidateKey === "string" ? response.candidateKey : null;
+
+test("generic bot fallback never advances the rules RNG and replays to the same state hash", async t => {
+  const live = fallbackScenario(t, 42), playback = fallbackScenario(t, 42);
+  const decisions: ReplayDecisionInput[] = [];
+  live.game.on("decision_made", value => decisions.push(structuredClone(value)));
+  const rulesRandom = live.game.getRandomState();
+  const response = await live.chain.offerChainResponse(live.game.bot, live.context);
+  assert.deepEqual(live.game.getRandomState(), rulesRandom, "AI rolls must not consume the rules RNG");
+  assert.equal(live.game.aiRandomGenerator.snapshot().calls, 1, "the fallback rolled the AI stream");
+  assert.equal(decisions.length, 1); assert.equal(decisions[0]?.kind, "chain_response");
+
+  playback.game.decisionBroker.loadReplayDecisions(JSON.parse(JSON.stringify(decisions)));
+  playback.game.aiRandom = () => assert.fail("replay cannot roll the AI stream");
+  const reproduced = await playback.chain.offerChainResponse(playback.game.bot, playback.context);
+  assert.equal(responseKey(reproduced), responseKey(response));
+  assert.equal(playback.game.decisionBroker.replayCursor, 1);
+  assert.deepEqual(playback.game.getRandomState(), live.game.getRandomState());
+  assert.deepEqual(createCanonicalStateSnapshot(playback.game), createCanonicalStateSnapshot(live.game));
+  assert.equal(hashCanonicalGameState(playback.game), hashCanonicalGameState(live.game));
+});
+
+test("generic bot fallback is reproducible per seed and never calls Math.random", async t => {
+  const run = async (randomSeed: number) => {
+    const { game, chain, context } = fallbackScenario(t, randomSeed);
+    const rulesRandom = game.getRandomState();
+    const choices: (string | null)[] = [];
+    for (let offer = 0; offer < 12; offer++) {
+      const response = await chain.offerChainResponse(game.bot, context);
+      choices.push(responseKey(response));
+    }
+    assert.deepEqual(game.getRandomState(), rulesRandom);
+    return { choices, aiRandom: game.aiRandomGenerator.snapshot() };
+  };
+  t.mock.method(Math, "random", () => assert.fail("bot fallback must not use Math.random"));
+  const first = await run(7), second = await run(7), other = await run(8);
+  assert.deepEqual(second, first);
+  assert.equal(first.aiRandom.calls, 12);
+  assert.notDeepEqual(other.aiRandom, first.aiRandom, "the AI stream is derived from the duel seed");
+  assert.ok(first.choices.includes(null) && first.choices.some(choice => choice !== null),
+    "the fallback stays probabilistic for a low-priority response");
+});
+
 for (const field of ["chainId", "respondingToLinkId", "sourceDuelCardId", "effectId", "candidateKeys"] as const) {
   test(`CS-02 malformed replay reference ${field} rejects without hanging`, async t => {
     const live = referenceScenario(t), playback = referenceScenario(t);
@@ -324,3 +386,64 @@ for (const reset of ["scenario", "duel", "dispose"] as const) {
     assert.equal(game.targetSelection, null);
   });
 }
+
+// A human Chain response window always records one decision, including the
+// passes produced without a modal answer, so playback consumes the same stream.
+function recordedResponses(game: ReturnType<typeof referenceScenario>["game"]) {
+  const decisions: ReplayDecisionInput[] = [];
+  game.on("decision_made", value => decisions.push(structuredClone(value)));
+  return decisions;
+}
+
+function assertRecordedPass(decisions: readonly ReplayDecisionInput[], chain: ReturnType<typeof referenceScenario>["chain"]) {
+  assert.equal(decisions.length, 1);
+  const decision = required(decisions[0]);
+  assert.equal(decision.kind, "chain_response");
+  assert.equal(decision.actorId, "bot");
+  assert.deepEqual(decision.value, { pass: true });
+  assert.deepEqual(decision.context, {
+    type: "effect_targeted", chainId: chain.activeChainId ?? null,
+    respondingToLinkId: chain.getLastChainLink()?.linkId ?? null,
+  });
+}
+
+test("human Chain response mouse-hold pass is recorded and replays without consulting the UI", async t => {
+  const live = referenceScenario(t), playback = referenceScenario(t);
+  const decisions = recordedResponses(live.game);
+  live.game.ui.isLeftMouseHeldForChainSkip = () => true;
+  live.game.ui.showChainResponseModal = () => assert.fail("a mouse-hold pass never opens the modal");
+  assert.equal(await live.chain.offerChainResponse(live.game.bot, live.candidate.context), null);
+  assertRecordedPass(decisions, live.chain);
+
+  playback.game.decisionBroker.loadReplayDecisions(JSON.parse(JSON.stringify(decisions)));
+  playback.game.ui.isLeftMouseHeldForChainSkip = () => assert.fail("playback never reads the mouse state");
+  playback.game.ui.showChainResponseModal = () => assert.fail("playback never opens the modal");
+  assert.equal(await playback.chain.offerChainResponse(playback.game.bot, playback.candidate.context), null);
+  assert.equal(playback.game.decisionBroker.replayCursor, 1);
+});
+
+test("human Chain response without a modal records a pass", async t => {
+  const { game, chain, candidate } = referenceScenario(t);
+  const decisions = recordedResponses(game);
+  chain.getUI = () => ({});
+  assert.equal(await chain.offerChainResponse(game.bot, candidate.context), null);
+  assertRecordedPass(decisions, chain);
+  assert.equal(chain.activeResponseAbortController, null);
+});
+
+test("human Chain response replay mismatch rejects instead of becoming a pass", async t => {
+  const { game, chain, candidate } = referenceScenario(t);
+  game.decisionBroker.loadReplayDecisions([]);
+  game.ui.showChainResponseModal = () => assert.fail("playback never opens the modal");
+  await assert.rejects(async () => chain.offerChainResponse(game.bot, candidate.context), /Replay decision mismatch/);
+});
+
+test("human Chain response UI exception records a pass and clears the response controller", async t => {
+  const { game, chain, candidate } = referenceScenario(t);
+  const decisions = recordedResponses(game);
+  t.mock.method(console, "error", () => undefined);
+  game.ui.showChainResponseModal = () => { throw new Error("modal exploded"); };
+  assert.equal(await chain.offerChainResponse(game.bot, candidate.context), null);
+  assertRecordedPass(decisions, chain);
+  assert.equal(chain.activeResponseAbortController, null);
+});

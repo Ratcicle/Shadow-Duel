@@ -4,6 +4,7 @@ import type {
   ChainActivationCandidate,
   ChainMaybePromise,
   ChainPlayer,
+  ChainUiPort,
   FastEffectContextInput,
   FullChainHost,
 } from "../contracts/chainRuntime.js";
@@ -21,11 +22,58 @@ type PlayerResponseHost = Pick<
 >;
 
 /**
- * Human player choosing chain response via UI
- * @param {Object} player
- * @param {Array} activatable
- * @param {ChainContext} context
- * @returns {Promise<Object|null>}
+ * Human resolver for a Chain response window. Every outcome it produces is a
+ * value the broker records: holding the left mouse button, a missing modal and
+ * a failing modal all resolve to a pass (`null`) instead of skipping the
+ * decision, so live recordings and playback consume the same decision stream.
+ */
+async function resolveHumanChainResponse(
+  host: PlayerResponseHost,
+  ui: ChainUiPort,
+  activatable: ChainActivationCandidate[],
+  context: FastEffectContextInput,
+): Promise<ChainActivationCandidate | null> {
+  if (ui.isLeftMouseHeldForChainSkip?.() === true) {
+    host.log("Left mouse button held - auto-passing chain response");
+    return null;
+  }
+  const showModal = ui.showChainResponseModal;
+  if (typeof showModal !== "function") {
+    host.log("No Chain response modal available - passing chain response");
+    return null;
+  }
+
+  host.activeResponseAbortController?.abort?.("response_replaced");
+  const controller = new AbortController();
+  host.activeResponseAbortController = controller;
+  const timeoutMs = Number.isFinite(host.responseTimeoutMs)
+    ? Math.max(0, host.responseTimeoutMs)
+    : 30000;
+  const timeoutId = setTimeout(() => {
+    controller.abort("response_timeout");
+  }, timeoutMs);
+  try {
+    return await showModal.call(
+      ui,
+      activatable,
+      context,
+      host.getChainSummary?.() || [],
+      { signal: controller.signal },
+    );
+  } catch (error) {
+    console.error("[ChainSystem] Chain response modal failed; passing:", error);
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+    if (host.activeResponseAbortController === controller) {
+      host.activeResponseAbortController = null;
+    }
+  }
+}
+
+/**
+ * Human player choosing a Chain response. The decision always goes through
+ * the broker, so replay errors propagate exactly as on the AI path.
  */
 export async function playerChooseChainResponse(
   this: PlayerResponseHost,
@@ -33,7 +81,7 @@ export async function playerChooseChainResponse(
   activatable: ChainActivationCandidate[],
   context: FastEffectContextInput,
 ): Promise<ChainActivationCandidate | null> {
-  // 🔧 CRITICAL FIX: Don't show prompts to AI/bots - they should auto-pass
+  // AI responders are resolved by the bot response policy, never by this UI path.
   if (isAI(player)) {
     this.log(`Player ${player.id} is AI - auto-passing chain response`);
     return null;
@@ -46,74 +94,25 @@ export async function playerChooseChainResponse(
     return null;
   }
 
-  let chosenOption: ChainActivationCandidate | null = null;
-  const autoPassByMouseHold =
-    typeof ui.isLeftMouseHeldForChainSkip === "function" &&
-    ui.isLeftMouseHeldForChainSkip() === true;
-
-  // Use existing trap offering system or create new modal
-  try {
-    if (autoPassByMouseHold) {
-      this.log("Left mouse button held - auto-passing chain response");
-    } else if (typeof ui.showChainResponseModal === "function") {
-      this.activeResponseAbortController?.abort?.("response_replaced");
-      const controller = new AbortController();
-      this.activeResponseAbortController = controller;
-      const timeoutMs = Number.isFinite(this.responseTimeoutMs)
-        ? Math.max(0, this.responseTimeoutMs)
-        : 30000;
-      const timeoutId = setTimeout(() => {
-        controller.abort("response_timeout");
-      }, timeoutMs);
-      try {
-        const resolveHuman = () => ui.showChainResponseModal!(
-          activatable,
-          context,
-          this.getChainSummary?.() || [],
-          { signal: controller.signal },
-        );
-        chosenOption = typeof this.game?.requestDecision === "function"
-          ? await (this.game.requestDecision({
-              kind: "chain_response",
-              actor: player,
-              candidates: activatable,
-              ...createChainResponseDecisionAdapter(this.game, activatable),
-              contextSnapshot: {
-                type: context?.type || null,
-                chainId: this.activeChainId ?? null,
-                respondingToLinkId: this.getLastChainLink?.()?.linkId ?? null,
-              },
-              resolveHuman,
-            }) as ChainMaybePromise<ChainActivationCandidate | null>)
-          : await resolveHuman();
-      } finally {
-        clearTimeout(timeoutId);
-        if (this.activeResponseAbortController === controller) {
-          this.activeResponseAbortController = null;
-        }
-      }
-    } else if (typeof ui.offerTrapActivation === "function") {
-      const cards = activatable.map((a) => a.card);
-      const result = await ui.offerTrapActivation(
-        cards,
-        `Respond to ${context?.type || "action"}?`,
-      );
-
-      if (result && result.card) {
-        chosenOption =
-          activatable.find((a) => a.card === result.card) || null;
-      }
-    }
-  } catch (error) {
-    console.error("[ChainSystem] playerChooseChainResponse failed:", error);
-    chosenOption = null;
-  }
+  const resolveHuman = () =>
+    resolveHumanChainResponse(this, ui, activatable, context);
 
   // Phase 4: choosing a response selects only the effect. Cost and target
   // selections belong to the canonical activation transaction.
-  if (chosenOption) {
-    return chosenOption;
-  }
+  const chosenOption = typeof this.game?.requestDecision === "function"
+    ? await (this.game.requestDecision({
+        kind: "chain_response",
+        actor: player,
+        candidates: activatable,
+        ...createChainResponseDecisionAdapter(this.game, activatable),
+        contextSnapshot: {
+          type: context?.type || null,
+          chainId: this.activeChainId ?? null,
+          respondingToLinkId: this.getLastChainLink?.()?.linkId ?? null,
+        },
+        resolveHuman,
+      }) as ChainMaybePromise<ChainActivationCandidate | null>)
+    : await resolveHuman();
 
-  return null;
+  return chosenOption ?? null;
 }

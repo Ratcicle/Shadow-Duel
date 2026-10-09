@@ -167,6 +167,71 @@ test("board presentation callbacks retain the UI object as receiver", async (t) 
   assert.deepEqual(receivers, [ui, ui, ui]);
 });
 
+test("repeated root zone ops with the same label always run the invariant check", (t) => {
+  // The decision to roll back must never depend on wall-clock spacing.
+  t.mock.method(Date, "now", () => 0);
+  const errors: unknown[][] = [];
+  t.mock.method(console, "error", (...args: unknown[]) => {
+    errors.push(args);
+  });
+  const game = new Game({ disableChains: true, captureReplay: false });
+  t.after(() => game.dispose("zone-invariant-repeat-test"));
+  const card = new Card(
+    {
+      id: 9_996,
+      name: "Duplicated zone card",
+      cardKind: "monster",
+      atk: 1_000,
+      def: 1_000,
+      level: 4,
+      effects: [],
+    },
+    "player",
+  );
+  game.player.hand.push(card);
+
+  const valid = game.runZoneOp("repeated_label", () => "committed");
+  assert.equal(valid, "committed");
+
+  const corrupt = () =>
+    game.runZoneOp("repeated_label", () => {
+      game.player.graveyard.push(card);
+      return "corrupted";
+    });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    assert.deepEqual(corrupt(), {
+      success: false,
+      reason: "STATE_INVARIANTS_FAILED",
+      rolledBack: true,
+    });
+    assert.deepEqual(game.player.hand, [card]);
+    assert.deepEqual(game.player.graveyard, []);
+  }
+  // Only the log is de-duplicated, by label and issue signature.
+  assert.equal(errors.length, 1);
+});
+
+test("root invariant checks keep a pending selection and an active resolution lock", (t) => {
+  const game = new Game({ disableChains: true, captureReplay: false });
+  t.after(() => game.dispose("zone-invariant-selection-test"));
+  // A selection pending in the middle of a resolution, outside any event.
+  const pending = { state: "selecting", requirements: [], selections: {} };
+  Reflect.set(game, "targetSelection", pending);
+  game.setSelectionState("selecting");
+  game.eventResolutionDepth = 0;
+  for (let op = 0; op < 2; op++) {
+    assert.equal(game.runZoneOp("pending_selection", () => "ok"), "ok");
+    assert.strictEqual(game.targetSelection, pending);
+    assert.equal(game.selectionState, "selecting");
+  }
+
+  Reflect.set(game, "targetSelection", null);
+  game.setSelectionState("resolving");
+  game.isResolvingEffect = true;
+  assert.equal(game.runZoneOp("effect_resolution", () => "ok"), "ok");
+  assert.equal(game.selectionState, "resolving");
+});
+
 test("zone rollback preserves messages from non-Error throwables", () => {
   const game = new Game({ disableChains: true, captureReplay: false });
   try {
