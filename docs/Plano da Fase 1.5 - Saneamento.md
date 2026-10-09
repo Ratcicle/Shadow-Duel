@@ -102,9 +102,9 @@ As Etapas 0–3 levam o CI ao verde e já têm todas as decisões necessárias (
 | D3 | **RNG da IA** (`determinism:1`). Opção B: stream semeado separado (`aiRandom`), mantendo o bot probabilístico. Opção A: limiar determinístico (prioridade ≥ 40). | B | Etapa 5 |
 | D4 | **Contabilidade da Arena** (`determinism:4a`): (a) TIMEOUT conta como "não concluído" (fora do win rate) ou como empate? (b) MAX_TURNS mantém a decisão por LP ou vira empate? | (a) Fora do win rate. (b) O default é implementado já na Etapa 5: MAX_TURNS mantém a decisão por LP, que é determinística depois da correção. Pode ser revista na fase 2, junto com o harness. | Etapa 5 |
 | D5 | **Bump do pacote `engine-rules-v27`** (o `v26` é o da Etapa 3, por D1). Aprovar; definir o dono da branch de integração `fase15/replay-v27` (quem abre, congela e rebaseia); definir o momento em que replays v26 deixam de carregar. | Um único bump na Etapa 7. Cada item entra na branch por um PR próprio, e o bump é o último PR. O dono é nomeado aqui antes da Etapa 5. | Etapa 7 (e regra de golden das Etapas 5–6) |
-| D6–D8 | **Aprovadas em 09/10/2026** com as recomendações abaixo: pipeline único, actions fixadas por SHA e `ubuntu-24.04`; ruleset com PR obrigatório, `verify` obrigatório, strict ligado e bypass do admin só via PR; emenda ao `AGENTS.md` como proposta. O merge da branch `fase15/etapa-0-1` acontece na Etapa 4. | — | — |
+| D6–D8 | **Aprovadas em 09/10/2026** com as recomendações abaixo: pipeline único, actions fixadas por SHA e `ubuntu-24.04`; emenda ao `AGENTS.md` como proposta. **D7 revisada no mesmo dia:** o usuário mantém o push direto em `main`, sem branch ou PR obrigatórios. O ruleset fica leve: bloqueia só force push e exclusão do `main`. O `verify` roda em todo push para `main` e só um `verify` verde publica o site. O "Gate de CI" do `AGENTS.md` foi ajustado para esse fluxo. O merge da branch `fase15/etapa-0-1` acontece na Etapa 4. | — | — |
 | D6 | **CI** (`tests-ci:3`): (1) pipeline único ou manter `deploy.yml` com `workflow_run`; (2) remover CI em push de branches não-`main`; (3) pin de actions por SHA; (4) pin de `ubuntu-24.04`; (5) Dependabot para actions. | Pipeline único, SHA e `ubuntu-24.04`. Remover push em branches só depois de adotar PRs. | Etapa 4 |
-| D7 | **Ruleset** (`tests-ci:4`), aplicado pelo usuário: exigir PR ou permitir fast-forward de SHA verificado; strict up-to-date; lista de bypass; auto-merge (agentes podem usar `gh pr merge --auto`?); apagar head branches. | PR obrigatório, strict ligado, bypass do admin "só via PR" | Etapa 4 |
+| D7 | **Revisada em 09/10/2026: ruleset leve, push direto permitido (ver D6–D8 acima).** Proposta original, substituída: **Ruleset** (`tests-ci:4`), aplicado pelo usuário: exigir PR ou permitir fast-forward de SHA verificado; strict up-to-date; lista de bypass; auto-merge (agentes podem usar `gh pr merge --auto`?); apagar head branches. | PR obrigatório, strict ligado, bypass do admin "só via PR" | Etapa 4 |
 | D8 | **Emenda ao `AGENTS.md`** (`tests-ci:5`): texto final, e se agentes podem abrir PR rascunho por iniciativa própria. | Texto proposto na Etapa 4, com PR só a pedido | Etapa 4 |
 | D11 | **Política de falhas de engine** (`engine-bugs:9`/`:2`): modo estrito = devMode mais opt-in de testes; produção registra a falha e mantém o fallback atual. | Aprovar | Etapa 6 |
 | D12 | Limites do loop de batalha do bot (`engine-bugs:12`). | 32 tentativas por Battle Phase; 3 tentativas seguidas sem progresso | Etapa 6 |
@@ -454,13 +454,12 @@ npm run audit:chain
   - Concurrency por grupo `verify-${{ github.event.pull_request.number || github.ref }}`, cancelando só em PR. Documentar no workflow que, numa rajada de pushes em `main`, a execução pendente é substituída e um commit intermediário pode ficar sem verify e sem deploy.
   - Manter `npm run check` no `package.json` para paridade local.
   - Atenção: remover o push em branches tira o portão de branch. Aplicar junto com o fluxo de PR.
-- [ ] **`tests-ci:4`** (D7, **aplicado pelo usuário**). Pré-condição: a primeira execução verde do novo job `verify` em `main`, e não apenas "Verify verde". Ruleset `main-gate`:
-  - Alvo `~DEFAULT_BRANCH`.
-  - Regras: `deletion`, `non_fast_forward`, `pull_request` (0 aprovações, squash/merge) e `required_status_checks` (`verify`, `integration_id` 15368, `strict_required_status_checks_policy: true`).
-  - Bypass: `RepositoryRole` 5, modo `pull_request`.
-  - Em Settings → General: "Allow auto-merge" e "Automatically delete head branches".
-  - Equivalente por API: `gh api -X POST repos/Ratcicle/Shadow-Duel/rulesets --input ruleset.json`. O JSON está na especificação `tests-ci:4`.
-  - Fluxo: branch `agent/<tema>` → `git push -u origin HEAD` → `gh pr create --draft` → `gh pr checks` / `gh run view --log-failed` → merge pelo usuário ou `gh pr merge --squash --auto`.
+- [ ] **`tests-ci:4`** (D7 revisada, **aplicado pelo usuário**). Ruleset leve `main-gate`, sem pré-condição, porque não exige check nem PR:
+  - alvo: a branch padrão (`~DEFAULT_BRANCH`);
+  - regras: `deletion` e `non_fast_forward`, ou seja, "Restrict deletions" e "Block force pushes";
+  - sem bypass. Se um force push for necessário numa emergência, desative o ruleset temporariamente.
+  - Pela interface: Settings → Rules → Rulesets → New ruleset → New branch ruleset. Nome `main-gate`, Enforcement status `Active`, Target branches → Add target → Include default branch, marcar "Restrict deletions" e "Block force pushes", desmarcar o resto → Create.
+  - Push direto em `main` continua permitido. Agentes usam branch e PR só quando o usuário pedir, por exemplo para mudanças grandes de engine.
 - [x] **`tests-ci:5`** (D8, aprovação explícita do texto): em `AGENTS.md:173`, trocar a frase "Confira o runner: argumentos extras de `npm test` podem não filtrar os arquivos." por:
 
   > `npm test -- <arquivos ou globs em test/>` executa somente os arquivos indicados e aceita apenas as flags `--test-*` da allowlist do runner, no formato `--flag=valor`; sem argumentos, executa a suíte global e continua proibido localmente sem pedido explícito.
@@ -479,17 +478,17 @@ $T test/shadowHeartGrave.test.ts
 ```
 
 Remota:
-- `gh pr checks --watch`: exatamente um check `verify`, com `deploy-pages` pulado no PR.
-- Depois do merge: `gh run list --workflow Verify --limit 2` mostra `verify` → `deploy-pages`.
+- Primeiro run do pipeline novo, por push em `main` ou PR: `verify` verde. Num PR, `deploy-pages` aparece pulado.
+- Depois do merge em `main`: `gh run list --workflow Verify --limit 2` mostra `verify` → `deploy-pages`.
 - `gh api repos/Ratcicle/Shadow-Duel/pages/builds/latest` aponta para o commit novo.
 - Nenhum aviso "Node.js 20 is deprecated" no log.
 - `gh api repos/Ratcicle/Shadow-Duel/rulesets` mostra `main-gate` ativo.
-- `gh api repos/Ratcicle/Shadow-Duel/rules/branches/main` lista as 4 regras.
-- O push direto de teste feito pelo usuário é rejeitado.
+- `gh api repos/Ratcicle/Shadow-Duel/rules/branches/main` lista `deletion` e `non_fast_forward`.
+- Push normal em `main` continua aceito; force push é rejeitado.
 
 **Critério de saída:**
 - Pages servindo o HEAD verificado.
-- Ruleset ativo, exigindo o contexto `verify` que já produziu uma execução verde em `main`.
+- Ruleset leve ativo: sem force push e sem exclusão do `main`.
 - `AGENTS.md` emendado.
 - Os dois testes de relógio endurecidos.
 - Concorrência do CI ainda em 1.
@@ -497,10 +496,8 @@ Remota:
 **Dependências:** Etapa 3 com CI verde; `tests-ci:1`.
 
 **Riscos:**
-- Ativar o ruleset antes do primeiro `verify` verde bloqueia todo PR: o contexto não existe enquanto o job se chama `check`. A saída de emergência é o bypass do admin "só via PR".
-- Renomear o job `verify` bloqueia merges silenciosamente.
+- Sem PR obrigatório, o `main` pode voltar a ficar vermelho. Mitigação: o deploy só publica com `verify` verde, as notificações de falha do GitHub ficam ligadas e o `AGENTS.md` trata `verify` vermelho em `main` como prioridade.
 - A política de branch do ambiente `github-pages` pode recusar o primeiro deploy.
-- Com strict up-to-date, PRs paralelos precisam de rebase em série.
 
 **Esforço:** S.
 
@@ -771,7 +768,7 @@ O portão global é o PR com `verify`.
 
 **Regra da etapa (branch de integração `fase15/replay-v27`, dono definido em D5):**
 - Cada item entra na branch por um **PR próprio com base em `fase15/replay-v27`**. O `pull_request` dispara o `verify` global e o PR carrega a validação focada do item. Push direto na branch não é usado, porque depois da Etapa 4 push fora de `main` não dispara CI.
-- O dono da branch abre, congela e rebaseia. Antes do PR final, a branch é rebaseada sobre `main`, já que o strict up-to-date vale em `main`.
+- O dono da branch abre, congela e rebaseia. Antes do PR final, a branch é rebaseada sobre `main`.
 - O bump (`determinism:7` + `decision-broker:5`) é o **último PR** para a branch. Depois dele a branch é congelada e vai para `main` num PR único.
 - Enquanto a branch estiver aberta, nenhum PR das Etapas 5/6 que toque caminhos de replay (`src/core/game/replay/`, `src/core/contracts/replay.ts`, goldens ou testes em `test/replay/`) entra em `main`. Esses PRs têm base em `fase15/replay-v27`.
 - Nenhum item desta etapa entra em `main` sem o bump.
@@ -1165,9 +1162,9 @@ Todas são corrigidas só no teste, na Etapa 1.
 | Bumps concorrentes de `engineVersion` ou rótulo reutilizado | Exatamente dois bumps planejados (`v26` na Etapa 3, `v27` na Etapa 7), dono definido em D5, branch de integração com PRs por item, checagem com `git log --all -S'engine-rules-vNN'` antes de cada bump |
 | Item das Etapas 5–6 muda golden ou hash antes do bump | Regra de golden das Convenções: `canonicalReplay`/`canonicalDriver` como portão obrigatório; o item desviado vai para `fase15/replay-v27` |
 | A Regra B (D1) exigir abrir uma janela de resposta nova e atrasar o CI verde | `INV-6` antes de codificar; escopo apresentado ao usuário antes de implementar |
-| Ruleset ativado antes do verde bloqueia todo PR | Ativar só depois da primeira execução verde do novo job `verify` em `main` (o job atual chama-se `check`); bypass do admin "só via PR" |
+| `main` vermelho de novo sem PR obrigatório (D7 revisada) | Deploy só com `verify` verde; notificações de falha do GitHub; `AGENTS.md` trata `verify` vermelho em `main` como prioridade |
 | Correções que expõem defeitos latentes: invariantes sem throttle, modo estrito, mocks engolidos | Tratar como bugs de engine (Etapa 6). Nunca reintroduzir throttle nem enfraquecer testes |
 | Testes mais rápidos ou concorrentes alteram a temporização (cooldown de 2 s em `zones/invariants.ts:267-277`) | `determinism:2` antes de `tests-ci:10`; concorrência 2 no CI só depois de `determinism:2` em `main` com 3 verdes; voltar para 1 no primeiro flake |
-| Agentes em paralelo com merges cruzados | PR por agente, strict up-to-date e rebase em série; ordem fixa entre `determinism:4a` e `ui-i18n:7` |
+| Agentes em paralelo com merges cruzados | Branch e PR por agente quando o usuário pedir, com rebase em série; ordem fixa entre `determinism:4a` e `ui-i18n:7` |
 | Mudança de comportamento do bot invalida baselines | Medir de novo na Etapa 9, antes de qualquer comparação da fase 2 |
 | Texto de carta alterado por engano | A Etapa 1 só edita `test/`; checagem com `git diff --stat -- src/data public/locales`; textos de `effectChoices` só com D17/D18 |

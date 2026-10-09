@@ -176,7 +176,12 @@ Durante todo o trabalho, inclusive no encerramento e antes de commit/PR, execute
 node --import=tsx --test --test-concurrency=1 test/caminho/arquivo.test.ts
 ```
 
-**Gate de CI.** O workflow `Verify` (check obrigatório `verify`) executa a verificação completa no GitHub Actions e é o gate de integração: nenhuma alteração entra em `main` sem o check `verify` verde. Trabalhe em branch própria, publique a branch e abra um PR (rascunho, se ainda estiver em andamento); não faça push direto em `main`. A política local não muda: execute apenas testes focados. Se o `verify` falhar, consulte o log (`gh pr checks`, `gh run view --log-failed`), reproduza localmente somente os arquivos que falharam com o comando focado e corrija a causa. Não desative, pule nem enfraqueça testes para obter CI verde, e não altere textos de cartas para satisfazer testes; divergências de texto são reportadas ao diretor criativo. Commit, push, PR e merge continuam exigindo pedido do usuário.
+**Gate de CI.** O workflow `Verify` (job `verify`) executa a verificação completa no GitHub Actions em todo push para `main` e em todo PR. O site só é publicado quando o `verify` passa. Push direto em `main` é permitido; o `main` só bloqueia force push e exclusão.
+- **Acompanhamento:** depois de cada push em `main` ou PR, acompanhe o resultado com `gh run list --branch main` e `gh run view --log-failed`. Um `verify` vermelho em `main` é prioridade e não deve permanecer.
+- **Branch e PR:** mudanças grandes de engine, Chain, replay ou IA podem usar branch e PR para validar no CI antes de entrar em `main`, quando o usuário pedir.
+- **Testes locais:** a política não muda; execute apenas testes focados. Se o `verify` falhar, reproduza localmente somente os arquivos que falharam, com o comando focado, e corrija a causa.
+- **Testes e textos:** não desative, pule nem enfraqueça testes para obter CI verde, e não altere textos de cartas para satisfazer testes; divergências de texto são reportadas ao diretor criativo.
+- **Pedido do usuário:** commit, push, PR e merge continuam exigindo pedido do usuário.
 
 O loader de assets não é pré-carregado nos testes. Ele registra o `tsx` de novo numa thread de hooks e deixa cada processo várias vezes mais lento. Arquivos de teste que importam SVG, por exemplo pelo `Renderer`, registram o loader por conta própria com `import "../scripts/register_node_asset_loader.js"`, como o `npm test` espera. Scripts que carregam a UI, como `scripts/run_bot_arena_smoke.ts`, continuam usando `--import=./scripts/register_node_asset_loader.ts`.
 
