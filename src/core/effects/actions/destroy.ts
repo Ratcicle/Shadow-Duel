@@ -10,7 +10,7 @@ import type {
 } from "../../contracts/actionRuntime.js";
 import type { ActionOf, CardAction } from "../../contracts/actions.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
-import { requestOptionalConfirmation } from "../../actionHandlers/shared.js";
+import { requestOptionalConfirmation, resolutionChoiceContext } from "../../actionHandlers/shared.js";
 
 interface DestroyRuntimeCard extends ActionRuntimeCard {
   permanentBuffsBySource?: Record<string, { atk?: number }>;
@@ -204,6 +204,7 @@ export async function checkBeforeDestroyNegations(
       owner,
       () => this.promptForDestructionNegation(card, effect),
       () => true,
+      resolutionChoiceContext(this.game, card, effect.id),
     );
     if (!shouldNegate) continue;
 

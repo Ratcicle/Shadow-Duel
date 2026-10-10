@@ -61,7 +61,7 @@ import type { EventCardPresenceSnapshot, EventEquipHostExitBinding } from "../..
 import { captureEventCardPresence } from "./ownership.js";
 import { reportEngineFault } from "../devTools/faults.js";
 import { captureReplacementPresence, formatReplacementText, replacementPresenceIsCurrent } from "../effects/destructionReplacement.js";
-import { requestOptionalConfirmation } from "../../actionHandlers/shared.js";
+import { requestOptionalConfirmation, resolutionChoiceContext } from "../../actionHandlers/shared.js";
 import { getCardDisplayName } from "../../i18n.js";
 import type { DecisionBrokerPort } from "../../contracts/decisions.js";
 import type { CardAction } from "../../contracts/actions.js";
@@ -1664,6 +1664,7 @@ async function trySendToGraveActionReplacement(
             { kind: "send_to_grave_replacement", cardName: targetName },
           )) ?? false,
           aiAllowsReplacement,
+          resolutionChoiceContext(game, sourceCard, effect.id),
         );
       if (!confirmed) continue;
 

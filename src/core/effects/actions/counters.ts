@@ -2,6 +2,7 @@ import {
   buildFieldSelectionCandidates as buildSharedFieldSelectionCandidates,
   getUI as getSharedUI,
   requestResolutionOption,
+  resolutionChoiceContext,
   resolveFieldScopeCards as resolveSharedFieldScopeCards,
   resolveTargetCards,
   selectCards as selectSharedCards,
@@ -702,6 +703,7 @@ async function resolveCounterRemovalAmount(
     (amount) => `amount:${amount}`,
     promptHuman,
     () => maxAmount,
+    resolutionChoiceContext(game, ctx?.source, ctx?.effect?.id),
   );
 }
 

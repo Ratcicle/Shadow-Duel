@@ -26,6 +26,7 @@ import type { DecisionBrokerPort } from "../../contracts/decisions.js";
 import {
   requestOptionalConfirmation,
   requestResolutionOption,
+  resolutionChoiceContext,
 } from "../../actionHandlers/shared.js";
 
 type BlueprintEffect = EffectDefinition & {
@@ -650,6 +651,7 @@ export async function activateStoredBlueprint(
             confirmLabel: "Ativar",
           }),
         () => stored[0] ?? null,
+        resolutionChoiceContext(this.game, source, ctx?.effect?.id),
       );
     }
   }
@@ -777,6 +779,7 @@ export async function handleBlueprintStorageAfterResolution(
           `Substituir o efeito armazenado (${existingName}) por ${blueprint.displayName}?`,
         )),
         () => config.autoStoreForAI,
+        resolutionChoiceContext(this.game, sourceCard, effect.id),
       );
     } else if (isAI(player) && !config.autoStoreForAI) {
       shouldStore = false;
@@ -807,6 +810,7 @@ export async function handleBlueprintStorageAfterResolution(
             confirmLabel: "Substituir",
           }),
         () => storedBlueprints[0] ?? null,
+        resolutionChoiceContext(this.game, sourceCard, effect.id),
       );
       // Cancelling the slot choice declines the storage; never pick a slot for the player.
       if (!replacement) {
@@ -831,6 +835,7 @@ export async function handleBlueprintStorageAfterResolution(
       this.game, player,
       () => resolvePromptResult(this.ui?.showConfirmPrompt?.("Salvar o efeito desta magia no Grimorio?")),
       () => config.autoStoreForAI,
+      resolutionChoiceContext(this.game, sourceCard, effect.id),
     );
   } else if (isAI(player) && !config.autoStoreForAI) {
     shouldStore = false;

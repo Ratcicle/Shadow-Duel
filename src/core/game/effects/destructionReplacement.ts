@@ -16,7 +16,7 @@ import {
   markOncePerDuelEffectUsed,
 } from "../../effects/triggers/registration.js";
 import { getCardDisplayName, getUIText } from "../../i18n.js";
-import { requestOptionalConfirmation } from "../../actionHandlers/shared.js";
+import { requestOptionalConfirmation, resolutionChoiceContext } from "../../actionHandlers/shared.js";
 import type { DecisionBrokerPort } from "../../contracts/decisions.js";
 import { getCardLocationVersion } from "../../Card.js";
 import type { ReplacementTargetPresence } from "../../contracts/actionRuntime.js";
@@ -1093,6 +1093,7 @@ async function tryReplacement(
         game, player: sourceOwner, sourceCard, effect, replacementEffect: replacement,
         targetCard: card, cause, fromZone, context: ctx, kind: "destruction",
       }),
+      resolutionChoiceContext(game, sourceCard, effect.id),
     );
   };
 

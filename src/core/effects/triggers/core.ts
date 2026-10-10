@@ -212,7 +212,7 @@ async function confirmTriggeredEffect(
       effectId: effect.id,
       event: effect.event,
     }));
-  }, () => true);
+  }, () => true, { sourceDuelCardId: sourceCard.duelCardId ?? null, effectId: effect.id ?? null });
 }
 
 /**

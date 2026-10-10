@@ -516,6 +516,12 @@ function validateDecisionContext(
 ): void {
   if (value === null && kind !== "field_placement") return;
   const context = requireObject(value, path);
+  if (read(context, "type") === "resolution_choice") {
+    if (kind !== "choice") invalid(path, "a choice context for a resolution choice");
+    requireIdentity(read(context, "sourceDuelCardId"), `${path}.sourceDuelCardId`, true);
+    requireNullableString(read(context, "effectId"), `${path}.effectId`);
+    return;
+  }
   if (read(context, "type") === "chain_response_reference") {
     if (kind !== "choice") invalid(path, "a choice context for a Chain response reference");
     requireIdentity(read(context, "chainId"), `${path}.chainId`);

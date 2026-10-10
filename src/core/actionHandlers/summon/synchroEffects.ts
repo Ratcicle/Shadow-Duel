@@ -26,6 +26,7 @@ import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js"
 import {
   getUI,
   requestOptionalConfirmation,
+  resolutionChoiceContext,
   resolveTargetCards,
   selectResolutionCards,
 } from "../shared.js";
@@ -329,7 +330,7 @@ async function confirmOptionalRevive(
       },
     );
     return Boolean(result);
-  });
+  }, undefined, resolutionChoiceContext(game, source, null));
 }
 
 function canSpecialSummonMaterial(

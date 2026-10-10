@@ -43,6 +43,8 @@ import {
   buildZoneSelectionCandidates,
   getUI,
   requestOptionalConfirmation,
+  resolutionChoiceContext,
+  type ResolutionChoiceContext,
   collectZoneCandidates,
   normalizeSelectionCount,
   selectCardsFromZone,
@@ -1389,6 +1391,7 @@ export async function handleSearchThenOptionalSpecialSummonFromHand(
     game,
     player,
     searchedCard,
+    resolutionChoiceContext(game, source, ctx.effect?.id),
   );
 
   if (!shouldSummon) {
@@ -1509,6 +1512,7 @@ async function shouldPerformOptionalSummon(
   game: ActionRuntimeGamePort,
   player: ActionRuntimePlayer,
   card: ActionRuntimeCard,
+  context: ResolutionChoiceContext,
 ): Promise<boolean> {
   if (action.optional === false) return true;
 
@@ -1532,7 +1536,7 @@ async function shouldPerformOptionalSummon(
       },
     );
     return isPromiseLikeBoolean(result) ? !!(await result) : !!result;
-  }, () => true);
+  }, () => true, context);
 }
 
 /**
@@ -2189,6 +2193,7 @@ export async function handleUpkeepPayOrSendToGrave(
       game, player,
       () => confirmHumanUpkeepPayment(action, game, player, source, lpCost),
       () => shouldAiPayUpkeep(action, player, source, lpCost),
+      resolutionChoiceContext(game, source, ctx?.effect?.id),
     );
 
   if (!shouldPay) {

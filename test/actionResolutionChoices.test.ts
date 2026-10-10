@@ -6,7 +6,7 @@ import type { ActionRuntimeGamePort } from "../src/core/contracts/actionRuntime.
 import type { SelectionSessionInput } from "../src/core/contracts/selection.js";
 import { cardDefinition, required, unsafeFixture } from "./helpers/fixtures.js";
 import { createRuntimeGame, completeTestSelections, placeFieldCards } from "./helpers/game.js";
-import { requestResolutionOption, selectResolutionCards } from "../src/core/actionHandlers/shared.js";
+import { requestOptionalConfirmation, requestResolutionOption, selectResolutionCards } from "../src/core/actionHandlers/shared.js";
 import type { CardAction } from "../src/core/contracts/actions.js";
 
 function setup(t: TestContext, human = false, seat: "player" | "bot" = "player") {
@@ -338,4 +338,26 @@ test("a tiered cost without costFilters fails closed instead of using a card-nam
   const result = await game.effectEngine.applyActions([action], { player: owner, opponent: game.bot, source }, {});
   assert.equal(typeof result === "object" && result !== null ? result.success : result, false);
   assert.ok(owner.hand.includes(source));
+});
+
+test("a recorded resolution choice replays only for the same actor, source and effect", async t => {
+  const decide = async (context: { sourceDuelCardId: number | null; effectId: string | null }, decisions?: ReplayDecisionInput[]) => {
+    const game = createRuntimeGame({ laboratoryMode: true, captureReplay: false, disableChains: true });
+    t.after(() => game.dispose());
+    game.player.controllerType = "human";
+    const recorded: ReplayDecisionInput[] = [];
+    game.on("decision_made", decision => { recorded.push(decision); });
+    if (decisions) game.decisionBroker.loadReplayDecisions(decisions);
+    const confirmed = await requestOptionalConfirmation(game, game.player,
+      () => decisions ? assert.fail("Playback must consume the recorded confirmation") : true,
+      () => assert.fail("A human seat is never decided by the AI"), context);
+    return { confirmed, recorded };
+  };
+
+  const live = await decide({ sourceDuelCardId: 7, effectId: "effect_a" });
+  assert.equal(live.confirmed, true);
+  assert.deepEqual(live.recorded[0]?.context, { type: "resolution_choice", sourceDuelCardId: 7, effectId: "effect_a" });
+  assert.equal((await decide({ sourceDuelCardId: 7, effectId: "effect_a" }, live.recorded)).confirmed, true);
+  await assert.rejects(decide({ sourceDuelCardId: 8, effectId: "effect_a" }, live.recorded), /does not match/);
+  await assert.rejects(decide({ sourceDuelCardId: 7, effectId: "effect_b" }, live.recorded), /does not match/);
 });
