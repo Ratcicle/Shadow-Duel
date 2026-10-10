@@ -812,11 +812,11 @@ O portão global é o PR com `verify`.
   - **Revalidação depois do prompt** com um helper que reexecuta todos os checks de elegibilidade de `:1572-1586`: face-down, negação, `requireZone` contra a zona rederivada, `matchesSendToGraveReplacement`, `canUseOncePerTurn` e `checkActionPreviewRequirements`. Além disso, tokens de presença por `locationVersion` de alvo e fonte (padrão `destructionReplacement.ts:1073-1076`).
   - Formatar `{target}`/`{source}` com nome de exibição no prompt **e** no log, exportando ou duplicando `formatReplacementText` (`destructionReplacement.ts:414`). Isso é apresentação; o texto da carta não muda.
   - Testes em `test/replay/movementContractsReplay.test.ts`, com a estratégia em `assert.fail` no playback (padrão `test/replay/mirageboundPriorityTwoReplay.test.ts:31-32`).
-- [ ] **`decision-broker:3`** (D15): em `src/core/actionHandlers/resources.ts`:
+- [x] **`decision-broker:3`** (D15): em `src/core/actionHandlers/resources.ts`:
   - `selectionContractBuilder` em `:1370-1399`, usando `buildAddToHandSelectionContract` generalizado (`metadata.context` vindo de `action.type`).
   - `shouldPerformOptionalSummon` (`:1580-1609`) passa a usar `requestOptionalConfirmation`. O `return true` final, que automatiza a escolha do humano sem UI, é removido.
   - Testes em `test/replay/optionalEffectsReplay.test.ts`: o humano escolhe o segundo candidato; playback com locales EN→PT.
-  - Verificar uma vez no navegador (`npm run dev`).
+  - Verificar uma vez no navegador (`npm run dev`). **Pendente:** feito no fim da etapa, junto com a verificação manual do pacote.
 - [ ] **`contextSnapshot`** (opcional aprovado em D5): um `contextSnapshot` mínimo (`{ type, sourceDuelCardId, effectId }`) em `requestOptionalConfirmation` (`src/core/actionHandlers/shared.ts:59`), conferido pelo broker no replay. Assim, uma escolha consumida pelo ator ou pelo prompt errado falha na própria decisão, e não só no hash.
 - [ ] **`engine-bugs:1`**: em `src/core/game/zones/movement.ts:2922-2949`, trocar o `destroyCard(host).then(...)` destacado por `pendingBoundDestruction.push({ target: host, source: card, zone: "field" })`, aproveitando o flush aguardado em `:3567`.
   - A mensagem de log vai para um `logMessage` opcional da entrada pendente, porque o flush ignora o resultado de `destroyCard`.
