@@ -156,8 +156,11 @@ for (const id of [19, 20] as const) {
   }
 }
 
-for (const accepted of [true, false]) {
-  test(`Void Lost Throne replays the human's second search candidate and optional summon (${accepted ? "accepted" : "declined"}) across locales`, async t => {
+// "cancelled" closes the search: the activation is still recorded, so the
+// refusal must be recorded for playback too.
+for (const outcome of ["accepted", "declined", "cancelled"] as const) {
+  const accepted = outcome === "accepted";
+  test(`Void Lost Throne replays the human's second search candidate and optional summon (${outcome}) across locales`, async t => {
     setLocale("en");
     t.after(() => setLocale("en"));
     const live = createRuntimeGame({ captureReplay: true, disableChains: true, randomSeed: 86,
@@ -198,14 +201,26 @@ for (const accepted of [true, false]) {
     assert.ok(requirement.candidates.length >= 2, "both Void monsters are offered");
     assert.equal(requirement.label, "Void Lost Throne", "the prompt names the card, not the internal requirement id");
     const second = required(requirement.candidates[1]);
-    session.selections[requirement.id] = [second.key];
-    await live.finishTargetSelection();
-    await activation;
     const chosen = required(Reflect.get(second, "cardRef")) as Card;
-    assert.equal(live.player.field.includes(chosen), accepted);
-    assert.equal(live.player.hand.includes(chosen), !accepted);
+    if (outcome === "cancelled") {
+      live.cancelTargetSelection();
+      await activation;
+      assert.equal(live.player.deck.includes(chosen), true, "nothing was searched");
+    } else {
+      session.selections[requirement.id] = [second.key];
+      await live.finishTargetSelection();
+      await activation;
+      assert.equal(live.player.field.includes(chosen), accepted);
+      assert.equal(live.player.hand.includes(chosen), !accepted);
+    }
     const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "lost-throne-test" }))));
-    assert.ok(replay.decisions.some(decision => decision.kind === "choice"), "the optional summon is a recorded choice");
+    if (outcome === "cancelled") {
+      assert.ok(replay.decisions.some(decision => decision.kind === "target" &&
+        JSON.stringify(decision.value) === JSON.stringify({ pass: true })),
+        "the cancelled search is a recorded refusal");
+    } else {
+      assert.ok(replay.decisions.some(decision => decision.kind === "choice"), "the optional summon is a recorded choice");
+    }
     setLocale("pt-br");
     const result = await replayCanonicalDuel(replay, {
       game: unsafeFixture<ReplayDriverGamePort>(playback, "Real Game integration uses its own card and player instances through the replay driver projection."),
@@ -215,3 +230,46 @@ for (const accepted of [true, false]) {
     assert.equal(playback.decisionBroker.replayCursor, replay.decisions.length);
   });
 }
+
+test("a bot's Deck search is a recorded decision that playback consumes", async t => {
+  const live = createRuntimeGame({ captureReplay: true, disableChains: true, randomSeed: 87,
+    laboratoryMode: true, laboratoryUseBot: false });
+  const playback = createRuntimeGame({ captureReplay: false, replayMode: "playback", disableChains: true,
+    laboratoryMode: true, laboratoryUseBot: false });
+  t.after(() => { live.dispose(); playback.dispose(); });
+  for (const game of [live, playback]) {
+    const start = game.startWithDecks.bind(game);
+    game.startWithDecks = async options => {
+      await start(options);
+      game.phase = "main1"; game.turnCounter = 2;
+      game.disablePresentationDelays = true;
+      game.waitForBoardPresentation = async () => {};
+      game.player.controllerType = "ai";
+      game.bot.controllerType = "human";
+      const cards = [...game.player.hand, ...game.player.deck];
+      game.player.hand = [required(cards.find(card => card.id === 219))];
+      game.player.deck = cards.filter(card => card.id !== 219);
+    };
+  }
+  // The strategies disagree: playback must not ask its own strategy again.
+  live.player.strategy = unsafeFixture<NonNullable<typeof live.player.strategy>>({
+    rankSearchCandidates: (cards: readonly Card[]) => [...cards].reverse(),
+  }, "Only the search ranking is exercised.");
+  playback.player.strategy = unsafeFixture<NonNullable<typeof playback.player.strategy>>({
+    rankSearchCandidates: () => assert.fail("Playback cannot rank search candidates"),
+  }, "Only the search ranking is exercised.");
+  await live.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true,
+    startAtDrawPhase: true, startingPlayer: "player", announceStartingPlayer: false,
+    playerDeck: [219, 204, 211, ...Array<number>(10).fill(3)],
+    botDeck: Array<number>(13).fill(3), playerExtraDeck: [], botExtraDeck: [] });
+  const spell = required(live.player.hand.find(card => card.id === 219));
+  await live.tryActivateSpell(spell, live.player.hand.indexOf(spell));
+  const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "bot-search" }))));
+  assert.ok(replay.decisions.some(decision => decision.actorId === "player" && decision.kind === "choice" &&
+    JSON.stringify(decision.value).includes("zone_selection")), "the bot's pick is recorded");
+  const result = await replayCanonicalDuel(replay, {
+    game: unsafeFixture<ReplayDriverGamePort>(playback, "Real Game integration uses its own card and player instances through the replay driver projection."),
+  });
+  assert.equal(result.finalStateHash, replay.result?.finalStateHash);
+  assert.equal(playback.decisionBroker.replayCursor, replay.decisions.length);
+});

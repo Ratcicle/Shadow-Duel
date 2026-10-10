@@ -989,7 +989,9 @@ export async function performAscensionSummonFromExtraDeck(
   if (material) {
     this.closeExtraDeckModal?.();
     return await this.performAscensionSummon(player, material, card,
-      options.position ? { position: options.position } : {});
+      options.position === "attack" || options.position === "defense"
+        ? { position: options.position }
+        : {});
   }
 
   const selectionContract = buildAscensionMaterialSelectionContract(

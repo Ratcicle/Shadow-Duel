@@ -1051,10 +1051,6 @@ export async function handleAddFromZoneToHand(
 
   const decisionKey = readString(action, "selectionId") || `${ctx.effect?.id || action.type}_selection`;
   const plannedIds = isAI(player) ? ctx.activationContext?.decisions?.selections?.[decisionKey] : undefined;
-  if (plannedIds !== undefined) {
-    const selected = resolveExactInstanceSelection(candidates, plannedIds, { min: minSelect, max: maxSelect });
-    return selected ? finalizeSelection(selected) : false;
-  }
 
   const selection = await selectCardsFromZone({
     game,
@@ -1066,7 +1062,12 @@ export async function handleAddFromZoneToHand(
     maxSelect,
     minSelect,
     promptPlayer: promptPlayer !== false,
-    botSelect: (cards, max) => {
+    botSelect: (cards, max, min) => {
+      // A planned line names its exact pick; it is still recorded as the
+      // bot's decision.
+      if (plannedIds !== undefined) {
+        return resolveExactInstanceSelection(cards, plannedIds, { min, max }) ?? [];
+      }
       if (typeof player.strategy?.rankSearchCandidates === "function") {
         const ranked = player.strategy.rankSearchCandidates(cards, action, {
           player,

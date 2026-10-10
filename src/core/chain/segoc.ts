@@ -175,10 +175,9 @@ function compactSerializable(
   const looksLikePlayer =
     typeof id === "string" &&
     (controllerType != null || lp != null || Array.isArray(hand));
-  if (looksLikePlayer) {
-    const name = Reflect.get(value, "name");
-    return { id, name: typeof name === "string" ? name : null };
-  }
+  // A player is identified by its seat. Its display name is presentation
+  // (Arena seat labels, locale) and would leak into replay hashes.
+  if (looksLikePlayer) return { id };
   const cardKind = Reflect.get(value, "cardKind");
   const instanceId = Reflect.get(value, "instanceId");
   if (Object.hasOwn(value, "cardId") && Object.hasOwn(value, "duelCardId") &&

@@ -11,6 +11,7 @@
  */
 
 import { isAI } from "../../Player.js";
+import { waitForCommandsToSettle } from "../replay/capture.js";
 import { botLogger } from "../../BotLogger.js";
 import type { FullGameHost, GamePlayer } from "../../contracts/gameRuntime.js";
 import type { TurnLimitGameOverEventPayload } from "../../contracts/events.js";
@@ -134,13 +135,15 @@ function scheduleAiMoveAfterPaint(game: LifecycleHost, actor: GamePlayer) {
     }
   };
 
+  // The move starts after the command that scheduled it has settled.
+  const runSettledMove = () => { void waitForCommandsToSettle(game).then(runMove); };
   const requestFrame = globalThis.requestAnimationFrame;
   if (typeof requestFrame === "function") {
-    requestFrame(() => setTimeout(runMove, 0));
+    requestFrame(() => setTimeout(runSettledMove, 0));
     return;
   }
 
-  setTimeout(runMove, 0);
+  setTimeout(runSettledMove, 0);
 }
 
 /**

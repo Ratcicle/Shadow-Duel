@@ -1,4 +1,5 @@
 import { getEligibleSelectionCandidates } from "./contract.js";
+import { hasCommandInFlight } from "../replay/capture.js";
 /**
  * Selection session management - start, advance, finish, cancel sessions.
  * Extracted from Game.js as part of B.3 modularization.
@@ -667,8 +668,17 @@ export function cancelTargetSelection(this: SelectionSessionHost): void {
     void this.finishTargetSelection();
     return;
   }
-  // Only callers retaining the pending command need a refusal for playback.
-  if (selection.replayCommandHandledByCaller === true && this.decisionBroker?.mode !== "replay") {
+  // A cancel inside a running command that is still recorded, such as a
+  // resolution search, needs the refusal for playback. A cancel that drops
+  // the pending command (the session carries it, or the command records the
+  // choice), or a standalone selection outside any command, leaves nothing
+  // to replay.
+  const cancelDropsCommand =
+    selection.replayCommandDescriptor != null || selection.choiceRecordedByCommand === true;
+  const insideCommand = hasCommandInFlight(this) || this._activeDeferredReplayCommandDescriptor != null;
+  const recordsRefusal = selection.replayCommandHandledByCaller === true ||
+    (insideCommand && !cancelDropsCommand);
+  if (recordsRefusal && this.decisionBroker?.mode !== "replay") {
     this.recordDecision?.({
       kind: getSelectionDecisionKind(selection),
       actor: getSelectionActor(this, selection),

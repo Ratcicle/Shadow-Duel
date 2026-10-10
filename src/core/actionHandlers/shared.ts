@@ -1153,14 +1153,25 @@ export async function selectCardsFromZone({
 
   const isAIPlayer = isAI(player);
   if (isAIPlayer) {
-    const selected =
-      typeof botSelect === "function"
-        ? botSelect(resolvedCandidates, resolvedMax, resolvedMin)
-        : resolvedCandidates.slice(0, resolvedMax);
+    // The bot's pick is a recorded decision: playback consumes it instead of
+    // asking the strategy again, whose planning state is not replayed.
+    const picked = await selectResolutionCards({
+      game,
+      player,
+      cards: resolvedCandidates,
+      requirementId: "zone_selection",
+      min: resolvedMin,
+      max: resolvedMax,
+      locate: card => locateRuntimeCard(game, player, card),
+      resolveAI: () =>
+        typeof botSelect === "function"
+          ? botSelect(resolvedCandidates, resolvedMax, resolvedMin)
+          : resolvedCandidates.slice(0, resolvedMax),
+    });
 
     return {
       candidates: resolvedCandidates,
-      selected,
+      selected: picked ? [...picked] : [],
       cancelled: false,
     };
   }
@@ -1346,6 +1357,25 @@ export function normalizeSelectionCount(
     min: Math.max(0, min),
     max: Math.max(0, max),
   };
+}
+
+const LOCATABLE_ARRAY_ZONES = ["hand", "field", "graveyard", "deck", "spellTrap", "extraDeck", "banished"] as const;
+
+/** Where a runtime card is, for selection keys; the chooser's hand when it is nowhere. */
+function locateRuntimeCard(
+  game: ActionRuntimeGamePort,
+  fallbackOwner: ActionRuntimePlayer,
+  card: ActionRuntimeCard,
+): { player: ActionRuntimePlayer; zone: ZoneInput; index: number } {
+  for (const owner of [game.player, game.bot]) {
+    if (owner.fieldSpell === card) return { player: owner, zone: "fieldSpell", index: 0 };
+    for (const zone of LOCATABLE_ARRAY_ZONES) {
+      const cards: unknown = Reflect.get(owner, zone);
+      const index = Array.isArray(cards) ? cards.indexOf(card) : -1;
+      if (index >= 0) return { player: owner, zone, index };
+    }
+  }
+  return { player: fallbackOwner, zone: "hand", index: -1 };
 }
 
 /** A resolution choice uses instance keys and the same broker for both controllers. */

@@ -20,6 +20,7 @@ import { required, unsafeFixture } from "../helpers/fixtures.js";
 import type { HarnessTrace } from "./helpers/chainHarness.js";
 
 import { captureSourceSnapshot } from "../../src/core/chain/link.js";
+import { captureTriggerEventSnapshot } from "../../src/core/chain/segoc.js";
 import { SEGOC_GROUPS } from "../../src/core/contracts/chain.js";
 import { TRIGGER_REQUIREMENTS, TRIGGER_TIMINGS } from "../../src/core/contracts/effects.js";
 import {
@@ -103,6 +104,14 @@ function createEntry(
     },
   };
 }
+
+test("a trigger event snapshot identifies players by seat, not by display name", () => {
+  const seat = (id: string, name: string) => ({ id, name, lp: 8000, hand: [], controllerType: "ai" });
+  const arena = captureTriggerEventSnapshot({ player: seat("player", "Bot 1"), opponent: seat("bot", "Bot 2") });
+  const duel = captureTriggerEventSnapshot({ player: seat("player", "Jogador"), opponent: seat("bot", "Oponente") });
+  assert.deepEqual(arena, { player: { id: "player" }, opponent: { id: "bot" } });
+  assert.deepEqual(duel, arena, "names are presentation and stay out of replay hashes");
+});
 
 test("SEGOC preserves a message from non-Error throwables", async () => {
   const { chain } = createChainHarness();

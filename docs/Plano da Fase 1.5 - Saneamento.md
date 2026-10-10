@@ -862,6 +862,8 @@ O portão global é o PR com `verify`.
   - a ativação de ignição do bot no campo e no Cemitério, e os efeitos do bot a partir da Zona de Campo e da Zona de Magias e Armadilhas, não passavam pela ativação canônica, então não gravavam comando;
   - as Invocações-Sincro e Invocações-Ascensão do bot e os efeitos de monstro ativados pelo modal do Cemitério do jogador também não passavam pelos pontos de entrada gravados; as entradas do Extra Deck agora respeitam a posição gravada;
   - a Invocação por procedimento do Extra Deck com escolha manual de materiais disparava a Invocação sem aguardá-la, então o comando era gravado antes da Invocação e um segundo comando repetia a mesma Invocação;
+  - o cancelamento humano de uma escolha durante a resolução (a busca do Lost Throne) não era gravado; agora é gravado quando ocorre dentro de um comando em andamento;
+  - duelos Bot vs Bot no Arena com captura ligada, reproduzidos em outro `Game`, revelaram mais três causas: a jogada da IA podia começar antes de o comando de troca de turno terminar; o snapshot de triggers da Chain incluía o nome de exibição dos jogadores; e as escolhas do bot em buscas (`selectCardsFromZone`) não passavam pelo broker. Depois das correções, 60 duelos de 9 presets reproduziram por completo;
   - o modal de busca do Lost Throne mostrava o id interno do requisito no lugar do nome da carta.
   - um duelo vencido no Damage Step gravava o estado final no meio do ataque; o resultado agora acompanha o estado depois do comando, o mesmo que a reprodução compara.
 - Pendentes de verificação manual, antes do merge: o Void Lost Throne no navegador (`decision-broker:3`) e um replay v27 de um duelo novo exportado pelo usuário (`npm run replay`).

@@ -10,6 +10,7 @@
  */
 
 import { isAI } from "../../Player.js";
+import { waitForCommandsToSettle } from "../replay/capture.js";
 import {
   PHASE_ORDER,
   getNextPhase,
@@ -144,13 +145,15 @@ function scheduleAiMoveAfterPaint(game: TransitionHost, actor: GamePlayer) {
     actor.makeMove(game);
   };
 
+  // The move starts after the command that scheduled it has settled.
+  const runSettledMove = () => { void waitForCommandsToSettle(game).then(runMove); };
   const requestFrame = globalThis.requestAnimationFrame;
   if (typeof requestFrame === "function") {
-    requestFrame(() => setTimeout(runMove, 0));
+    requestFrame(() => setTimeout(runSettledMove, 0));
     return;
   }
 
-  setTimeout(runMove, 0);
+  setTimeout(runSettledMove, 0);
 }
 
 function hasPendingPhaseInterruption(game: PhaseTransitionHost) {

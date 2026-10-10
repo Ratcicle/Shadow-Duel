@@ -1345,6 +1345,8 @@ export async function performSynchroSummonFromExtraDeck(
 
   return await this.performSynchroSummon(player, materials, card, {
     checkActionWindow: !Array.isArray(options.materials),
-    ...(options.position ? { position: options.position } : {}),
+    ...(options.position === "attack" || options.position === "defense"
+      ? { position: options.position }
+      : {}),
   });
 }
