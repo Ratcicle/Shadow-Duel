@@ -16,6 +16,7 @@ import {
   getUI,
   payCostAndThen,
   requestResolutionOption,
+  resolutionChoiceContext,
   resolveTargetCards,
   selectCards,
   selectCardsFromZone,
@@ -465,6 +466,7 @@ export async function handleSpecialSummonFromHandWithCost(
     (count) => `cost:${count}`,
     promptHumanTier,
     () => allowedMax,
+    resolutionChoiceContext(game, ctx.source, ctx.effect?.id),
   );
 
   if (!chosenCount) {

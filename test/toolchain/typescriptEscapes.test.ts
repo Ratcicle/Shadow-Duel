@@ -151,3 +151,38 @@ test("@ts-expect-error is prohibited outside contract tests", () => {
     `, filePath), ["prohibited-ts-expect-error"]);
   }
 });
+
+test("human decision prompts must go through the decision broker", () => {
+  const unrecorded = `export async function choose(ui: { showConfirmPrompt(message: string): Promise<boolean> }) {
+  return ui.showConfirmPrompt("Use it?");
+}`;
+  assert.deepEqual(diagnosticCodes(unrecorded, "src/core/example.ts"), ["unrecorded-human-prompt"]);
+  // Optional-call and non-null forms are the same call.
+  assert.deepEqual(diagnosticCodes(`export function f(ui: any) { return ui?.showTargetSelection?.({}); }`
+    .replace("any", "{ showTargetSelection?(value: object): void }"), "src/core/example.ts"), ["unrecorded-human-prompt"]);
+  // Outside src/ (tests, scripts) and in excluded UI/contract paths the guard does not apply.
+  assert.deepEqual(diagnosticCodes(unrecorded, "test/example.ts"), []);
+  assert.deepEqual(diagnosticCodes(unrecorded, "src/ui/renderer/example.ts"), []);
+  assert.deepEqual(diagnosticCodes(unrecorded, "src/core/game/ui/interactions.ts"), []);
+});
+
+test("broker callbacks, their same-file helpers and human resolvers may prompt", () => {
+  const brokered = `declare function requestOptionalConfirmation(game: object, player: object, human: () => Promise<boolean>): Promise<boolean>;
+declare function requestResolutionOption(game: object, player: object, human: () => Promise<number>): Promise<number>;
+type Ui = { showConfirmPrompt(message: string): Promise<boolean>; showNumberPrompt(message: string): Promise<number> };
+async function askHuman(ui: Ui) { return ui.showConfirmPrompt("Helper?"); }
+export async function decide(game: object, player: object, ui: Ui) {
+  await requestOptionalConfirmation(game, player, () => ui.showConfirmPrompt("Inline?"));
+  await requestOptionalConfirmation(game, player, () => askHuman(ui));
+  // Handed to the broker by reference.
+  const human = () => ui.showNumberPrompt("How many?");
+  return requestResolutionOption(game, player, human);
+}
+export const port = { resolveHuman(ui: Ui) { return ui.showConfirmPrompt("Resolver?"); } };`;
+  assert.deepEqual(diagnosticCodes(brokered, "src/core/example.ts"), []);
+});
+
+test("an allowlisted prompt that no longer exists is reported", () => {
+  const withoutPrompt = "export function startTargetSelectionSession() { return null; }";
+  assert.deepEqual(diagnosticCodes(withoutPrompt, "src/core/game/selection/session.ts"), ["stale-human-prompt-allowlist"]);
+});

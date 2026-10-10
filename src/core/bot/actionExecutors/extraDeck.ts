@@ -9,8 +9,9 @@ export async function executeSynchroAction(
 ): Promise<boolean> {
   const resolved = resolveSynchroActionForCurrentState(bot, action, game);
   if (!resolved) return false;
-  const result = await game.performSynchroSummon(bot, resolved.materials, resolved.card, {
-    position: action.position,
+  const result = await game.performSynchroSummonFromExtraDeck(resolved.card, bot, {
+    materials: resolved.materials,
+    ...(action.position ? { position: action.position } : {}),
   });
   return result.success === true;
 }

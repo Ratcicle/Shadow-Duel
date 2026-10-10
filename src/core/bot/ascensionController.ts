@@ -115,8 +115,10 @@ export async function tryAscensionIfAvailable(
     const action = selectAutomaticAscensionAction(bot, game);
     const material = action && bot.field[action.materialIndex];
     if (!action || !material || !action.ascensionCard) return false;
-    const result = await game.performAscensionSummon(bot, material, action.ascensionCard,
-      action.position ? { position: action.position } : {});
+    const result = await game.performAscensionSummonFromExtraDeck(action.ascensionCard, bot, {
+      material,
+      ...(action.position ? { position: action.position } : {}),
+    });
     return result?.success === true;
   } catch {
     // Preserve the opportunistic legacy wrapper for external callers.

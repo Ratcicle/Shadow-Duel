@@ -336,3 +336,32 @@ for (const seat of ["player", "bot"] as const) {
     assert.equal(source.atk, 2800);
   });
 }
+
+for (const seat of ["player", "bot"] as const) {
+  for (const negated of [false, true]) {
+    test(`The Shadow Heart destroys its host inside the awaited move (${seat}, ${negated ? "negated" : "active"})`, async t => {
+      const { game, owner } = setup(t, seat);
+      const equip = game.createCardForOwner(120, owner);
+      const host = game.createCardForOwner(111, owner);
+      assert.ok(equip && host);
+      placeFieldCards(owner.field, host);
+      owner.spellTrap.push(equip);
+      equip.isFacedown = false;
+      equip.equippedTo = host;
+      host.equips = [equip];
+      equip.effectsNegated = negated;
+      const logs: string[] = [];
+      const log = game.ui.log.bind(game.ui);
+      game.ui.log = (message: string) => { logs.push(message); log(message); };
+
+      const moved = await game.moveCard(equip, owner, "graveyard", { fromZone: "spellTrap" });
+
+      assert.equal(moved && typeof moved === "object" ? moved.success : moved, true);
+      // Nothing is left running after the move: the host is already gone.
+      assert.equal(game.zoneOpDepth, 0);
+      assert.ok(owner.graveyard.includes(host), "the equipped monster is destroyed before the move resolves");
+      assert.equal(owner.field.includes(host), false);
+      assert.equal(logs.filter(message => message.includes("left the field")).length, 1);
+    });
+  }
+}

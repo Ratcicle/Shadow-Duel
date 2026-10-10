@@ -353,3 +353,67 @@ for (const viaTrap of [true, false]) {
     assert.deepEqual(playback.player.field.map(card => card.id), [107, 108]);
   });
 }
+
+// engine-bugs:3: `autoSelect` decides for a human only when the choice is forced.
+for (const hollows of [2, 1] as const) {
+  test(`Void Hollow King autoSelect cost ${hollows === 2 ? "opens a recorded human selection" : "stays automatic when forced"} (${hollows} Void Hollow)`, async t => {
+    setLocale('en');
+    const live = createRuntimeGame({ captureReplay: true, randomSeed: 108, laboratoryMode: true, laboratoryUseBot: false, chainResponseTimeoutMs: 0 });
+    const playback = createRuntimeGame({ captureReplay: false, replayMode: 'playback', laboratoryMode: true, laboratoryUseBot: false, chainResponseTimeoutMs: 0 });
+    t.after(() => { live.dispose(); playback.dispose(); setLocale('en'); });
+    for (const game of [live, playback]) {
+      const start = game.startWithDecks.bind(game);
+      game.startWithDecks = async options => {
+        await start(options);
+        Object.assign(game, { turn: 'player', turnCounter: 4, phase: 'main1', disablePresentationDelays: true });
+        game.waitForBoardPresentation = game.waitForPresentationDelay = game.waitForAiPresentationStep = async () => {};
+        for (const owner of [game.player, game.bot]) {
+          owner.controllerType = 'human';
+          owner.deck = [...owner.hand, ...owner.deck]; owner.hand = [];
+        }
+        const take = (id: number) => {
+          const owner = game.player;
+          const card = required([...owner.deck, ...owner.extraDeck].find(card => card.id === id));
+          const zone = owner.deck.includes(card) ? owner.deck : owner.extraDeck;
+          zone.splice(zone.indexOf(card), 1); card.isFacedown = false; return card;
+        };
+        placeFieldCards(game.player.field, take(kingId), ...Array.from({ length: hollows }, () => take(hollowId)));
+      };
+    }
+    live.ui.showChainResponseModal = async () => null;
+    live.ui.showConfirmPrompt = async () => true;
+    playback.ui.showChainResponseModal = async () => assert.fail('replay requested a new response');
+    playback.ui.showTargetSelection = () => assert.fail('replay requested a new selection');
+    playback.autoSelector.select = () => assert.fail('replay recomputed an AI choice');
+    await live.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true,
+      startAtDrawPhase: true, startingPlayer: 'player', announceStartingPlayer: false,
+      playerDeck: [hollowId, hollowId, ...Array<number>(10).fill(3)], playerExtraDeck: [kingId],
+      botDeck: Array<number>(12).fill(3), botExtraDeck: [] });
+    const king = required(live.player.field.find(card => card.id === kingId));
+    const action = live.tryActivateMonsterEffect(king, null, 'field', live.player, { effectId: 'void_hollow_king_quick_boost' });
+    let opened = false;
+    let chosen: Card | null = null;
+    for (let attempts = 0; attempts < 100 && !live.targetSelection; attempts++) {
+      await new Promise<void>(resolve => setImmediate(resolve));
+    }
+    if (live.targetSelection) {
+      opened = true;
+      const requirement = required(live.targetSelection.requirements[0]);
+      const second = required(requirement.candidates[1]);
+      chosen = required(Reflect.get(second, 'cardRef')) as Card;
+      live.targetSelection.selections[requirement.id] = [second.key];
+      await live.finishTargetSelection();
+    }
+    await completeTestSelections(live, action);
+    assert.equal((await action).success, true);
+    assert.equal(opened, hollows === 2, 'a real choice opens the selection; a forced one does not');
+    if (chosen) assert.ok(live.player.graveyard.includes(chosen), 'the second Void Hollow paid the cost');
+    const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: 'void-hollow-king-autoselect' }))));
+    const result = await replayCanonicalDuel(replay, {
+      game: unsafeFixture<ReplayDriverGamePort>(playback, 'Canonical playback runs the concrete Game with identical initial fixture layout.'),
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.finalStateHash, required(replay.result).finalStateHash);
+    assert.equal(playback.decisionBroker.replayCursor, replay.decisions.length);
+  });
+}

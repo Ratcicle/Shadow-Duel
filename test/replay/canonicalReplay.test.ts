@@ -2,6 +2,7 @@ import { required, unsafeFixture } from "../helpers/fixtures.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import Card from "../../src/core/Card.js";
 import Game from "../../src/core/Game.js";
 import {
   getCardDatabaseSignature,
@@ -23,6 +24,51 @@ import type { ReplayDecisionInput } from "../../src/core/contracts/decisions.js"
 const deck = [1, 2, 3, 4, 5, 6, 7, 8];
 
 type GameInstance = InstanceType<typeof Game>;
+
+// Snapshot fields added by the engine-rules-v27 hash completion.
+const V27_PLAYER_FIELDS = [
+  "damageReceivedThisTurn",
+  "normalSummonsThisTurn",
+  "additionalNormalSummonPermissions",
+  "lpGainMultiplier",
+  "opponentCannotActivateDuringBattle",
+] as const;
+const V27_CARD_FIELDS = [
+  "characteristics",
+  "statusRegistries",
+  "turnState",
+  "statBookkeeping",
+  "bindings",
+] as const;
+const V27_CARD_STATUS_FIELDS = [
+  "battleIndestructible",
+  "tempBattleIndestructible",
+  "battleDamageHealsControllerThisTurn",
+  "extraAttacks",
+] as const;
+
+/** Project a current replay onto the engine-rules-v26 snapshot shape. */
+function stripV27SnapshotFields(replay: object): void {
+  const result: unknown = Reflect.get(replay, "result");
+  const finalState: unknown = result && typeof result === "object" ? Reflect.get(result, "finalState") : null;
+  assert.ok(finalState && typeof finalState === "object");
+  Reflect.deleteProperty(finalState, "ruleState");
+  const players: unknown = Reflect.get(finalState, "players");
+  assert.ok(players && typeof players === "object");
+  for (const player of Object.values(players)) {
+    for (const field of V27_PLAYER_FIELDS) Reflect.deleteProperty(player, field);
+    for (const zone of Object.values(Reflect.get(player, "zones") ?? {})) {
+      for (const card of Array.isArray(zone) ? zone : zone ? [zone] : []) {
+        if (!card || typeof card !== "object") continue;
+        for (const field of V27_CARD_FIELDS) Reflect.deleteProperty(card, field);
+        const statuses: unknown = Reflect.get(card, "statuses");
+        if (statuses && typeof statuses === "object") {
+          for (const field of V27_CARD_STATUS_FIELDS) Reflect.deleteProperty(statuses, field);
+        }
+      }
+    }
+  }
+}
 
 async function initialize(
   game: GameInstance,
@@ -248,16 +294,24 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   // Presence durations participate in the canonical state as well.
   assert.deepEqual(
     replay.commands.map(command => command.stateHash),
-    ["387cada4", "f9154acc"],
+    ["0a69cfa6", "a196a87e"],
   );
   const replayResult = required(replay.result);
-  assert.equal(replayResult.finalStateHash, "f9154acc");
+  assert.equal(replayResult.finalStateHash, "a196a87e");
   // Historical envelopes retain their exact version and declaration signature.
-  const beforeEffectlessCardActivations = { ...replay, engineVersion: "engine-rules-v25" };
+  // engine-rules-v26: the snapshot before the v27 hash completion.
+  const beforeHashCompletion = structuredClone(replay);
+  stripV27SnapshotFields(beforeHashCompletion);
+  required(beforeHashCompletion.commands[0]).stateHash = "387cada4";
+  required(beforeHashCompletion.commands[1]).stateHash = "f9154acc";
+  required(beforeHashCompletion.result).finalStateHash = "f9154acc";
+  assert.equal(hashCanonicalValue({ ...beforeHashCompletion, engineVersion: "engine-rules-v26" }), "bbfb1fb5");
+  assert.equal(JSON.stringify({ ...beforeHashCompletion, engineVersion: "engine-rules-v26" }).length, 14016);
+  const beforeEffectlessCardActivations = { ...beforeHashCompletion, engineVersion: "engine-rules-v25" };
   assert.deepEqual(beforeEffectlessCardActivations.commands.map(command => command.stateHash), ["387cada4", "f9154acc"]);
   assert.equal(hashCanonicalValue(beforeEffectlessCardActivations), "5569d130");
   assert.equal(JSON.stringify(beforeEffectlessCardActivations).length, 14016);
-  const beforeTurnActionState = structuredClone(replay);
+  const beforeTurnActionState = structuredClone(beforeHashCompletion);
   for (const player of Object.values(required(required(beforeTurnActionState.result).finalState).players)) {
     for (const zone of Object.values(player.zones)) {
       for (const card of Array.isArray(zone) ? zone : zone ? [zone] : []) {
@@ -310,8 +364,8 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "f60cba87", engineVersion: "engine-rules-v22" }), "b1bbca51");
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "7e5d54cb", engineVersion: "engine-rules-v23" }), "7bfe1e4a");
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "feeb687b", engineVersion: "engine-rules-v23" }), "6b0653a2");
-  assert.equal(hashCanonicalValue(replay), "bbfb1fb5");
-  assert.equal(JSON.stringify(replay).length, 14016);
+  assert.equal(hashCanonicalValue(replay), "43ba430d");
+  assert.equal(JSON.stringify(replay).length, 33776);
 
   const result = await replayCanonicalDuel(replay);
   assert.equal(result.ok, true);
@@ -524,4 +578,152 @@ test("trilha canônica cobre ativação, SEGOC, uso, resolução, Invocação e 
   );
   assert.doesNotThrow(() => JSON.stringify(replayBuffer.events));
   game.dispose();
+});
+
+interface RuleFieldMutation {
+  readonly field: string;
+  readonly mutate: (game: GameInstance) => void;
+}
+
+// Every rule-relevant mutable field must reach the canonical hash: two duels
+// that differ only there must not be reported as identical.
+const RULE_FIELD_MUTATIONS: readonly RuleFieldMutation[] = [
+  { field: "player.damageReceivedThisTurn", mutate: game => { game.player.damageReceivedThisTurn = 500; } },
+  { field: "player.normalSummonsThisTurn", mutate: game => { game.player.normalSummonsThisTurn = [{ unknown: true }]; } },
+  { field: "player.additionalNormalSummonPermissions", mutate: game => {
+    game.player.additionalNormalSummonPermissions = [{ count: 1, filters: {} }];
+  } },
+  { field: "player.lpGainMultiplier", mutate: game => { game.player.lpGainMultiplier = 2; } },
+  { field: "player.opponentCannotActivateDuringBattle", mutate: game => {
+    Reflect.set(game.player, "opponentCannotActivateDuringBattle", true);
+  } },
+  { field: "gameOver", mutate: game => { game.gameOver = true; } },
+  { field: "winner", mutate: game => { game.winner = "bot"; } },
+  { field: "battleStep", mutate: game => { game.battleStep = "damage"; } },
+  { field: "lastAttackNegated", mutate: game => { game.lastAttackNegated = true; } },
+  { field: "damageCalculationStatChangePending", mutate: game => { game.damageCalculationStatChangePending = true; } },
+  { field: "damageCalculationTempBuffs", mutate: game => {
+    game.damageCalculationTempBuffs = [{ card: required(game.player.hand[0]), atk: 500, def: 0 }];
+  } },
+  { field: "endOfDamageStepTempBuffs", mutate: game => {
+    game.endOfDamageStepTempBuffs = [{ card: required(game.player.hand[0]), atk: 0, def: 300 }];
+  } },
+  { field: "temporaryBattlePairEffects", mutate: game => {
+    game.temporaryBattlePairEffects = [{ timing: "before_damage_calculation", sourceCardId: 1 }];
+  } },
+  { field: "pendingSynchroMaterialFollowups", mutate: game => {
+    game.pendingSynchroMaterialFollowups = [{ type: "synchro_material_followup", synchroSummonContextId: "synchro:1" }];
+  } },
+  { field: "pendingSynchroMaterialTriggerContinuation", mutate: game => {
+    game.pendingSynchroMaterialTriggerContinuation = {
+      stage: "material_triggers", synchroSummonContextId: "synchro:1",
+      summonedCard: required(game.player.hand[0]), playerId: "player",
+    };
+  } },
+  { field: "synchroSummonContextCounter", mutate: game => { game.synchroSummonContextCounter = 3; } },
+  { field: "eventResolutionCounter", mutate: game => { game.eventResolutionCounter += 1; } },
+  { field: "generatedIdCounters", mutate: game => { game.createDeterministicId("battle_pair"); } },
+  { field: "materialDuelStats", mutate: game => {
+    game.materialDuelStats.player.activatedEffectIdsByMaterialId.set(1, new Set(["effect"]));
+  } },
+  { field: "specialSummonTypeCounts", mutate: game => { game.specialSummonTypeCounts.player.set("Dragon", 1); } },
+  { field: "card.equips", mutate: game => {
+    required(game.player.hand[0]).equips = [required(game.player.hand[1])];
+  } },
+  { field: "card.boundTrapSource", mutate: game => {
+    required(game.player.hand[0]).boundTrapSource = required(game.player.hand[1]);
+  } },
+  { field: "card.boundMonsterTarget", mutate: game => {
+    required(game.player.hand[0]).boundMonsterTarget = required(game.player.hand[1]);
+  } },
+  { field: "card.ascensionMaterials", mutate: game => {
+    const material = required(game.player.hand[1]);
+    required(game.player.hand[0]).ascensionMaterials = [{
+      instanceId: material.instanceId, cardId: material.id ?? null, name: material.name,
+      ownerId: "player", controllerId: "player", usedOnTurn: 1,
+    }];
+  } },
+  { field: "card.synchroMaterials", mutate: game => {
+    const material = required(game.player.hand[1]);
+    required(game.player.hand[0]).synchroMaterials = [{
+      instanceId: material.instanceId, cardId: material.id ?? null, name: material.name, level: 1,
+      isTuner: true, ownerId: "player", controllerId: "player", usedOnTurn: 1,
+    }];
+  } },
+  { field: "card.attackedMonstersThisTurn", mutate: game => {
+    const target = required(game.bot.hand[0]);
+    required(game.player.hand[0]).attackedMonstersThisTurn = new Set([target.instanceId]);
+  } },
+  ...[
+    ["cardKind", "trap"], ["originalCardKind", "trap"], ["treatedAsCardKinds", ["trap"]],
+    ["isTrapMonster", true], ["trapMonsterSummonProcedure", "card_effect"],
+    ["trapMonsterOriginalState", { cardKind: "trap" }], ["monsterType", "effect"],
+    ["type", "Machine"], ["types", ["Machine"]], ["attribute", "DARK"], ["subtype", "continuous"],
+    ["isTuner", true], ["synchroMaterialRoles", { tuner: true }], ["isToken", true],
+    ["battleIndestructible", true], ["tempBattleIndestructible", true],
+    ["battleDamageHealsControllerThisTurn", true], ["extraAttacks", 1],
+    ["tempStatuses", { battleIndestructible: false }], ["fieldExitStatuses", { isTuner: false }],
+    ["canMakeSecondAttackThisTurn", true], ["secondAttackUsedThisTurn", true],
+    ["canAttackAllOpponentMonstersThisTurn", true], ["canAttackDirectlyThisTurn", true],
+    ["extraAttackTargetRestriction", "monster"], ["passiveExtraAttackTargetRestriction", "monster"],
+    ["passiveExtraAttackBonuses", { effect: { amount: 1, targetRestriction: null } }],
+    ["cannotAttackUntilTurn", 4], ["immuneToOpponentEffectsUntilTurn", 4],
+    ["battleIndestructibleOncePerTurnLastUsedTurn", 1], ["setTurn", 1], ["turnSetOn", 1],
+    ["revealedTurn", 1], ["lastSummonProcedure", "synchro"],
+    ["tempAtkBoost", 300], ["tempDefBoost", 300],
+    ["turnBasedBuffs", [{ id: "buff_1_1", stat: "atk", value: 300, expiresOnTurn: 2 }]],
+    ["originalAtk", 1000], ["originalDef", 1000], ["originalStatsOverride", { atk: 0, def: 0 }],
+    ["dynamicBuffs", { aura: { value: 300, stats: ["atk"], appliedValues: { atk: 300 } } }],
+    ["suppressedDynamicBuffStatsByKey", { aura: { atk: 300 } }],
+    ["temporarySuppressedDynamicBuffStatsByKey", { aura: { atk: 300 } }],
+    ["equipAtkBonus", 500], ["equipDefBonus", 500], ["equipExtraAttacks", 1], ["equipExtraAttacksApplied", 1],
+    ["grantsBattleIndestructible", true],
+    ["effectMarkers", { marker: { key: "marker", sourceEffectId: "effect", createdOnTurn: 1 } }],
+    ["pendingSpellTrapFinalization", { destination: "graveyard", ownerId: "player", activationZone: "spellTrap" }],
+    ["lastSentToGraveAsMaterial", { method: "synchro", turn: 1 }],
+  ].map(([key, value]): RuleFieldMutation => ({
+    field: `card.${String(key)}`,
+    mutate: game => { Reflect.set(required(game.player.hand[0]), String(key), value); },
+  })),
+];
+
+test("every rule-relevant mutable field changes the canonical hash", async (t) => {
+  for (const mutation of RULE_FIELD_MUTATIONS) {
+    const game = new Game({ randomSeed: 123, captureReplay: false });
+    t.after(() => game.dispose());
+    await initialize(game, "player");
+    const before = hashCanonicalGameState(game);
+    mutation.mutate(game);
+    assert.notEqual(hashCanonicalGameState(game), before, `${mutation.field} must change the canonical hash`);
+  }
+});
+
+test("rule records hash by duel identity, not by process-local instance ids", async (t) => {
+  const hashWithRecords = async (instanceShift: number) => {
+    // Shift the process-global instance counter between otherwise equal duels.
+    for (let index = 0; index < instanceShift; index++) {
+      new Card({ id: 1, name: "Instance shift", cardKind: "monster", atk: 0, def: 0, level: 1, effects: [] }, "player");
+    }
+    const game = new Game({ randomSeed: 123, captureReplay: false });
+    t.after(() => game.dispose());
+    await initialize(game, "player");
+    const source = required(game.player.hand[0]);
+    const target = required(game.bot.hand[0]);
+    game.temporaryBattlePairEffects = [{
+      id: `${String(source.instanceId)}:pair:${game.createDeterministicId("battle_pair")}`,
+      source, sourceInstanceId: source.instanceId, firstTarget: target, firstInstanceId: target.instanceId,
+    }];
+    game.pendingSynchroMaterialFollowups = [{
+      id: `${String(source.instanceId)}:followup:1`, source, sourceInstanceId: source.instanceId,
+    }];
+    game.damageCalculationTempBuffs = [{ card: target, atk: 100, def: 0 }];
+    source.attackedMonstersThisTurn = new Set([target.instanceId]);
+    source.ascensionMaterials = [{
+      instanceId: target.instanceId, cardId: target.id ?? null, name: target.name,
+      ownerId: "bot", controllerId: "bot", usedOnTurn: 1,
+    }];
+    Reflect.set(source, "effectMarkers", { marker: { key: "marker", sourceInstanceId: target.instanceId } });
+    return hashCanonicalGameState(game);
+  };
+  assert.equal(await hashWithRecords(0), await hashWithRecords(7));
 });

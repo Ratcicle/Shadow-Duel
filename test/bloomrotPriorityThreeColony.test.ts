@@ -35,6 +35,8 @@ function setup(t: TestContext, seat: Seat) {
   const source = new Card(cardDefinition(410), owner.id);
   const ownTarget = new Card(cardDefinition(401), owner.id);
   const target = new Card(cardDefinition(401), opponent.id);
+  // Duel cards carry their duel identity from creation, as in a real duel.
+  for (const card of [source, ownTarget, target]) game.ensureDuelCardId(card);
   owner.fieldSpell = source; source.location = "fieldSpell";
   placeFieldCards(owner.field, ownTarget); placeFieldCards(opponent.field, target);
   return { game, owner, opponent, source, ownTarget, target, seat, otherSeat };
@@ -80,7 +82,7 @@ for (const seat of ["player", "bot"] as const) {
     assert.equal(target.atk, target.baseAtk);
     target.isFacedown = simulatedTarget.isFacedown = false; reconcile(game, state);
     assert.equal(target.atk, target.baseAtk - 200);
-    const key = `bloomrot_living_colony_spore_debuff_${source.fieldPresenceId || source.instanceId}_spore`;
+    const key = `bloomrot_living_colony_spore_debuff_${source.fieldPresenceId || source.duelCardId || source.instanceId}_spore`;
     assert.equal(target.dynamicBuffs?.[key]?.value, -200);
     assert.deepEqual(getModeledPassiveContributions(simulatedTarget), [[key, "field_counter_stat_aura"]]);
   });

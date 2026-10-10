@@ -183,6 +183,7 @@ interface CombatHost {
   player: GamePlayer;
   bot: GamePlayer;
   turnCounter: number;
+  combatResolutionDepth?: number;
   battleStep: string | null;
   lastAttackNegated: boolean;
   temporaryBattlePairEffects: BattlePairEffect[];
@@ -554,6 +555,21 @@ export async function resolveCombat(
   );
   if (!guard.ok) return guard;
 
+  // From here until the combat settles, every other action sees it as resolving.
+  this.combatResolutionDepth = Number(this.combatResolutionDepth || 0) + 1;
+  try {
+    return await resolveGuardedCombat.call(this, attacker, attackerOwner, target);
+  } finally {
+    this.combatResolutionDepth = Math.max(0, Number(this.combatResolutionDepth || 0) - 1);
+  }
+}
+
+async function resolveGuardedCombat(
+  this: CombatHost,
+  attacker: CombatCard,
+  attackerOwner: GamePlayer,
+  target: CombatCard | null,
+): Promise<CombatResult | undefined> {
   const availability = this.getAttackAvailability(attacker);
   if (!availability.ok) return;
 

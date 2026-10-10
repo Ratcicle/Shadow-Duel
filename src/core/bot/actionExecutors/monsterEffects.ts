@@ -56,34 +56,10 @@ export async function executeMonsterEffectAction(
     );
   activationContext.effectId = activationEffect?.id || effectId || null;
 
-  const pipelineResult = await game.runActivationPipeline({
-    card,
-    owner: bot,
-    activationZone: "field",
+  // The canonical activation records the replay command, like a human's.
+  const pipelineResult = await game.tryActivateMonsterEffect(card, null, "field", bot, {
+    effectId: activationContext.effectId ?? null,
     activationContext,
-    selectionKind: "monsterEffect",
-    selectionMessage: "Select target(s) for the monster effect.",
-    guardKind: "bot_monster_effect",
-    phaseReq: ["main1", "main2"],
-    preview: () =>
-      game.effectEngine?.canActivateMonsterEffectPreview?.(
-        card,
-        bot,
-        "field",
-        null,
-        { activationContext },
-      ),
-    oncePerTurn: {
-      card,
-      player: bot,
-      effect: activationEffect,
-    },
-    activate: (chosen, ctx, zone) =>
-      game.effectEngine.activateMonsterEffect(card, bot, chosen, zone, ctx),
-    finalize: () => {
-      game.ui?.log?.(`Bot activates ${card.name}'s effect`);
-      game.updateBoard();
-    },
   });
 
   return (
@@ -149,34 +125,10 @@ export async function executeGraveyardMonsterEffectAction(
       actionActivationContext.autoSelectSingleTarget !== false,
   };
 
-  const pipelineResult = await game.runActivationPipeline({
-    card,
-    owner: bot,
-    activationZone: "graveyard",
+  // The canonical activation records the replay command, like a human's.
+  const pipelineResult = await game.tryActivateMonsterEffect(card, null, "graveyard", bot, {
+    effectId: activationContext.effectId ?? null,
     activationContext,
-    selectionKind: "graveyardEffect",
-    selectionMessage: "Select target(s) for the graveyard effect.",
-    guardKind: "bot_graveyard_monster_effect",
-    phaseReq: ["main1", "main2"],
-    preview: () =>
-      game.effectEngine?.canActivateMonsterEffectPreview?.(
-        card,
-        bot,
-        "graveyard",
-        null,
-        { activationContext },
-      ),
-    oncePerTurn: {
-      card,
-      player: bot,
-      effect: graveyardEffect,
-    },
-    activate: (chosen, ctx) =>
-      game.effectEngine.activateMonsterFromGraveyard(card, bot, chosen, ctx),
-    finalize: () => {
-      game.ui?.log?.(`Bot activates ${card.name}'s effect from graveyard`);
-      game.updateBoard();
-    },
   });
 
   return (

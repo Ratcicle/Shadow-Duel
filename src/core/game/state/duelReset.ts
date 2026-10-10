@@ -127,6 +127,7 @@ export function resetDuelState(
   this.activeDamageStepTransaction = null;
   this.lastDamageStepTransaction = null;
   this.damageStepProcedureDepth = 0;
+  this.combatResolutionDepth = 0;
   this.activeSummonTransaction = null;
   this.lastSummonTransaction = null;
   this.summonProcedureDepth = 0;

@@ -781,8 +781,10 @@ export function resolveTargets(
     }
 
     const autoSelectExplicit = def.autoSelect === true;
+    // A human is only auto-selected for when no choice remains (exactly the
+    // minimum is available); fewer candidates fall through to the normal flow.
     const allowAutoSelectForPlayer =
-      !isPreview && !isAIPlayer && autoSelectExplicit;
+      !isPreview && !isAIPlayer && autoSelectExplicit && candidates.length === min;
     const allowAutoSelectForBot = allowAutoSelectTargets && autoSelectExplicit;
     const shouldAutoSelect = allowAutoSelectForPlayer || allowAutoSelectForBot;
     if (shouldAutoSelect) {

@@ -294,6 +294,10 @@ export async function replayCanonicalDuel(
     botDeck: canonicalReplay.setup.botDeck,
     botExtraDeck: canonicalReplay.setup.botExtraDeck,
   });
+  if (canonicalReplay.setup.openingTurnStarted === true) {
+    await game.startTurn();
+    await drainReplayDecisions(game);
+  }
 
   for (const command of canonicalReplay.commands) {
     await executeCommand(game, command);

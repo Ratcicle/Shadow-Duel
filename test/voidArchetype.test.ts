@@ -15,6 +15,7 @@ import { moveCardToZone } from "../src/core/ai/common/zones.js";
 import type { ActionOf } from "../src/core/contracts/actions.js";
 import type { GamePlayer } from "../src/core/contracts/player.js";
 import type { BattleDestroyEventPayload } from "../src/core/contracts/events.js";
+import type { ReplayDecisionInput } from "../src/core/contracts/decisions.js";
 import { cardDatabaseById, required, unsafeFixture } from "./helpers/fixtures.js";
 import { createRuntimeGame, placeFieldCards } from "./helpers/game.js";
 
@@ -1236,6 +1237,42 @@ for (const change of ["negated", "declined", "negated_after_prompt", "atk_after_
   });
 }
 
+for (const seat of ["player", "bot"] as const) {
+  for (const controller of ["human", "ai"] as const) {
+    for (const accept of controller === "human" ? [true, false] : [true]) {
+      test(`Hydra grava a confirmação de proteção pelo broker e o playback a consome (${seat}, ${controller}, ${accept ? "aceita" : "recusa"})`, async (t) => {
+        const run = async (prompt: (resolve: (value: boolean) => void) => void, decisions?: ReplayDecisionInput[]) => {
+          const game = createGame(t);
+          const owner = game[seat];
+          owner.controllerType = controller;
+          const hydra = makeCard(215, owner);
+          placeFieldCards(owner.field, hydra);
+          game.ui.showDestructionNegationPrompt = (_name, _cost, resolve) => prompt(resolve);
+          const recorded: ReplayDecisionInput[] = [];
+          game.on("decision_made", decision => { recorded.push(decision); });
+          if (decisions) game.decisionBroker.loadReplayDecisions(decisions);
+          const result = await game.destroyCard(hydra, { cause: "effect" });
+          assert.ok("destroyed" in result);
+          return { game, hydra, destroyed: result.destroyed, recorded };
+        };
+
+        let prompts = 0;
+        const live = await run(resolve => { prompts++; resolve(accept); });
+        assert.equal(prompts, controller === "human" ? 1 : 0, "only a human seat sees the prompt");
+        assert.equal(live.destroyed, !accept);
+        assert.equal(live.recorded.length, 1);
+        assert.equal(live.recorded[0]?.kind, "choice");
+        assert.equal(live.recorded[0]?.actorId, seat);
+
+        const playback = await run(() => assert.fail("Playback must consume the recorded protection choice"), live.recorded);
+        assert.equal(playback.destroyed, live.destroyed);
+        assert.equal(playback.hydra.atk, live.hydra.atk);
+        assert.equal(playback.game.decisionBroker.replayCursor, 1);
+      });
+    }
+  }
+}
+
 test("Hydra mantém a redução e usa proteção uma vez por turno por cópia", async (t) => {
   const game = createGame(t);
   const destroy = async (card: Card, cause: "battle" | "effect") => {
@@ -1539,3 +1576,38 @@ for (const laterAtomicEvent of [false, true]) {
     ]);
   });
 }
+
+test("Berserker trigger confirmation outside the SEGOC is a recorded human choice", async (t) => {
+  const run = async (prompt: (message: string) => boolean, decisions?: ReplayDecisionInput[]) => {
+    const game = createGame(t, true);
+    game.player.controllerType = "human";
+    const berserker = makeCard(213, game.player);
+    placeFieldCards(game.player.field, berserker);
+    placeFieldCards(game.bot.field, makeCard(203, game.bot));
+    const destroyed = makeCard(203, game.bot);
+    game.bot.graveyard.push(destroyed);
+    game.ui.showConfirmPrompt = async message => prompt(message);
+    const recorded: ReplayDecisionInput[] = [];
+    game.on("decision_made", decision => { recorded.push(decision); });
+    if (decisions) game.decisionBroker.loadReplayDecisions(decisions);
+    const payload = unsafeFixture<BattleDestroyEventPayload>(
+      { attacker: berserker, attackerOwner: game.player, destroyed, destroyedOwner: game.bot, battleDestroyer: berserker },
+      "Focused battle trigger fixture omits damage-step metadata unused by Berserker.");
+    const triggers = await game.effectEngine.collectBattleDestroyTriggers(payload);
+    const entry = required(triggers.entries.find(e => e.card === berserker));
+    const result = await game.runActivationPipeline(unsafeFixture<Parameters<typeof game.runActivationPipeline>[0]>(entry.config,
+      "Collected trigger references concrete game cards behind the narrower trigger port."));
+    return { game, result, recorded };
+  };
+
+  let prompts = 0;
+  const live = await run(() => { prompts++; return false; });
+  assert.equal(prompts, 1);
+  assert.equal(live.result.success, false, "a declined optional trigger does not resolve");
+  assert.equal(live.recorded.length, 1);
+  assert.equal(live.recorded[0]?.kind, "choice");
+
+  const playback = await run(() => assert.fail("Playback must consume the recorded trigger confirmation"), live.recorded);
+  assert.equal(playback.result.success, false);
+  assert.equal(playback.game.decisionBroker.replayCursor, 1);
+});

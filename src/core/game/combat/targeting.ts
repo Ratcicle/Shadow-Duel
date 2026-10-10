@@ -160,24 +160,29 @@ export function startAttackTargetSelection(
 
   this.startTargetSelectionSession({
     kind: "attack",
+    // The attack command records the chosen target; playback replays it directly.
+    choiceRecordedByCommand: true,
     attacker: asAttackSelectionCard(attacker),
     selectionContract,
-    execute: (selections: SelectionResult) => {
+    // The session settles only after the combat it started has resolved.
+    execute: async (selections: SelectionResult) => {
       const chosenKeys = selections[requirement.id] || [];
       const chosenKey = chosenKeys[0];
       const chosenCandidate = requirement.candidates.find(
         (cand) => cand.key === chosenKey
       );
-      if (chosenCandidate?.isDirectAttack) {
-        this.resolveCombat(attacker, null, {
-          allowDuringSelection: true,
-          allowDuringResolving: true,
-        }).catch((err) => console.error(err));
-      } else if (chosenCandidate?.cardRef) {
-        this.resolveCombat(attacker, chosenCandidate.cardRef, {
-          allowDuringSelection: true,
-          allowDuringResolving: true,
-        }).catch((err) => console.error(err));
+      const chosenTarget = chosenCandidate?.isDirectAttack
+        ? null
+        : chosenCandidate?.cardRef;
+      if (chosenTarget !== undefined) {
+        try {
+          await this.resolveCombat(attacker, chosenTarget, {
+            allowDuringSelection: true,
+            allowDuringResolving: true,
+          });
+        } catch (err) {
+          console.error(err);
+        }
       }
       return { success: true, needsSelection: false };
     },

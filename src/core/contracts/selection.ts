@@ -396,6 +396,11 @@ export interface SelectionSessionInput {
   replayCommandDescriptor?: object | null;
   /** Intermediate choice whose caller awaits the complete command, including later decisions. */
   replayCommandHandledByCaller?: boolean;
+  /**
+   * The choice is carried by the replay command its execute records (an attack
+   * carries its target), so it is not also recorded as a broker decision.
+   */
+  choiceRecordedByCommand?: boolean;
   resolve?: SelectionSessionResolver;
   execute?: (
     selections: SelectionResult,

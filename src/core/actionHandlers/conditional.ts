@@ -19,7 +19,7 @@ import type {
   RawSelectionRequirement,
   SelectionResult,
 } from "../contracts/selection.js";
-import { getUI, requestOptionalConfirmation, resolveTargetCards } from "./shared.js";
+import { getUI, requestOptionalConfirmation, resolutionChoiceContext, resolveTargetCards } from "./shared.js";
 import { isAI } from "../Player.js";
 
 type OptionalTargetAction = ActionOf<"optional_target_actions">;
@@ -567,7 +567,7 @@ async function confirmOptionalAction(
         },
       );
       return Boolean(result);
-    });
+    }, undefined, resolutionChoiceContext(game, ctx?.source, ctx?.effect?.id));
   }
 
   const selections = await runOptionalTargetSelection(

@@ -439,9 +439,10 @@ Notas importantes:
   contrato de target; combine somente filtros que possam encontrar o mesmo
   card. `position` e `maxAtk` não são campos diretos de target no schema de
   autoria atual.
-- Sem `autoSelect`, jogador humano recebe modal quando há escolha. Definir
-  `autoSelect: true` também automatiza a escolha humana; use somente se o
-  efeito realmente não exigir decisão do jogador.
+- Sem `autoSelect`, jogador humano recebe modal quando há escolha. Com
+  `autoSelect: true`, o humano só é selecionado automaticamente quando a
+  escolha é forçada (há exatamente o mínimo de candidatos); havendo mais
+  candidatos, a seleção abre normalmente.
 - Para bots, `activationContext.autoSelectTargets` pode selecionar automaticamente.
 
 ## Conditions

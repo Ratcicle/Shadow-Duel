@@ -867,6 +867,8 @@ export interface GameRuntimeState {
   pendingSynchroMaterialTriggerContinuation: unknown;
   synchroSummonContextCounter: number;
   devModeEnabled: boolean;
+  /** Combats in progress (resolveCombat after its guard); blocks other actions. */
+  combatResolutionDepth: number;
   strictEngineFaults: boolean | undefined;
   engineFaults: EngineFault[];
   zoneOpDepth: number;
@@ -1031,6 +1033,7 @@ export interface GameActionGuardHost {
   activeSummonTransaction: SummonTransaction | null;
   chainSystem: ChainRuntimePort;
   damageStepProcedureDepth: number;
+  combatResolutionDepth?: number;
   eventResolutionDepth: number;
   isResolvingEffect: boolean;
   phase: GamePhase;

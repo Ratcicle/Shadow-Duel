@@ -76,6 +76,7 @@ export function startReplayRecording(
 
 export function captureReplaySetup(
   this: ReplayRecorderGamePort,
+  options: { openingTurnStarted?: boolean } = {},
 ) {
   if (!this.captureReplayEnabled || !this._canonicalReplay) return null;
   this._canonicalReplay.setup = {
@@ -86,6 +87,7 @@ export function captureReplaySetup(
     playerExtraDeck: deckEntries(this, this.player?.extraDeck),
     botDeck: deckEntries(this, this.bot?.deck),
     botExtraDeck: deckEntries(this, this.bot?.extraDeck),
+    ...(options.openingTurnStarted === true ? { openingTurnStarted: true as const } : {}),
   };
   return this._canonicalReplay.setup;
 }
@@ -103,6 +105,14 @@ export function recordReplayCommand(
     stateHash: hashCanonicalGameState(this),
   };
   this._canonicalReplay.commands.push(entry);
+  // A duel that ends inside a command (LP reaching 0 in the Damage Step)
+  // finalizes before the command settles. Playback checks the final hash
+  // after that command, so the result follows the settled state.
+  const result = this._canonicalReplay.result;
+  if (this._canonicalReplay.finalized && result) {
+    result.finalStateHash = entry.stateHash;
+    result.finalState = createCanonicalStateSnapshot(this);
+  }
   return entry;
 }
 

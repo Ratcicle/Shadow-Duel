@@ -71,6 +71,7 @@ interface ExtraDeckPerformOptions extends ExtraDeckCheckOptions {
 
 interface AscensionPerformOptions extends ExtraDeckCheckOptions {
   material?: GameCard;
+  position?: BattlePositionInput | null;
 }
 
 interface ProcedureCheckSuccess {
@@ -233,6 +234,7 @@ interface ExtraDeckHost {
     player: GamePlayer,
     material: GameCard,
     card: GameCard,
+    options?: { position?: BattlePositionInput },
   ): Promise<SummonExecutionResult>;
   createPreparedSummon(input: PreparedSummonInput): PreparedSummon;
   executeSummonTransaction(
@@ -866,7 +868,9 @@ export async function performExtraDeckSummonProcedure(
         owner: player,
         selectionContract: contract,
         message: contract.ui.message,
-        execute: (selections) => {
+        // Awaited inside the session, so the session records one command
+        // whose state hash follows the finished summon.
+        execute: async (selections) => {
           const keys = selections?.extra_deck_materials || [];
           const selected = keys
             .map(
@@ -876,10 +880,9 @@ export async function performExtraDeckSummonProcedure(
                 )?.cardRef,
             )
             .filter((material): material is GameCard => Boolean(material));
-          void this.performExtraDeckSummonProcedure(card, player, {
+          return await this.performExtraDeckSummonProcedure(card, player, {
             materials: selected,
           });
-          return { success: true, needsSelection: false };
         },
       });
       return {
@@ -985,7 +988,10 @@ export async function performAscensionSummonFromExtraDeck(
     options.material || (!requiresChoice && materials.length === 1 ? materials[0] : null);
   if (material) {
     this.closeExtraDeckModal?.();
-    return await this.performAscensionSummon(player, material, card);
+    return await this.performAscensionSummon(player, material, card,
+      options.position === "attack" || options.position === "defense"
+        ? { position: options.position }
+        : {});
   }
 
   const selectionContract = buildAscensionMaterialSelectionContract(

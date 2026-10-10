@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import Game from "../../src/core/Game.js";
 import Bot from "../../src/core/Bot.js";
 import { validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
+import { hasCommandInFlight } from "../../src/core/game/replay/capture.js";
 
 const deck = [3, 3, 3, 4, 4, 4, 5, 5, 5, 7, 7, 7, 8, 8, 9, 9, 9, 1, 1, 1];
 const modes = ["lifecycle-skip", "lifecycle-next", "transition-skip", "transition-next", "human-control"] as const;
@@ -64,3 +65,25 @@ for (const entry of ["transition", "lifecycle"] as const) {
     });
   }
 }
+
+test("an AI move scheduled by a turn change waits for that command to settle", async t => {
+  const game = new Game({ captureReplay: true, randomSeed: 9402, chainResponseTimeoutMs: 0 });
+  t.after(() => game.dispose());
+  game.phaseDelayMs = 0;
+  const calls: boolean[] = [];
+  t.mock.method(Bot.prototype, "makeMove", async () => { calls.push(hasCommandInFlight(game)); });
+  await game.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true,
+    startAtDrawPhase: true, announceStartingPlayer: false, startingPlayer: "player",
+    playerDeck: deck, botDeck: deck, playerExtraDeck: [], botExtraDeck: [] });
+  // Ending the turn schedules the bot's move; the command keeps running after it.
+  const endTurn = game.endTurn.bind(game);
+  game.endTurn = async () => {
+    const result = await endTurn();
+    await new Promise(resolve => setTimeout(resolve, 20));
+    return result;
+  };
+  await game.skipToPhase("end");
+  assert.equal(game.turn, "bot");
+  await new Promise(resolve => setTimeout(resolve, 30));
+  assert.deepEqual(calls, [false], "the bot acts once, after the turn change settled");
+});

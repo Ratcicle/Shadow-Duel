@@ -190,6 +190,7 @@ interface PerformSynchroOptions extends SynchroCheckOptions {
 
 interface ExtraDeckSynchroOptions extends SynchroCheckOptions {
   materials?: GameCard[];
+  position?: BattlePositionInput | null;
 }
 
 interface SynchroSelectionCandidate extends RawSelectionCandidate {
@@ -1344,5 +1345,8 @@ export async function performSynchroSummonFromExtraDeck(
 
   return await this.performSynchroSummon(player, materials, card, {
     checkActionWindow: !Array.isArray(options.materials),
+    ...(options.position === "attack" || options.position === "defense"
+      ? { position: options.position }
+      : {}),
   });
 }

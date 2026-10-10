@@ -152,16 +152,12 @@ for (const seat of ["player", "bot"] as const) {
       assert.equal(applySimulatedActions({ state, selfId: seat, actions: [{ type: "polymerization_fusion_summon" }], options }), true);
       assert.equal(moved, true); assert.equal(observed, 1);
       assert.equal(state[seat].lp, game[seat].lp);
-      // Known divergence, fixed in Phase 1.5 Etapa 7: in self-exit the simulation still searches while the
-      // runtime refuses it. The runtime snapshots the source's current locationVersion after the synchronous
-      // listener prefix; the synchronous simulation already sees the card back in the GY. Etapa 7 moves both
-      // to the payload locationVersion; only then this expects `true` and self-exit-late drops the
-      // deferred_trigger_source_presence fallback asserted below.
-      assert.equal(state[seat].deck.includes(simDeckCard), sourceRole !== "self-exit");
+      // Runtime and simulation bind a moved source to the move's payload locationVersion, so both lose the
+      // self-exit search after the GY -> hand -> GY callback (D2) and no fallback is needed.
+      assert.equal(state[seat].deck.includes(simDeckCard), true);
       assert.equal(getCounterValue(material, "spore"), 0);
       assert.equal(fusion.atk, actual.fusion.atk);
-      assert.deepEqual(state._simUnsupportedActions ?? [], sourceRole === "self-exit-late"
-        ? ["deferred_trigger_source_presence"] : []);
+      assert.deepEqual(state._simUnsupportedActions ?? [], []);
     });
   }
 

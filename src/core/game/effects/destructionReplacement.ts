@@ -16,7 +16,7 @@ import {
   markOncePerDuelEffectUsed,
 } from "../../effects/triggers/registration.js";
 import { getCardDisplayName, getUIText } from "../../i18n.js";
-import { requestOptionalConfirmation } from "../../actionHandlers/shared.js";
+import { requestOptionalConfirmation, resolutionChoiceContext } from "../../actionHandlers/shared.js";
 import type { DecisionBrokerPort } from "../../contracts/decisions.js";
 import { getCardLocationVersion } from "../../Card.js";
 import type { ReplacementTargetPresence } from "../../contracts/actionRuntime.js";
@@ -247,7 +247,7 @@ interface ReplacementContext {
   targetPresence: ReplacementPresence;
 }
 
-interface ReplacementPresence {
+export interface ReplacementPresence {
   readonly card: GameCard;
   readonly owner: GamePlayer;
   readonly zone: CanonicalZone | null;
@@ -411,7 +411,7 @@ function getCostTypeDescription(costFilters: CardFilter, count: number) {
   return getCostKindLabel("card", count);
 }
 
-function formatReplacementText(
+export function formatReplacementText(
   text: string | null | undefined,
   targetCardName: string,
   sourceCardName: string | null | undefined,
@@ -865,13 +865,13 @@ function findReplacementZone(owner: GamePlayer, card: GameCard): CanonicalZone |
   return zones.find(zone => getPlayerZone(owner, zone)?.includes(card)) || null;
 }
 
-function captureReplacementPresence(card: GameCard, owner: GamePlayer): ReplacementPresence {
+export function captureReplacementPresence(card: GameCard, owner: GamePlayer): ReplacementPresence {
   return { card, owner, zone: findReplacementZone(owner, card),
     controller: card.controller ?? owner.id, instanceId: card.instanceId, duelCardId: card.duelCardId,
     locationVersion: getCardLocationVersion(card), fieldPresenceId: card.fieldPresenceId };
 }
 
-function replacementPresenceIsCurrent(presence: ReplacementPresence): boolean {
+export function replacementPresenceIsCurrent(presence: ReplacementPresence): boolean {
   const { card, owner } = presence;
   // Ownership normalization and lazy replay IDs may fill absent fields without
   // moving a card. The captured object/instance and presence still identify it.
@@ -1093,6 +1093,7 @@ async function tryReplacement(
         game, player: sourceOwner, sourceCard, effect, replacementEffect: replacement,
         targetCard: card, cause, fromZone, context: ctx, kind: "destruction",
       }),
+      resolutionChoiceContext(game, sourceCard, effect.id),
     );
   };
 

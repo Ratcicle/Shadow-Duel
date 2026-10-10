@@ -124,16 +124,9 @@ export async function executeSpellTrapEffectAction(
     return false;
   }
 
-  const activationEffect = game.effectEngine?.getSpellTrapActivationEffect?.(
-    card,
-    {
-      fromHand: false,
-      activationZone: "spellTrap",
-    },
-  );
   const actionActivationContext = action.activationContext || {};
 
-  const activationContext: AIActivationContext = {
+  const activationContext = {
     ...actionActivationContext,
     fromHand: false,
     activationZone: "spellTrap",
@@ -144,48 +137,14 @@ export async function executeSpellTrapEffectAction(
     autoSelectTargets: actionActivationContext.autoSelectTargets !== false,
     autoSelectSingleTarget:
       actionActivationContext.autoSelectSingleTarget !== false,
-  };
+  } satisfies AIActivationContext;
 
-  const pipelineResult = await game.runActivationPipeline({
-    card,
+  // The canonical entrypoint records the command, so the replay drives the
+  // same activation path.
+  const pipelineResult = await game.tryActivateSpellTrapEffect(card, null, {
     owner: bot,
     activationZone: "spellTrap",
     activationContext,
-    selectionKind: "spellTrapEffect",
-    selectionMessage: "Select target(s) for the spell effect.",
-    guardKind: "bot_spelltrap_effect",
-    phaseReq: ["main1", "main2"],
-    preview: () =>
-      game.effectEngine?.canActivateSpellTrapEffectPreview?.(
-        card,
-        bot,
-        "spellTrap",
-        null,
-        { activationContext },
-      ),
-    oncePerTurn: {
-      card,
-      player: bot,
-      effect: activationEffect,
-    },
-    activate: (chosen, ctx, zone) =>
-      game.effectEngine.activateSpellTrapEffect(card, bot, chosen, zone, ctx),
-    finalize: async (result, info) => {
-      if (result.placementOnly) {
-        game.ui?.log?.(`Bot places ${info.card.name}.`);
-      } else {
-        await game.finalizeSpellTrapActivation(
-          info.card,
-          bot,
-          info.activationZone as Parameters<
-            BotGamePort["finalizeSpellTrapActivation"]
-          >[2],
-          { activationContext: info.activationContext },
-        );
-        game.ui?.log?.(`Bot activates ${info.card.name}`);
-      }
-      game.updateBoard();
-    },
   });
 
   const success = !!pipelineResult && pipelineResult.success !== false;
@@ -261,46 +220,16 @@ export async function executeFieldEffectAction(
   if (!bot.fieldSpell) return false;
   const fieldSpell = bot.fieldSpell;
   const actionActivationContext = action.activationContext || {};
-  const activationContext: AIActivationContext = {
+  const activationContext = {
     ...actionActivationContext,
     fromHand: false,
     activationZone: "fieldSpell",
     sourceZone: "fieldSpell",
-  };
-  const activationEffect =
-    game.effectEngine?.getFieldSpellActivationEffect?.(fieldSpell);
-  const pipelineResult = await game.runActivationPipeline({
-    card: fieldSpell,
-    owner: bot,
-    activationZone: "fieldSpell",
+  } satisfies AIActivationContext;
+  // The canonical entrypoint records the command, so the replay drives the
+  // same activation path.
+  const pipelineResult = await game.activateFieldSpellEffect(fieldSpell, {
     activationContext,
-    selectionKind: "fieldSpell",
-    selectionMessage: "Select target(s) for the field spell effect.",
-    guardKind: "bot_fieldspell_effect",
-    phaseReq: ["main1", "main2"],
-    preview: () =>
-      game.effectEngine?.canActivateFieldSpellEffectPreview?.(
-        fieldSpell,
-        bot,
-        null,
-        { activationContext },
-      ),
-    oncePerTurn: {
-      card: fieldSpell,
-      player: bot,
-      effect: activationEffect,
-    },
-    activate: (selections, ctx) =>
-      game.effectEngine.activateFieldSpell(fieldSpell, bot, selections, ctx),
-    finalize: () => {
-      game.ui?.log?.(`Bot activates ${fieldSpell.name}'s effect`);
-      game.updateBoard();
-    },
   });
-  // Pipeline retorna false, null, ou {success: false} quando falha
-  return (
-    (pipelineResult as unknown) !== false &&
-    pipelineResult !== null &&
-    pipelineResult?.success !== false
-  );
+  return pipelineResult !== null && pipelineResult.success !== false;
 }

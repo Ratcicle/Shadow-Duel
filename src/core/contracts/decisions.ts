@@ -72,7 +72,11 @@ export interface SegocOrderDecisionContext {
 
 export interface SelectionDecisionContext {
   session?: ActiveSelectionSession;
-  type?: "chain_response_reference";
+  /**
+   * `resolution_choice`: an optional confirmation or resolution option, bound
+   * to the effect and source card that asked for it.
+   */
+  type?: "chain_response_reference" | "resolution_choice";
   chainId?: number;
   respondingToLinkId?: number;
   sourceDuelCardId?: number | null;

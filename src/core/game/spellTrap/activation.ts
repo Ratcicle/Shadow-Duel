@@ -768,6 +768,7 @@ export async function tryActivateSpell(
 export function activateFieldSpellEffect(
   this: SpellTrapActivationHost,
   card: GameCard | null | undefined,
+  options: Pick<SpellTrapActivationOptions, "activationContext"> = {},
 ): MaybePromise<ActivationResult> {
   if (!card) {
     return this.createActionResult({
@@ -792,6 +793,7 @@ export function activateFieldSpellEffect(
   );
   if (!guard.ok) return this.normalizeActivationResult(guard);
   const activationContext: SpellTrapActivationContext = {
+    ...options.activationContext,
     fromHand: false,
     activationZone: "fieldSpell",
     sourceZone: "fieldSpell",

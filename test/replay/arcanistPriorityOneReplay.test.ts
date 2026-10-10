@@ -199,10 +199,14 @@ for (const seat of ["player", "bot"] as const) {
         const activations = saved.commands.filter(command => command.type === "activate_effect");
         assert.deepEqual(activations.map(command => record(command.payload).duelCardId), [source.duelCardId, second.duelCardId]);
         assert.notEqual(source.duelCardId, second.duelCardId);
-        const choices = saved.decisions.filter(decision => decision.kind === "choice");
+        // A bot's search pick is its own recorded choice, besides the case choices.
+        const isSearchPick = (value: unknown) => JSON.stringify(value).includes("zone_selection");
+        const choices = saved.decisions.filter(decision => decision.kind === "choice" && !isSearchPick(decision.value));
         assert.equal(choices.length, 2);
         assert.ok(JSON.stringify(choices[0]?.value).includes(required(caseId)));
         assert.ok(JSON.stringify(choices[1]?.value).includes(required(secondCase)));
+        assert.equal(saved.decisions.filter(decision => isSearchPick(decision.value)).length,
+          controller === "ai" ? 2 : 0, "each bot activation records its search pick");
       });
     }
   }

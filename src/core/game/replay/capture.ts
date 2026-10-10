@@ -208,6 +208,37 @@ function commandWasGuardRejected(result: unknown): boolean {
     Reflect.get(result, "needsSelection") === false && typeof code === "string" && code.startsWith("BLOCKED_");
 }
 
+// Commands of a game that have started and not settled. An AI move waits for
+// them: acting inside another command's continuation would interleave two
+// commands, and the first one's state hash would include part of the second.
+const inFlightCommands = new WeakMap<object, { depth: number; waiters: Array<() => void> }>();
+
+function enterCommand(game: object): void {
+  const state = inFlightCommands.get(game) ?? { depth: 0, waiters: [] };
+  state.depth += 1;
+  inFlightCommands.set(game, state);
+}
+
+function leaveCommand(game: object): void {
+  const state = inFlightCommands.get(game);
+  if (!state) return;
+  state.depth = Math.max(0, state.depth - 1);
+  if (state.depth > 0) return;
+  for (const resolve of state.waiters.splice(0)) resolve();
+}
+
+/** Whether a command of this game has started and not settled. */
+export function hasCommandInFlight(game: object): boolean {
+  return (inFlightCommands.get(game)?.depth ?? 0) > 0;
+}
+
+/** Resolves once no command of this game is still running. */
+export function waitForCommandsToSettle(game: object): Promise<void> {
+  const state = inFlightCommands.get(game);
+  if (!state || state.depth === 0) return Promise.resolve();
+  return new Promise(resolve => { state.waiters.push(resolve); });
+}
+
 function installReplayCommandCapture(
   prototype: object,
   captureBinding: ReplayCaptureBindingUnion,
@@ -229,7 +260,14 @@ function installReplayCommandCapture(
     const recording = this._canonicalReplay;
     const descriptor = Reflect.apply(describe, this, [args]);
     const previousSelection = this.targetSelection;
-    const pending = Reflect.apply(original, this, args);
+    enterCommand(this);
+    let pending: unknown;
+    try {
+      pending = Reflect.apply(original, this, args);
+    } catch (error) {
+      leaveCommand(this);
+      throw error;
+    }
     const openedSelection = this.targetSelection;
     // Some entrypoints settle only after their selection has finished. Attach
     // before awaiting so confirmation records once and cancellation records nothing.
@@ -243,7 +281,12 @@ function installReplayCommandCapture(
     if (deferredToSelection && openedSelection) {
       openedSelection.replayCommandDescriptor = descriptor;
     }
-    const result = await pending;
+    let result: unknown;
+    try {
+      result = await pending;
+    } finally {
+      leaveCommand(this);
+    }
     if (
       descriptor &&
       !commandWasGuardRejected(result) &&
@@ -276,6 +319,13 @@ function cardPayload<Extra extends object>(
     cardId: card.id ?? null,
     ...extra,
   };
+}
+
+// Only a concrete position is part of a command. "choice" and an absent
+// position both leave the position to the summon, which records it as a
+// decision when it asks.
+function recordedPosition(position: unknown): "attack" | "defense" | null {
+  return position === "attack" || position === "defense" ? position : null;
 }
 
 export const REPLAY_CAPTURE_BINDINGS = Object.freeze([
@@ -313,7 +363,7 @@ export const REPLAY_CAPTURE_BINDINGS = Object.freeze([
           actorId: actor.id,
           payload: cardPayload(this, card, {
             summonType: "synchro" as const,
-            position: options.position || null,
+            position: recordedPosition(options.position),
             materialIds: (options.materials || []).map((material) =>
               this.ensureDuelCardId(material),
             ),
@@ -333,7 +383,7 @@ export const REPLAY_CAPTURE_BINDINGS = Object.freeze([
           actorId: actor.id,
           payload: cardPayload(this, card, {
             summonType: "ascension" as const,
-            position: options.position || null,
+            position: recordedPosition(options.position),
             materialIds: options.material
               ? [this.ensureDuelCardId(options.material)]
               : [],
@@ -362,7 +412,7 @@ export const REPLAY_CAPTURE_BINDINGS = Object.freeze([
           actorId: actor.id,
           payload: cardPayload(this, card, {
             summonType: "procedure" as const,
-            position: options.position || null,
+            position: recordedPosition(options.position),
             materialIds: (options.materials || []).map((material) =>
               this.ensureDuelCardId(material),
             ),
@@ -376,7 +426,7 @@ export const REPLAY_CAPTURE_BINDINGS = Object.freeze([
       type: "hand_summon_procedure",
       actorId: actor.id,
       payload: cardPayload(this, card, {
-        position: options.position || null,
+        position: recordedPosition(options.position),
         ...(options.materials ? {
           materialIds: options.materials.map(material => this.ensureDuelCardId(material)),
         } : {}),

@@ -4,6 +4,10 @@ import { recordMaterialEffectIdentity } from "../../game/summon/materialStats.js
 import { captureProcedureTriggerConditions } from "../conditions/runtime.js";
 import { captureSourceSnapshot } from "../../chain/link.js";
 import { walkActionList } from "../../actionHandlers/actionWalker.js";
+import { requestOptionalConfirmation } from "../../actionHandlers/shared.js";
+import type { ActionRuntimeGamePort } from "../../contracts/actionRuntime.js";
+
+type TriggerConfirmationGame = Pick<ActionRuntimeGamePort, "requestDecision">;
 import { findTriggerSourceLocation, isTriggerSourceLegal, matchesEquipHostExitSourcePresence } from "./collectors/shared.js";
 import type { CardAction } from "../../contracts/actions.js";
 import type { RawSelectionRequirement } from "../../contracts/selection.js";
@@ -159,7 +163,13 @@ function shouldPromptTriggeredEffect(
   return true;
 }
 
+/**
+ * Confirmation of an optional trigger activated outside the SEGOC (which
+ * confirms its own entries), e.g. with Chains disabled. Only a human is asked,
+ * as a recorded broker choice.
+ */
 async function confirmTriggeredEffect(
+  game: TriggerConfirmationGame | null | undefined,
   effect: TriggerEffectLike,
   sourceCard: TriggerRuntimeCard,
   owner: TriggerRuntimePlayer,
@@ -168,18 +178,13 @@ async function confirmTriggeredEffect(
 ): Promise<boolean> {
   if (!shouldPromptTriggeredEffect(effect, owner, ctx)) return true;
 
-  let wantsToUse = true;
-  const promptName =
-    getCardDisplayName(sourceCard) ||
-    sourceCard?.name ||
-    getUIText("ui.prompts.thisCard");
-
-  const customPrompt = effect.customPromptMethod
-    ? Reflect.get(ui || {}, effect.customPromptMethod)
-    : null;
-  if (typeof customPrompt === "function") {
-    wantsToUse = Boolean(await Reflect.apply(customPrompt, ui, []));
-  } else if (ui?.showConfirmPrompt) {
+  return requestOptionalConfirmation(game ?? {}, owner, async () => {
+    // Without a confirmation prompt the trigger proceeds, as it always has.
+    if (!ui?.showConfirmPrompt) return true;
+    const promptName =
+      getCardDisplayName(sourceCard) ||
+      sourceCard?.name ||
+      getUIText("ui.prompts.thisCard");
     let promptMessage = effect.promptMessage;
     if (!promptMessage) {
       if (effect.event === "attack_declared") {
@@ -201,26 +206,13 @@ async function confirmTriggeredEffect(
         });
       }
     }
-    const confirmResult = ui.showConfirmPrompt(promptMessage, {
+    return Boolean(await ui.showConfirmPrompt(promptMessage, {
       kind: "triggered_effect",
       cardName: promptName,
       effectId: effect.id,
       event: effect.event,
-    });
-    const thenMethod =
-      confirmResult !== null &&
-      confirmResult !== undefined &&
-      (typeof confirmResult === "object" ||
-        typeof confirmResult === "function")
-        ? Reflect.get(confirmResult, "then")
-        : null;
-    wantsToUse =
-      typeof thenMethod === "function"
-        ? Boolean(await confirmResult)
-        : Boolean(confirmResult);
-  }
-
-  return !!wantsToUse;
+    }));
+  }, () => true, { sourceDuelCardId: sourceCard.duelCardId ?? null, effectId: effect.id ?? null });
 }
 
 /**
@@ -460,6 +452,20 @@ function mergeStrategyActivationContext(
  * @param {Function} [options.onSuccess] - Callback on successful activation
  * @returns {Object|null} The trigger entry or null if invalid
  */
+/**
+ * A source that is the moved card itself belongs to the presence the move
+ * created. If it moved again before collection, the trigger is lost (D2).
+ */
+function bindMovedSourceToEvent<Snapshot extends { locationVersion: number } | null>(
+  snapshot: Snapshot,
+  eventLocationVersion: number | undefined,
+): Snapshot {
+  if (!snapshot || typeof eventLocationVersion !== "number" || !Number.isFinite(eventLocationVersion)) {
+    return snapshot;
+  }
+  return { ...snapshot, locationVersion: eventLocationVersion };
+}
+
 export function buildTriggerEntry(
   this: TriggerCollectorHost,
   options: BuildTriggerEntryOptions = {},
@@ -522,11 +528,14 @@ export function buildTriggerEntry(
         : sourceCard.isFacedown === true,
     sourceAtTrigger:
       activationContext.sourceAtTrigger ||
-      Reflect.apply(captureSourceSnapshot, undefined, [
-        sourceCard,
-        findTriggerSourceLocation(this, sourceCard, owner).player,
-        activationContext.activationZone || options.activationZone || null,
-      ]),
+      bindMovedSourceToEvent(
+        Reflect.apply(captureSourceSnapshot, undefined, [
+          sourceCard,
+          findTriggerSourceLocation(this, sourceCard, owner).player,
+          activationContext.activationZone || options.activationZone || null,
+        ]),
+        sourceCard === options.ctx?.movedCard ? options.eventLocationVersion : undefined,
+      ),
     selectionKind: "triggered",
   };
   const strategyContext =
@@ -714,6 +723,7 @@ export function buildTriggerEntry(
       }
       if (selections == null && activationCtx.confirmed !== true) {
         const wantsToUse = await confirmTriggeredEffect(
+          this.game,
           effect,
           sourceCard,
           owner,

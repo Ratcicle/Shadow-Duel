@@ -618,14 +618,14 @@ export function applyPassiveBuffValue(
 
 /** Stable source identity lets live and simulated state remove one aura contribution. */
 export function getFieldAuraBuffKey(
-  card: { id?: number | undefined; instanceId?: string | number | null | undefined;
+  card: { id?: number | undefined; duelCardId?: number | null | undefined; instanceId?: string | number | null | undefined;
     fieldPresenceId?: string | number | null | undefined },
   effectId: string | undefined,
   effectIndex: number,
   fieldIndex: number,
   stat: PassiveStat,
 ): string {
-  const sourceKey = card.fieldPresenceId || card.instanceId || `${card.id}_${fieldIndex}`;
+  const sourceKey = card.fieldPresenceId || card.duelCardId || card.instanceId || `${card.id}_${fieldIndex}`;
   return `${effectId || `passive_${card.id}_${effectIndex}_field_aura`}_${sourceKey}_${stat}`;
 }
 
@@ -637,7 +637,7 @@ export function getFieldCounterStatAuraBuffKey(
   sourceIndex: number,
   counterType: string,
 ): string {
-  const sourceKey = source.fieldPresenceId || source.instanceId || `${source.id}_${sourceIndex}`;
+  const sourceKey = source.fieldPresenceId || source.duelCardId || source.instanceId || `${source.id}_${sourceIndex}`;
   return `${effectId || `passive_${source.id}_${effectIndex}_field_counter_aura`}_${sourceKey}_${counterType}`;
 }
 
@@ -648,7 +648,7 @@ export function getEquippedCounterBuffKey(
   effectIndex: number,
   sourceIndex: number,
 ): string {
-  const sourceKey = source.fieldPresenceId || source.instanceId || `${source.id}_${sourceIndex}`;
+  const sourceKey = source.fieldPresenceId || source.duelCardId || source.instanceId || `${source.id}_${sourceIndex}`;
   return effectId || `passive_${source.id}_${effectIndex}_${sourceKey}_counter_equip`;
 }
 
@@ -659,7 +659,7 @@ export function getEquippedFieldCounterBuffKeys(
   effectIndex: number,
   sourceIndex: number,
 ): { counterKey: string; fixedDefKey: string } {
-  const sourceKey = source.fieldPresenceId || source.instanceId || `${source.id}_${sourceIndex}`;
+  const sourceKey = source.fieldPresenceId || source.duelCardId || source.instanceId || `${source.id}_${sourceIndex}`;
   const baseKey = effectId || `passive_${source.id}_${effectIndex}_${sourceKey}_field_counter_equip`;
   return {
     counterKey: `${baseKey}_${sourceKey}_${effectIndex}_counter`,
