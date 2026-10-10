@@ -223,3 +223,28 @@ test("a human attack chosen through the selection session replays after its awai
   assert.equal(result.finalStateHash, replay.result?.finalStateHash);
   assert.equal(playback.bot.lp, live.bot.lp);
 });
+
+test("a normal duel's automatic opening turn is replayed before the first command", async t => {
+  const live = createRuntimeGame({ captureReplay: true, randomSeed: 141, laboratoryMode: true, laboratoryUseBot: false });
+  const playback = createRuntimeGame({ captureReplay: false, replayMode: "playback", laboratoryMode: true, laboratoryUseBot: false });
+  t.after(() => { live.dispose(); playback.dispose(); });
+  for (const game of [live, playback]) {
+    game.player.controllerType = game.bot.controllerType = "human";
+    game.disablePresentationDelays = true;
+    game.phaseDelayMs = 0;
+  }
+  // Not initializeOnly and not startAtDrawPhase: the duel starts its opening turn by itself.
+  await live.startWithDecks({ exactDecks: true, preserveDeckOrder: true, startingPlayer: "player",
+    announceStartingPlayer: false, playerDeck: Array<number>(16).fill(1), botDeck: Array<number>(16).fill(1),
+    playerExtraDeck: [], botExtraDeck: [] });
+  assert.equal(live.turnCounter, 1);
+  assert.notEqual(live.phase, "draw", "the opening turn advanced without any command");
+  await live.skipToPhase("end");
+
+  const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "opening-turn" }))));
+  assert.equal(replay.setup.openingTurnStarted, true);
+  assert.ok(replay.commands.length > 0);
+  const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback, "Concrete Game with identical presentation and controller configuration.") });
+  assert.equal(result.finalStateHash, replay.result?.finalStateHash);
+  assert.equal(playback.turnCounter, live.turnCounter);
+});

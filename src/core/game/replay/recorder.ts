@@ -76,6 +76,7 @@ export function startReplayRecording(
 
 export function captureReplaySetup(
   this: ReplayRecorderGamePort,
+  options: { openingTurnStarted?: boolean } = {},
 ) {
   if (!this.captureReplayEnabled || !this._canonicalReplay) return null;
   this._canonicalReplay.setup = {
@@ -86,6 +87,7 @@ export function captureReplaySetup(
     playerExtraDeck: deckEntries(this, this.player?.extraDeck),
     botDeck: deckEntries(this, this.bot?.deck),
     botExtraDeck: deckEntries(this, this.bot?.extraDeck),
+    ...(options.openingTurnStarted === true ? { openingTurnStarted: true as const } : {}),
   };
   return this._canonicalReplay.setup;
 }

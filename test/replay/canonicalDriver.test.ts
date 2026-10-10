@@ -66,6 +66,9 @@ function driverFixture(consumeDecisions = true): DriverFixture {
     async startWithDecks() {
       calls.push("startWithDecks");
     },
+    async startTurn() {
+      calls.push("startTurn");
+    },
     drawCards(_owner, amount) {
       calls.push(`draw:${amount}`);
     },

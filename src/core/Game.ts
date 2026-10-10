@@ -571,7 +571,8 @@ class Game {
       () => this.random(),
     );
     if (initialRandomState) this.restoreRandomState(initialRandomState);
-    this.captureReplaySetup?.();
+    // A normal duel starts its opening turn without a command; playback must too.
+    this.captureReplaySetup?.({ openingTurnStarted: !initializeOnly && !startAtDrawPhase });
     this._arenaTracker?.recordProgress?.("starting_player_selected", this, {
       startingPlayer: this.turn,
     });

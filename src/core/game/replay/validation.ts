@@ -250,6 +250,9 @@ function validateSetup(value: unknown): void {
   validateDeck(read(setup, "playerExtraDeck"), "setup.playerExtraDeck");
   validateDeck(read(setup, "botDeck"), "setup.botDeck");
   validateDeck(read(setup, "botExtraDeck"), "setup.botExtraDeck");
+  if (hasOwn(setup, "openingTurnStarted") && read(setup, "openingTurnStarted") !== true) {
+    invalid("setup.openingTurnStarted", "true when present");
+  }
 }
 
 function validateCardLocator(payload: object, path: string): void {

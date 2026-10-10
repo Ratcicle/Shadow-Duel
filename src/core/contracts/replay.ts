@@ -59,6 +59,12 @@ export interface CanonicalReplaySetup {
   playerExtraDeck: ReplayDeckEntry[];
   botDeck: ReplayDeckEntry[];
   botExtraDeck: ReplayDeckEntry[];
+  /**
+   * The duel started its opening turn by itself after the opening draw (a
+   * normal duel). No command records that start, so playback starts the turn
+   * before the first command. Absent when the opening turn waits for commands.
+   */
+  openingTurnStarted?: true;
 }
 
 export type ReplayCardZone =
@@ -877,6 +883,7 @@ export interface ReplayDriverGamePort extends CanonicalReplayGamePort {
   decisionBroker: ReplayDecisionBrokerPort;
   dispose?(): void;
   startWithDecks(options: object): PromiseLike<unknown>;
+  startTurn(): PromiseLike<unknown>;
   drawCards(player: ReplayRuntimePlayer, amount: number): unknown;
   shuffle(cards: ReplayRuntimeCard[]): unknown;
   nextPhase(): unknown;
