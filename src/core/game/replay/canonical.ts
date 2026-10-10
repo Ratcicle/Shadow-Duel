@@ -6,19 +6,25 @@ import { projectOncePerTurnUsage } from "../turn/oncePerTurn.js";
 import { getTurnCardActivations } from "../events/activationHistory.js";
 import { cardDatabase } from "../../../data/cards.js";
 import type { RawCardDefinition } from "../../contracts/cards.js";
+import type { DuelCardId } from "../../contracts/primitives.js";
 import {
   CANONICAL_REPLAY_EVENT_NAMES,
   CANONICAL_REPLAY_FORMAT,
   CANONICAL_REPLAY_SCHEMA_VERSION,
 } from "../../contracts/replay.js";
 import type {
+  CanonicalCardCharacteristicsSnapshot,
+  CanonicalCardBindingsSnapshot,
+  CanonicalCardStatBookkeepingSnapshot,
   CanonicalCardStateSnapshot,
+  CanonicalCardTurnStateSnapshot,
   CanonicalGameStateSnapshot,
   CanonicalPlayerStateSnapshot,
   CanonicalPlayerZonesSnapshot,
   CanonicalProcedureStateSnapshot,
   CanonicalReplayEventName,
   CanonicalReplayGamePort,
+  CanonicalRuleStateSnapshot,
   ReplayRuntimeCard,
   ReplayRuntimePlayer,
   SerializableObject,
@@ -41,6 +47,9 @@ const SKIPPED_RUNTIME_KEYS: ReadonlySet<string> = new Set([
   "effects",
   "image",
 ]);
+
+// Process-local runtime ids (`instanceId`, `sourceInstanceId`, `firstInstanceId`, ...).
+const INSTANCE_ID_KEY = /instanceId$/i;
 
 type SpecialProjection = (
   value: object,
@@ -182,6 +191,202 @@ function numericValue(value: unknown): number {
   return Number(value ?? 0);
 }
 
+function readString(value: object, key: string): string | null {
+  const field = readProperty(value, key);
+  return typeof field === "string" ? field : null;
+}
+
+function readFlag(value: object, key: string): boolean {
+  return readProperty(value, key) === true;
+}
+
+function readSerializable(
+  value: object,
+  key: string,
+  fallback: SerializableValue,
+): SerializableValue {
+  return stableValue(readProperty(value, key) ?? fallback) ?? fallback;
+}
+
+/** A status baseline registry: the value to restore and the value in effect. */
+function statusRegistryState(card: object, registryKey: string): SerializableValue {
+  const registry = readProperty(card, registryKey);
+  if (!registry || typeof registry !== "object") return {};
+  return stableValue(Object.fromEntries(Object.keys(registry).map(status => [status, {
+    previous: readProperty(registry, status) ?? null,
+    current: readProperty(card, status) ?? null,
+  }]))) ?? {};
+}
+
+function readTurn(value: object, key: string): number | null {
+  const field = readProperty(value, key);
+  return typeof field === "number" && Number.isFinite(field) ? field : null;
+}
+
+/**
+ * Attack bookkeeping stores process-local instance ids of the attacked
+ * monsters; they are resolved to duel identities through the cards in play.
+ */
+function cardsInPlay(game: CanonicalReplayGamePort): ReplayRuntimeCard[] {
+  return [game.player, game.bot].flatMap(player => player ? [
+    ...player.deck, ...player.extraDeck, ...player.hand, ...player.field,
+    ...player.spellTrap, ...player.graveyard, ...player.banished,
+    ...(player.fieldSpell ? [player.fieldSpell] : []),
+  ] : []);
+}
+
+/** Duel identity of the card holding a process-local instance id, if it is still in a zone. */
+function identityForInstance(
+  game: CanonicalReplayGamePort,
+  cards: readonly ReplayRuntimeCard[],
+  instanceId: unknown,
+): DuelCardId | number | null {
+  if (instanceId == null) return null;
+  const card = cards.find(entry => readProperty(entry, "instanceId") === instanceId);
+  return card ? game.ensureDuelCardId?.(card) ?? card.duelCardId ?? null : null;
+}
+
+function identityForCard(
+  game: CanonicalReplayGamePort,
+  value: unknown,
+): DuelCardId | number | null {
+  if (!value || typeof value !== "object") return null;
+  game.ensureDuelCardId?.(value);
+  const duelCardId = readProperty(value, "duelCardId");
+  return typeof duelCardId === "number" ? duelCardId : null;
+}
+
+function attackedMonsterIdentities(
+  game: CanonicalReplayGamePort,
+  card: ReplayRuntimeCard,
+): SerializableValue {
+  const attacked = readProperty(card, "attackedMonstersThisTurn");
+  if (!(attacked instanceof Set) || attacked.size === 0) return [];
+  const cards = cardsInPlay(game);
+  const identities = [...attacked].map(targetId => {
+    const identity = identityForInstance(game, cards, targetId);
+    if (identity != null) return identity;
+    // Legacy fallbacks store a definition id or name, which are already stable.
+    return typeof targetId === "number" || typeof targetId === "string" ? `unresolved:${String(targetId)}` : null;
+  });
+  return stableValue(new Set(identities)) ?? [];
+}
+
+/** Material records keep their facts with the material's duel identity, not its runtime id or name. */
+function materialRecords(
+  game: CanonicalReplayGamePort,
+  card: ReplayRuntimeCard,
+  key: string,
+): SerializableValue {
+  const records = readProperty(card, key);
+  if (!Array.isArray(records) || records.length === 0) return [];
+  const cards = cardsInPlay(game);
+  return records.map(record => {
+    if (!record || typeof record !== "object") return null;
+    const projection: SerializableObject = {
+      duelCardId: identityForInstance(game, cards, readProperty(record, "instanceId")),
+    };
+    for (const field of Object.keys(record).sort(compareCodeUnits)) {
+      if (field === "instanceId" || field === "name") continue;
+      const value = stableValue(readProperty(record, field));
+      if (value !== undefined) projection[field] = value;
+    }
+    return projection;
+  });
+}
+
+/**
+ * Turn-based buff ids embed the process-local instance id of the card; rules
+ * never read them, so only the stat, amount and expiry participate, in order.
+ */
+function turnBasedBuffState(card: ReplayRuntimeCard): SerializableValue {
+  const buffs = readProperty(card, "turnBasedBuffs");
+  if (!Array.isArray(buffs)) return [];
+  return buffs.map(buff => buff && typeof buff === "object" ? {
+    stat: stableValue(readProperty(buff, "stat")) ?? null,
+    value: numericValue(readProperty(buff, "value")),
+    expiresOnTurn: stableValue(readProperty(buff, "expiresOnTurn")) ?? null,
+  } : null);
+}
+
+function cardStatBookkeeping(card: ReplayRuntimeCard): CanonicalCardStatBookkeepingSnapshot {
+  return {
+    tempAtkBoost: numericValue(readProperty(card, "tempAtkBoost")),
+    tempDefBoost: numericValue(readProperty(card, "tempDefBoost")),
+    turnBasedBuffs: turnBasedBuffState(card),
+    originalAtk: readTurn(card, "originalAtk"),
+    originalDef: readTurn(card, "originalDef"),
+    originalStatsOverride: readSerializable(card, "originalStatsOverride", null),
+    dynamicBuffs: readSerializable(card, "dynamicBuffs", {}),
+    suppressedDynamicBuffStatsByKey: readSerializable(card, "suppressedDynamicBuffStatsByKey", {}),
+    temporarySuppressedDynamicBuffStatsByKey: readSerializable(card, "temporarySuppressedDynamicBuffStatsByKey", {}),
+    equipAtkBonus: numericValue(readProperty(card, "equipAtkBonus")),
+    equipDefBonus: numericValue(readProperty(card, "equipDefBonus")),
+    equipExtraAttacks: numericValue(readProperty(card, "equipExtraAttacks")),
+    equipExtraAttacksApplied: numericValue(readProperty(card, "equipExtraAttacksApplied")),
+  };
+}
+
+function cardBindings(
+  game: CanonicalReplayGamePort,
+  card: ReplayRuntimeCard,
+): CanonicalCardBindingsSnapshot {
+  const equips = readProperty(card, "equips");
+  return {
+    equips: Array.isArray(equips) ? equips.map(equip => identityForCard(game, equip)) : [],
+    grantsBattleIndestructible: readFlag(card, "grantsBattleIndestructible"),
+    boundTrapSource: identityForCard(game, readProperty(card, "boundTrapSource")),
+    boundMonsterTarget: identityForCard(game, readProperty(card, "boundMonsterTarget")),
+    effectMarkers: serializeRuleRecords(game, readProperty(card, "effectMarkers") ?? {}),
+    pendingSpellTrapFinalization: serializeRuleRecords(game, readProperty(card, "pendingSpellTrapFinalization") ?? null),
+    ascensionMaterials: materialRecords(game, card, "ascensionMaterials"),
+    synchroMaterials: materialRecords(game, card, "synchroMaterials"),
+    lastSentToGraveAsMaterial: readSerializable(card, "lastSentToGraveAsMaterial", null),
+  };
+}
+
+function cardTurnState(
+  game: CanonicalReplayGamePort,
+  card: ReplayRuntimeCard,
+): CanonicalCardTurnStateSnapshot {
+  return {
+    canMakeSecondAttackThisTurn: readFlag(card, "canMakeSecondAttackThisTurn"),
+    secondAttackUsedThisTurn: readFlag(card, "secondAttackUsedThisTurn"),
+    canAttackAllOpponentMonstersThisTurn: readFlag(card, "canAttackAllOpponentMonstersThisTurn"),
+    canAttackDirectlyThisTurn: readFlag(card, "canAttackDirectlyThisTurn"),
+    attackedMonstersThisTurn: attackedMonsterIdentities(game, card),
+    extraAttackTargetRestriction: readSerializable(card, "extraAttackTargetRestriction", null),
+    passiveExtraAttackTargetRestriction: readSerializable(card, "passiveExtraAttackTargetRestriction", null),
+    passiveExtraAttackBonuses: readSerializable(card, "passiveExtraAttackBonuses", {}),
+    cannotAttackUntilTurn: readTurn(card, "cannotAttackUntilTurn"),
+    immuneToOpponentEffectsUntilTurn: readTurn(card, "immuneToOpponentEffectsUntilTurn"),
+    battleIndestructibleOncePerTurnLastUsedTurn: readTurn(card, "battleIndestructibleOncePerTurnLastUsedTurn"),
+    setTurn: readTurn(card, "setTurn"),
+    turnSetOn: readTurn(card, "turnSetOn"),
+    revealedTurn: readTurn(card, "revealedTurn"),
+    lastSummonProcedure: readString(card, "lastSummonProcedure"),
+  };
+}
+
+function cardCharacteristics(card: ReplayRuntimeCard): CanonicalCardCharacteristicsSnapshot {
+  return {
+    cardKind: readString(card, "cardKind"),
+    originalCardKind: readString(card, "originalCardKind"),
+    treatedAsCardKinds: readSerializable(card, "treatedAsCardKinds", []),
+    isTrapMonster: readFlag(card, "isTrapMonster"),
+    trapMonsterSummonProcedure: readSerializable(card, "trapMonsterSummonProcedure", null),
+    trapMonsterOriginalState: readSerializable(card, "trapMonsterOriginalState", null),
+    monsterType: readString(card, "monsterType"),
+    type: readString(card, "type"),
+    types: readSerializable(card, "types", []),
+    attribute: readString(card, "attribute"),
+    subtype: readString(card, "subtype"),
+    isTuner: readFlag(card, "isTuner"),
+    synchroMaterialRoles: readSerializable(card, "synchroMaterialRoles", null),
+    isToken: readFlag(card, "isToken"),
+  };
+}
+
 function cardState(
   game: CanonicalReplayGamePort,
   card: ReplayRuntimeCard | null | undefined,
@@ -264,7 +469,19 @@ function cardState(
       piercing: card.piercing === true,
       piercingDamageMultiplier: Number(card.piercingDamageMultiplier ?? 1),
       piercingGrantedByEffect: card.piercingGrantedByEffect === true,
+      battleIndestructible: readFlag(card, "battleIndestructible"),
+      tempBattleIndestructible: readFlag(card, "tempBattleIndestructible"),
+      battleDamageHealsControllerThisTurn: readFlag(card, "battleDamageHealsControllerThisTurn"),
+      extraAttacks: numericValue(readProperty(card, "extraAttacks")),
     },
+    characteristics: cardCharacteristics(card),
+    statusRegistries: {
+      temporary: statusRegistryState(card, "tempStatuses"),
+      fieldExit: statusRegistryState(card, "fieldExitStatuses"),
+    },
+    turnState: cardTurnState(game, card),
+    statBookkeeping: cardStatBookkeeping(card),
+    bindings: cardBindings(game, card),
   };
 }
 
@@ -289,6 +506,12 @@ function playerState(
     zones,
     summonCount: Number(player?.summonCount || 0),
     additionalNormalSummons: Number(player?.additionalNormalSummons || 0),
+    damageReceivedThisTurn: numericValue(player?.damageReceivedThisTurn),
+    normalSummonsThisTurn: stableValue(player?.normalSummonsThisTurn || []) ?? [],
+    additionalNormalSummonPermissions: stableValue(player?.additionalNormalSummonPermissions || []) ?? [],
+    // Derived from face-up passives on board refresh, but read between refreshes.
+    lpGainMultiplier: Number(player?.lpGainMultiplier ?? 1),
+    opponentCannotActivateDuringBattle: player?.opponentCannotActivateDuringBattle === true,
     oncePerDuelUsage: stableValue(player?.oncePerDuelUsageByName || {}) ?? {},
     restrictions: stableValue({
       specialSummon: player?.specialSummonRestrictions || [],
@@ -343,6 +566,72 @@ function procedureState(value: unknown): CanonicalProcedureStateSnapshot | null 
     active: normalized.active,
     last: normalized.last,
     transaction: normalized.transaction,
+  };
+}
+
+/**
+ * Rule records keep their facts; cards become duel identities, and process-local
+ * instance ids, plus record ids built from them, are dropped. The deterministic
+ * counters behind those record ids are hashed through `generatedIdCounters`.
+ */
+function serializeRuleRecords(
+  game: CanonicalReplayGamePort,
+  value: unknown,
+): SerializableValue {
+  const project: SpecialProjection = (entry) => {
+    const card = projectRuntimeCardReference(game, entry);
+    if (card !== undefined) return card;
+    if (Array.isArray(entry) || entry instanceof Map || entry instanceof Set) return undefined;
+    const keys = Object.keys(entry);
+    const derivesFromInstance = keys.includes("sourceInstanceId");
+    if (!derivesFromInstance && !keys.some(key => INSTANCE_ID_KEY.test(key))) return undefined;
+    const record: SerializableObject = {};
+    for (const key of keys.sort(compareCodeUnits)) {
+      if (INSTANCE_ID_KEY.test(key) || (derivesFromInstance && key === "id")) continue;
+      if (SKIPPED_RUNTIME_KEYS.has(key)) continue;
+      const field = normalizeValue(readProperty(entry, key), new WeakSet(), project);
+      if (field !== undefined) record[key] = field;
+    }
+    return record;
+  };
+  return normalizeValue(value, new WeakSet(), project) ?? null;
+}
+
+function synchroContinuationState(
+  game: CanonicalReplayGamePort,
+  value: unknown,
+): SerializableValue {
+  if (!value || typeof value !== "object") return null;
+  const summonedCard = readProperty(value, "summonedCard");
+  return {
+    stage: stableValue(readProperty(value, "stage")) ?? null,
+    synchroSummonContextId: stableValue(readProperty(value, "synchroSummonContextId")) ?? null,
+    summonedCard: summonedCard && typeof summonedCard === "object"
+      ? projectRuntimeCardReference(game, summonedCard) ?? null
+      : null,
+    playerId: stableValue(readProperty(value, "playerId")) ?? null,
+  };
+}
+
+function ruleState(game: CanonicalReplayGamePort): CanonicalRuleStateSnapshot {
+  return {
+    gameOver: game.gameOver === true,
+    winner: game.winner ?? null,
+    battleStep: game.battleStep ?? null,
+    lastAttackNegated: game.lastAttackNegated === true,
+    damageCalculationStatChangePending: game.damageCalculationStatChangePending === true,
+    damageCalculationTempBuffs: serializeRuleRecords(game, game.damageCalculationTempBuffs || []),
+    endOfDamageStepTempBuffs: serializeRuleRecords(game, game.endOfDamageStepTempBuffs || []),
+    temporaryBattlePairEffects: serializeRuleRecords(game, game.temporaryBattlePairEffects || []),
+    pendingSynchroMaterialFollowups: serializeRuleRecords(game, game.pendingSynchroMaterialFollowups || []),
+    pendingSynchroMaterialTriggerContinuation:
+      synchroContinuationState(game, game.pendingSynchroMaterialTriggerContinuation),
+    synchroSummonContextCounter: Number(game.synchroSummonContextCounter || 0),
+    eventResolutionCounter: Number(game.eventResolutionCounter || 0),
+    generatedIdCounters: stableValue(game.generatedIdCounters || new Map()) ?? [],
+    // Keyed by player and card definition id; inner Sets are sorted canonically.
+    materialDuelStats: stableValue(game.materialDuelStats || {}) ?? {},
+    specialSummonTypeCounts: stableValue(game.specialSummonTypeCounts || {}) ?? {},
   };
 }
 
@@ -420,6 +709,7 @@ export function createCanonicalStateSnapshot(
     delayedActions: serializeReplayEventPayload(game, game.delayedActions || []) ?? [],
     temporaryEventEffects: canonicalEventEffects ?? [],
     temporaryControlEffects: canonicalControl ?? [],
+    ruleState: ruleState(game),
     ...(game.temporaryReplacementEffects?.length ? { temporaryReplacementEffects: canonicalReplacements ?? [] } : {}),
     ...(replacementSequence ? { temporaryReplacementSequence: replacementSequence } : {}),
     chain: {
@@ -468,37 +758,42 @@ export function getDirectAfterResolutionSnapshot(game: Pick<CanonicalReplayGameP
     actionIndex: state.actionIndex, selectionGeneration: state.selectionGeneration, results } };
 }
 
+/** Physical cards and players referenced from runtime records, by duel identity. */
+function projectRuntimeCardReference(
+  game: CanonicalReplayGamePort,
+  value: object,
+): SerializableValue | undefined {
+  const identity = projectCardIdentitySnapshot(value);
+  if (identity !== undefined) return identity;
+  const duelCardId = readProperty(value, "duelCardId");
+  const cardKind = readProperty(value, "cardKind");
+  const name = readProperty(value, "name");
+  // Declarative filters and Token templates also carry a name and kind.
+  // Only physical runtime instances may receive a new duel identity.
+  const runtimeInstance = typeof readProperty(value, "instanceId") === "number" &&
+    typeof cardKind === "string" && typeof name === "string";
+  if (duelCardId != null || runtimeInstance) {
+    game.ensureDuelCardId?.(value);
+    const projection: SerializableObject = {
+      duelCardId: stableValue(readProperty(value, "duelCardId")) ?? null,
+      cardId: stableValue(readProperty(value, "id")) ?? null,
+      locationVersion: Number(readProperty(value, "locationVersion") ?? 0),
+    };
+    return projection;
+  }
+  const id = readProperty(value, "id");
+  if (id === "player" || id === "bot") {
+    const projection: SerializableObject = { playerId: id };
+    return projection;
+  }
+  return undefined;
+}
+
 export function serializeReplayEventPayload(
   game: CanonicalReplayGamePort,
   payload: unknown,
 ): SerializableValue | undefined {
-  const project: SpecialProjection = (value) => {
-    const identity = projectCardIdentitySnapshot(value);
-    if (identity !== undefined) return identity;
-    const duelCardId = readProperty(value, "duelCardId");
-    const cardKind = readProperty(value, "cardKind");
-    const name = readProperty(value, "name");
-    // Declarative filters and Token templates also carry a name and kind.
-    // Only physical runtime instances may receive a new duel identity.
-    const runtimeInstance = typeof readProperty(value, "instanceId") === "number" &&
-      typeof cardKind === "string" && typeof name === "string";
-    if (duelCardId != null || runtimeInstance) {
-      game.ensureDuelCardId?.(value);
-      const projection: SerializableObject = {
-        duelCardId: stableValue(readProperty(value, "duelCardId")) ?? null,
-        cardId: stableValue(readProperty(value, "id")) ?? null,
-        locationVersion: Number(readProperty(value, "locationVersion") ?? 0),
-      };
-      return projection;
-    }
-    const id = readProperty(value, "id");
-    if (id === "player" || id === "bot") {
-      const projection: SerializableObject = { playerId: id };
-      return projection;
-    }
-    return undefined;
-  };
-  return normalizeValue(payload, new WeakSet(), project);
+  return normalizeValue(payload, new WeakSet(), value => projectRuntimeCardReference(game, value));
 }
 
 export function isReplayEvent(

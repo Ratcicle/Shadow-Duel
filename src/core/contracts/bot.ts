@@ -45,6 +45,7 @@ type BotGameMethodName =
   | "canSummonExtraDeckCardByProcedure" | "canSummonFromHandByProcedure" | "canChangePosition" | "changeMonsterPosition"
   | "getAttackAvailability" | "isActiveAttackPriorityTarget" | "resolveCombat"
   | "commitCardActivationFromHand" | "runActivationPipeline" | "setSpellOrTrap" | "tryActivateSpellTrapEffect"
+  | "activateFieldSpellEffect" | "performSynchroSummonFromExtraDeck" | "performAscensionSummonFromExtraDeck"
   | "tryActivateMonsterEffect" | "tryActivateSpell"
   | "finalizeSpellCardActivation" | "finalizeSpellTrapActivation" | "canPlaceCardOnField";
 

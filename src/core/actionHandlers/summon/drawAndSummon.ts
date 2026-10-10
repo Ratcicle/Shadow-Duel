@@ -8,7 +8,7 @@ import type {
 } from "../../contracts/actionRuntime.js";
 import type { CardFilter } from "../../contracts/effects.js";
 import { getCardDisplayName, getUIText } from "../../i18n.js";
-import { getUI, requestOptionalConfirmation } from "../shared.js";
+import { getUI, requestOptionalConfirmation, resolutionChoiceContext } from "../shared.js";
 import { performSummonFromHand } from "./fromHand.js";
 
 type DrawConditionFilters = Omit<CardFilter, "type"> & {
@@ -190,6 +190,7 @@ export async function handleDrawAndSummon(
         { kind: "draw_and_summon", cardName },
       )) ?? false,
       () => true,
+      resolutionChoiceContext(game, ctx.source, ctx.effect?.id),
     );
     if (!wantsToSummon) return true;
   }

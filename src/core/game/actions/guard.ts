@@ -75,6 +75,7 @@ export function canStartAction(
     this.isResolvingEffect ||
     this.activeDamageStepTransaction != null ||
     Number(this.damageStepProcedureDepth || 0) > 0 ||
+    Number(this.combatResolutionDepth || 0) > 0 ||
     this.activeSummonTransaction != null ||
     Number(this.summonProcedureDepth || 0) > 0 ||
     selectionState === "resolving" ||

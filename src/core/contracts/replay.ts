@@ -24,7 +24,7 @@ export const CANONICAL_REPLAY_SCHEMA_VERSION = 2 as const;
  * Change only when existing replay interpretation becomes incompatible.
  * Card definition changes are tracked separately by cardDatabaseSignature.
  */
-export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v26" as const;
+export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v27" as const;
 
 export type SerializablePrimitive = string | number | boolean | null;
 
@@ -59,6 +59,12 @@ export interface CanonicalReplaySetup {
   playerExtraDeck: ReplayDeckEntry[];
   botDeck: ReplayDeckEntry[];
   botExtraDeck: ReplayDeckEntry[];
+  /**
+   * The duel started its opening turn by itself after the opening draw (a
+   * normal duel). No command records that start, so playback starts the turn
+   * before the first command. Absent when the opening turn waits for commands.
+   */
+  openingTurnStarted?: true;
 }
 
 export type ReplayCardZone =
@@ -360,6 +366,93 @@ export interface CanonicalCardStatusSnapshot {
   piercing: boolean;
   piercingDamageMultiplier: number;
   piercingGrantedByEffect: boolean;
+  battleIndestructible: boolean;
+  tempBattleIndestructible: boolean;
+  battleDamageHealsControllerThisTurn: boolean;
+  extraAttacks: number;
+}
+
+/**
+ * Characteristics a rule can rewrite (Trap Monsters, Tuner status, Tokens).
+ * Static definition data is covered by `cardId` and the card database
+ * signature; these are the values currently in effect.
+ */
+export interface CanonicalCardCharacteristicsSnapshot {
+  cardKind: string | null;
+  originalCardKind: string | null;
+  treatedAsCardKinds: SerializableValue;
+  isTrapMonster: boolean;
+  trapMonsterSummonProcedure: SerializableValue;
+  trapMonsterOriginalState: SerializableValue;
+  monsterType: string | null;
+  type: string | null;
+  types: SerializableValue;
+  attribute: string | null;
+  subtype: string | null;
+  isTuner: boolean;
+  synchroMaterialRoles: SerializableValue;
+  isToken: boolean;
+}
+
+/**
+ * Per-card attack and turn bookkeeping read by legality checks. Monsters
+ * already attacked this turn are listed by duel identity.
+ */
+export interface CanonicalCardTurnStateSnapshot {
+  canMakeSecondAttackThisTurn: boolean;
+  secondAttackUsedThisTurn: boolean;
+  canAttackAllOpponentMonstersThisTurn: boolean;
+  canAttackDirectlyThisTurn: boolean;
+  attackedMonstersThisTurn: SerializableValue;
+  extraAttackTargetRestriction: SerializableValue;
+  passiveExtraAttackTargetRestriction: SerializableValue;
+  passiveExtraAttackBonuses: SerializableValue;
+  cannotAttackUntilTurn: number | null;
+  immuneToOpponentEffectsUntilTurn: number | null;
+  battleIndestructibleOncePerTurnLastUsedTurn: number | null;
+  setTurn: number | null;
+  turnSetOn: number | null;
+  revealedTurn: number | null;
+  lastSummonProcedure: string | null;
+}
+
+/** Values later subtracted or restored when temporary and passive modifiers end. */
+export interface CanonicalCardStatBookkeepingSnapshot {
+  tempAtkBoost: number;
+  tempDefBoost: number;
+  turnBasedBuffs: SerializableValue;
+  originalAtk: number | null;
+  originalDef: number | null;
+  originalStatsOverride: SerializableValue;
+  dynamicBuffs: SerializableValue;
+  suppressedDynamicBuffStatsByKey: SerializableValue;
+  temporarySuppressedDynamicBuffStatsByKey: SerializableValue;
+  equipAtkBonus: number;
+  equipDefBonus: number;
+  equipExtraAttacks: number;
+  equipExtraAttacksApplied: number;
+}
+
+/**
+ * Links to other cards and records kept for later rules. Cards and material
+ * records use duel identities; process-local instance ids are dropped.
+ */
+export interface CanonicalCardBindingsSnapshot {
+  equips: SerializableValue;
+  grantsBattleIndestructible: boolean;
+  boundTrapSource: DuelCardId | number | null;
+  boundMonsterTarget: DuelCardId | number | null;
+  effectMarkers: SerializableValue;
+  pendingSpellTrapFinalization: SerializableValue;
+  ascensionMaterials: SerializableValue;
+  synchroMaterials: SerializableValue;
+  lastSentToGraveAsMaterial: SerializableValue;
+}
+
+/** Status baselines restored at end of turn and when the card leaves the field. */
+export interface CanonicalCardStatusRegistriesSnapshot {
+  temporary: SerializableValue;
+  fieldExit: SerializableValue;
 }
 
 export interface CanonicalStatBuffContribution {
@@ -406,6 +499,11 @@ export interface CanonicalCardStateSnapshot {
   counters: SerializableValue;
   equipTargetId: DuelCardId | number | null;
   statuses: CanonicalCardStatusSnapshot;
+  characteristics: CanonicalCardCharacteristicsSnapshot;
+  statusRegistries: CanonicalCardStatusRegistriesSnapshot;
+  turnState: CanonicalCardTurnStateSnapshot;
+  statBookkeeping: CanonicalCardStatBookkeepingSnapshot;
+  bindings: CanonicalCardBindingsSnapshot;
 }
 
 export interface CanonicalPlayerZonesSnapshot {
@@ -426,8 +524,36 @@ export interface CanonicalPlayerStateSnapshot {
   zones: CanonicalPlayerZonesSnapshot;
   summonCount: number;
   additionalNormalSummons: number;
+  damageReceivedThisTurn: number;
+  normalSummonsThisTurn: SerializableValue;
+  additionalNormalSummonPermissions: SerializableValue;
+  lpGainMultiplier: number;
+  opponentCannotActivateDuringBattle: boolean;
   oncePerDuelUsage: SerializableValue;
   restrictions: SerializableValue;
+}
+
+/**
+ * Duel-level rule state outside the turn, chain and procedure snapshots. Card
+ * references are projected to duel identities; process-local instance ids
+ * (and record ids derived from them) never participate.
+ */
+export interface CanonicalRuleStateSnapshot {
+  gameOver: boolean;
+  winner: string | null;
+  battleStep: string | null;
+  lastAttackNegated: boolean;
+  damageCalculationStatChangePending: boolean;
+  damageCalculationTempBuffs: SerializableValue;
+  endOfDamageStepTempBuffs: SerializableValue;
+  temporaryBattlePairEffects: SerializableValue;
+  pendingSynchroMaterialFollowups: SerializableValue;
+  pendingSynchroMaterialTriggerContinuation: SerializableValue;
+  synchroSummonContextCounter: number;
+  eventResolutionCounter: number;
+  generatedIdCounters: SerializableValue;
+  materialDuelStats: SerializableValue;
+  specialSummonTypeCounts: SerializableValue;
 }
 
 export interface CanonicalChainStateSnapshot {
@@ -465,6 +591,7 @@ export interface CanonicalGameStateSnapshot {
   temporaryControlEffects: SerializableValue;
   temporaryReplacementEffects?: SerializableValue;
   temporaryReplacementSequence?: number;
+  ruleState: CanonicalRuleStateSnapshot;
   chain: CanonicalChainStateSnapshot;
   summon: CanonicalSummonStateSnapshot | null;
   combat: CanonicalCombatStateSnapshot | null;
@@ -567,6 +694,11 @@ export interface ReplayRuntimePlayer {
   effectActivationRestrictions?: unknown[];
   forbidDirectAttacksThisTurn?: boolean;
   directAttacksDeclaredThisTurn?: number;
+  damageReceivedThisTurn?: number;
+  normalSummonsThisTurn?: readonly unknown[];
+  additionalNormalSummonPermissions?: readonly unknown[];
+  lpGainMultiplier?: number;
+  opponentCannotActivateDuringBattle?: boolean;
 }
 
 export type CanonicalReplayChainPort = Partial<
@@ -593,6 +725,20 @@ export interface CanonicalReplayGamePort {
   temporaryEventEffects?: unknown[];
   temporaryControlEffects?: unknown[];
   temporaryReplacementEffects?: unknown[];
+  gameOver?: boolean;
+  winner?: string | null;
+  battleStep?: string | null;
+  lastAttackNegated?: boolean;
+  damageCalculationStatChangePending?: boolean;
+  damageCalculationTempBuffs?: unknown[];
+  endOfDamageStepTempBuffs?: unknown[];
+  temporaryBattlePairEffects?: unknown[];
+  pendingSynchroMaterialFollowups?: unknown[];
+  pendingSynchroMaterialTriggerContinuation?: unknown;
+  synchroSummonContextCounter?: number;
+  eventResolutionCounter?: number;
+  materialDuelStats?: unknown;
+  specialSummonTypeCounts?: unknown;
   chainSystem?: CanonicalReplayChainPort | null;
   ensureDuelCardId?(card: ReplayRuntimeCard): DuelCardId | number | null;
   getRandomState?(): ReplayRandomState | null;
@@ -737,6 +883,7 @@ export interface ReplayDriverGamePort extends CanonicalReplayGamePort {
   decisionBroker: ReplayDecisionBrokerPort;
   dispose?(): void;
   startWithDecks(options: object): PromiseLike<unknown>;
+  startTurn(): PromiseLike<unknown>;
   drawCards(player: ReplayRuntimePlayer, amount: number): unknown;
   shuffle(cards: ReplayRuntimeCard[]): unknown;
   nextPhase(): unknown;

@@ -238,6 +238,15 @@ export class DecisionBroker {
         }
       }
       if (runtimeInput.kind === "choice" && runtimeInput.contextSnapshot &&
+          Reflect.get(runtimeInput.contextSnapshot, "type") === "resolution_choice") {
+        const expected = runtimeInput.contextSnapshot;
+        const received = recorded.context;
+        if (!received || recorded.actorId !== (runtimeInput.actor?.id || runtimeInput.actorId || null) ||
+            ["type", "sourceDuelCardId", "effectId"].some(key => Reflect.get(expected, key) !== Reflect.get(received, key))) {
+          throw new Error("Replay resolution choice does not match the current actor, source or effect.");
+        }
+      }
+      if (runtimeInput.kind === "choice" && runtimeInput.contextSnapshot &&
           Reflect.get(runtimeInput.contextSnapshot, "type") === "chain_response_reference") {
         const expected = runtimeInput.contextSnapshot;
         const received = recorded.context;

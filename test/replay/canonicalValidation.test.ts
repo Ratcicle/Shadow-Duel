@@ -43,6 +43,7 @@ function replay(overrides: MutableReplay = {}): MutableReplay {
 test("engine version is required and rejects recordings with previous semantics", () => {
   assert.equal(getCardDatabaseSignature(), "efa7767a");
   assert.throws(() => validateCanonicalReplay(replay({ cardDatabaseSignature: "feeb687b" })), /database signature/);
+  assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v26" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v25" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v24" })), /engineVersion/);
   assert.throws(() => validateCanonicalReplay(replay({ engineVersion: "engine-rules-v23" })), /engineVersion/);

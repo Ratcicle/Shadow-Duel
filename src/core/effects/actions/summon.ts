@@ -134,6 +134,9 @@ export async function applySpecialSummonToken(
     targetPlayer.id,
   ) as Card & SummonRuntimeCard;
 
+  // Like every other duel card, a Token gets its duel identity when created, so
+  // identity-based keys (aura sources, linked buffs) never change afterwards.
+  this.game?.ensureDuelCardId?.(tokenCard);
   // Mark as token - this is the canonical flag for token identification
   // Tokens that leave the field are removed from the game entirely (handled in Game.moveCardInternal)
   tokenCard.isToken = true;

@@ -250,6 +250,9 @@ function validateSetup(value: unknown): void {
   validateDeck(read(setup, "playerExtraDeck"), "setup.playerExtraDeck");
   validateDeck(read(setup, "botDeck"), "setup.botDeck");
   validateDeck(read(setup, "botExtraDeck"), "setup.botExtraDeck");
+  if (hasOwn(setup, "openingTurnStarted") && read(setup, "openingTurnStarted") !== true) {
+    invalid("setup.openingTurnStarted", "true when present");
+  }
 }
 
 function validateCardLocator(payload: object, path: string): void {
@@ -516,6 +519,12 @@ function validateDecisionContext(
 ): void {
   if (value === null && kind !== "field_placement") return;
   const context = requireObject(value, path);
+  if (read(context, "type") === "resolution_choice") {
+    if (kind !== "choice") invalid(path, "a choice context for a resolution choice");
+    requireIdentity(read(context, "sourceDuelCardId"), `${path}.sourceDuelCardId`, true);
+    requireNullableString(read(context, "effectId"), `${path}.effectId`);
+    return;
+  }
   if (read(context, "type") === "chain_response_reference") {
     if (kind !== "choice") invalid(path, "a choice context for a Chain response reference");
     requireIdentity(read(context, "chainId"), `${path}.chainId`);
@@ -798,6 +807,84 @@ function validateCardSnapshot(value: unknown, path: string, onField = false): vo
   if (requireFiniteNumber(read(statuses, "piercingDamageMultiplier"), `${path}.statuses.piercingDamageMultiplier`) <= 0) {
     invalid(`${path}.statuses.piercingDamageMultiplier`, "a positive multiplier");
   }
+  for (const key of ["battleIndestructible", "tempBattleIndestructible", "battleDamageHealsControllerThisTurn"]) {
+    requireBoolean(read(statuses, key), `${path}.statuses.${key}`);
+  }
+  requireFiniteNumber(read(statuses, "extraAttacks"), `${path}.statuses.extraAttacks`);
+  const characteristics = requireObject(read(card, "characteristics"), `${path}.characteristics`);
+  for (const key of ["isTrapMonster", "isTuner", "isToken"]) {
+    requireBoolean(read(characteristics, key), `${path}.characteristics.${key}`);
+  }
+  for (const key of ["cardKind", "originalCardKind", "monsterType", "type", "attribute", "subtype"]) {
+    requireNullableString(read(characteristics, key), `${path}.characteristics.${key}`);
+  }
+  for (const key of ["treatedAsCardKinds", "trapMonsterSummonProcedure", "trapMonsterOriginalState", "types", "synchroMaterialRoles"]) {
+    if (!hasOwn(characteristics, key)) invalid(`${path}.characteristics.${key}`, "a serialized value");
+  }
+  const turnState = requireObject(read(card, "turnState"), `${path}.turnState`);
+  for (const key of [
+    "canMakeSecondAttackThisTurn",
+    "secondAttackUsedThisTurn",
+    "canAttackAllOpponentMonstersThisTurn",
+    "canAttackDirectlyThisTurn",
+  ]) {
+    requireBoolean(read(turnState, key), `${path}.turnState.${key}`);
+  }
+  for (const key of [
+    "cannotAttackUntilTurn",
+    "immuneToOpponentEffectsUntilTurn",
+    "battleIndestructibleOncePerTurnLastUsedTurn",
+    "setTurn",
+    "turnSetOn",
+    "revealedTurn",
+  ]) {
+    if (read(turnState, key) !== null) requireFiniteNumber(read(turnState, key), `${path}.turnState.${key}`);
+  }
+  requireNullableString(read(turnState, "lastSummonProcedure"), `${path}.turnState.lastSummonProcedure`);
+  requireArray(read(turnState, "attackedMonstersThisTurn"), `${path}.turnState.attackedMonstersThisTurn`);
+  for (const key of ["extraAttackTargetRestriction", "passiveExtraAttackTargetRestriction", "passiveExtraAttackBonuses"]) {
+    if (!hasOwn(turnState, key)) invalid(`${path}.turnState.${key}`, "a serialized value");
+  }
+  const stats = requireObject(read(card, "statBookkeeping"), `${path}.statBookkeeping`);
+  for (const key of [
+    "tempAtkBoost",
+    "tempDefBoost",
+    "equipAtkBonus",
+    "equipDefBonus",
+    "equipExtraAttacks",
+    "equipExtraAttacksApplied",
+  ]) {
+    requireFiniteNumber(read(stats, key), `${path}.statBookkeeping.${key}`);
+  }
+  for (const key of ["originalAtk", "originalDef"]) {
+    if (read(stats, key) !== null) requireFiniteNumber(read(stats, key), `${path}.statBookkeeping.${key}`);
+  }
+  for (const key of [
+    "turnBasedBuffs",
+    "originalStatsOverride",
+    "dynamicBuffs",
+    "suppressedDynamicBuffStatsByKey",
+    "temporarySuppressedDynamicBuffStatsByKey",
+  ]) {
+    if (!hasOwn(stats, key)) invalid(`${path}.statBookkeeping.${key}`, "a serialized value");
+  }
+  const bindings = requireObject(read(card, "bindings"), `${path}.bindings`);
+  requireBoolean(read(bindings, "grantsBattleIndestructible"), `${path}.bindings.grantsBattleIndestructible`);
+  requireArray(read(bindings, "equips"), `${path}.bindings.equips`)
+    .forEach((equip, index) => requireIdentity(equip, `${path}.bindings.equips[${index}]`, true));
+  for (const key of ["boundTrapSource", "boundMonsterTarget"]) {
+    requireIdentity(read(bindings, key), `${path}.bindings.${key}`, true);
+  }
+  for (const key of ["ascensionMaterials", "synchroMaterials"]) {
+    requireArray(read(bindings, key), `${path}.bindings.${key}`);
+  }
+  for (const key of ["effectMarkers", "pendingSpellTrapFinalization", "lastSentToGraveAsMaterial"]) {
+    if (!hasOwn(bindings, key)) invalid(`${path}.bindings.${key}`, "a serialized value");
+  }
+  const registries = requireObject(read(card, "statusRegistries"), `${path}.statusRegistries`);
+  for (const key of ["temporary", "fieldExit"]) {
+    requireObject(read(registries, key), `${path}.statusRegistries.${key}`);
+  }
 }
 
 function validatePlayerSnapshot(value: unknown, path: string): void {
@@ -812,6 +899,16 @@ function validatePlayerSnapshot(value: unknown, path: string): void {
     read(player, "additionalNormalSummons"),
     `${path}.additionalNormalSummons`,
   );
+  if (requireFiniteNumber(read(player, "damageReceivedThisTurn"), `${path}.damageReceivedThisTurn`) < 0) {
+    invalid(`${path}.damageReceivedThisTurn`, "a nonnegative number");
+  }
+  for (const key of ["normalSummonsThisTurn", "additionalNormalSummonPermissions"]) {
+    requireArray(read(player, key), `${path}.${key}`);
+  }
+  if (requireFiniteNumber(read(player, "lpGainMultiplier"), `${path}.lpGainMultiplier`) <= 0) {
+    invalid(`${path}.lpGainMultiplier`, "a positive multiplier");
+  }
+  requireBoolean(read(player, "opponentCannotActivateDuringBattle"), `${path}.opponentCannotActivateDuringBattle`);
   for (const key of ["oncePerDuelUsage", "restrictions"]) {
     if (!hasOwn(player, key)) invalid(`${path}.${key}`, "a serialized value");
   }
@@ -1181,8 +1278,40 @@ function validateStateSnapshot(value: unknown, path: string): void {
     const presenceId = read(control, "fieldPresenceId");
     if (presenceId !== null && typeof presenceId !== "number" && typeof presenceId !== "string") invalid(`${controlPath}.fieldPresenceId`, "a field presence identity or null");
   });
+  validateRuleStateSnapshot(read(snapshot, "ruleState"), `${path}.ruleState`);
   validateProcedureSnapshot(read(snapshot, "summon"), `${path}.summon`);
   validateProcedureSnapshot(read(snapshot, "combat"), `${path}.combat`);
+}
+
+function validateRuleStateSnapshot(value: unknown, path: string): void {
+  const rules = requireObject(value, path);
+  for (const key of ["gameOver", "lastAttackNegated", "damageCalculationStatChangePending"]) {
+    requireBoolean(read(rules, key), `${path}.${key}`);
+  }
+  for (const key of ["winner", "battleStep"]) requireNullableString(read(rules, key), `${path}.${key}`);
+  for (const key of ["synchroSummonContextCounter", "eventResolutionCounter"]) {
+    requireInteger(read(rules, key), `${path}.${key}`, 0);
+  }
+  for (const key of [
+    "damageCalculationTempBuffs",
+    "endOfDamageStepTempBuffs",
+    "temporaryBattlePairEffects",
+    "pendingSynchroMaterialFollowups",
+    "generatedIdCounters",
+  ]) {
+    requireArray(read(rules, key), `${path}.${key}`);
+  }
+  for (const key of ["materialDuelStats", "specialSummonTypeCounts"]) {
+    requireObject(read(rules, key), `${path}.${key}`);
+  }
+  const continuation = read(rules, "pendingSynchroMaterialTriggerContinuation");
+  if (continuation !== null) {
+    const continuationPath = `${path}.pendingSynchroMaterialTriggerContinuation`;
+    const entry = requireObject(continuation, continuationPath);
+    for (const key of ["stage", "synchroSummonContextId", "summonedCard", "playerId"]) {
+      if (!hasOwn(entry, key)) invalid(`${continuationPath}.${key}`, "a serialized value");
+    }
+  }
 }
 
 function validateEvents(value: unknown): void {

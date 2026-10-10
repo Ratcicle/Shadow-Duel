@@ -7,7 +7,6 @@
  * Methods: openGraveyardModal, closeGraveyardModal
  */
 
-import { getUIText } from "../../i18n.js";
 import type {
   GameCard,
   GamePlayer,
@@ -41,28 +40,6 @@ interface GraveyardEffectEnginePort {
     player: GamePlayer,
     zone: "graveyard",
   ): ActivationPreview;
-  getSpellTrapActivationEffect?(
-    card: GameCard,
-    context: { fromHand: false; activationZone: "graveyard" },
-  ): EffectDefinition | null;
-  getMonsterIgnitionEffect?(
-    card: GameCard,
-    zone: "graveyard",
-    options: { effectId: string | null },
-  ): EffectDefinition | null;
-  activateSpellTrapEffect(
-    card: GameCard,
-    player: GamePlayer,
-    selections: unknown,
-    zone: "graveyard",
-    context: unknown,
-  ): unknown;
-  activateMonsterFromGraveyard(
-    card: GameCard,
-    player: GamePlayer,
-    selections: unknown,
-    context: unknown,
-  ): unknown;
 }
 
 interface GraveyardModalOptions {
@@ -84,11 +61,12 @@ interface GraveyardUiPort {
 
 interface GraveyardHost {
   tryActivateSpellTrapEffect(card: GameCard, selections: null, options: { owner: GamePlayer; activationZone: "graveyard" }): Promise<unknown>;
+  tryActivateMonsterEffect(card: GameCard, selections: null, activationZone: "graveyard", owner: GamePlayer,
+    options: { effectId: string | null }): Promise<unknown>;
   turn: "player" | "bot";
   graveyardSelection: { onCancel: (() => void) | null } | null;
   effectEngine: GraveyardEffectEnginePort;
   ui: GraveyardUiPort;
-  runActivationPipeline(config: unknown): unknown;
   closeGraveyardModal(triggerCancel?: boolean): void;
   updateBoard(): unknown;
 }
@@ -152,60 +130,10 @@ export function openGraveyardModal(
           void this.tryActivateSpellTrapEffect(card, null, { owner: player, activationZone: "graveyard" });
           return;
         }
-        const activationContext = {
-          fromHand: false,
-          activationZone: "graveyard",
-          sourceZone: "graveyard",
+        // The canonical entrypoint records the command that replays drive.
+        this.closeGraveyardModal(false);
+        void this.tryActivateMonsterEffect(card, null, "graveyard", player, {
           effectId: monsterEffectEntry?.effect?.id || null,
-          committed: false,
-        };
-        const activationEffect = isSpellTrap
-          ? this.effectEngine?.getSpellTrapActivationEffect?.(card, {
-              fromHand: false,
-              activationZone: "graveyard",
-            })
-          : this.effectEngine?.getMonsterIgnitionEffect?.(card, "graveyard", {
-              effectId: activationContext.effectId,
-            });
-        this.runActivationPipeline({
-          card,
-          owner: player,
-          activationZone: "graveyard",
-          activationContext,
-          selectionKind: "graveyardEffect",
-          selectionMessage: isSpellTrap
-            ? getUIText("ui.spell.spellSelection")
-            : getUIText("ui.graveyard.selection"),
-          guardKind: isSpellTrap
-            ? "graveyard_spell_effect"
-            : "graveyard_effect",
-          phaseReq: ["main1", "main2"],
-          oncePerTurn: {
-            card,
-            player,
-            effect: activationEffect,
-          },
-          onSelectionStart: () => this.closeGraveyardModal(false),
-          activate: (chosen: unknown, ctx: unknown) =>
-            isSpellTrap
-              ? this.effectEngine.activateSpellTrapEffect(
-                  card,
-                  player,
-                  chosen,
-                  "graveyard",
-                  ctx,
-                )
-              : this.effectEngine.activateMonsterFromGraveyard(
-                  card,
-                  player,
-                  chosen,
-                  ctx,
-                ),
-          finalize: () => {
-            this.closeGraveyardModal(false);
-            this.ui.log(`${card.name} activates from the Graveyard.`);
-            this.updateBoard();
-          },
         });
       };
       options.selectable = true;

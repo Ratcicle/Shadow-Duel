@@ -792,7 +792,10 @@ O portão global é o PR com `verify`.
 
 **Tarefas**
 
-- [ ] **`determinism:6`**: completar o hash canônico (`src/core/game/replay/canonical.ts`).
+- [x] **`determinism:6`**: completar o hash canônico (`src/core/game/replay/canonical.ts`).
+  - **Escopo ampliado em 09/10/2026 (aprovado):** a auditoria prévia encontrou, além dos 9 campos listados abaixo, cerca de 55 campos de regras fora do hash. Todos entraram, em 4 commits: estado do jogador e `ruleState` do duelo; características e registros de status das cartas; controle de ataques e turnos (`turnState`); base de reversão de stats (`statBookkeeping`) e vínculos/materiais (`bindings`). Referências de carta e `instanceId` locais ao processo são projetados para `duelCardId`. Ficaram de fora, com motivo registrado na auditoria: campos mortos, estado só de UI/IA, guards de reentrância e dados estáticos cobertos pela assinatura do banco.
+  - Vazamentos de `instanceId` encontrados pelos replays e corrigidos: o `id` dos `turnBasedBuffs` (sem uso pelas regras) fica fora do hash; as chaves de aura (`getFieldAuraBuffKey` e variantes, compartilhadas com a simulação) usam `fieldPresenceId || duelCardId || instanceId`; Fichas recebem `duelCardId` na criação, como as demais cartas. As chaves de `permanentBuffsBySource` continuam fora do hash, pelo contrato existente (`test/statBuffSerialization.test.ts`).
+  - `test/replay/discardDestinationReplay.test.ts` falhou uma vez de forma intermitente numa bateria longa e passou em três reexecuções; acompanhar.
   - `playerState` (`:271-300`): `damageReceivedThisTurn`, `normalSummonsThisTurn`, `additionalNormalSummonPermissions` e **`lpGainMultiplier`** (lido em `Player.ts:991`, resetado em `:1027`).
   - Snapshot do jogo (`:395-436`):
     - `materialDuelStats` por lado, incluindo o `Map<number, Set<string>>` `activatedEffectIdsByMaterialId`. Ordenar as chaves externas e os Sets internos com `compareCodeUnits`.
@@ -802,37 +805,41 @@ O portão global é o PR com `verify`.
   - Tipos em `src/core/contracts/replay.ts`, validação em `src/core/game/replay/validation.ts` (padrão de `2b8f117`) e texto de contrato em `docs/Replay canônico.md:155-178`.
   - Antes de codificar, auditar outros campos de `Player`/`Game` escritos e lidos por regras.
   - Testes em `test/replay/canonicalReplay.test.ts`: cobertura "every rule-relevant mutable field changes the canonical hash" e invariância a deslocamento de `instanceId`. Também `canonicalValidation` e `canonicalRecorder`.
-- [ ] **`decision-broker:1`** (D14): `checkBeforeDestroyNegations` (`src/core/effects/actions/destroy.ts:197-208`) passa a usar `requestOptionalConfirmation(this.game, owner, () => this.promptForDestructionNegation(card, effect), () => true)` para os dois controladores. Não alterar o `UIAdapter`.
+- [x] **`decision-broker:1`** (D14): `checkBeforeDestroyNegations` (`src/core/effects/actions/destroy.ts:197-208`) passa a usar `requestOptionalConfirmation(this.game, owner, () => this.promptForDestructionNegation(card, effect), () => true)` para os dois controladores. Não alterar o `UIAdapter`.
   - Testes em `test/voidArchetype.test.ts` com matriz assento × controlador e playback sem travar. Os nomes contêm "Hydra", para que o `--test-name-pattern` os alcance.
-- [ ] **`decision-broker:2`** (correção aplicada): em `trySendToGraveActionReplacement` (`src/core/game/zones/movement.ts:1591-1618`):
+- [x] **`decision-broker:2`** (correção aplicada): em `trySendToGraveActionReplacement` (`src/core/game/zones/movement.ts:1591-1618`):
   - `auto === true` mantém a semântica atual. Caso contrário, `requestOptionalConfirmation` com `resolveAI = shouldUseAiReplacementEffect`. `BurningWestStrategy.ts:851` não usa RNG.
   - **Revalidação depois do prompt** com um helper que reexecuta todos os checks de elegibilidade de `:1572-1586`: face-down, negação, `requireZone` contra a zona rederivada, `matchesSendToGraveReplacement`, `canUseOncePerTurn` e `checkActionPreviewRequirements`. Além disso, tokens de presença por `locationVersion` de alvo e fonte (padrão `destructionReplacement.ts:1073-1076`).
   - Formatar `{target}`/`{source}` com nome de exibição no prompt **e** no log, exportando ou duplicando `formatReplacementText` (`destructionReplacement.ts:414`). Isso é apresentação; o texto da carta não muda.
   - Testes em `test/replay/movementContractsReplay.test.ts`, com a estratégia em `assert.fail` no playback (padrão `test/replay/mirageboundPriorityTwoReplay.test.ts:31-32`).
-- [ ] **`decision-broker:3`** (D15): em `src/core/actionHandlers/resources.ts`:
+- [x] **`decision-broker:3`** (D15): em `src/core/actionHandlers/resources.ts`:
   - `selectionContractBuilder` em `:1370-1399`, usando `buildAddToHandSelectionContract` generalizado (`metadata.context` vindo de `action.type`).
   - `shouldPerformOptionalSummon` (`:1580-1609`) passa a usar `requestOptionalConfirmation`. O `return true` final, que automatiza a escolha do humano sem UI, é removido.
   - Testes em `test/replay/optionalEffectsReplay.test.ts`: o humano escolhe o segundo candidato; playback com locales EN→PT.
-  - Verificar uma vez no navegador (`npm run dev`).
-- [ ] **`contextSnapshot`** (opcional aprovado em D5): um `contextSnapshot` mínimo (`{ type, sourceDuelCardId, effectId }`) em `requestOptionalConfirmation` (`src/core/actionHandlers/shared.ts:59`), conferido pelo broker no replay. Assim, uma escolha consumida pelo ator ou pelo prompt errado falha na própria decisão, e não só no hash.
-- [ ] **`engine-bugs:1`**: em `src/core/game/zones/movement.ts:2922-2949`, trocar o `destroyCard(host).then(...)` destacado por `pendingBoundDestruction.push({ target: host, source: card, zone: "field" })`, aproveitando o flush aguardado em `:3567`.
+  - Verificar uma vez no navegador (`npm run dev`). **Pendente:** feito no fim da etapa, junto com a verificação manual do pacote.
+- [x] **`contextSnapshot`** (opcional aprovado em D5): um `contextSnapshot` mínimo (`{ type, sourceDuelCardId, effectId }`) em `requestOptionalConfirmation` (`src/core/actionHandlers/shared.ts:59`), conferido pelo broker no replay. Assim, uma escolha consumida pelo ator ou pelo prompt errado falha na própria decisão, e não só no hash.
+- [x] **`engine-bugs:1`**: em `src/core/game/zones/movement.ts:2922-2949`, trocar o `destroyCard(host).then(...)` destacado por `pendingBoundDestruction.push({ target: host, source: card, zone: "field" })`, aproveitando o flush aguardado em `:3567`.
   - A mensagem de log vai para um `logMessage` opcional da entrada pendente, porque o flush ignora o resultado de `destroyCard`.
   - O comportamento atual com The Shadow Heart negada é mantido.
   - Testes em `test/shadowHeartFinalRules.test.ts` (`zoneOpDepth === 0` depois do `await`) e `test/replay/equipCleanupReplay.test.ts`.
-- [ ] **`engine-bugs:3`** (correção aplicada): em `src/core/effects/targeting/resolution.ts:782-792`, só aplicar `autoSelect` para o humano quando `candidates.length === min`, isto é, quando a escolha é forçada. Com menos candidatos que `min`, vale o fluxo normal de falha de alvo.
+- [x] **`engine-bugs:3`** (correção aplicada): em `src/core/effects/targeting/resolution.ts:782-792`, só aplicar `autoSelect` para o humano quando `candidates.length === min`, isto é, quando a escolha é forçada. Com menos candidatos que `min`, vale o fluxo normal de falha de alvo.
   - Atualizar `docs/Como criar uma carta.md:442-444`, que hoje promete automatizar a escolha humana.
   - Teste novo num bloco Void Hollow King de `test/replay/deferredSummonReplay.test.ts`: com 2 Void Hollow a seleção abre, a escolha é gravada e o playback a consome; com 1, a seleção não abre. O arquivo já está na validação desta etapa sem filtro.
-- [ ] **`engine-bugs:6`** (correção aplicada): contador de combate em andamento, com incremento/decremento em `try/finally` dentro de `resolveCombat` (`src/core/game/combat/resolution.ts`), somado a `resolvingActive` em `src/core/game/actions/guard.ts:74-81`.
+- [x] **`engine-bugs:6`** (correção aplicada): contador de combate em andamento, com incremento/decremento em `try/finally` dentro de `resolveCombat` (`src/core/game/combat/resolution.ts`), somado a `resolvingActive` em `src/core/game/actions/guard.ts:74-81`.
   - O `execute` de `src/core/game/combat/targeting.ts:162-182` passa a aguardar `resolveCombat`.
   - Verificar prompts aninhados (`session.ts:653-655`) e `_activeDeferredReplayCommandDescriptor`.
   - Testes em `test/contracts/selectionSession.test.ts` e ida-e-volta de replay em `test/replay/phaseLifecycleReplay.test.ts`.
-- [ ] **`bloomrot:devourer`, parte runtime** (D2):
+  - **Achado ao testar (corrigido):** um ataque humano pela sessão de seleção gravava a escolha do alvo como decisão `attack` além do comando `attack`, que já carrega o alvo. No playback o comando executa direto e a decisão sobrava ("unconsumed decision"), quebrando qualquer replay com ataque humano. A sessão ganhou a opção genérica `choiceRecordedByCommand`, usada pela seleção de ataque.
+- [x] **`bloomrot:devourer`, parte runtime** (D2):
   - Primeiro o runtime: para fontes que são a própria carta movida, o snapshot usa `payload.locationVersion` em vez do valor atual (`src/core/effects/triggers/core.ts:521-528`, `src/core/chain/link.ts:91-104`, payload em `src/core/game/zones/movement.ts:786-791`).
   - Depois a simulação espelha o runtime, usando o `payload.locationVersion` simulado (`src/core/ai/common/simulatedActions/movement.ts:145`; caminho Fusion em `simulatedActions/summon.ts:1375-1379` → `movement.ts:155-158`) no check de presença congelada (`src/core/ai/common/simulation.ts:1748-1767,1850-1857`).
   - Só então remover o fallback `deferred_trigger_source_presence` (`:1852-1855`) e ajustar `test/ai/bloomrotDevourerFusion.test.ts:145` (`true`) e `:148-149` (`[]`). A linha `:180` (flag `custom_emitter`) não muda.
+  - **Resultado (09/10/2026):** os coletores de `card_to_grave` e `card_moved` passam a versão do payload (o `card_to_grave` ganhou `locationVersion`), e o `sourceAtTrigger` de uma fonte que é a própria carta movida usa essa versão; a simulação espelha isso com a versão do recibo da movimentação. O fallback `deferred_trigger_source_presence` saiu só para essas fontes: para fontes que não são a carta movida, ou payloads sem versão, ele continua sendo o diagnóstico deliberado de paridade não comprovada (`test/ai/bloomrotCounterParity.test.ts`, `test/ai/mirageboundSourcePresenceS02.test.ts`).
+  - **`INV-5` avaliada:** com a fonte presa à versão do payload, a validade do gatilho não depende mais da ordem de coleta das ocorrências aninhada e externa; a ordenação do SEGOC não foi alterada.
   - **`INV-5`:** inversão de ordem de eventos. O `card_moved` aninhado (GY → mão) é despachado e coletado antes do externo (campo → GY), porque o emit em `movement.ts:786` não é aguardado. Avaliar o impacto na ordenação de ocorrências do SEGOC ao corrigir o snapshot.
-- [ ] **`decision-broker:8`**: apagar o fallback morto `confirmTriggeredEffect` e `customPromptMethod` (`src/core/effects/triggers/core.ts:162-222`, `triggers/runtime.ts:223`). Ele é inalcançável: o SEGOC sempre passa `confirmed:true` e o `NullChainSystem` não ativa gatilhos. A remoção é pré-requisito do guard.
-- [ ] **`decision-broker:12`** (D16): guard estático por AST implementado como **regra de `scripts/audit_typescript_escapes.ts`**, ou como auditoria irmã chamada pelo mesmo entry point. Ele roda com `npm run audit:typescript-escapes` e não exige emenda ao `AGENTS.md`. Nenhum teste importa o alias `typescript`.
+- [x] **`decision-broker:8`**: apagar o fallback morto `confirmTriggeredEffect` e `customPromptMethod` (`src/core/effects/triggers/core.ts:162-222`, `triggers/runtime.ts:223`). Ele é inalcançável: o SEGOC sempre passa `confirmed:true` e o `NullChainSystem` não ativa gatilhos. A remoção é pré-requisito do guard.
+  - **Ajuste (09/10/2026):** a premissa de inalcançável não se confirmou por completo. Uma varredura instrumentada mostrou o fallback sendo alcançado por ativações diretas de entradas de gatilho fora do SEGOC (três testes conduzem o pipeline à mão; com Chains desligadas o `NullChainSystem` não despacha gatilhos). Em vez de apagar, a confirmação passou a ser uma escolha gravada pelo broker (`requestOptionalConfirmation`, só para humanos), o que cumpre o pré-requisito do guard; `customPromptMethod`, sem uso em cartas, foi removido.
+- [x] **`decision-broker:12`** (D16): guard estático por AST implementado como **regra de `scripts/audit_typescript_escapes.ts`**, ou como auditoria irmã chamada pelo mesmo entry point. Ele roda com `npm run audit:typescript-escapes` e não exige emenda ao `AGENTS.md`. Nenhum teste importa o alias `typescript`.
   - Casar `CallExpression` pelo nome da propriedade, cobrindo as formas `?.(` e `!(`.
   - Ficam fora da varredura, como na especificação: `src/core/game/ui/interactions.ts` (UI pré-comando, gravada como comando), `src/core/contracts/` e `src/core/UIAdapter.ts`.
   - Allowlist por arquivo + função envolvente, cada entrada com um motivo de uma linha:
@@ -840,12 +847,23 @@ O portão global é o PR com `verify`.
     - `shared.ts:1078-1084` (`promptPlayer === false`) e `resources.ts:2157`;
     - sites mortos mantidos por `decision-broker:9` (backlog), com o motivo "morto, remoção rastreada em `decision-broker:9` (backlog)": o wrapper `showSickleSelectionModal` (`src/core/effects/actions/equip.ts:224-252`) e `showShadowHeartCathedralModal`/`showIgnitionActivateModal` (`src/core/game/ui/modals.ts:33-85`).
   - Alternativa descartada em 09/10/2026 (`decision-broker:9` fica no backlog): trazer `decision-broker:9` (esforço S) para esta etapa, antes de `:12`. Nesse caso, editar as contagens de `AGENTS.md:113` e `docs/Estrutura do Projeto.md:397` (222 → 220 métodos, 61 → 60 grupos), o que exige aprovação.
-- [ ] **`determinism:7` + `decision-broker:5`** (D5), último PR para a branch:
+- [x] **`determinism:7` + `decision-broker:5`** (D5), último commit da branch:
   - Antes: `git log --all -S'engine-rules-v27'` vazio.
   - `src/core/contracts/replay.ts:27` → `engine-rules-v27`.
   - `test/replay/canonicalReplay.test.ts`: regenerar os goldens atuais executando o teste uma vez. Adicionar um passo histórico v26 com os valores congelados na Etapa 3: hash, comprimento e hashes de comando, sem os campos novos. Manter o passo histórico v25 criado na Etapa 3.
   - `test/replay/canonicalValidation.test.ts` e `test/replay/canonicalDriver.test.ts` (`latestPrevious` = v26): incluir v26 nas listas de rejeição.
   - Em `docs/Replay canônico.md`, apenas o texto de contrato, sem changelog.
+
+**Resultado (09/10/2026):** todos os itens da etapa foram concluídos na branch `fase15/replay-v27`, com o bump `engine-rules-v27` como último commit. Replays v26 passam a ser rejeitados antes da inicialização.
+- Desvios registrados nos próprios itens: escopo ampliado do `determinism:6` (auditoria); `decision-broker:8` roteado pelo broker em vez de apagado; fallback `deferred_trigger_source_presence` mantido para fontes que não são a carta movida.
+- Bugs encontrados e corrigidos durante a etapa: vazamentos de `instanceId` em chaves de regras (buffs por turno, auras, Fichas sem identidade desde a criação) e a decisão de ataque duplicada que quebrava replays com ataque humano.
+- Corrigidos a partir do primeiro replay real exportado (09–10/10/2026):
+  - o turno de abertura automático de um duelo normal não era reproduzido antes do primeiro comando (`setup.openingTurnStarted`);
+  - a ativação de ignição do bot no campo e no Cemitério, e os efeitos do bot a partir da Zona de Campo e da Zona de Magias e Armadilhas, não passavam pela ativação canônica, então não gravavam comando;
+  - as Invocações-Sincro e Invocações-Ascensão do bot e os efeitos de monstro ativados pelo modal do Cemitério do jogador também não passavam pelos pontos de entrada gravados; as entradas do Extra Deck agora respeitam a posição gravada;
+  - o modal de busca do Lost Throne mostrava o id interno do requisito no lugar do nome da carta.
+  - um duelo vencido no Damage Step gravava o estado final no meio do ataque; o resultado agora acompanha o estado depois do comando, o mesmo que a reprodução compara.
+- Pendentes de verificação manual, antes do merge: o Void Lost Throne no navegador (`decision-broker:3`) e um replay v27 de um duelo novo exportado pelo usuário (`npm run replay`).
 
 **Validação**
 

@@ -55,17 +55,55 @@ export function shouldContinueAfterActionFailure(action: CardAction): boolean {
   return isActionOptionalNoop(action);
 }
 
-/** Keep optional confirmations in the same decision stream as target choices. */
+/** The effect and source card a resolution choice belongs to. */
+export interface ResolutionChoiceContext {
+  readonly sourceDuelCardId: number | null;
+  readonly effectId: string | null;
+}
+
+/**
+ * Context for a choice asked by `source`'s effect, by duel identity. Hosts and
+ * card projections of every subsystem are accepted; the identity is read from
+ * the game's `ensureDuelCardId` when it has one, else from the card.
+ */
+export function resolutionChoiceContext(
+  game: object | null | undefined,
+  source: object | null | undefined,
+  effectId: string | null | undefined,
+): ResolutionChoiceContext {
+  let sourceDuelCardId: number | null = null;
+  if (source) {
+    const ensure: unknown = game ? Reflect.get(game, "ensureDuelCardId") : null;
+    const ensured: unknown = typeof ensure === "function" ? Reflect.apply(ensure, game, [source]) : null;
+    const stored: unknown = Reflect.get(source, "duelCardId");
+    sourceDuelCardId = typeof ensured === "number" ? ensured : typeof stored === "number" ? stored : null;
+  }
+  return { sourceDuelCardId, effectId: effectId ?? null };
+}
+
+function resolutionChoiceSnapshot(context: ResolutionChoiceContext | null) {
+  return context
+    ? { contextSnapshot: { type: "resolution_choice" as const, ...context } }
+    : {};
+}
+
+/**
+ * Keep optional confirmations in the same decision stream as target choices.
+ * With a context, playback also checks that the recorded choice belongs to
+ * the same effect and source card.
+ */
 export async function requestOptionalConfirmation(
   game: Pick<ActionRuntimeGamePort, "requestDecision">,
   player: DecisionActor | null,
   resolveHuman: () => MaybePromise<boolean>,
   resolveAI: () => MaybePromise<boolean> = () => false,
+  context: ResolutionChoiceContext | null = null,
 ): Promise<boolean> {
   if (!game.requestDecision) return Boolean(await (isAI(player) ? resolveAI() : resolveHuman()));
   const result = await game.requestDecision({
     kind: "choice",
     actor: player,
+    ...resolutionChoiceSnapshot(context),
     candidates: [],
     requireCandidate: false,
     resolveHuman: async () => (await resolveHuman()) ? {} : null,
@@ -117,6 +155,7 @@ export async function requestResolutionOption<Option>(
   keyOf: (option: Option, index: number) => string,
   resolveHuman: () => MaybePromise<Option | null>,
   resolveAI: () => MaybePromise<Option | null>,
+  context: ResolutionChoiceContext | null = null,
 ): Promise<Option | null> {
   const keys = options.map(
     (option, index) => `option:${keyOf(option, index)}` as SelectionCandidateKey,
@@ -141,6 +180,7 @@ export async function requestResolutionOption<Option>(
   const result = await game.requestDecision({
     kind: "choice",
     actor: player,
+    ...resolutionChoiceSnapshot(context),
     candidates: [],
     requireCandidate: false,
     resolveHuman: async () => toResult(await resolveHuman()),

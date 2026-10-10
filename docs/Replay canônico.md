@@ -63,6 +63,11 @@ documentos mínimos: `events`, `result` e `finalized` são opcionais; hashes de
 comando e hash final podem estar ausentes ou ser `null`. Se `finalized` for
 `true`, `result` deve estar presente e não nulo.
 
+O estado final é o estado depois do último comando. Quando o duelo termina
+durante um comando, por exemplo com LP zerado no Damage Step, o gravador
+registra `finalStateHash` e `finalState` quando esse comando termina, e não
+no momento da vitória.
+
 Os campos de `setup` são obrigatórios. `seed` identifica a aleatoriedade inicial.
 `randomState` guarda `seed`, `state` e `calls`, ou recebe `null`.
 `startingPlayer` identifica o assento inicial como `player` ou `bot`, ou recebe
@@ -157,8 +162,32 @@ Esses dados também participam dos snapshots de procedimentos e de referências.
 `createCanonicalStateSnapshot` e `hashCanonicalGameState`. A projeção inclui:
 
 - turno, fase, contadores relevantes e estado do RNG;
-- jogadores, PV, PV ganhos, zonas e restrições;
+- jogadores, PV, PV ganhos, dano recebido no turno, Invocações-Normais do
+  turno e permissões adicionais, multiplicador de ganho de PV, zonas e
+  restrições;
+- estado de regras do duelo (`ruleState`): fim de jogo e vencedor, etapa de
+  batalha, ataque negado, buffs do Damage Step, efeitos de par de batalha,
+  continuações de material de Sincro, contadores de contexto, de eventos e de
+  IDs gerados, estatísticas de materiais e contagens de Invocação-Especial por
+  tipo;
 - identidade, presença, posição, stats, contadores, vínculos e status das cartas;
+- características em vigor das cartas (`characteristics`), inclusive as
+  reescritas por monstros-armadilha, Regulador e Fichas, e os registros de
+  status restaurados no fim do turno e na saída do campo
+  (`statusRegistries`, com o valor a restaurar e o valor atual);
+- controle de ataques e turnos por carta (`turnState`): segundo ataque,
+  ataque a todos os monstros e ataque direto concedidos, restrições e bônus de
+  ataque extra, monstros já atacados (pela identidade do duelo), prazos de
+  ataque e imunidade, turno em que foi baixada ou revelada e último
+  procedimento de Invocação;
+- base de reversão de stats (`statBookkeeping`): buffs temporários e por
+  turno, stats originais e substituições, buffs dinâmicos e suas supressões
+  e bônus de equipamento. As chaves de origem dos buffs permanentes não
+  participam; só suas contribuições, ordenadas;
+- vínculos e registros das cartas (`bindings`): equipamentos, vínculos de
+  monstro-armadilha, marcadores de efeito, finalização pendente de
+  Magia/Armadilha, materiais de Ascensão e de Sincro (pela identidade do
+  duelo, sem nome nem ID runtime) e o último envio ao Cemitério como material;
 - contribuições de negação, modificações de Nível, buffs e proteções;
 - usos de efeitos por nome, por cópia e por duelo, quando projetados;
 - ações agendadas e efeitos temporários de evento, controle e substituição;
@@ -168,6 +197,10 @@ Esses dados também participam dos snapshots de procedimentos e de referências.
 Os snapshots projetam dados serializáveis, com cópias dos campos previstos
 pelo contrato. Referências runtime e IDs locais ao processo são tratados pelas
 projeções específicas de cartas, procedimentos e efeitos temporários.
+Nos registros de regras do `ruleState`, cartas viram a identidade do duelo;
+campos terminados em `instanceId` e IDs de registro derivados deles não
+participam, e os contadores determinísticos que compõem esses IDs entram por
+`generatedIdCounters`. `Map` e `Set` são ordenados por code units.
 Campos com duração participam do hash conforme seu estado atual.
 
 Cada snapshot de carta também registra `attacksUsedThisTurn`, `hasAttacked`,

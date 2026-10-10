@@ -43,6 +43,8 @@ import {
   buildZoneSelectionCandidates,
   getUI,
   requestOptionalConfirmation,
+  resolutionChoiceContext,
+  type ResolutionChoiceContext,
   collectZoneCandidates,
   normalizeSelectionCount,
   selectCardsFromZone,
@@ -338,8 +340,9 @@ function getSelectionMessageForSource(
   return "Select target(s) for the spell/trap effect.";
 }
 
+/** Selection contract for any effect that adds cards from one own zone to the hand. */
 function buildAddToHandSelectionContract(
-  action: SearchAction,
+  action: SearchAction | FollowupSearchAction,
   ctx: EffectContext,
   { player, game, sourceZone }: AddToHandContractContext,
 ): (
@@ -349,7 +352,7 @@ function buildAddToHandSelectionContract(
   return (cards: readonly ActionRuntimeCard[], range: SelectionRange) => {
     const requirementId =
       readString(action, "selectionId") ||
-      `${ctx?.effect?.id || action.type || "add_from_zone_to_hand"}_selection`;
+      `${ctx?.effect?.id || action.type}_selection`;
     const decorated = buildZoneSelectionCandidates(
       player,
       game,
@@ -369,7 +372,11 @@ function buildAddToHandSelectionContract(
         requirements: [
           {
             id: requirementId,
-            label: readString(action, "selectionLabel") || requirementId,
+            // Shown to the player ("Choose 1 target(s) for {label}"): never the
+            // internal requirement id.
+            label: readString(action, "selectionLabel") ||
+              (ctx?.source ? getCardDisplayName(ctx.source) || ctx.source.name : null) ||
+              getUIText("ui.selection.effectLabel"),
             min: range.min,
             max: range.max,
             zones: [sourceZone],
@@ -385,7 +392,7 @@ function buildAddToHandSelectionContract(
           allowEmpty: Number(range.min || 0) === 0,
         },
         metadata: {
-          context: "add_from_zone_to_hand",
+          context: action.type,
           sourceCard: ctx?.source || null,
           sourceCardName: ctx?.source?.name || null,
           effectId: ctx?.effect?.id || null,
@@ -1318,6 +1325,10 @@ export async function handleSearchThenOptionalSpecialSummonFromHand(
         .slice(0, max);
     },
     selectSingle: (cards) => selectSingleSearchCard(game, cards),
+    selectionContractBuilder:
+      promptPlayer && typeof game.startTargetSelectionSession === "function"
+        ? buildAddToHandSelectionContract(action, ctx, { player, game, sourceZone })
+        : undefined,
     selectMulti: (cards, range) => cards.slice(0, range.max),
   });
 
@@ -1384,6 +1395,7 @@ export async function handleSearchThenOptionalSpecialSummonFromHand(
     game,
     player,
     searchedCard,
+    resolutionChoiceContext(game, source, ctx.effect?.id),
   );
 
   if (!shouldSummon) {
@@ -1504,13 +1516,14 @@ async function shouldPerformOptionalSummon(
   game: ActionRuntimeGamePort,
   player: ActionRuntimePlayer,
   card: ActionRuntimeCard,
+  context: ResolutionChoiceContext,
 ): Promise<boolean> {
-  if (action.optional === false || isAI(player)) {
-    return true;
-  }
+  if (action.optional === false) return true;
 
-  const ui = getUI(game);
-  if (ui && typeof ui.showConfirmPrompt === "function") {
+  // A recorded broker choice; without a prompt the human is never decided for.
+  return requestOptionalConfirmation(game, player, async () => {
+    const ui = getUI(game);
+    if (!ui || typeof ui.showConfirmPrompt !== "function") return false;
     const cardName = getCardDisplayName(card) || card.name;
     const result = ui.showConfirmPrompt(
       action.promptMessage ||
@@ -1527,9 +1540,7 @@ async function shouldPerformOptionalSummon(
       },
     );
     return isPromiseLikeBoolean(result) ? !!(await result) : !!result;
-  }
-
-  return true;
+  }, () => true, context);
 }
 
 /**
@@ -2186,6 +2197,7 @@ export async function handleUpkeepPayOrSendToGrave(
       game, player,
       () => confirmHumanUpkeepPayment(action, game, player, source, lpCost),
       () => shouldAiPayUpkeep(action, player, source, lpCost),
+      resolutionChoiceContext(game, source, ctx?.effect?.id),
     );
 
   if (!shouldPay) {

@@ -155,3 +155,63 @@ for (const id of [19, 20] as const) {
     });
   }
 }
+
+for (const accepted of [true, false]) {
+  test(`Void Lost Throne replays the human's second search candidate and optional summon (${accepted ? "accepted" : "declined"}) across locales`, async t => {
+    setLocale("en");
+    t.after(() => setLocale("en"));
+    const live = createRuntimeGame({ captureReplay: true, disableChains: true, randomSeed: 86,
+      laboratoryMode: true, laboratoryUseBot: false });
+    const playback = createRuntimeGame({ captureReplay: false, replayMode: "playback", disableChains: true,
+      laboratoryMode: true, laboratoryUseBot: false });
+    t.after(() => { live.dispose(); playback.dispose(); });
+    for (const game of [live, playback]) {
+      const start = game.startWithDecks.bind(game);
+      game.startWithDecks = async options => {
+        await start(options);
+        game.phase = "main1"; game.turnCounter = 2;
+        game.disablePresentationDelays = true;
+        game.waitForBoardPresentation = async () => {};
+        game.player.controllerType = game.bot.controllerType = "human";
+        const cards = [...game.player.hand, ...game.player.deck];
+        game.player.hand = [required(cards.find(card => card.id === 219))];
+        game.player.deck = cards.filter(card => card.id !== 219);
+      };
+    }
+    live.ui.showConfirmPrompt = async () => accepted;
+    live.ui.showSpecialSummonPositionModal = (_card, choose) => choose("defense");
+    live.ui.getSearchModalElements = () => assert.fail("A human search uses the selection session, not the search modal");
+    playback.ui.showConfirmPrompt = async () => { throw new Error("Replay cannot request a confirmation."); };
+    playback.ui.showSpecialSummonPositionModal = () => { throw new Error("Replay cannot request a position."); };
+    playback.ui.getSearchModalElements = () => { throw new Error("Replay cannot open the search modal."); };
+    await live.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true,
+      startAtDrawPhase: true, startingPlayer: "player", announceStartingPlayer: false,
+      playerDeck: [219, 204, 211, ...Array<number>(10).fill(3)],
+      botDeck: Array<number>(13).fill(3), playerExtraDeck: [], botExtraDeck: [] });
+    const spell = required(live.player.hand.find(card => card.id === 219));
+    const activation = live.tryActivateSpell(spell, live.player.hand.indexOf(spell));
+    for (let attempts = 0; attempts < 100 && !live.targetSelection; attempts++) {
+      await new Promise<void>(resolve => setImmediate(resolve));
+    }
+    const session = required(live.targetSelection);
+    const requirement = required(session.requirements[0]);
+    assert.ok(requirement.candidates.length >= 2, "both Void monsters are offered");
+    assert.equal(requirement.label, "Void Lost Throne", "the prompt names the card, not the internal requirement id");
+    const second = required(requirement.candidates[1]);
+    session.selections[requirement.id] = [second.key];
+    await live.finishTargetSelection();
+    await activation;
+    const chosen = required(Reflect.get(second, "cardRef")) as Card;
+    assert.equal(live.player.field.includes(chosen), accepted);
+    assert.equal(live.player.hand.includes(chosen), !accepted);
+    const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "lost-throne-test" }))));
+    assert.ok(replay.decisions.some(decision => decision.kind === "choice"), "the optional summon is a recorded choice");
+    setLocale("pt-br");
+    const result = await replayCanonicalDuel(replay, {
+      game: unsafeFixture<ReplayDriverGamePort>(playback, "Real Game integration uses its own card and player instances through the replay driver projection."),
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.finalStateHash, replay.result?.finalStateHash);
+    assert.equal(playback.decisionBroker.replayCursor, replay.decisions.length);
+  });
+}

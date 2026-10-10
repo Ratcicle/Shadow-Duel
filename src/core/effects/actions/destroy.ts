@@ -10,6 +10,7 @@ import type {
 } from "../../contracts/actionRuntime.js";
 import type { ActionOf, CardAction } from "../../contracts/actions.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
+import { requestOptionalConfirmation, resolutionChoiceContext } from "../../actionHandlers/shared.js";
 
 interface DestroyRuntimeCard extends ActionRuntimeCard {
   permanentBuffsBySource?: Record<string, { atk?: number }>;
@@ -195,19 +196,17 @@ export async function checkBeforeDestroyNegations(
       continue;
     }
 
-    const ownerIsHuman = owner?.controllerType === "human";
-
-    // Human-controlled cards ask for confirmation. AI seats in Bot Arena can
-    // occupy either side, so do not infer "human" from owner.id/player slot.
-    if (ownerIsHuman) {
-      const shouldNegate = await this.promptForDestructionNegation(
-        card,
-        effect
-      );
-      if (!shouldNegate) {
-        continue;
-      }
-    }
+    // Both controllers decide through the broker, so the choice is recorded
+    // and replayed. The broker routes by controller, never by seat; the AI
+    // keeps its policy of always negating.
+    const shouldNegate = await requestOptionalConfirmation(
+      this.game,
+      owner,
+      () => this.promptForDestructionNegation(card, effect),
+      () => true,
+      resolutionChoiceContext(this.game, card, effect.id),
+    );
+    if (!shouldNegate) continue;
 
     // A human prompt may yield while the card's state changes.
     if (
