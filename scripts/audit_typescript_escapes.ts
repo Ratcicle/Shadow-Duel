@@ -144,6 +144,236 @@ function isTypeAssertion(
   return ts.isAsExpression(node) || ts.isTypeAssertionExpression(node);
 }
 
+// --- Human decision prompts (decision-broker:12) ----------------------------
+// A human decision must reach the canonical decision broker, so it is recorded
+// and replayed. In src/, a UI prompt call is accepted only inside a broker
+// callback, inside a same-file function such a callback calls (one level), or
+// in an explicit allowlist entry with its reason.
+
+const HUMAN_DECISION_PROMPTS: ReadonlySet<string> = new Set([
+  "chooseFieldPlacement",
+  "showCardGridSelectionModal",
+  "showChainResponseModal",
+  "showConditionalSummonPrompt",
+  "showConfirmPrompt",
+  "showDestructionNegationPrompt",
+  "showFusionMaterialSelection",
+  "showFusionTargetModal",
+  "showIgnitionActivateModal",
+  "showMultiSelectModal",
+  "showNumberPrompt",
+  "showPositionChoiceModal",
+  "showSearchModal",
+  "showSearchModalVisual",
+  "showShadowHeartCathedralModal",
+  "showSickleSelectionModal",
+  "showSpecialSummonPositionModal",
+  "showSpellChoiceModal",
+  "showTargetSelection",
+  "showTieBreakerSelection",
+  "showTierChoiceModal",
+  "showTrapActivationModal",
+  "showTriggerOrderModal",
+  "showUnifiedTrapModal",
+]);
+
+const DECISION_BROKER_ENTRIES: ReadonlySet<string> = new Set([
+  "requestDecision",
+  "requestOptionalConfirmation",
+  "requestResolutionCards",
+  "requestResolutionOption",
+]);
+
+/** Functions with this name are human resolvers handed to the broker. */
+const HUMAN_RESOLVER_NAME = "resolveHuman";
+
+// UI implementations, pre-command interactions (recorded as commands) and
+// contracts are outside the guard.
+const PROMPT_GUARD_EXCLUDED_PATHS: readonly RegExp[] = [
+  /^src\/ui\//,
+  /^src\/core\/game\/ui\/interactions\.ts$/,
+  /^src\/core\/contracts\//,
+  /^src\/core\/UIAdapter\.ts$/,
+];
+
+interface PromptAllowlistEntry {
+  readonly path: string;
+  readonly enclosing: string;
+  readonly reason: string;
+}
+
+export const HUMAN_PROMPT_ALLOWLIST: readonly PromptAllowlistEntry[] = [
+  {
+    path: "src/core/game/selection/session.ts",
+    enclosing: "startTargetSelectionSession",
+    reason: "Presents the selection session, which records its own decision when it finishes.",
+  },
+  {
+    path: "src/core/actionHandlers/resources.ts",
+    enclosing: "handleAddFromZoneToHand>selectSingle",
+    reason: "Fallback for hosts without selection sessions; a real Game always uses the recorded session.",
+  },
+  {
+    path: "src/core/actionHandlers/resources.ts",
+    enclosing: "handleAddFromZoneToHand>selectMulti",
+    reason: "Fallback for hosts without selection sessions; a real Game always uses the recorded session.",
+  },
+  {
+    path: "src/core/actionHandlers/resources.ts",
+    enclosing: "selectSingleSearchCard",
+    reason: "Fallback for hosts without selection sessions; a real Game always uses the recorded session.",
+  },
+  {
+    path: "src/core/effects/actions/equip.ts",
+    enclosing: "showSickleSelectionModal",
+    reason: "Dead wrapper; removal tracked in decision-broker:9 (backlog).",
+  },
+  {
+    path: "src/core/game/ui/modals.ts",
+    enclosing: "showIgnitionActivateModal",
+    reason: "Dead wrapper; removal tracked in decision-broker:9 (backlog).",
+  },
+  {
+    path: "src/core/game/ui/modals.ts",
+    enclosing: "showShadowHeartCathedralModal",
+    reason: "Dead wrapper; removal tracked in decision-broker:9 (backlog).",
+  },
+];
+
+function stripCallee(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (ts.isNonNullExpression(current) || ts.isParenthesizedExpression(current)) {
+    current = current.expression;
+  }
+  return current;
+}
+
+function calleeName(expression: ts.Expression): string | null {
+  const callee = stripCallee(expression);
+  if (ts.isIdentifier(callee)) return callee.text;
+  if (ts.isPropertyAccessExpression(callee)) return callee.name.text;
+  if (ts.isElementAccessExpression(callee) && ts.isStringLiteralLike(callee.argumentExpression)) {
+    return callee.argumentExpression.text;
+  }
+  return null;
+}
+
+type FunctionNode =
+  | ts.ArrowFunction
+  | ts.FunctionExpression
+  | ts.FunctionDeclaration
+  | ts.MethodDeclaration;
+
+function isFunctionNode(node: ts.Node): node is FunctionNode {
+  return ts.isArrowFunction(node) || ts.isFunctionExpression(node) ||
+    ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node);
+}
+
+function functionName(node: FunctionNode): string | null {
+  if ((ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) && node.name) {
+    return node.name.getText();
+  }
+  const parent = node.parent;
+  if (ts.isVariableDeclaration(parent) || ts.isPropertyAssignment(parent)) return parent.name.getText();
+  return null;
+}
+
+/** Name of the enclosing function; a callback in an object literal is "outer>property". */
+function enclosingFunctionName(node: ts.Node): string {
+  for (let current = node.parent; current; current = current.parent) {
+    if (!isFunctionNode(current)) continue;
+    if (ts.isPropertyAssignment(current.parent) && !ts.isFunctionDeclaration(current)) {
+      return `${enclosingFunctionName(current.parent)}>${current.parent.name.getText()}`;
+    }
+    const name = functionName(current);
+    if (name) return name;
+  }
+  return "<module>";
+}
+
+function isBrokerCallback(node: FunctionNode): boolean {
+  if (functionName(node) === HUMAN_RESOLVER_NAME) return true;
+  const parent = node.parent;
+  if (ts.isCallExpression(parent) && parent.arguments.some(argument => argument === node)) {
+    const name = calleeName(parent.expression);
+    return name !== null && DECISION_BROKER_ENTRIES.has(name);
+  }
+  return false;
+}
+
+function auditHumanPrompts(
+  input: TypeScriptSourceInput,
+  sourceFile: ts.SourceFile,
+  diagnostics: AuditDiagnostic[],
+): void {
+  if (!input.path.startsWith("src/")) return;
+  if (PROMPT_GUARD_EXCLUDED_PATHS.some(pattern => pattern.test(input.path))) return;
+
+  // Functions reached from broker callbacks in this file: called inside one,
+  // or handed to a broker entry by reference.
+  const brokerReached = new Set<string>([HUMAN_RESOLVER_NAME]);
+  const collectReached = (node: ts.Node, insideCallback: boolean): void => {
+    const inside = insideCallback || (isFunctionNode(node) && isBrokerCallback(node));
+    if (ts.isCallExpression(node)) {
+      const name = calleeName(node.expression);
+      if (inside && name) brokerReached.add(name);
+      if (name && DECISION_BROKER_ENTRIES.has(name)) {
+        for (const argument of node.arguments) {
+          if (ts.isIdentifier(argument)) brokerReached.add(argument.text);
+        }
+      }
+    }
+    ts.forEachChild(node, child => collectReached(child, inside));
+  };
+  collectReached(sourceFile, false);
+
+  const isAccepted = (node: ts.Node): boolean => {
+    for (let current = node.parent; current; current = current.parent) {
+      if (!isFunctionNode(current)) continue;
+      if (isBrokerCallback(current)) return true;
+      const name = functionName(current);
+      if (name && brokerReached.has(name)) return true;
+    }
+    return false;
+  };
+
+  const allowlist = HUMAN_PROMPT_ALLOWLIST.filter(entry => entry.path === input.path);
+  const usedAllowlist = new Set<PromptAllowlistEntry>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const name = calleeName(node.expression);
+      if (name && HUMAN_DECISION_PROMPTS.has(name) && !ts.isIdentifier(stripCallee(node.expression)) && !isAccepted(node)) {
+        const enclosing = enclosingFunctionName(node);
+        const allowed = allowlist.find(entry => entry.enclosing === enclosing);
+        if (allowed) {
+          usedAllowlist.add(allowed);
+        } else {
+          diagnostics.push({
+            code: "unrecorded-human-prompt",
+            path: input.path,
+            ...sourceLocation(sourceFile, node.getStart(sourceFile)),
+            message: `Human prompt ${name} in ${enclosing} bypasses the decision broker; ` +
+              "request it through requestDecision/requestOptionalConfirmation, or allowlist it with a reason.",
+          });
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+
+  for (const entry of allowlist) {
+    if (usedAllowlist.has(entry)) continue;
+    diagnostics.push({
+      code: "stale-human-prompt-allowlist",
+      path: input.path,
+      line: 1,
+      column: 1,
+      message: `Allowlisted human prompt in ${entry.enclosing} no longer exists; remove the allowlist entry.`,
+    });
+  }
+}
+
 function auditSource(
   input: TypeScriptSourceInput,
   sourceFile: ts.SourceFile,
@@ -224,6 +454,7 @@ export function auditTypeScriptSources(
       scriptKindFor(input.path),
     );
     auditSource(input, sourceFile, collectComments(sourceFile, input.text), diagnostics);
+    auditHumanPrompts(input, sourceFile, diagnostics);
   }
 
   diagnostics.sort((left, right) => {
