@@ -82,6 +82,27 @@ for (const seat of ["player", "bot"] as const) {
   });
 }
 
+for (const seat of ["player", "bot"] as const) {
+  test(`cancelling a selection inside a running command records the refusal (${seat})`, t => {
+    const game = new Game({ captureReplay: false, disableChains: true });
+    t.after(() => game.dispose());
+    const decisions: unknown[] = [];
+    game.on("decision_made", decision => { decisions.push(decision); });
+    // A deferred command is executing: playback runs it and reaches this choice.
+    game._activeDeferredReplayCommandDescriptor = { type: "activate_effect" };
+    game.startTargetSelectionSession({
+      kind: "choice", owner: game[seat], allowCancel: true,
+      selectionContract: { kind: "choice", requirements: [{ id: "inside", min: 1, max: 1,
+        zone: "choice", candidates: [{ key: "yes", zone: "choice" }] }] },
+      onCancel: () => {},
+      execute: () => assert.fail("Cancellation must not execute the selection"),
+    });
+    game.cancelTargetSelection();
+    game._activeDeferredReplayCommandDescriptor = null;
+    assert.equal(decisions.length, 1, "the refusal is recorded for playback");
+  });
+}
+
 test("forced cleanup can clear a mandatory field selection without cancelling its effect", t => {
   const game = new Game({ captureReplay: false, disableChains: true });
   t.after(() => game.dispose());

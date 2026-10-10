@@ -387,9 +387,12 @@ function buildAddToHandSelectionContract(
             candidates: decorated,
           },
         ],
+        // A mandatory search cannot be cancelled; an optional one ends empty.
         ui: {
           useFieldTargeting: false,
           allowEmpty: Number(range.min || 0) === 0,
+          allowCancel: Number(range.min || 0) === 0,
+          preventCancel: Number(range.min || 0) > 0,
         },
         metadata: {
           context: action.type,

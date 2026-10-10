@@ -156,9 +156,8 @@ for (const id of [19, 20] as const) {
   }
 }
 
-// "cancelled" closes the search: the activation is still recorded, so the
-// refusal must be recorded for playback too.
-for (const outcome of ["accepted", "declined", "cancelled"] as const) {
+// The search is mandatory: a cancel is refused and the choice stays open.
+for (const outcome of ["accepted", "declined", "cancel refused"] as const) {
   const accepted = outcome === "accepted";
   test(`Void Lost Throne replays the human's second search candidate and optional summon (${outcome}) across locales`, async t => {
     setLocale("en");
@@ -202,25 +201,18 @@ for (const outcome of ["accepted", "declined", "cancelled"] as const) {
     assert.equal(requirement.label, "Void Lost Throne", "the prompt names the card, not the internal requirement id");
     const second = required(requirement.candidates[1]);
     const chosen = required(Reflect.get(second, "cardRef")) as Card;
-    if (outcome === "cancelled") {
+    if (outcome === "cancel refused") {
+      assert.equal(session.allowCancel, false);
       live.cancelTargetSelection();
-      await activation;
-      assert.equal(live.player.deck.includes(chosen), true, "nothing was searched");
-    } else {
-      session.selections[requirement.id] = [second.key];
-      await live.finishTargetSelection();
-      await activation;
-      assert.equal(live.player.field.includes(chosen), accepted);
-      assert.equal(live.player.hand.includes(chosen), !accepted);
+      assert.equal(live.targetSelection, session, "a mandatory search stays open");
     }
+    session.selections[requirement.id] = [second.key];
+    await live.finishTargetSelection();
+    await activation;
+    assert.equal(live.player.field.includes(chosen), accepted);
+    assert.equal(live.player.hand.includes(chosen), !accepted);
     const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "lost-throne-test" }))));
-    if (outcome === "cancelled") {
-      assert.ok(replay.decisions.some(decision => decision.kind === "target" &&
-        JSON.stringify(decision.value) === JSON.stringify({ pass: true })),
-        "the cancelled search is a recorded refusal");
-    } else {
-      assert.ok(replay.decisions.some(decision => decision.kind === "choice"), "the optional summon is a recorded choice");
-    }
+    assert.ok(replay.decisions.some(decision => decision.kind === "choice"), "the optional summon is a recorded choice");
     setLocale("pt-br");
     const result = await replayCanonicalDuel(replay, {
       game: unsafeFixture<ReplayDriverGamePort>(playback, "Real Game integration uses its own card and player instances through the replay driver projection."),
