@@ -554,6 +554,7 @@ Remota:
   - Localmente continua 1. Nunca usar `--experimental-test-isolation=none`.
   - A estimativa de 6,5 → 3,5–4 min pressupõe a Etapa 0.
   - No primeiro flake, voltar para 1.
+  - Substituído em 10/10/2026, com aprovação do usuário: o CI roda todos os arquivos num processo só (`--test-isolation=none`, concorrência 1). O log do Verify mostrou que cerca de metade do passo de testes era a abertura de um processo Node por arquivo.
 
 **Resultado (09/10/2026):** todos os itens acima foram concluídos sem bump; os goldens de replay ficaram inalterados.
 - Duas execuções da Arena com a mesma seed (20261009, Arcanist × Shadow-Heart, 3 duelos) produzem relatórios idênticos byte a byte, descontados só os tempos.

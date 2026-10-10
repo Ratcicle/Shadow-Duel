@@ -40,7 +40,7 @@ for (const actor of ["player", "bot"] as const) {
     assert.equal(copy.bot.directAttacksDeclaredThisTurn, 0);
   });
   test(`permanent reductions restore their actual delta on simulated exit (${actor})`, () => {
-    const source = simulationCard(cardDefinition(103));
+    const source = simulationCard({ ...cardDefinition(103) });
     const target = simulationCard({ id: 99971, cardKind: "monster", atk: 600, def: 1000 });
     const state = simulationState({ bot: { id: actor, field: [source] }, player: { id: actor === "player" ? "bot" : "player", field: [target] } });
     applySimulatedActions({ actions: [{ type: "buff_stats_temp", targetRef: "chosen", atkBoost: -1000, permanent: true }], selections: { chosen: [target] }, state, selfId: "bot", options: { sourceCard: source } });
@@ -73,7 +73,7 @@ for (const actor of ["player", "bot"] as const) {
   });
 
   test(`Purge simulation preserves zero-floor overlap on later departure (${actor})`, () => {
-    const source = simulationCard(cardDefinition(103));
+    const source = simulationCard({ ...cardDefinition(103) });
     const target = simulationCard({ id: 99971, cardKind: "monster", atk: 600, def: 1000 });
     const state = simulationState({ bot: { id: actor }, player: { id: actor === "player" ? "bot" : "player", field: [target] } });
     applySimulatedActions({ actions: [
@@ -99,7 +99,7 @@ for (const actor of ["player", "bot"] as const) {
 
   for (const modifier of ["aura", "while_faceup"] as const) {
     test(`simulated permanent reductions retain cleanup accounting after ${modifier} expires (${actor})`, () => {
-      const source = simulationCard(cardDefinition(103));
+      const source = simulationCard({ ...cardDefinition(103) });
       const target = simulationCard({ id: 99971, cardKind: "monster", atk: 600, def: 1000 });
       const state = simulationState({ bot: { id: actor }, player: { id: actor === "player" ? "bot" : "player", field: [target] } });
       if (modifier === "aura") applyPassiveBuffValue(target, "valley", 300, ["atk"]);
@@ -128,7 +128,7 @@ for (const actor of ["player", "bot"] as const) {
       selections: { chosen: [target] }, state, selfId: "bot", options: { sourceCard: shield } });
     assert.equal(target.atk, 1100);
     applySimulatedActions({ actions: [{ type: "buff_stats_temp", targetRef: "chosen", atkBoost: -1000, permanent: true }],
-      selections: { chosen: [target] }, state, selfId: "bot", options: { sourceCard: simulationCard(cardDefinition(103)) } });
+      selections: { chosen: [target] }, state, selfId: "bot", options: { sourceCard: simulationCard({ ...cardDefinition(103) }) } });
     assert.equal(target.atk, 100);
     moveCardToZone(state.bot, shield, "graveyard", state.bot, { state });
     assert.equal(target.atk, 0);

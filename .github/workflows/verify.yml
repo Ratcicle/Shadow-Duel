@@ -70,12 +70,13 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run build
 
-      # D20: two test files at a time, enabled after three green runs with the
-      # deterministic invariants. Local runs stay at 1. Never use
-      # --experimental-test-isolation=none; on the first flake, go back to 1.
+      # Every test file runs in one process: most of the step was one Node start
+      # per file. Tests run one at a time, so they never interleave in the
+      # shared process. A file that leaks global state into a later file is a
+      # bug in that test. Replaces D20 (two isolated processes at a time).
       - name: Tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: npm test -- --test-concurrency=2
+        run: npm test -- --test-isolation=none --test-concurrency=1
 
       # Only a fully green run on a push to main publishes `dist`. Vite's base
       # is static, so configure-pages is not needed.

@@ -15,14 +15,16 @@ const TEST_FILE_SUFFIX = ".test.ts";
 // (`import "../scripts/register_node_asset_loader.js"`).
 const BASE_NODE_ARGS = ["--import=tsx", "--test"] as const;
 
-// Only test-runner flags that select, schedule or report tests are forwarded.
-// Flags that change isolation or outcomes (--test-isolation, --test-only,
-// --test-force-exit, --test-update-snapshots) and arbitrary Node options are
-// rejected. Every flag must use the `--flag=value` form.
+// Only test-runner flags that select, schedule, isolate or report tests are
+// forwarded. Flags that change outcomes (--test-only, --test-force-exit,
+// --test-update-snapshots) and arbitrary Node options are rejected. Every flag
+// must use the `--flag=value` form. --test-isolation=none runs every file in
+// one process; CI uses it to skip one Node start per file.
 const ALLOWED_TEST_FLAGS: ReadonlySet<string> = new Set([
   "--test-name-pattern",
   "--test-skip-pattern",
   "--test-concurrency",
+  "--test-isolation",
   "--test-timeout",
   "--test-reporter",
   "--test-reporter-destination",
