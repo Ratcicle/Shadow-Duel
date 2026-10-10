@@ -818,7 +818,7 @@ O portão global é o PR com `verify`.
   - Testes em `test/replay/optionalEffectsReplay.test.ts`: o humano escolhe o segundo candidato; playback com locales EN→PT.
   - Verificar uma vez no navegador (`npm run dev`). **Pendente:** feito no fim da etapa, junto com a verificação manual do pacote.
 - [ ] **`contextSnapshot`** (opcional aprovado em D5): um `contextSnapshot` mínimo (`{ type, sourceDuelCardId, effectId }`) em `requestOptionalConfirmation` (`src/core/actionHandlers/shared.ts:59`), conferido pelo broker no replay. Assim, uma escolha consumida pelo ator ou pelo prompt errado falha na própria decisão, e não só no hash.
-- [ ] **`engine-bugs:1`**: em `src/core/game/zones/movement.ts:2922-2949`, trocar o `destroyCard(host).then(...)` destacado por `pendingBoundDestruction.push({ target: host, source: card, zone: "field" })`, aproveitando o flush aguardado em `:3567`.
+- [x] **`engine-bugs:1`**: em `src/core/game/zones/movement.ts:2922-2949`, trocar o `destroyCard(host).then(...)` destacado por `pendingBoundDestruction.push({ target: host, source: card, zone: "field" })`, aproveitando o flush aguardado em `:3567`.
   - A mensagem de log vai para um `logMessage` opcional da entrada pendente, porque o flush ignora o resultado de `destroyCard`.
   - O comportamento atual com The Shadow Heart negada é mantido.
   - Testes em `test/shadowHeartFinalRules.test.ts` (`zoneOpDepth === 0` depois do `await`) e `test/replay/equipCleanupReplay.test.ts`.

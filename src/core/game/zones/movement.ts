@@ -2705,9 +2705,11 @@ export async function moveCardInternal(
     source: GameCard;
     zone: "field" | "spellTrap";
     checkActiveSource?: boolean;
+    /** Logged only when the destruction actually happens. */
+    logMessage?: string;
   }> = [];
   const flushPendingBoundDestruction = async () => {
-    for (const { target, source, zone, checkActiveSource } of pendingBoundDestruction) {
+    for (const { target, source, zone, checkActiveSource, logMessage } of pendingBoundDestruction) {
       const owner = target.owner === "player" ? this.player : this.bot;
       if (!owner[zone].includes(target)) continue;
       // A surviving trap can become inactive during the original move's events.
@@ -2716,11 +2718,14 @@ export async function moveCardInternal(
         source.isFacedown || source.effectsNegated ||
         this.effectEngine?.isEffectNegated?.(source) === true
       )) continue;
-      await duringCurrentDuel(this.destroyCard(target, {
+      const result = await duringCurrentDuel(this.destroyCard(target, {
         cause: "effect",
         sourceCard: source,
         opponent: this.getOpponent(owner),
       }));
+      if (logMessage && result && typeof result === "object" && "destroyed" in result && result.destroyed) {
+        this.ui.log(logMessage);
+      }
       this.updateBoard();
     }
   };
@@ -2987,18 +2992,12 @@ export async function moveCardInternal(
         hasDestroyOnLeaveEffect) &&
       host
     ) {
-      const hostOwner = host.owner === "player" ? this.player : this.bot;
-      this.destroyCard(host, {
-        cause: "effect",
-        sourceCard: card,
-        opponent: this.getOpponent(hostOwner),
-      }).then((result) => {
-        if (result?.destroyed) {
-          this.ui.log(
-            `${host.name} is destroyed as ${card.name} left the field.`,
-          );
-          this.updateBoard();
-        }
+      // Queued for the awaited flush after this move, never a detached promise.
+      pendingBoundDestruction.push({
+        target: host,
+        source: card,
+        zone: "field",
+        logMessage: `${host.name} is destroyed as ${card.name} left the field.`,
       });
     }
   }
