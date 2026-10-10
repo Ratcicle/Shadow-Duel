@@ -8,6 +8,7 @@ import type {
   ResolvedTargetMap,
 } from "../../contracts/actionRuntime.js";
 import type { CardAction } from "../../contracts/actions.js";
+import type { DecisionBrokerPort } from "../../contracts/decisions.js";
 import type { BattlePosition, CardKind, DuelCardIdentityCarrier, FieldPresenceSummonRecord } from "../../contracts/cards.js";
 import type { DuelCardId } from "../../contracts/primitives.js";
 import type { EventCard, EventEquipHostExitBinding, EventPlayer } from "../../contracts/events.js";
@@ -220,7 +221,6 @@ export interface TriggerEffectLike {
   readonly promptOnAttackDeclared?: boolean;
   readonly promptOnTargeted?: boolean;
   readonly promptMessage?: string;
-  readonly customPromptMethod?: string;
   readonly contextLabel?: string;
   readonly contextLabels?: readonly string[];
 }
@@ -465,6 +465,8 @@ export interface TemporaryEventEffect {
 }
 
 export interface TriggerGamePort {
+  /** Trigger confirmations outside the SEGOC are recorded broker choices. */
+  requestDecision?: DecisionBrokerPort["requestDecision"];
   materialDuelStats?: MaterialDuelStats;
   player: TriggerRuntimePlayer;
   bot: TriggerRuntimePlayer;

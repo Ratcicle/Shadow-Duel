@@ -1576,3 +1576,38 @@ for (const laterAtomicEvent of [false, true]) {
     ]);
   });
 }
+
+test("Berserker trigger confirmation outside the SEGOC is a recorded human choice", async (t) => {
+  const run = async (prompt: (message: string) => boolean, decisions?: ReplayDecisionInput[]) => {
+    const game = createGame(t, true);
+    game.player.controllerType = "human";
+    const berserker = makeCard(213, game.player);
+    placeFieldCards(game.player.field, berserker);
+    placeFieldCards(game.bot.field, makeCard(203, game.bot));
+    const destroyed = makeCard(203, game.bot);
+    game.bot.graveyard.push(destroyed);
+    game.ui.showConfirmPrompt = async message => prompt(message);
+    const recorded: ReplayDecisionInput[] = [];
+    game.on("decision_made", decision => { recorded.push(decision); });
+    if (decisions) game.decisionBroker.loadReplayDecisions(decisions);
+    const payload = unsafeFixture<BattleDestroyEventPayload>(
+      { attacker: berserker, attackerOwner: game.player, destroyed, destroyedOwner: game.bot, battleDestroyer: berserker },
+      "Focused battle trigger fixture omits damage-step metadata unused by Berserker.");
+    const triggers = await game.effectEngine.collectBattleDestroyTriggers(payload);
+    const entry = required(triggers.entries.find(e => e.card === berserker));
+    const result = await game.runActivationPipeline(unsafeFixture<Parameters<typeof game.runActivationPipeline>[0]>(entry.config,
+      "Collected trigger references concrete game cards behind the narrower trigger port."));
+    return { game, result, recorded };
+  };
+
+  let prompts = 0;
+  const live = await run(() => { prompts++; return false; });
+  assert.equal(prompts, 1);
+  assert.equal(live.result.success, false, "a declined optional trigger does not resolve");
+  assert.equal(live.recorded.length, 1);
+  assert.equal(live.recorded[0]?.kind, "choice");
+
+  const playback = await run(() => assert.fail("Playback must consume the recorded trigger confirmation"), live.recorded);
+  assert.equal(playback.result.success, false);
+  assert.equal(playback.game.decisionBroker.replayCursor, 1);
+});
