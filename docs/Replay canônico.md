@@ -63,6 +63,11 @@ documentos mínimos: `events`, `result` e `finalized` são opcionais; hashes de
 comando e hash final podem estar ausentes ou ser `null`. Se `finalized` for
 `true`, `result` deve estar presente e não nulo.
 
+O estado final é o estado depois do último comando. Quando o duelo termina
+durante um comando, por exemplo com LP zerado no Damage Step, o gravador
+registra `finalStateHash` e `finalState` quando esse comando termina, e não
+no momento da vitória.
+
 Os campos de `setup` são obrigatórios. `seed` identifica a aleatoriedade inicial.
 `randomState` guarda `seed`, `state` e `calls`, ou recebe `null`.
 `startingPlayer` identifica o assento inicial como `player` ou `bot`, ou recebe

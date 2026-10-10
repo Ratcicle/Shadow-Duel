@@ -224,6 +224,54 @@ test("a human attack chosen through the selection session replays after its awai
   assert.equal(playback.bot.lp, live.bot.lp);
 });
 
+test("a duel won in the Damage Step records its final state after the attack command settles", async t => {
+  const live = createRuntimeGame({ captureReplay: true, randomSeed: 142, laboratoryMode: true, laboratoryUseBot: false });
+  const playback = createRuntimeGame({ captureReplay: false, replayMode: "playback", laboratoryMode: true, laboratoryUseBot: false });
+  t.after(() => { live.dispose(); playback.dispose(); });
+  for (const game of [live, playback]) {
+    const start = game.startWithDecks.bind(game);
+    game.startWithDecks = async options => {
+      await start(options);
+      game.player.controllerType = game.bot.controllerType = "human";
+      game.disablePresentationDelays = true;
+      game.phaseDelayMs = 0;
+      game.bot.lp = 100;
+    };
+  }
+  await live.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true,
+    startAtDrawPhase: true, startingPlayer: "player", announceStartingPlayer: false,
+    playerDeck: Array<number>(16).fill(1), botDeck: Array<number>(16).fill(1), playerExtraDeck: [], botExtraDeck: [] });
+  await live.skipToPhase("main1");
+  await live.performNormalSummon(live.player, 0, "attack", false, null);
+  const attacker = required(live.player.field[0]);
+  await live.skipToPhase("end");
+  await live.skipToPhase("end");
+  await live.skipToPhase("battle");
+  let finalizedDuringCombat = false;
+  const finalize = live.finalizeReplay.bind(live);
+  live.finalizeReplay = result => {
+    finalizedDuringCombat = live.combatResolutionDepth > 0;
+    return finalize(result);
+  };
+  live.startAttackTargetSelection(attacker, []);
+  const session = required(live.targetSelection);
+  const requirement = required(session.requirements[0]);
+  session.selections[requirement.id] = [required(requirement.candidates.find(candidate =>
+    Reflect.get(candidate, "isDirectAttack") === true)).key];
+  await live.finishTargetSelection();
+  assert.equal(live.winner, "player");
+  assert.equal(finalizedDuringCombat, true, "the win finalized the recording inside the attack");
+
+  const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.exportReplay({ download: false }))));
+  const lastCommand = required(replay.commands.at(-1));
+  assert.equal(lastCommand.type, "attack");
+  assert.equal(replay.result?.finalStateHash, lastCommand.stateHash);
+  assert.deepEqual(replay.result?.finalState, createCanonicalStateSnapshot(live));
+  const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback, "Concrete Game with identical presentation and controller configuration.") });
+  assert.equal(result.finalStateHash, replay.result?.finalStateHash);
+  assert.equal(playback.bot.lp, live.bot.lp);
+});
+
 test("a normal duel's automatic opening turn is replayed before the first command", async t => {
   const live = createRuntimeGame({ captureReplay: true, randomSeed: 141, laboratoryMode: true, laboratoryUseBot: false });
   const playback = createRuntimeGame({ captureReplay: false, replayMode: "playback", laboratoryMode: true, laboratoryUseBot: false });
