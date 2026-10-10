@@ -83,9 +83,10 @@ for (const seat of ["player", "bot"] as const) {
   }
 }
 
-// Field (and graveyard) ignition from the bot used to run the activation
-// pipeline directly, so no command was recorded and real-duel replays broke.
-function rootlingScenario(seat: "player" | "bot", playback = false) {
+// Field (and graveyard) ignition from the bot, and its Field Spell effect,
+// used to run the activation pipeline directly, so no command was recorded
+// and real-duel replays broke.
+function rootlingScenario(seat: "player" | "bot", playback = false, source: "rootling" | "colony" = "rootling") {
   const first = new Bot("bloomrot"), second = new Bot("bloomrot");
   first.id = "player";
   const game = createRuntimeGame({ laboratoryMode: true, laboratoryUseBot: false, chainResponseTimeoutMs: 0,
@@ -108,11 +109,17 @@ function rootlingScenario(seat: "player" | "bot", playback = false) {
       card.isFacedown = false; card.position = "attack"; card.summonedTurn = 0;
       return card;
     };
-    placeFieldCards(actor.field, take(402));
+    if (source === "colony") {
+      const colony = take(410);
+      actor.fieldSpell = colony;
+      game.effectEngine.assignFieldPresenceId(colony);
+    } else {
+      placeFieldCards(actor.field, take(402));
+    }
     placeFieldCards(opponent.field, take(3, opponent));
     for (const owner of [actor, opponent]) for (const card of owner.field) game.effectEngine.assignFieldPresenceId(card);
   };
-  const deck = [402, 3, ...Array<number>(18).fill(1)];
+  const deck = [source === "colony" ? 410 : 402, 3, ...Array<number>(18).fill(1)];
   const initialize = () => game.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true,
     startAtDrawPhase: true, startingPlayer: seat, announceStartingPlayer: false,
     playerDeck: deck, botDeck: deck, playerExtraDeck: [], botExtraDeck: [] });
@@ -134,6 +141,34 @@ for (const seat of ["player", "bot"] as const) {
     assert.equal(replay.commands.filter(command => command.type === "activate_effect").length, 1);
 
     const p = rootlingScenario(seat, true);
+    t.after(() => p.game.dispose());
+    p.game.ui.showChainResponseModal = async () => assert.fail("replay must consume recorded response");
+    p.game.autoSelector.select = () => assert.fail("replay must consume recorded selection");
+    const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(p.game,
+      "Concrete Game with the same deterministic initialization.") });
+    assert.equal(result.ok, true);
+    assert.equal(result.finalStateHash, replay.result?.finalStateHash);
+    assert.equal(p.game.decisionBroker.replayCursor, replay.decisions.length);
+  });
+}
+
+for (const seat of ["player", "bot"] as const) {
+  test(`bot Field Spell effect records its command and replays (${seat})`, async t => {
+    const s = rootlingScenario(seat, false, "colony"), { game, live, actor, opponent } = s;
+    t.after(() => game.dispose()); await s.initialize();
+    game.ui.showChainResponseModal = async () => null;
+    const target = required(opponent.field[0]);
+    const accepted = await actor.executeMainPhaseAction(live, {
+      type: "fieldEffect", cardId: 410, effectId: "bloomrot_living_colony_ignition_spore_counter", priority: 1,
+    });
+    assert.equal(accepted, true);
+    assert.equal(target.getCounter("spore"), 1);
+    const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(game.finalizeReplay({ reason: "bot-field-spell" }))));
+    const commands = replay.commands.filter(command => command.type === "activate_effect");
+    assert.equal(commands.length, 1);
+    assert.equal(required(commands[0]).payload.sourceZone, "fieldSpell");
+
+    const p = rootlingScenario(seat, true, "colony");
     t.after(() => p.game.dispose());
     p.game.ui.showChainResponseModal = async () => assert.fail("replay must consume recorded response");
     p.game.autoSelector.select = () => assert.fail("replay must consume recorded selection");
