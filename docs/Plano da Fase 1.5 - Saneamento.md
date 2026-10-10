@@ -805,7 +805,7 @@ O portão global é o PR com `verify`.
   - Tipos em `src/core/contracts/replay.ts`, validação em `src/core/game/replay/validation.ts` (padrão de `2b8f117`) e texto de contrato em `docs/Replay canônico.md:155-178`.
   - Antes de codificar, auditar outros campos de `Player`/`Game` escritos e lidos por regras.
   - Testes em `test/replay/canonicalReplay.test.ts`: cobertura "every rule-relevant mutable field changes the canonical hash" e invariância a deslocamento de `instanceId`. Também `canonicalValidation` e `canonicalRecorder`.
-- [ ] **`decision-broker:1`** (D14): `checkBeforeDestroyNegations` (`src/core/effects/actions/destroy.ts:197-208`) passa a usar `requestOptionalConfirmation(this.game, owner, () => this.promptForDestructionNegation(card, effect), () => true)` para os dois controladores. Não alterar o `UIAdapter`.
+- [x] **`decision-broker:1`** (D14): `checkBeforeDestroyNegations` (`src/core/effects/actions/destroy.ts:197-208`) passa a usar `requestOptionalConfirmation(this.game, owner, () => this.promptForDestructionNegation(card, effect), () => true)` para os dois controladores. Não alterar o `UIAdapter`.
   - Testes em `test/voidArchetype.test.ts` com matriz assento × controlador e playback sem travar. Os nomes contêm "Hydra", para que o `--test-name-pattern` os alcance.
 - [ ] **`decision-broker:2`** (correção aplicada): em `trySendToGraveActionReplacement` (`src/core/game/zones/movement.ts:1591-1618`):
   - `auto === true` mantém a semântica atual. Caso contrário, `requestOptionalConfirmation` com `resolveAI = shouldUseAiReplacementEffect`. `BurningWestStrategy.ts:851` não usa RNG.
