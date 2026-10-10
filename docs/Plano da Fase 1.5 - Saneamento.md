@@ -822,7 +822,7 @@ O portão global é o PR com `verify`.
   - A mensagem de log vai para um `logMessage` opcional da entrada pendente, porque o flush ignora o resultado de `destroyCard`.
   - O comportamento atual com The Shadow Heart negada é mantido.
   - Testes em `test/shadowHeartFinalRules.test.ts` (`zoneOpDepth === 0` depois do `await`) e `test/replay/equipCleanupReplay.test.ts`.
-- [ ] **`engine-bugs:3`** (correção aplicada): em `src/core/effects/targeting/resolution.ts:782-792`, só aplicar `autoSelect` para o humano quando `candidates.length === min`, isto é, quando a escolha é forçada. Com menos candidatos que `min`, vale o fluxo normal de falha de alvo.
+- [x] **`engine-bugs:3`** (correção aplicada): em `src/core/effects/targeting/resolution.ts:782-792`, só aplicar `autoSelect` para o humano quando `candidates.length === min`, isto é, quando a escolha é forçada. Com menos candidatos que `min`, vale o fluxo normal de falha de alvo.
   - Atualizar `docs/Como criar uma carta.md:442-444`, que hoje promete automatizar a escolha humana.
   - Teste novo num bloco Void Hollow King de `test/replay/deferredSummonReplay.test.ts`: com 2 Void Hollow a seleção abre, a escolha é gravada e o playback a consome; com 1, a seleção não abre. O arquivo já está na validação desta etapa sem filtro.
 - [ ] **`engine-bugs:6`** (correção aplicada): contador de combate em andamento, com incremento/decremento em `try/finally` dentro de `resolveCombat` (`src/core/game/combat/resolution.ts`), somado a `resolvingActive` em `src/core/game/actions/guard.ts:74-81`.
