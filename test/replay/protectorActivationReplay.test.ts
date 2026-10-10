@@ -1,21 +1,17 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 import { MainPhaseSession } from "../../src/core/bot/mainPhaseSession.js";
 import { createCanonicalStateSnapshot, validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
 import { required } from "../helpers/fixtures.js";
+import { setLocale } from "../../src/core/i18n.js";
 import { createProtectorScenario, finishProtectorResponse, protectorEffect } from "../helpers/protector.js";
+import { replayProtectorInAnotherGame } from "../helpers/protectorReplayWorker.js";
 
 for (const seat of ["player", "bot"] as const) for (const response of ["decline", "respond", "no-threat"] as const) {
-  test(`generated Protector captures and replays its response and position in another process (${seat}, ${response})`, async t => {
+  test(`generated Protector captures and replays its response and position in another Game (${seat}, ${response})`, async t => {
     const { game, live, actor, opponent, initialize, generatedAction } = createProtectorScenario(seat, true,
       { captureReplay: true }, response !== "no-threat");
-    const directory = mkdtempSync(join(tmpdir(), "protector-replay-"));
-    t.after(() => { game.dispose(); rmSync(directory, { recursive: true, force: true }); });
+    t.after(() => { game.dispose(); setLocale("en"); });
     await initialize();
     const source = required(actor.hand[0]), cost = required(actor.field[0]);
     const target = required(actor.field[1]), discard = required(opponent.hand[0]);
@@ -38,13 +34,8 @@ for (const seat of ["player", "bot"] as const) for (const response of ["decline"
     assert.ok(command.type === "activate_effect");
     assert.equal(command.payload.effectId, protectorEffect);
     if (response !== "no-threat") assert.ok(replay.decisions.some(decision => decision.kind === "chain_response"));
-    const replayPath = join(directory, "replay.json"), snapshotPath = join(directory, "snapshot.json");
-    writeFileSync(replayPath, JSON.stringify(replay));
-    writeFileSync(snapshotPath, JSON.stringify(createCanonicalStateSnapshot(game)));
-    const worker = spawnSync(process.execPath, ["--import=tsx", "--import=./scripts/register_node_asset_loader.ts",
-      fileURLToPath(new URL("../helpers/protectorReplayWorker.ts", import.meta.url)), seat, replayPath, snapshotPath, response],
-    { cwd: process.cwd(), encoding: "utf8", timeout: 15000, maxBuffer: 4 * 1024 * 1024 });
-    assert.equal(worker.status, 0, `${worker.error?.message || ""}\n${worker.stdout}\n${worker.stderr}`);
+    await replayProtectorInAnotherGame(seat, replay,
+      JSON.parse(JSON.stringify(createCanonicalStateSnapshot(game))), response);
     assert.equal(replay.decisions.filter(decision => decision.kind === "choice").length, 1,
       "the AI's summon position is recorded for playback");
   });

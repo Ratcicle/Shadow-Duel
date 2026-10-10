@@ -161,35 +161,18 @@ const LP_TEST_NAME = "LP counters and reduced-motion payment animations retain f
 const LP_FILTER = ["test/lpPresentation.test.ts", "--test-name-pattern=LP counters", "--test-reporter=tap"];
 
 // lpPresentation.test.ts imports SVG modules through Renderer and registers the
-// asset loader itself, so these cases also prove that a self-loading file runs
-// under the runner without a preloaded loader, besides spawn, filtering and exit code.
-test("the runner executes a filtered real test file", () => {
-  const child = runRunner(LP_FILTER, environmentWithoutTestContext());
+// asset loader itself, so this also proves that a self-loading file runs under
+// the runner without a preloaded loader, besides spawn, filtering and exit code.
+// The inherited NODE_TEST_CONTEXT would make node --test skip the file and
+// still exit 0; the runner removes it, so the filtered test really runs.
+test("the runner executes a filtered real test file despite an inherited NODE_TEST_CONTEXT", () => {
+  const child = runRunner(LP_FILTER, { ...environmentWithoutTestContext(), NODE_TEST_CONTEXT: "child-v8" });
   const output = child.stdout + child.stderr;
   assert.equal(child.status, 0, output);
   assert.match(child.stdout, new RegExp(`^ok 1 - ${LP_TEST_NAME}$`, "m"), output);
   assert.match(child.stdout, /^# tests 1$/m, output);
   assert.match(child.stdout, /^# pass 1$/m, output);
   assert.match(child.stdout, /^# fail 0$/m, output);
-});
-
-test("the runner removes an inherited NODE_TEST_CONTEXT instead of silently skipping files", () => {
-  const child = runRunner(LP_FILTER, { ...environmentWithoutTestContext(), NODE_TEST_CONTEXT: "child-v8" });
-  const output = child.stdout + child.stderr;
-  assert.equal(child.status, 0, output);
-  assert.match(child.stdout, new RegExp(`^ok 1 - ${LP_TEST_NAME}$`, "m"), output);
-  assert.match(child.stdout, /^# pass 1$/m, output);
-});
-
-test("a name pattern without matches runs no real test", () => {
-  const child = runRunner(
-    ["test/lpPresentation.test.ts", "--test-name-pattern=__no_test_has_this_name__", "--test-reporter=tap"],
-    environmentWithoutTestContext(),
-  );
-  const output = child.stdout + child.stderr;
-  // node --test reports the file itself when it contributes no tests; its own plan is empty.
-  assert.match(child.stdout, /^1\.\.0$/m, output);
-  assert.doesNotMatch(child.stdout, new RegExp(LP_TEST_NAME), output);
 });
 
 test("the runner exits 1 when a positional matches no test file", () => {

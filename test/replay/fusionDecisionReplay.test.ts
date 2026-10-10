@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import test, { type TestContext } from "node:test";
 import Bot from "../../src/core/Bot.js";
 import { MainPhaseSession } from "../../src/core/bot/mainPhaseSession.js";
@@ -9,6 +8,7 @@ import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js"
 import { createRuntimeGame, placeFieldCards, type RuntimeGame } from "../helpers/game.js";
 import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
 import type { ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
+import { replayFusionInAnotherGame } from "../helpers/fusionReplayPlayback.js";
 
 type Seat = "player" | "bot";
 type Mode = "executor" | "planned" | "default" | "defense" | "twins" | "human" | "destination" | "unique" | "human-retry";
@@ -192,7 +192,7 @@ for (const seat of ["player", "bot"] as const) {
     });
   }
   for (const mode of ["executor", "planned", "default", "defense", "twins", "human", "destination", "unique", "human-retry"] as const) {
-    test(`${seat} ${mode} fusion records exact choices and replays in a fresh process`, async t => {
+    test(`${seat} ${mode} fusion records exact choices and replays in another Game`, async t => {
       const { game, replay, fusion, used } = await recordFusion(t, seat, mode);
       assert.deepEqual(replay.commands.map(command => command.type), ["set_phase", "activate_card"]);
       assert.deepEqual(replay.decisions.map(decision => decision.kind),
@@ -201,11 +201,7 @@ for (const seat of ["player", "bot"] as const) {
         { selections: { fusion_choice: [{ duelCardId: fusion.duelCardId, cardId: fusion.id, effectId: null, candidateKey: null, key: null }] } });
       if (mode !== "unique") assert.deepEqual([...replay.decisions].reverse().find(decision => decision.kind === "fusion_materials")?.value,
         { selections: { materials: used.map(card => ({ duelCardId: card.duelCardId, cardId: card.id, effectId: null, candidateKey: null, key: null })) } });
-      const child = spawnSync(process.execPath, ["--import=tsx", "--import=./scripts/register_node_asset_loader.ts",
-        "test/helpers/fusionReplayPlayback.ts"], { input: JSON.stringify(replay), encoding: "utf8", timeout: 30000 });
-      assert.equal(child.status, 0, child.stderr || child.stdout);
-      const output = required(child.stdout.split("\n").find(line => line.startsWith("FUSION_REPLAY_RESULT ")));
-      const result = JSON.parse(output.slice("FUSION_REPLAY_RESULT ".length));
+      const result = await replayFusionInAnotherGame(t, replay);
       assert.deepEqual(result.snapshot, createCanonicalStateSnapshot(game));
       assert.equal(result.cursor, replay.decisions.length);
       assert.equal(result.finalStateHash, replay.result?.finalStateHash);
@@ -228,12 +224,15 @@ for (const mutation of ["unavailable", "duplicate", "wrong-definition", "positio
       const position = required(replay.decisions.find(decision => decision.kind === "choice"));
       position.value = { pass: false, candidateKey: "sideways", effectId: null };
     }
-    const child = spawnSync(process.execPath, ["--import=tsx", "--import=./scripts/register_node_asset_loader.ts",
-      "test/helpers/fusionReplayPlayback.ts"], { input: JSON.stringify(replay), encoding: "utf8", timeout: 30000 });
-    assert.equal(child.status, 1, child.stderr || child.stdout);
-    assert.match(child.stderr, mutation === "duplicate" ? /repeats a card identity/
+    // The engine contains the rejected choice as a fault and playback then
+    // diverges; a guard firing would log "Playback recomputed/opened" instead.
+    const errors = t.mock.method(console, "error", () => {});
+    await assert.rejects(replayFusionInAnotherGame(t, replay), /Replay divergence/);
+    const logged = errors.mock.calls.map(call => call.arguments.map(String).join(" ")).join("\n");
+    errors.mock.restore();
+    assert.match(logged, mutation === "duplicate" ? /repeats a card identity/
       : mutation === "position" ? /no longer legal/ : /identity is no longer available/);
-    assert.doesNotMatch(child.stderr, /Playback recomputed|Playback opened/);
+    assert.doesNotMatch(logged, /Playback recomputed|Playback opened/);
   });
 }
 
@@ -275,9 +274,7 @@ for (const seat of ["player", "bot"] as const) {
       assert.equal(game.targetSelection, null);
       const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(game.exportReplay())));
       assert.deepEqual(replay.decisions.find(decision => decision.kind === stage)?.value, { pass: true });
-      const child = spawnSync(process.execPath, ["--import=tsx", "--import=./scripts/register_node_asset_loader.ts",
-        "test/helpers/fusionReplayPlayback.ts"], { input: JSON.stringify(replay), encoding: "utf8", timeout: 30000 });
-      assert.equal(child.status, 0, child.stderr || child.stdout);
+      await replayFusionInAnotherGame(t, replay);
     });
   }
 }

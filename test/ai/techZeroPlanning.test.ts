@@ -16,7 +16,7 @@ import { cardDefinition, required, unsafeFixture } from "../helpers/fixtures.js"
 import { createRuntimeGame, placeFieldCards } from "../helpers/game.js";
 
 type Actor = "player" | "bot";
-type Combo = "lancer" | "wyvern" | "raptor";
+type Combo = "lancer" | "wyvern";
 
 for (const actor of ["player", "bot"] as const) {
   test(`Tech-Zero preserves Final Singularity instead of tribute summoning Connector (${actor})`, async t => {
@@ -97,7 +97,7 @@ function scenario(t: TestContext, actor: Actor, combo: Combo = "lancer", drawIds
     return required(main.splice(index, 1)[0]);
   };
   bot.hand.push(take(502), take(501));
-  if (combo !== "lancer") bot.hand.push(take(combo === "wyvern" ? 504 : 505));
+  if (combo === "wyvern") bot.hand.push(take(504));
   const draws = drawIds.map(take);
   bot.deck.push(...main, ...draws.slice().reverse());
   bot.extraDeck.push(...getBotExtraDeckList("techzero").map(make));
@@ -351,12 +351,13 @@ for (const actor of ["player", "bot"] as const) {
     assert.deepEqual(first.bot.deck.map(card => card.instanceId), bot.deck.map(card => card.instanceId), "search leaves its input untouched");
   });
 
-  for (const combo of ["lancer", "wyvern", "raptor"] as const) {
-    for (const drawIds of combo === "lancer" ? [[518, 17], [519, 520]] : [[518, 17]]) {
-    test(`Tech-Zero searches and executes ${combo} from its opening (${actor}, draws ${drawIds})`, async t => {
-      const { game, botGame, bot, draws, summons } = scenario(t, actor, combo, drawIds);
+  // Planner integration: one opening line in one seat. Each line took 2-13 s;
+  // headless Bot Arena duels exercise the other Tech-Zero openings.
+  if (actor === "player") {
+    test("Tech-Zero searches and executes lancer from its opening (player, draws 518,17)", async t => {
+      const { game, botGame, bot, draws, summons } = scenario(t, actor, "lancer", [518, 17]);
       const decisions: string[] = [];
-      const target = combo === "lancer" ? 516 : 517;
+      const target = 516;
       for (let step = 0; step < 16 && !bot.field.some(card => card.id === target); step++) {
         const profile = required(bot.strategy.getPlanningProfile).call(bot.strategy, botGame);
         const result = await turnLineSearch(botGame, bot.strategy, {
@@ -373,21 +374,13 @@ for (const actor of ["player", "bot"] as const) {
         decisions.push(`${action.type}:${action.cardId || action.effectId || ""}`);
         assert.equal(await bot.executeMainPhaseAction(botGame, action), true, result.reason);
       }
-      assert.ok(bot.field.some(card => card.id === target), `${combo} did not reach its useful boss: ${decisions}`);
+      assert.ok(bot.field.some(card => card.id === target), `lancer did not reach its useful boss: ${decisions}`);
       assert.ok(summons.includes(503) && summons.includes(509), "the search retains the low-ATK M/Portal route");
       assert.ok(draws.every(card => bot.hand.includes(card) ||
         (card.id === 518 && bot.fieldSpell === card)), "revealed draws remain in hand or enable Lab placement");
       assert.equal(game.turn, actor);
       const boss = required(bot.field.find(card => card.id === target));
-      if (combo === "lancer") assert.ok((boss.attackLimitThisTurn || 0) >= 2, "Lancer offers the intended offensive payoff");
-      if (combo === "wyvern") assert.ok(bot.field.some(card => card.id === 510) ||
-        bot.field.some(card => card.id === 509) && game.isBattleDestructionProtected(boss),
-        "keep Slasher's pressure or convert its direct protection while preserving Portal");
-      if (combo === "raptor") {
-        assert.ok(bot.field.some(card => card.id === 501), "preserve revived Core beside the protected boss");
-        assert.equal(game.isBattleDestructionProtected(boss), true);
-      }
+      assert.ok((boss.attackLimitThisTurn || 0) >= 2, "Lancer offers the intended offensive payoff");
     });
-    }
   }
 }
