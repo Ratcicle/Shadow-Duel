@@ -196,6 +196,7 @@ for (const accepted of [true, false]) {
     const session = required(live.targetSelection);
     const requirement = required(session.requirements[0]);
     assert.ok(requirement.candidates.length >= 2, "both Void monsters are offered");
+    assert.equal(requirement.label, "Void Lost Throne", "the prompt names the card, not the internal requirement id");
     const second = required(requirement.candidates[1]);
     session.selections[requirement.id] = [second.key];
     await live.finishTargetSelection();

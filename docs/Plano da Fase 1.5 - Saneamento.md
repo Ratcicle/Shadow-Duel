@@ -857,6 +857,10 @@ O portão global é o PR com `verify`.
 **Resultado (09/10/2026):** todos os itens da etapa foram concluídos na branch `fase15/replay-v27`, com o bump `engine-rules-v27` como último commit. Replays v26 passam a ser rejeitados antes da inicialização.
 - Desvios registrados nos próprios itens: escopo ampliado do `determinism:6` (auditoria); `decision-broker:8` roteado pelo broker em vez de apagado; fallback `deferred_trigger_source_presence` mantido para fontes que não são a carta movida.
 - Bugs encontrados e corrigidos durante a etapa: vazamentos de `instanceId` em chaves de regras (buffs por turno, auras, Fichas sem identidade desde a criação) e a decisão de ataque duplicada que quebrava replays com ataque humano.
+- Corrigidos a partir do primeiro replay real exportado (09–10/10/2026):
+  - o turno de abertura automático de um duelo normal não era reproduzido antes do primeiro comando (`setup.openingTurnStarted`);
+  - a ativação de ignição do bot no campo e no Cemitério não passava pela ativação canônica, então não gravava comando;
+  - o modal de busca do Lost Throne mostrava o id interno do requisito no lugar do nome da carta.
 - Pendentes de verificação manual, antes do merge: o Void Lost Throne no navegador (`decision-broker:3`) e um replay v27 de um duelo novo exportado pelo usuário (`npm run replay`).
 
 **Validação**

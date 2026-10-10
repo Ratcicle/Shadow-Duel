@@ -372,7 +372,11 @@ function buildAddToHandSelectionContract(
         requirements: [
           {
             id: requirementId,
-            label: readString(action, "selectionLabel") || requirementId,
+            // Shown to the player ("Choose 1 target(s) for {label}"): never the
+            // internal requirement id.
+            label: readString(action, "selectionLabel") ||
+              (ctx?.source ? getCardDisplayName(ctx.source) || ctx.source.name : null) ||
+              getUIText("ui.selection.effectLabel"),
             min: range.min,
             max: range.max,
             zones: [sourceZone],
