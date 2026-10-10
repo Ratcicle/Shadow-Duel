@@ -847,12 +847,17 @@ O portão global é o PR com `verify`.
     - `shared.ts:1078-1084` (`promptPlayer === false`) e `resources.ts:2157`;
     - sites mortos mantidos por `decision-broker:9` (backlog), com o motivo "morto, remoção rastreada em `decision-broker:9` (backlog)": o wrapper `showSickleSelectionModal` (`src/core/effects/actions/equip.ts:224-252`) e `showShadowHeartCathedralModal`/`showIgnitionActivateModal` (`src/core/game/ui/modals.ts:33-85`).
   - Alternativa descartada em 09/10/2026 (`decision-broker:9` fica no backlog): trazer `decision-broker:9` (esforço S) para esta etapa, antes de `:12`. Nesse caso, editar as contagens de `AGENTS.md:113` e `docs/Estrutura do Projeto.md:397` (222 → 220 métodos, 61 → 60 grupos), o que exige aprovação.
-- [ ] **`determinism:7` + `decision-broker:5`** (D5), último PR para a branch:
+- [x] **`determinism:7` + `decision-broker:5`** (D5), último commit da branch:
   - Antes: `git log --all -S'engine-rules-v27'` vazio.
   - `src/core/contracts/replay.ts:27` → `engine-rules-v27`.
   - `test/replay/canonicalReplay.test.ts`: regenerar os goldens atuais executando o teste uma vez. Adicionar um passo histórico v26 com os valores congelados na Etapa 3: hash, comprimento e hashes de comando, sem os campos novos. Manter o passo histórico v25 criado na Etapa 3.
   - `test/replay/canonicalValidation.test.ts` e `test/replay/canonicalDriver.test.ts` (`latestPrevious` = v26): incluir v26 nas listas de rejeição.
   - Em `docs/Replay canônico.md`, apenas o texto de contrato, sem changelog.
+
+**Resultado (09/10/2026):** todos os itens da etapa foram concluídos na branch `fase15/replay-v27`, com o bump `engine-rules-v27` como último commit. Replays v26 passam a ser rejeitados antes da inicialização.
+- Desvios registrados nos próprios itens: escopo ampliado do `determinism:6` (auditoria); `decision-broker:8` roteado pelo broker em vez de apagado; fallback `deferred_trigger_source_presence` mantido para fontes que não são a carta movida.
+- Bugs encontrados e corrigidos durante a etapa: vazamentos de `instanceId` em chaves de regras (buffs por turno, auras, Fichas sem identidade desde a criação) e a decisão de ataque duplicada que quebrava replays com ataque humano.
+- Pendentes de verificação manual, antes do merge: o Void Lost Throne no navegador (`decision-broker:3`) e um replay v27 de um duelo novo exportado pelo usuário (`npm run replay`).
 
 **Validação**
 
