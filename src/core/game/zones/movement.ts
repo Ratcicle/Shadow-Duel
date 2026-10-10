@@ -60,6 +60,10 @@ import type { ActionRuntimeCard } from "../../contracts/actionRuntime.js";
 import type { EventCardPresenceSnapshot, EventEquipHostExitBinding } from "../../contracts/events.js";
 import { captureEventCardPresence } from "./ownership.js";
 import { reportEngineFault } from "../devTools/faults.js";
+import { captureReplacementPresence, formatReplacementText, replacementPresenceIsCurrent } from "../effects/destructionReplacement.js";
+import { requestOptionalConfirmation } from "../../actionHandlers/shared.js";
+import { getCardDisplayName } from "../../i18n.js";
+import type { DecisionBrokerPort } from "../../contracts/decisions.js";
 import type { CardAction } from "../../contracts/actions.js";
 import type {
   CardFilter,
@@ -152,6 +156,8 @@ type MovementHost = Omit<
   effectEngine: MovementEffectEnginePort;
   devModeEnabled: boolean;
   devFailAfterZoneMutation: boolean;
+  /** Optional replacement confirmations are recorded through the decision broker. */
+  requestDecision?: DecisionBrokerPort["requestDecision"];
   temporaryControlEffects: Array<{ cardInstanceId?: number | string | null }>;
   cardAnimationsReady?: boolean;
   getOpponent(player: GamePlayer | null): GamePlayer | null;
@@ -1506,6 +1512,67 @@ function hasRuntimeReplacementEffect(
   return "replacementEffect" in effect && effect.replacementEffect != null;
 }
 
+interface SendToGraveReplacementEligibility {
+  readonly sourceCard: GameCard;
+  readonly sourceOwner: GamePlayer;
+  readonly effect: EffectDefinition;
+  readonly replacement: RuntimeReplacementEffect;
+  readonly card: GameCard;
+  readonly location: { readonly owner: GamePlayer; readonly zone: CanonicalZone };
+  readonly actions: readonly CardAction[];
+  readonly replacementCtx: SendToGraveReplacementActionContext;
+}
+
+interface SendToGraveReplacementActionContext {
+  player: GamePlayer;
+  opponent: GamePlayer | null;
+  source: GameCard;
+  movedCard: GameCard;
+  eventCard: GameCard;
+  fromZone: CanonicalZone;
+  toZone: "graveyard";
+  activationContext: {
+    source: GameCard;
+    player: GamePlayer;
+    sourceZone: CanonicalZone;
+    activationZone: CanonicalZone;
+  };
+}
+
+/** Every rule check of a send-to-GY replacement, against the source's current zone. */
+function isSendToGraveReplacementEligible(
+  game: MovementHost,
+  entry: SendToGraveReplacementEligibility,
+  sourceZone: CanonicalZone,
+): boolean {
+  const { sourceCard, sourceOwner, effect, replacement, card, location } = entry;
+  if (!sourceCard || sourceCard.isFacedown) return false;
+  if (game.effectEngine?.isEffectNegated?.(sourceCard)) return false;
+  if (effect.requireZone && effect.requireZone !== sourceZone) return false;
+  if (
+    !matchesSendToGraveReplacement(game, replacement, sourceCard, {
+      card,
+      fromOwner: location.owner,
+      fromZone: location.zone,
+      sourceOwner,
+    })
+  ) return false;
+  const optCheck = game.canUseOncePerTurn?.(sourceCard, sourceOwner, effect);
+  if (optCheck && optCheck.ok === false) return false;
+  if (typeof game.effectEngine?.checkActionPreviewRequirements !== "function") return true;
+  const preview = game.effectEngine.checkActionPreviewRequirements(entry.actions, {
+    ...entry.replacementCtx,
+    preview: true,
+    isPreview: true,
+    activationContext: {
+      ...entry.replacementCtx.activationContext,
+      preview: true,
+      isPreview: true,
+    },
+  });
+  return preview?.ok !== false;
+}
+
 async function trySendToGraveActionReplacement(
   game: MovementHost,
   card: GameCard,
@@ -1525,40 +1592,28 @@ async function trySendToGraveActionReplacement(
   );
   if (!location || location.zone !== "field") return { replaced: false };
 
+  // The send can only be replaced while the moving card keeps this presence.
+  const targetPresence = captureReplacementPresence(card, location.owner);
+
   for (const {
     sourceCard,
     sourceOwner,
     sourceZone,
   } of getSendToGraveReplacementSources(game)) {
-    if (!sourceCard || sourceCard.isFacedown) continue;
-    if (game.effectEngine?.isEffectNegated?.(sourceCard)) continue;
-
     for (const effect of sourceCard.effects || []) {
       if (!hasRuntimeReplacementEffect(effect)) continue;
       const replacement = effect.replacementEffect;
       if (!replacement || replacement.type !== "send_to_grave") continue;
-      if (effect.requireZone && effect.requireZone !== sourceZone) continue;
-      if (effect.requireFaceup === true && sourceCard.isFacedown) continue;
-      if (
-        !matchesSendToGraveReplacement(game, replacement, sourceCard, {
-          card,
-          fromOwner: location.owner,
-          fromZone: location.zone,
-          sourceOwner,
-        })
-      ) {
-        continue;
-      }
-
-      const optCheck = game.canUseOncePerTurn?.(
-        sourceCard,
-        sourceOwner,
-        effect,
-      );
-      if (optCheck && optCheck.ok === false) continue;
+      const actions = [
+        ...(Array.isArray(effect.activationCosts)
+          ? effect.activationCosts
+          : []),
+        ...(Array.isArray(effect.actions) ? effect.actions : []),
+      ];
+      if (actions.length === 0) continue;
 
       const opponent = game.getOpponent?.(sourceOwner) || null;
-      const replacementCtx = {
+      const replacementCtx: SendToGraveReplacementActionContext = {
         player: sourceOwner,
         opponent,
         source: sourceCard,
@@ -1573,30 +1628,13 @@ async function trySendToGraveActionReplacement(
           activationZone: sourceZone,
         },
       };
-      const actions = [
-        ...(Array.isArray(effect.activationCosts)
-          ? effect.activationCosts
-          : []),
-        ...(Array.isArray(effect.actions) ? effect.actions : []),
-      ];
-      if (actions.length === 0) continue;
+      const eligibility: SendToGraveReplacementEligibility = {
+        sourceCard, sourceOwner, effect, replacement, card, location, actions, replacementCtx,
+      };
+      if (!isSendToGraveReplacementEligible(game, eligibility, sourceZone)) continue;
+      const sourcePresence = captureReplacementPresence(sourceCard, sourceOwner);
 
-      const preview =
-        typeof game.effectEngine?.checkActionPreviewRequirements === "function"
-          ? game.effectEngine.checkActionPreviewRequirements(actions, {
-              ...replacementCtx,
-              preview: true,
-              isPreview: true,
-              activationContext: {
-                ...replacementCtx.activationContext,
-                preview: true,
-                isPreview: true,
-              },
-            })
-          : { ok: true };
-      if (preview?.ok === false) continue;
-
-      const strategyAllowsReplacement = await shouldUseAiReplacementEffect({
+      const aiAllowsReplacement = () => shouldUseAiReplacementEffect({
         game,
         player: sourceOwner,
         sourceCard,
@@ -1611,19 +1649,32 @@ async function trySendToGraveActionReplacement(
         },
         kind: "send_to_grave",
       });
-      if (!strategyAllowsReplacement) continue;
+      const targetName = getCardDisplayName(card) || card.name;
+      const sourceName = getCardDisplayName(sourceCard) || sourceCard.name;
+      // Automatic replacements keep their semantics (no prompt; the AI strategy
+      // may still decline). Optional ones are a recorded broker decision.
+      const confirmed = replacement.auto === true
+        ? await aiAllowsReplacement()
+        : await requestOptionalConfirmation(
+          game,
+          sourceOwner,
+          async () => (await game.ui?.showConfirmPrompt?.(
+            formatReplacementText(replacement.prompt, targetName, sourceName) ||
+              `Use ${sourceName} to replace sending ${targetName} to the Graveyard?`,
+            { kind: "send_to_grave_replacement", cardName: targetName },
+          )) ?? false,
+          aiAllowsReplacement,
+        );
+      if (!confirmed) continue;
 
-      if (sourceOwner.controllerType === "human" && replacement.auto !== true) {
-        const prompt =
-          replacement.prompt ||
-          `Use ${sourceCard.name} to replace sending ${card.name} to the Graveyard?`;
-        const wantsToReplace =
-          (await game.ui?.showConfirmPrompt?.(prompt, {
-            kind: "send_to_grave_replacement",
-            cardName: card.name,
-          })) ?? false;
-        if (!wantsToReplace) continue;
-      }
+      // The decision may yield while the board changes: the moving card and
+      // the source must keep their presences, and every check must still hold.
+      if (
+        !replacementPresenceIsCurrent(targetPresence) ||
+        !replacementPresenceIsCurrent(sourcePresence)
+      ) continue;
+      const currentSourceZone = findCardLocation(game, sourceCard, null)?.zone ?? null;
+      if (!currentSourceZone || !isSendToGraveReplacementEligible(game, eligibility, currentSourceZone)) continue;
 
       const result = await game.effectEngine.applyActions(
         actions,
@@ -1639,13 +1690,8 @@ async function trySendToGraveActionReplacement(
       if (!success) continue;
 
       game.markOncePerTurnUsed?.(sourceCard, sourceOwner, effect);
-      if (replacement.logMessage) {
-        game.ui?.log?.(
-          replacement.logMessage
-            .replace("{target}", card.name)
-            .replace("{source}", sourceCard.name),
-        );
-      }
+      const logMessage = formatReplacementText(replacement.logMessage, targetName, sourceName);
+      if (logMessage) game.ui?.log?.(logMessage);
       const finalLocation = findCardLocation(game, card, null);
       return {
         replaced: true,
