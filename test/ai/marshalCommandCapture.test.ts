@@ -5,7 +5,10 @@ import { createCanonicalStateSnapshot, validateCanonicalReplay } from "../../src
 import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
 import type { ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
 import { required, unsafeFixture } from "../helpers/fixtures.js";
-import { completeTestSelections } from "../helpers/game.js";
+import { completeTestSelections, createRuntimeGame, placeFieldCards } from "../helpers/game.js";
+import Bot from "../../src/core/Bot.js";
+import type { AiLiveGamePort } from "../../src/core/contracts/aiState.js";
+import type { BotGamePort } from "../../src/core/contracts/bot.js";
 import { marshalScenario, marshalEffectId } from "../helpers/marshalHandIgnition.js";
 
 for (const seat of ["player", "bot"] as const) {
@@ -78,4 +81,66 @@ for (const seat of ["player", "bot"] as const) {
       assert.equal(game.chainSystem.chainStack.length, 0); assert.equal(game.targetSelection, null);
     });
   }
+}
+
+// Field (and graveyard) ignition from the bot used to run the activation
+// pipeline directly, so no command was recorded and real-duel replays broke.
+function rootlingScenario(seat: "player" | "bot", playback = false) {
+  const first = new Bot("bloomrot"), second = new Bot("bloomrot");
+  first.id = "player";
+  const game = createRuntimeGame({ laboratoryMode: true, laboratoryUseBot: false, chainResponseTimeoutMs: 0,
+    captureReplay: !playback, randomSeed: 84156, replayMode: playback ? "playback" : "live", opponentOverride: second });
+  game.player = unsafeFixture<typeof game.player>(first, "Concrete Bot supplies the Player capabilities in the mirrored seat.");
+  const live = unsafeFixture<BotGamePort & AiLiveGamePort>(game, "Concrete Game provides AI read and execution ports.");
+  first.game = second.game = live;
+  const actor = seat === "player" ? first : second, opponent = seat === "player" ? second : first;
+  const start = game.startWithDecks.bind(game);
+  game.startWithDecks = async configuration => {
+    await start(configuration);
+    game.turn = seat; game.phase = "main1"; game.turnCounter = 4;
+    game.disablePresentationDelays = true;
+    game.waitForBoardPresentation = game.waitForPresentationDelay = game.waitForAiPresentationStep = async () => {};
+    actor.controllerType = "ai"; opponent.controllerType = "human";
+    for (const owner of [actor, opponent]) owner.deck.push(...owner.hand.splice(0));
+    const take = (id: number, owner = actor) => {
+      const card = required(owner.deck.find(card => card.id === id));
+      owner.deck.splice(owner.deck.indexOf(card), 1);
+      card.isFacedown = false; card.position = "attack"; card.summonedTurn = 0;
+      return card;
+    };
+    placeFieldCards(actor.field, take(402));
+    placeFieldCards(opponent.field, take(3, opponent));
+    for (const owner of [actor, opponent]) for (const card of owner.field) game.effectEngine.assignFieldPresenceId(card);
+  };
+  const deck = [402, 3, ...Array<number>(18).fill(1)];
+  const initialize = () => game.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true,
+    startAtDrawPhase: true, startingPlayer: seat, announceStartingPlayer: false,
+    playerDeck: deck, botDeck: deck, playerExtraDeck: [], botExtraDeck: [] });
+  return { game, live, actor, opponent, initialize };
+}
+
+for (const seat of ["player", "bot"] as const) {
+  test(`bot field ignition records its command and replays (${seat})`, async t => {
+    const s = rootlingScenario(seat), { game, live, actor, opponent } = s;
+    t.after(() => game.dispose()); await s.initialize();
+    game.ui.showChainResponseModal = async () => null;
+    const target = required(opponent.field[0]);
+    const accepted = await actor.executeMainPhaseAction(live, {
+      type: "monsterEffect", cardId: 402, effectId: "bloomrot_rootling_ignition_spore_counter", priority: 1,
+    });
+    assert.equal(accepted, true);
+    assert.equal(target.getCounter("spore"), 1);
+    const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(game.finalizeReplay({ reason: "bot-field-ignition" }))));
+    assert.equal(replay.commands.filter(command => command.type === "activate_effect").length, 1);
+
+    const p = rootlingScenario(seat, true);
+    t.after(() => p.game.dispose());
+    p.game.ui.showChainResponseModal = async () => assert.fail("replay must consume recorded response");
+    p.game.autoSelector.select = () => assert.fail("replay must consume recorded selection");
+    const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(p.game,
+      "Concrete Game with the same deterministic initialization.") });
+    assert.equal(result.ok, true);
+    assert.equal(result.finalStateHash, replay.result?.finalStateHash);
+    assert.equal(p.game.decisionBroker.replayCursor, replay.decisions.length);
+  });
 }
