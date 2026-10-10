@@ -460,6 +460,20 @@ function mergeStrategyActivationContext(
  * @param {Function} [options.onSuccess] - Callback on successful activation
  * @returns {Object|null} The trigger entry or null if invalid
  */
+/**
+ * A source that is the moved card itself belongs to the presence the move
+ * created. If it moved again before collection, the trigger is lost (D2).
+ */
+function bindMovedSourceToEvent<Snapshot extends { locationVersion: number } | null>(
+  snapshot: Snapshot,
+  eventLocationVersion: number | undefined,
+): Snapshot {
+  if (!snapshot || typeof eventLocationVersion !== "number" || !Number.isFinite(eventLocationVersion)) {
+    return snapshot;
+  }
+  return { ...snapshot, locationVersion: eventLocationVersion };
+}
+
 export function buildTriggerEntry(
   this: TriggerCollectorHost,
   options: BuildTriggerEntryOptions = {},
@@ -522,11 +536,14 @@ export function buildTriggerEntry(
         : sourceCard.isFacedown === true,
     sourceAtTrigger:
       activationContext.sourceAtTrigger ||
-      Reflect.apply(captureSourceSnapshot, undefined, [
-        sourceCard,
-        findTriggerSourceLocation(this, sourceCard, owner).player,
-        activationContext.activationZone || options.activationZone || null,
-      ]),
+      bindMovedSourceToEvent(
+        Reflect.apply(captureSourceSnapshot, undefined, [
+          sourceCard,
+          findTriggerSourceLocation(this, sourceCard, owner).player,
+          activationContext.activationZone || options.activationZone || null,
+        ]),
+        sourceCard === options.ctx?.movedCard ? options.eventLocationVersion : undefined,
+      ),
     selectionKind: "triggered",
   };
   const strategyContext =

@@ -353,6 +353,7 @@ export async function collectCardMovedTriggers(
       owner,
       effect,
       ctx,
+      ...(typeof payload.locationVersion === "number" ? { eventLocationVersion: payload.locationVersion } : {}),
       activationContext,
       selectionKind: "triggered",
       selectionMessage: "Select target(s) for the triggered effect.",

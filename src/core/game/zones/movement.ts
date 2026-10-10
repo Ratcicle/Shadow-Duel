@@ -3537,6 +3537,8 @@ export async function moveCardInternal(
       const cardToGravePayload = {
         timingRelevance: options.timingRelevance || "semantic" as const,
         card,
+        // The presence this move created; listeners may move the card again.
+        locationVersion: Number(card.locationVersion ?? 0),
         fromZone: fromZone || options.fromZone || null,
         toZone: "graveyard",
         player: ownerPlayer,

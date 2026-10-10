@@ -334,6 +334,8 @@ export interface CardMovedEventPayload extends EventPayloadBase {
 
 export interface CardToGraveEventPayload extends EventPayloadBase {
   card: EventCard;
+  /** Location version the card received when it entered the Graveyard. */
+  locationVersion?: number;
   fromZone: EventZone;
   toZone?: "graveyard";
   player: EventPlayer;

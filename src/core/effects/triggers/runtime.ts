@@ -419,6 +419,11 @@ export interface BuildTriggerEntryOptions {
   readonly selectionMessage?: string;
   readonly summary?: string;
   readonly ctx?: TriggerContext;
+  /**
+   * Location version the triggering move gave the moved card. A trigger whose
+   * source is that card binds to this presence, not to the card's current one.
+   */
+  readonly eventLocationVersion?: number;
   readonly guardKind?: string;
   readonly phaseReq?: string | null;
   readonly allowDuringSelection?: boolean;

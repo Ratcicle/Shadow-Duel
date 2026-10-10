@@ -1847,16 +1847,22 @@ function dispatchSimulatedEvent(
           eventCard: payload.card || payload.eventCard || null,
         }) })) : null;
       const hasContextualReferences = effect?.targets?.some(definition => definition.intent === "reference" && !!definition.targetFromContext);
+      // Like the runtime, a source that is the moved card belongs to the
+      // presence the move created (payload version): if it moved again before
+      // activation, the trigger is lost (D2).
+      const movedSourceVersion = sourceCard === (payload.card || payload.eventCard) &&
+        typeof payload.locationVersion === "number" ? payload.locationVersion : null;
       const frozenSourceIsCurrent = () => {
+        if (movedSourceVersion !== null) return Number(sourceCard.locationVersion ?? 0) === movedSourceVersion;
         if (eventReferenceSources.get(sourceCard)?.some(isSimulatedReferencePresenceValid)) return true;
         if (queue && !hasContextualReferences) {
-          // Runtime's noncontextual collectors may read the source later.
-          // A callback-mutated source cannot silently claim that parity.
+          // Other sources: runtime's noncontextual collectors may read the source
+          // later. A callback-mutated source cannot silently claim that parity.
           (state._simUnsupportedActions ??= []).push("deferred_trigger_source_presence");
         }
         return false;
       };
-      if (hasContextualReferences && !frozenSourceIsCurrent()) continue;
+      if ((hasContextualReferences || movedSourceVersion !== null) && !frozenSourceIsCurrent()) continue;
       const unsupportedNegatedExit = sourceCard === (payload.card || payload.eventCard) &&
         payload.effectsNegatedAtFieldExit === true && rawEffect.movementTriggerOwnership === "field_exit_controller" &&
         !rawEffect.allowIfEffectsNegatedAtFieldExit;
