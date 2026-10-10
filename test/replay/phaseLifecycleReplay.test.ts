@@ -278,6 +278,43 @@ test("a monster effect activated from the human Graveyard modal records its comm
   assert.equal(playback.decisionBroker.replayCursor, replay.decisions.length);
 });
 
+test("a human Extra Deck procedure that waits for its materials records one command after the summon", async t => {
+  const live = createRuntimeGame({ captureReplay: true, randomSeed: 144, laboratoryMode: true, laboratoryUseBot: false });
+  const playback = createRuntimeGame({ captureReplay: false, replayMode: "playback", laboratoryMode: true, laboratoryUseBot: false });
+  t.after(() => { live.dispose(); playback.dispose(); });
+  for (const game of [live, playback]) {
+    const start = game.startWithDecks.bind(game);
+    game.startWithDecks = async options => {
+      await start(options);
+      game.player.controllerType = game.bot.controllerType = "human";
+      game.disablePresentationDelays = true;
+      game.phaseDelayMs = 0;
+      // Arcturus, the Fallen Lord banishes "Arcturus, Lord of the Void" from the Graveyard.
+      game.player.deck.push(...game.player.hand.splice(0));
+      const material = required(game.player.deck.find(card => card.id === 224));
+      game.player.deck.splice(game.player.deck.indexOf(material), 1);
+      game.player.graveyard.push(material);
+    };
+  }
+  playback.ui.showTargetSelection = () => assert.fail("Playback cannot ask for materials");
+  await live.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true,
+    startAtDrawPhase: true, startingPlayer: "player", announceStartingPlayer: false,
+    playerDeck: [224, ...Array<number>(19).fill(1)], botDeck: Array<number>(20).fill(1),
+    playerExtraDeck: [225], botExtraDeck: [] });
+  await live.skipToPhase("main1");
+  const fallen = required(live.player.extraDeck.find(card => card.id === 225));
+  await completeTestSelections(live, live.performExtraDeckSummonProcedure(fallen, live.player));
+  assert.ok(live.player.field.includes(fallen));
+
+  const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "extra-deck-procedure" }))));
+  const summons = replay.commands.filter(command => command.type === "extra_deck_summon");
+  assert.equal(summons.length, 1, "the material selection belongs to the same command");
+  assert.equal(required(summons[0]).stateHash, replay.result?.finalStateHash, "the command hash follows the finished summon");
+  const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback, "Concrete Game with identical presentation and controller configuration.") });
+  assert.equal(result.finalStateHash, replay.result?.finalStateHash);
+  assert.equal(playback.decisionBroker.replayCursor, replay.decisions.length);
+});
+
 test("a duel won in the Damage Step records its final state after the attack command settles", async t => {
   const live = createRuntimeGame({ captureReplay: true, randomSeed: 142, laboratoryMode: true, laboratoryUseBot: false });
   const playback = createRuntimeGame({ captureReplay: false, replayMode: "playback", laboratoryMode: true, laboratoryUseBot: false });

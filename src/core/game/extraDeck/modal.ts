@@ -868,7 +868,9 @@ export async function performExtraDeckSummonProcedure(
         owner: player,
         selectionContract: contract,
         message: contract.ui.message,
-        execute: (selections) => {
+        // Awaited inside the session, so the session records one command
+        // whose state hash follows the finished summon.
+        execute: async (selections) => {
           const keys = selections?.extra_deck_materials || [];
           const selected = keys
             .map(
@@ -878,10 +880,9 @@ export async function performExtraDeckSummonProcedure(
                 )?.cardRef,
             )
             .filter((material): material is GameCard => Boolean(material));
-          void this.performExtraDeckSummonProcedure(card, player, {
+          return await this.performExtraDeckSummonProcedure(card, player, {
             materials: selected,
           });
-          return { success: true, needsSelection: false };
         },
       });
       return {
