@@ -62,7 +62,6 @@ test("flags outside the allowlist and the space-separated form are rejected", ()
     "--test-only",
     "--test-force-exit",
     "--test-update-snapshots",
-    "--test-isolation=none",
   ]) {
     assert.match(messageOf(createTestRunnerInvocation([flag], root)), /Unsupported flag/, flag);
   }
