@@ -181,3 +181,45 @@ test("public summon, position, attack and turn reset replay card action state an
     return true;
   });
 });
+
+test("a human attack chosen through the selection session replays after its awaited combat", async t => {
+  const live = createRuntimeGame({ captureReplay: true, randomSeed: 140, laboratoryMode: true, laboratoryUseBot: false });
+  const playback = createRuntimeGame({ captureReplay: false, replayMode: "playback", laboratoryMode: true, laboratoryUseBot: false });
+  t.after(() => { live.dispose(); playback.dispose(); });
+  for (const game of [live, playback]) {
+    const start = game.startWithDecks.bind(game);
+    game.startWithDecks = async options => {
+      await start(options);
+      game.player.controllerType = game.bot.controllerType = "human";
+      game.disablePresentationDelays = true;
+      game.phaseDelayMs = 0;
+    };
+  }
+  playback.ui.showTargetSelection = () => assert.fail("Playback cannot ask for an attack target");
+  await live.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true,
+    startAtDrawPhase: true, startingPlayer: "player", announceStartingPlayer: false,
+    playerDeck: Array<number>(16).fill(1), botDeck: Array<number>(16).fill(1), playerExtraDeck: [], botExtraDeck: [] });
+  await live.skipToPhase("main1");
+  await live.performNormalSummon(live.player, 0, "attack", false, null);
+  const attacker = required(live.player.field[0]);
+  await live.skipToPhase("end");
+  await live.skipToPhase("end");
+  assert.equal(live.turn, "player");
+  await live.skipToPhase("battle");
+  live.startAttackTargetSelection(attacker, []);
+  const session = required(live.targetSelection);
+  const requirement = required(session.requirements[0]);
+  session.selections[requirement.id] = [required(requirement.candidates.find(candidate =>
+    Reflect.get(candidate, "isDirectAttack") === true)).key];
+  await live.finishTargetSelection();
+  assert.ok(live.bot.lp < 8000, "the combat resolved before the selection settled");
+  assert.equal(live.combatResolutionDepth, 0);
+
+  const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "selection-attack" }))));
+  assert.equal(replay.decisions.filter(decision => decision.kind === "attack").length, 0,
+    "the attack command carries the target; no separate decision is recorded");
+  assert.ok(replay.commands.some(command => command.type === "attack"));
+  const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback, "Concrete Game with identical presentation and controller configuration.") });
+  assert.equal(result.finalStateHash, replay.result?.finalStateHash);
+  assert.equal(playback.bot.lp, live.bot.lp);
+});

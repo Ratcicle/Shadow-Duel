@@ -281,6 +281,7 @@ class Game {
     this.pendingSynchroMaterialTriggerContinuation = null;
     this.synchroSummonContextCounter = 0;
     this.devModeEnabled = !!options.devMode;
+    this.combatResolutionDepth = 0;
     this.strictEngineFaults = options.strictEngineFaults;
     this.engineFaults = [];
     this.zoneOpDepth = 0;

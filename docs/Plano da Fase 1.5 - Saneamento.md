@@ -825,10 +825,11 @@ O portão global é o PR com `verify`.
 - [x] **`engine-bugs:3`** (correção aplicada): em `src/core/effects/targeting/resolution.ts:782-792`, só aplicar `autoSelect` para o humano quando `candidates.length === min`, isto é, quando a escolha é forçada. Com menos candidatos que `min`, vale o fluxo normal de falha de alvo.
   - Atualizar `docs/Como criar uma carta.md:442-444`, que hoje promete automatizar a escolha humana.
   - Teste novo num bloco Void Hollow King de `test/replay/deferredSummonReplay.test.ts`: com 2 Void Hollow a seleção abre, a escolha é gravada e o playback a consome; com 1, a seleção não abre. O arquivo já está na validação desta etapa sem filtro.
-- [ ] **`engine-bugs:6`** (correção aplicada): contador de combate em andamento, com incremento/decremento em `try/finally` dentro de `resolveCombat` (`src/core/game/combat/resolution.ts`), somado a `resolvingActive` em `src/core/game/actions/guard.ts:74-81`.
+- [x] **`engine-bugs:6`** (correção aplicada): contador de combate em andamento, com incremento/decremento em `try/finally` dentro de `resolveCombat` (`src/core/game/combat/resolution.ts`), somado a `resolvingActive` em `src/core/game/actions/guard.ts:74-81`.
   - O `execute` de `src/core/game/combat/targeting.ts:162-182` passa a aguardar `resolveCombat`.
   - Verificar prompts aninhados (`session.ts:653-655`) e `_activeDeferredReplayCommandDescriptor`.
   - Testes em `test/contracts/selectionSession.test.ts` e ida-e-volta de replay em `test/replay/phaseLifecycleReplay.test.ts`.
+  - **Achado ao testar (corrigido):** um ataque humano pela sessão de seleção gravava a escolha do alvo como decisão `attack` além do comando `attack`, que já carrega o alvo. No playback o comando executa direto e a decisão sobrava ("unconsumed decision"), quebrando qualquer replay com ataque humano. A sessão ganhou a opção genérica `choiceRecordedByCommand`, usada pela seleção de ataque.
 - [ ] **`bloomrot:devourer`, parte runtime** (D2):
   - Primeiro o runtime: para fontes que são a própria carta movida, o snapshot usa `payload.locationVersion` em vez do valor atual (`src/core/effects/triggers/core.ts:521-528`, `src/core/chain/link.ts:91-104`, payload em `src/core/game/zones/movement.ts:786-791`).
   - Depois a simulação espelha o runtime, usando o `payload.locationVersion` simulado (`src/core/ai/common/simulatedActions/movement.ts:145`; caminho Fusion em `simulatedActions/summon.ts:1375-1379` → `movement.ts:155-158`) no check de presença congelada (`src/core/ai/common/simulation.ts:1748-1767,1850-1857`).

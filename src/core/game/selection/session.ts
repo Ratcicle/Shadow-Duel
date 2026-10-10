@@ -580,7 +580,7 @@ export async function finishTargetSelection(
   }
 
   const actor = getSelectionActor(this, selection);
-  this.recordDecision?.(
+  if (selection.choiceRecordedByCommand !== true) this.recordDecision?.(
     {
       kind: getSelectionDecisionKind(selection),
       actor,

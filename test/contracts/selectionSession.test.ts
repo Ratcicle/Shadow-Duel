@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import Card from "../../src/core/Card.js";
 import Game from "../../src/core/Game.js";
+import { placeFieldCards } from "../helpers/game.js";
 import type {
   SelectionCardReference,
   SelectionResult,
@@ -625,4 +626,33 @@ test("legitimate cancellation retires its callbacks before closing UI or startin
   const next = required(game.targetSelection);
   oldConfirm?.();
   assert.equal(game.targetSelection, next);
+});
+
+test("attack selection settles only after its combat, which blocks other actions while it runs", async t => {
+  const game = new Game({ captureReplay: false, disableChains: true });
+  t.after(() => game.dispose("attack-selection-combat"));
+  game.turn = "player"; game.phase = "battle"; game.turnCounter = 2;
+  game.disablePresentationDelays = true;
+  game.waitForBoardPresentation = async () => {};
+  game.player.controllerType = game.bot.controllerType = "human";
+  const attacker = new Card({ id: 999801, name: "Combat attacker", cardKind: "monster", atk: 1000, def: 0, level: 4, effects: [] }, "player");
+  placeFieldCards(game.player.field, attacker);
+  const blockedDuringCombat: (string | undefined)[] = [];
+  game.on("attack_declared", () => {
+    const guard = game.canStartAction({ actor: game.player, kind: "bot_attack", phaseReq: "battle", silent: true });
+    blockedDuringCombat.push(guard.ok ? undefined : guard.code);
+  });
+
+  game.startAttackTargetSelection(attacker, []);
+  const session = required(game.targetSelection);
+  const requirement = required(session.requirements[0]);
+  const direct = required(requirement.candidates.find(candidate => Reflect.get(candidate, "isDirectAttack") === true));
+  session.selections[requirement.id] = [direct.key];
+  await game.finishTargetSelection();
+
+  // The combat already resolved when the selection settles.
+  assert.equal(game.bot.lp, 7000);
+  assert.equal(game.combatResolutionDepth, 0);
+  assert.deepEqual(blockedDuringCombat, ["BLOCKED_RESOLVING"]);
+  assert.equal(game.canStartAction({ actor: game.player, kind: "bot_attack", phaseReq: "battle", silent: true }).ok, true);
 });
