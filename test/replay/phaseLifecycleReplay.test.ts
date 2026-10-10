@@ -224,6 +224,60 @@ test("a human attack chosen through the selection session replays after its awai
   assert.equal(playback.bot.lp, live.bot.lp);
 });
 
+test("a monster effect activated from the human Graveyard modal records its command and replays", async t => {
+  const live = createRuntimeGame({ captureReplay: true, randomSeed: 143, laboratoryMode: true, laboratoryUseBot: false });
+  const playback = createRuntimeGame({ captureReplay: false, replayMode: "playback", laboratoryMode: true, laboratoryUseBot: false });
+  t.after(() => { live.dispose(); playback.dispose(); });
+  for (const game of [live, playback]) {
+    const start = game.startWithDecks.bind(game);
+    game.startWithDecks = async options => {
+      await start(options);
+      game.player.controllerType = game.bot.controllerType = "human";
+      game.disablePresentationDelays = true;
+      game.phaseDelayMs = 0;
+      game.player.deck.push(...game.player.hand.splice(0));
+      // Void Tenebris Horn revives itself while 2 "Void Hollow" are in the Graveyard.
+      for (const id of [204, 204, 211]) {
+        const card = required(game.player.deck.find(entry => entry.id === id));
+        game.player.deck.splice(game.player.deck.indexOf(card), 1);
+        game.player.graveyard.push(card);
+      }
+    };
+  }
+  playback.ui.renderGraveyardModal = () => assert.fail("Playback cannot open the Graveyard modal");
+  await live.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true,
+    startAtDrawPhase: true, startingPlayer: "player", announceStartingPlayer: false,
+    playerDeck: [204, 204, 211, ...Array<number>(17).fill(1)], botDeck: Array<number>(20).fill(1),
+    playerExtraDeck: [], botExtraDeck: [] });
+  await live.skipToPhase("main1");
+  const horn = required(live.player.graveyard.find(card => card.id === 211));
+  const modal: { options?: Parameters<typeof live.ui.renderGraveyardModal>[1] } = {};
+  live.ui.renderGraveyardModal = (_cards, options) => { modal.options = options; };
+  const activation: { pending?: Promise<unknown> } = {};
+  const activate = live.tryActivateMonsterEffect.bind(live);
+  live.tryActivateMonsterEffect = (...args) => {
+    const result = activate(...args);
+    activation.pending = result;
+    return result;
+  };
+  live.ui.showSpecialSummonPositionModal = (_card, choose) => choose("defense");
+  playback.ui.showSpecialSummonPositionModal = () => assert.fail("Playback cannot ask for a position");
+  live.openGraveyardModal(live.player);
+  const select = required(required(modal.options).onSelect);
+  select(horn, live.player.graveyard.indexOf(horn),
+    unsafeFixture<HTMLElement>({}, "The Graveyard activation handler reads only the card."),
+    unsafeFixture<MouseEvent>({}, "The Graveyard activation handler reads only the card."));
+  await completeTestSelections(live, required(activation.pending));
+  assert.ok(live.player.field.includes(horn), "the Graveyard effect revived the card");
+
+  const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "graveyard-modal" }))));
+  const command = required(replay.commands.find(entry => entry.type === "activate_effect"));
+  assert.equal(command.payload.sourceZone, "graveyard");
+  const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(playback, "Concrete Game with identical presentation and controller configuration.") });
+  assert.equal(result.finalStateHash, replay.result?.finalStateHash);
+  assert.equal(playback.decisionBroker.replayCursor, replay.decisions.length);
+});
+
 test("a duel won in the Damage Step records its final state after the attack command settles", async t => {
   const live = createRuntimeGame({ captureReplay: true, randomSeed: 142, laboratoryMode: true, laboratoryUseBot: false });
   const playback = createRuntimeGame({ captureReplay: false, replayMode: "playback", laboratoryMode: true, laboratoryUseBot: false });

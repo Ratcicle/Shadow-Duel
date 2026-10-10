@@ -860,6 +860,7 @@ O portão global é o PR com `verify`.
 - Corrigidos a partir do primeiro replay real exportado (09–10/10/2026):
   - o turno de abertura automático de um duelo normal não era reproduzido antes do primeiro comando (`setup.openingTurnStarted`);
   - a ativação de ignição do bot no campo e no Cemitério, e os efeitos do bot a partir da Zona de Campo e da Zona de Magias e Armadilhas, não passavam pela ativação canônica, então não gravavam comando;
+  - as Invocações-Sincro e Invocações-Ascensão do bot e os efeitos de monstro ativados pelo modal do Cemitério do jogador também não passavam pelos pontos de entrada gravados; as entradas do Extra Deck agora respeitam a posição gravada;
   - o modal de busca do Lost Throne mostrava o id interno do requisito no lugar do nome da carta.
   - um duelo vencido no Damage Step gravava o estado final no meio do ataque; o resultado agora acompanha o estado depois do comando, o mesmo que a reprodução compara.
 - Pendentes de verificação manual, antes do merge: o Void Lost Throne no navegador (`decision-broker:3`) e um replay v27 de um duelo novo exportado pelo usuário (`npm run replay`).

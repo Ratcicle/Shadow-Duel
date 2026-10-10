@@ -16,11 +16,11 @@ export async function executeAscensionAction(bot: BotRuntimePort, game: BotGameP
       `[Bot.executeMainPhaseAction] 🔥 Attempting Ascension: ${material.name} → ${action.ascensionCard!.name}`,
     );
 
-    const result = await game.performAscensionSummon(
-      bot,
-      material,
+    const result = await game.performAscensionSummonFromExtraDeck(
       card,
+      bot,
       {
+        material,
         position:
           action.position ||
           bot.getAscensionPositionPreference(

@@ -71,6 +71,7 @@ interface ExtraDeckPerformOptions extends ExtraDeckCheckOptions {
 
 interface AscensionPerformOptions extends ExtraDeckCheckOptions {
   material?: GameCard;
+  position?: BattlePositionInput | null;
 }
 
 interface ProcedureCheckSuccess {
@@ -233,6 +234,7 @@ interface ExtraDeckHost {
     player: GamePlayer,
     material: GameCard,
     card: GameCard,
+    options?: { position?: BattlePositionInput },
   ): Promise<SummonExecutionResult>;
   createPreparedSummon(input: PreparedSummonInput): PreparedSummon;
   executeSummonTransaction(
@@ -985,7 +987,8 @@ export async function performAscensionSummonFromExtraDeck(
     options.material || (!requiresChoice && materials.length === 1 ? materials[0] : null);
   if (material) {
     this.closeExtraDeckModal?.();
-    return await this.performAscensionSummon(player, material, card);
+    return await this.performAscensionSummon(player, material, card,
+      options.position ? { position: options.position } : {});
   }
 
   const selectionContract = buildAscensionMaterialSelectionContract(

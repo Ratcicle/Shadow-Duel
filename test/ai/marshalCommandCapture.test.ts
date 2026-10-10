@@ -83,10 +83,20 @@ for (const seat of ["player", "bot"] as const) {
   }
 }
 
-// Field (and graveyard) ignition from the bot, and its Field Spell effect,
-// used to run the activation pipeline directly, so no command was recorded
-// and real-duel replays broke.
-function rootlingScenario(seat: "player" | "bot", playback = false, source: "rootling" | "colony" = "rootling") {
+// Field (and graveyard) ignition from the bot, its Field Spell effect and its
+// Extra Deck summons used to bypass the captured entrypoints, so no command
+// was recorded and real-duel replays broke.
+type CaptureSource = "rootling" | "colony" | "ascension" | "synchro";
+// Field cards come from the Main Deck, or from the Extra Deck when listed there
+// (Synchro materials that are Synchro monsters themselves).
+const CAPTURE_SOURCES: Record<CaptureSource, { field: number[]; fieldSpell?: number; extraDeck: number[] }> = {
+  rootling: { field: [402], extraDeck: [] },
+  colony: { field: [], fieldSpell: 410, extraDeck: [] },
+  ascension: { field: [252], extraDeck: [253] },
+  synchro: { field: [503, 514], extraDeck: [503, 514, 516] },
+};
+function rootlingScenario(seat: "player" | "bot", playback = false, source: CaptureSource = "rootling") {
+  const setup = CAPTURE_SOURCES[source];
   const first = new Bot("bloomrot"), second = new Bot("bloomrot");
   first.id = "player";
   const game = createRuntimeGame({ laboratoryMode: true, laboratoryUseBot: false, chainResponseTimeoutMs: 0,
@@ -104,25 +114,27 @@ function rootlingScenario(seat: "player" | "bot", playback = false, source: "roo
     actor.controllerType = "ai"; opponent.controllerType = "human";
     for (const owner of [actor, opponent]) owner.deck.push(...owner.hand.splice(0));
     const take = (id: number, owner = actor) => {
-      const card = required(owner.deck.find(card => card.id === id));
-      owner.deck.splice(owner.deck.indexOf(card), 1);
+      const zone = owner.deck.some(card => card.id === id) ? owner.deck : owner.extraDeck;
+      const card = required(zone.find(card => card.id === id));
+      zone.splice(zone.indexOf(card), 1);
       card.isFacedown = false; card.position = "attack"; card.summonedTurn = 0;
       return card;
     };
-    if (source === "colony") {
-      const colony = take(410);
-      actor.fieldSpell = colony;
-      game.effectEngine.assignFieldPresenceId(colony);
-    } else {
-      placeFieldCards(actor.field, take(402));
+    if (setup.fieldSpell !== undefined) {
+      const fieldSpell = take(setup.fieldSpell);
+      actor.fieldSpell = fieldSpell;
+      game.effectEngine.assignFieldPresenceId(fieldSpell);
     }
+    for (const id of setup.field) placeFieldCards(actor.field, take(id));
     placeFieldCards(opponent.field, take(3, opponent));
     for (const owner of [actor, opponent]) for (const card of owner.field) game.effectEngine.assignFieldPresenceId(card);
   };
-  const deck = [source === "colony" ? 410 : 402, 3, ...Array<number>(18).fill(1)];
+  const mainField = setup.field.filter(id => !setup.extraDeck.includes(id));
+  const deck = [...mainField, ...(setup.fieldSpell === undefined ? [] : [setup.fieldSpell]), 3,
+    ...Array<number>(19 - mainField.length).fill(1)];
   const initialize = () => game.startWithDecks({ exactDecks: true, preserveDeckOrder: true, initializeOnly: true,
     startAtDrawPhase: true, startingPlayer: seat, announceStartingPlayer: false,
-    playerDeck: deck, botDeck: deck, playerExtraDeck: [], botExtraDeck: [] });
+    playerDeck: deck, botDeck: deck, playerExtraDeck: setup.extraDeck, botExtraDeck: setup.extraDeck });
   return { game, live, actor, opponent, initialize };
 }
 
@@ -178,4 +190,35 @@ for (const seat of ["player", "bot"] as const) {
     assert.equal(result.finalStateHash, replay.result?.finalStateHash);
     assert.equal(p.game.decisionBroker.replayCursor, replay.decisions.length);
   });
+}
+
+for (const seat of ["player", "bot"] as const) {
+  for (const source of ["ascension", "synchro"] as const) {
+    test(`bot ${source} records its Extra Deck command and replays (${seat})`, async t => {
+      const s = rootlingScenario(seat, false, source), { game, live, actor } = s;
+      t.after(() => game.dispose()); await s.initialize();
+      game.ui.showChainResponseModal = async () => null;
+      const extra = required(actor.extraDeck[0]);
+      const accepted = await actor.executeMainPhaseAction(live, source === "ascension"
+        ? { type: "ascension", materialIndex: 0, ascensionCard: extra, priority: 1 }
+        : { type: "synchro", synchroInstanceId: extra.instanceId, priority: 1, position: "attack",
+          materialInstanceIds: actor.field.map(card => card.instanceId) });
+      assert.equal(accepted, true);
+      assert.ok(actor.field.includes(extra));
+      const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(game.finalizeReplay({ reason: `bot-${source}` }))));
+      const commands = replay.commands.filter(command => command.type === "extra_deck_summon");
+      assert.equal(commands.length, 1);
+      assert.equal(required(commands[0]).payload.summonType, source);
+
+      const p = rootlingScenario(seat, true, source);
+      t.after(() => p.game.dispose());
+      p.game.ui.showChainResponseModal = async () => assert.fail("replay must consume recorded response");
+      p.game.autoSelector.select = () => assert.fail("replay must consume recorded selection");
+      const result = await replayCanonicalDuel(replay, { game: unsafeFixture<ReplayDriverGamePort>(p.game,
+        "Concrete Game with the same deterministic initialization.") });
+      assert.equal(result.ok, true);
+      assert.equal(result.finalStateHash, replay.result?.finalStateHash);
+      assert.equal(p.game.decisionBroker.replayCursor, replay.decisions.length);
+    });
+  }
 }
