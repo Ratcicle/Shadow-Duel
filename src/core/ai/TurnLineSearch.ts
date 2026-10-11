@@ -1,9 +1,10 @@
-import { appendSimulatedZoneCard } from "./common/zones.js";
+import { moveCardToZone } from "./common/zones.js";
 import { createPlanningCopy, hasPendingPassiveRestoration, projectRuntimeEffectUsage, projectRuntimeReplacementEffects } from "./common/planningCopy.js";
 import { PLANNING_PLAYER_FIELDS, PLANNING_STATE_FIELDS, PLANNING_ZONES } from "./common/stateFingerprint.js";
 import { applySimulatedFieldSpellBattleDrawRewards, isSimulatedMainPhaseActionSupported } from "./common/simulation.js";
 import { hasSimulatedProtection } from "./common/simulatedActions/lifecycle.js";
 import { replaceSimulatedBattleDestruction } from "./common/simulatedActions/destruction.js";
+import { getOriginalOwner } from "./common/simulatedActions/movement.js";
 import {
   clearSimulatedDamageCalculationBuffs,
   clearSimulatedEndOfDamageStepBuffs,
@@ -926,26 +927,6 @@ function canPlannerAttackerStillAttack(
   return used < getPlannerMaxAttacks(card, state);
 }
 
-function removeFromZone(
-  zone: PlannerCard[],
-  card: PlannerCard | null | undefined,
-): boolean {
-  if (!Array.isArray(zone) || !card) return false;
-  const index = zone.indexOf(card);
-  if (index < 0) return false;
-  zone.splice(index, 1);
-  return true;
-}
-
-function pushToGraveyard(
-  player: PlannerPlayer | null | undefined,
-  card: PlannerCard | null | undefined,
-): void {
-  if (!player || !card) return;
-  if (!Array.isArray(player.graveyard)) player.graveyard = [];
-  appendSimulatedZoneCard(player.graveyard, card);
-}
-
 function sameCardIdentity(
   a: PlannerCard | null | undefined,
   b: PlannerCard | null | undefined,
@@ -985,56 +966,34 @@ function sameBattlePairCard(
   );
 }
 
-function detachEquipsForDestroyedMonster(
-  player: PlannerPlayer | null | undefined,
-  monster: PlannerCard | null | undefined,
-): PlannerCard[] {
-  if (!player || !monster) return [];
-  const detached: PlannerCard[] = [];
-  const hostEquips = Array.isArray(monster.equips) ? monster.equips : [];
-  hostEquips.forEach((equip) => {
-    if (equip) detached.push(equip);
-  });
-  monster.equips = [];
-
-  if (Array.isArray(player.spellTrap)) {
-    for (let index = player.spellTrap.length - 1; index >= 0; index -= 1) {
-      const card = player.spellTrap[index];
-      if (!card) continue;
-      if (sameCardIdentity(card.equippedTo, monster)) {
-        detached.push(card);
-        player.spellTrap.splice(index, 1);
-      }
-    }
-  }
-
-  detached.forEach((equip) => {
-    equip.equippedTo = null;
-    pushToGraveyard(player, equip);
-  });
-  return detached;
-}
-
+// Same generic move as destroySimulatedCard: the monster and the equips held on
+// either side go to their owners' Graveyards, field-exit statuses reset,
+// destination replacement applies and auras are refreshed. As in the runtime
+// destroyCard move, no effect owner is passed, so only banish protection not
+// limited to the opponent's effects can refuse it.
 function destroyPlannerMonster(
-  player: PlannerPlayer | null | undefined,
+  state: PlanningState,
+  controller: PlannerPlayer | null | undefined,
   monster: PlannerCard | null | undefined,
+  movedByEffect: boolean,
 ): boolean {
-  if (!player || !monster) return false;
-  if (!removeFromZone(player.field, monster)) return false;
-  detachEquipsForDestroyedMonster(player, monster);
-  pushToGraveyard(player, monster);
-  return true;
+  if (!controller || !monster || !controller.field?.includes(monster)) return false;
+  return moveCardToZone(
+    getOriginalOwner(state, monster, controller),
+    monster,
+    "graveyard",
+    controller,
+    { state, movedByEffect },
+  );
 }
 
-function recordDestroyedCard(
-  summary: PlannerBattleSummary,
-  card: PlannerCard | null | undefined,
+// Captured before the move, because leaving the field resets statuses.
+function captureDestroyedCard(
+  card: PlannerCard,
   owner: string,
   destroyedBy = "battle",
-): void {
-  if (!summary || !card) return;
-  summary.destroyedNames.push(card.name || "card");
-  summary.destroyedCards.push({
+): DestroyedCardSummary {
+  return {
     card,
     position: card.position || null,
     id: card.id,
@@ -1050,7 +1009,16 @@ function recordDestroyedCard(
     def: card.def || 0,
     baseAtk: card.baseAtk ?? card.originalAtk ?? card.atk ?? 0,
     destroyedBy,
-  });
+  };
+}
+
+// Published only after the move: a refused move is not a destruction.
+function recordDestroyedCard(
+  summary: PlannerBattleSummary,
+  destroyed: DestroyedCardSummary,
+): void {
+  summary.destroyedNames.push(destroyed.name || "card");
+  summary.destroyedCards.push(destroyed);
 }
 
 function getSimTurnCounter(turnCounter: unknown): number {
@@ -1252,8 +1220,9 @@ function resolveSimulatedBattlePairEffects(
       continue;
     }
 
-    recordDestroyedCard(summary, affected, "opponent", "effect");
-    destroyPlannerMonster(opponent, affected);
+    const destroyed = captureDestroyedCard(affected, "opponent", "effect");
+    if (!destroyPlannerMonster(state, opponent, affected, true)) continue;
+    recordDestroyedCard(summary, destroyed);
     summary.rewardNames.push(
       `${entry.sourceName || "battle pair effect"} destroyed ${affected.name || "target"}`,
     );
@@ -1362,8 +1331,10 @@ function applySimulatedBattle(
       summary.rewardNames.push(`${replacement.name} protected battle`);
       return false;
     }
-    recordDestroyedCard(summary, card, ownerLabel, "battle");
-    return destroyPlannerMonster(owner, card);
+    const destroyed = captureDestroyedCard(card, ownerLabel, "battle");
+    if (!destroyPlannerMonster(state, owner, card, false)) return false;
+    recordDestroyedCard(summary, destroyed);
+    return true;
   };
 
   if (!target) {
