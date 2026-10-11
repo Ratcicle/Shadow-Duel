@@ -2,13 +2,13 @@
 
 Este documento registra a direção geral de desenvolvimento do **Shadow Duel** para evitar dispersão entre múltiplas frentes e preservar uma ordem de prioridades clara.
 
-## Estado de referência — 10/10/2026
+## Estado de referência — 11/10/2026
 
 | Frente | Estado conferido no repositório |
 | --- | --- |
 | Estabilização pós-TypeScript | Concluída em 06/10/2026. |
 | Saneamento (fase 1.5) | Concluído em 10/10/2026: CI `Verify` verde como portão de `main` e do deploy, replay `engine-rules-v27`, determinismo de IA e Arena, bugs de engine e correções de UI/i18n. |
-| IAs atuais | Plano de arquitetura e paridade concluído para os nove bots. A fase 2 começa pelo harness de benchmark; a comparação estatística de força continua pendente. |
+| IAs atuais | Arquitetura e paridade (2.1) e harness de benchmark (2.2) concluídos. A baseline v1 mede a força relativa dos nove bots. Próximo passo: limites conhecidos (2.3). |
 | Carmim Real | Catálogo proposto, com decisões de regra em aberto; cartas e IA ainda não implementadas. |
 | Suporte adicional de Burning West e Bloomrot | Planejado; escopo e necessidade dependem do diagnóstico dos decks e das IAs. |
 | Gauntlet | Planejado, ainda não implementado. |
@@ -66,7 +66,7 @@ Os itens adiados estão na seção "Fora do escopo da fase 1.5" do plano. Os que
 
 ## 2. Aprimoramento das IAs atuais
 
-**Status:** 2.1 concluída em **07/10/2026**. O próximo passo é a 2.2 (harness de benchmark), com escopo e decisões H1–H5 aprovados em 10/10/2026.
+**Status:** 2.1 concluída em **07/10/2026**. 2.2 concluída em **11/10/2026**, com a baseline v1 registrada abaixo. O próximo passo é a 2.3.
 
 **Objetivo:** aproximar a qualidade dos bots antes de usar a Bot Arena como referência séria de balanceamento. Resultados de bot vs bot podem refletir a qualidade da IA, e não só a força real do deck. Por isso, a força relativa dos nove bots precisa ser medida com benchmarks reproduzíveis e intervalos de confiança.
 
@@ -122,9 +122,76 @@ Os números de evidência do plano não servem como referência para a fase 2:
 
 As limitações que o plano deixou abertas estão na 2.3. A dos quatro casos de Devourer foi resolvida na fase 1.5.
 
-### 2.2 Harness de benchmark — próximo passo
+### 2.2 Harness de benchmark — concluída
 
 Nenhum peso, heurística, preset ou carta é ajustado antes de o harness produzir uma baseline. Não há baseline anterior utilizável: a v1 é gerada do zero.
+
+**Implementação.**
+
+- **Arquivos:** [run_benchmark.ts](../scripts/run_benchmark.ts), [analyze_benchmark.ts](../scripts/analyze_benchmark.ts) e a pasta [scripts/benchmark/](../scripts/benchmark/) (esquema, estatística e observador). Nada em `src/` mudou: a observação é feita por subclasses e embrulhos de instância.
+- **Execução:** um processo por duelo, diário com retomada, cabeçalho de identidade e digests de configuração e do conteúdo determinístico.
+- **Análise:** `summarize` confere os portões de sanidade antes das métricas, e `compare` compara duas execuções.
+- **Empate:** vale meio ponto no placar (`DRAW_POINTS`, em `scripts/benchmark/statistics.ts`).
+- **Scripts Tech-Zero:** o analisador ganhou os campos H3 sem mudar os existentes.
+
+**Comandos.**
+
+```bash
+npm run benchmark -- --seeds 20 --workers 10 --preset-metrics techzero-combo
+```
+
+```bash
+npm run benchmark:analyze -- summarize .cache/benchmark/<runId> --markdown -
+```
+
+```bash
+npm run benchmark:analyze -- compare .cache/benchmark/<base> .cache/benchmark/<candidata>
+```
+
+```bash
+npm run benchmark -- controls --workers 10
+```
+
+**Validação.**
+
+- **Reprodutibilidade:** dois pilotos com N = 2, em ordens opostas, deram o mesmo `deterministicDigest` (162 de 162 registros iguais). A retomada depois de uma interrupção também chega ao mesmo digest.
+- **Prova H1:** usar o planner do perfil de cada estratégia em vez do modo `critical` que a Arena impõe dá decisões e resultados idênticos (81 de 81 casos, ignorando o rótulo do modo). O modo imposto não muda decisões hoje.
+- **Guarda de stall:** com limites de 2000 decisões, 1000 ações e 20000 estágios de progresso por turno, os picos observados ficaram em 131/64/102, e a guarda não disparou nenhuma vez.
+
+**Baseline v1** (11/10/2026):
+
+- **Execução:** `canonical-facccc9-0e7dbbda`.
+- **Identidade:** commit `facccc9`, árvore limpa, `engine-rules-v27`, banco de cartas `a11dc8c4`.
+- **Digests:** `configDigest` `0e7dbbda…`; `deterministicDigest` `aea47bee68dee52b8996c5cfa6c8c5a6553b274af3c4f4f3423a3d01ac4ba6f8`.
+- **Duelos:** 1.620 válidos (N = 20, todos decididos por PV zerado), 0 erros. A fração no limite de turnos foi 0,0% [0,0%; 0,2%].
+- **Sanidade:** todos os portões passaram.
+- **Quem começa:** vence 53,5% [50,9%; 56,0%].
+- **Defeitos:** 4, triados. Todos vêm do mesmo bug de simulação da ponte de batalha, listado na 2.3.
+- **Controles no mesmo commit:**
+  - corpus `3d54efc8…`, 108 casos sem falhas;
+  - `controlsDigest` `d3e441b5…`.
+
+| Preset | Placar sem espelhos (n = 320) [IC 95%] |
+| --- | --- |
+| Dragon | 82,2% [77,6%; 86,0%] |
+| Tech-Zero | 78,1% [73,3%; 82,3%] |
+| Miragebound | 67,2% [61,9%; 72,1%] |
+| Arcanist | 41,3% [36,0%; 46,7%] |
+| Luminarch | 40,0% [34,8%; 45,5%] |
+| Shadow-Heart | 39,1% [33,9%; 44,5%] |
+| Void | 39,1% [33,9%; 44,5%] |
+| Bloomrot | 37,5% [32,4%; 42,9%] |
+| Burning West | 25,6% [21,2%; 30,7%] |
+
+**Limitações conhecidas do harness:**
+
+- **Letal:** a métrica opcional `lethal` dá sempre zero, porque a projeção pública de batalha desiste quando o oponente tem carta oculta.
+- **Falhas sem código:** a maioria das falhas de ação chega sem código (`uncoded`), e a classificação por motivo cobre pouco.
+- **Nós avaliados:** fora do TurnLineSearch, o número de nós é um proxy (as chamadas de simulação).
+
+Melhorar esses três pontos exige mudanças em `src/`, fora deste lote.
+
+**Especificação** (escopo aprovado):
 
 **Base.**
 
@@ -217,6 +284,7 @@ Cada correção é uma correção de paridade ou de regra, medida contra a basel
 | Visibilidade pós-efeito da Arena | `notifyChainLinkOutcome` roda antes das ações pós-efeito (`src/core/chain/resolution.ts:208-209`). Falhas pós-efeito não aparecem nas estatísticas de Chain | Depois do item anterior. Muda `chain_link_resolution`, exige bump e atualizar as asserções de comportamento atual em `test/ai/arenaChainOutcomes.test.ts` |
 | `engine-bugs:5` | `card_moved`/`card_to_grave` não são aguardados por padrão (`src/core/game/zones/movement.ts`) | Inverter o default. Muda a ordem em toda a engine: exige bump e goldens |
 | `decision-broker:10` | No playback, escolhas de IA fora do broker são recalculadas, não lidas do replay | Gravá-las. Exige bump. Convém fazer antes da 2.4, para que replays sobrevivam a mudanças de política |
+| Equipamentos na batalha simulada da ponte (achado da baseline v1) | `detachEquipsForDestroyedMonster` (`src/core/ai/TurnLineSearch.ts:988-1016`) supõe que todo equipamento é de quem controla o monstro destruído. Com Bloomrot Overgrowth, que se equipa ao oponente, a cópia fica em duas zonas e sem `fieldSlot`, e a busca lança `Invalid or duplicate canonical field position.`: o bot perde o resto da Main 1. Aconteceu em 4 dos 1.620 duelos. O mesmo atalho duplica no Cemitério os equipamentos do próprio jogador. O estado real e os replays não são afetados | Destruir na ponte com o movimento simulado genérico (`moveCardToZone` com `state`), como `destroySimulatedCard` já faz. Testado numa cópia: some o erro e a duplicação, sem mudar nenhum vencedor numa amostra de 233 duelos. Muda decisões, então pede baseline nova |
 
 ### 2.4 Ajuste de qualidade guiado por dados
 
@@ -430,7 +498,7 @@ A implementação deve ser feita **depois do Renderer Three.js**, para que esse 
 | --- | --- | --- |
 | 1 | Estabilização pós-TypeScript | Concluída |
 | 1.5 | Saneamento | Concluído |
-| 2 | IAs atuais | Arquitetura e paridade concluídas; próximo passo: harness de benchmark |
+| 2 | IAs atuais | 2.1 e 2.2 concluídas, baseline v1 registrada; próximo passo: 2.3 |
 | 3 | Carmim Real | — |
 | 4 | Burning West + Bloomrot | — |
 | 5 | Modo Gauntlet | — |
@@ -450,7 +518,7 @@ Exemplo de organização da etapa concluída:
 
 Organização prevista para a próxima etapa:
 
-**Projeto principal:** aprimoramento das IAs, começando pelo harness de benchmark  
+**Projeto principal:** aprimoramento das IAs (2.3 e 2.4, medidas contra a baseline v1)  
 **Projeto paralelo:** preparação final do Carmim Real
 
 A meta é sempre terminar cada fase com um **Shadow Duel mais estável, completo e jogável**, evitando vários sistemas grandes incompletos ao mesmo tempo.
