@@ -71,6 +71,7 @@ Blocos: preparação e instrumento (L00–L01), defeito e extrações (L02–L03
 | --- | --- | --- | --- |
 | L00 | `f4f0d4f` | R0 N = 5 (`canonical-f4f0d4f-21712b08`, `deterministicDigest` `276cdf30…`); ponte R0 N = 2 (`1a1dafdd…`); controles | R0 idêntico à v1 nos 405 casos em comum (única diferença de identidade: o commit). Controles idênticos aos da v1 (corpus `3d54efc8…`). Ponte sem erros nem defeitos. O R0 traz 1 defeito, o caso já conhecido `bloomrot:void:2`. Valores v27 congelados em `.cache/plan23-probes/v27-envelope.json` |
 | L01 | `c768440` | N = 5 (`canonical-c768440-21712b08`, `deterministicDigest` `c986ee1c…`); controles | Registros idênticos ao R0 nos 405 casos com os campos de divergência ignorados; vencedores, turnos, aberturas e decisões iguais. Vocabulário novo esperado: `opponent_backrow_reaction` (52 no N = 5), `opponent_state_mismatch` e `failed:opponent_backrow_reaction` (13). Taxa de divergência menor só onde havia artefatos de contador zerado (Arcanist 0,070 → 0,046; Bloomrot 0,155 → 0,102). O defeito `bloomrot:void:2` continua e passa de `operation: 'action_guard'` a `'planning'`. Controles: corpus idêntico; nos smokes só mudam motivos e contagens de divergência do planejamento (3 artefatos de contador em `spellTrap`, antes `host_equip_mismatch`, somem) |
+| L02 | `fbcfea3` | N = 5 (`canonical-fbcfea3-21712b08`, `deterministicDigest` `295e6dc1…`); ponte N = 2 (`canonical-fbcfea3-43624ae9`, `06569a41…`); controles | 0 erros e 0 defeitos: o `bloomrot:void:2` some do N = 5, e o recorte dirigido dos 4 casos da v1 cai de 4 para 0 defeitos. Varredura dos 233 duelos: 0 violações e 0 exceções de simulação. Nenhum vencedor trocado no N = 5 nem na ponte; teste de sinal sem viradas em todos os presets. Duração ou PV mudam em 3 casos do N = 5 (`bloomrot:bloomrot:0` 22 → 24 turnos; `void:luminarch:4` 11 → 9; `bloomrot:burningwest:4` só PV) e em 1 da ponte (`bloomrot:dragon:1`, só PV). Ponte: sem novidades além do vocabulário de L01; divergência menor no Arcanist (0,074 → 0,044) e no Bloomrot (0,171 → 0,116). Controles: corpus idêntico; nos smokes só mudam estatísticas internas de planejamento dos presets que usam a ponte. E1 fica sem efeito observável: sem o dono do efeito, a proteção `opponent_effects` não se aplica, como no `destroyCard` do runtime. Achados registrados à parte: par de batalha não resolvido no runtime e proteção de banimento na destruição |
 
 ## Objetivo e limites
 
@@ -341,11 +342,11 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 
 **Tarefas**
 
-- [ ] Reproduzir no commit de L01 com `.cache/plan23-probes/triage/verify/` e os 4 casos de defeito. Com equipamento do oponente (Bloomrot Overgrowth), a cópia fica em duas zonas e a busca lança `Invalid or duplicate canonical field position.`. Com equipamento próprio, a cópia vai duas vezes ao Cemitério.
-- [ ] `destroyPlannerMonster` (`src/core/ai/TurnLineSearch.ts:1018-1027`) passa a chamar `moveCardToZone(..., 'graveyard', controller, { state, movedByEffect })`, como já faz `destroySimulatedCard`. Ajustar os tipos sem cast duplo.
-- [ ] `movedByEffect` conforme E1: `true` na destruição pelo efeito do par de batalha e `false` em `destroyIfAllowed`.
-- [ ] `recordDestroyedCard` só publica no resumo quando o movimento acontece. O registro é capturado antes de mover, porque a saída do campo reseta os status.
-- [ ] Remover `removeFromZone`, `pushToGraveyard`, `detachEquipsForDestroyedMonster` (`TurnLineSearch.ts:988-1016`) e o import de `appendSimulatedZoneCard`. Não acrescentar a limpeza de controle temporário, para manter o comportamento de `destroySimulatedCard`.
+- [x] Reproduzir no commit de L01 com `.cache/plan23-probes/triage/verify/` e os 4 casos de defeito. Com equipamento do oponente (Bloomrot Overgrowth), a cópia fica em duas zonas e a busca lança `Invalid or duplicate canonical field position.`. Com equipamento próprio, a cópia vai duas vezes ao Cemitério.
+- [x] `destroyPlannerMonster` (`src/core/ai/TurnLineSearch.ts:1018-1027`) passa a chamar `moveCardToZone(..., 'graveyard', controller, { state, movedByEffect })`, como já faz `destroySimulatedCard`. Ajustar os tipos sem cast duplo.
+- [x] `movedByEffect` conforme E1: `true` na destruição pelo efeito do par de batalha e `false` em `destroyIfAllowed`.
+- [x] `recordDestroyedCard` só publica no resumo quando o movimento acontece. O registro é capturado antes de mover, porque a saída do campo reseta os status.
+- [x] Remover `removeFromZone`, `pushToGraveyard`, `detachEquipsForDestroyedMonster` (`TurnLineSearch.ts:988-1016`) e o import de `appendSimulatedZoneCard`. Não acrescentar a limpeza de controle temporário, para manter o comportamento de `destroySimulatedCard`.
 
 **Validação**
 
@@ -1313,6 +1314,8 @@ Antes do primeiro lote de cada caminho da 2.4, os itens abaixo passam por uma tr
 | --- | --- | --- |
 | Um gatilho obrigatório com plano exato inválido é perdido em silêncio no runtime, sem cair no AutoSelector | `src/core/effects/targeting/resolution.ts:649-651` | Exposto por L04. Não corrigido na 2.3 |
 | Em `bounce_and_summon`, a preferência `byName` sobrescreve a posição forçada e ignora `byTargetRef`/default | `src/core/actionHandlers/movement.ts` | Nenhuma carta usa a action |
+| O runtime nunca resolve os efeitos de par de batalha (`register_battle_pair_effect`). A Quick Draw in the Burning West (457) não destrói no início da Damage Step, e a finalização adiada (`deferFinalizationUntil: "battle_pair_effect"`) nunca roda, então a Magia fica virada para cima na zona. A ponte simula a destruição | `resolveTemporaryBattlePairEffects` e suas duas chamadas foram removidos em `3256e50`; o registro fica em `src/core/actionHandlers/conditional.ts` e só a prévia de PV o lê (`src/core/game/combat/resolution.ts`) | Exposto por L02. Decisão do usuário pendente (recomendação: lote de regra no pacote v28) |
+| No runtime, `protectFrom: "opponent_effects"` nunca recusa um banimento que vem de uma destruição, porque o `destroyCard` não repassa a fonte ao `moveCard`; o `destroySimulatedCard` da simulação recusa | `src/core/game/zones/destruction.ts` e `src/core/game/zones/movement.ts` | Exposto por L02. Questão de regra para o diretor criativo: se um banimento por `banishWhenLeavesField` conta como banido por efeito do oponente |
 
 ## Riscos gerais e mitigação
 
