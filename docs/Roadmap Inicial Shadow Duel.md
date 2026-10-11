@@ -66,16 +66,161 @@ Os itens adiados estão na seção "Fora do escopo da fase 1.5" do plano. Os que
 
 ## 2. Aprimoramento das IAs atuais
 
-**Status:** [plano de arquitetura e paridade](Plano%20de%20Atualiza%C3%A7%C3%A3o%20das%20IAs.md) concluído em **07/10/2026**, com validação focada, corpus determinístico e matriz de 56 duelos. Pesos, prioridades, budgets, cartas, presets e balanceamento foram preservados. Mudanças de decisão por correções de paridade e limitações conhecidas estão discriminadas no plano.
+**Status:** 2.1 concluída em **07/10/2026**. O próximo passo é a 2.2 (harness de benchmark), com escopo e decisões H1–H5 aprovados em 10/10/2026.
 
-**Objetivo:** aproximar a qualidade dos bots antes de usar a Bot Arena como referência séria de balanceamento.
+**Objetivo:** aproximar a qualidade dos bots antes de usar a Bot Arena como referência séria de balanceamento. Resultados de bot vs bot podem refletir a qualidade da IA, e não só a força real do deck. Por isso, a força relativa dos nove bots precisa ser medida com benchmarks reproduzíveis e intervalos de confiança.
 
-Motivação:
+As quatro partes seguem esta ordem:
 
-- comparar a qualidade dos bots, incluindo o Tech-Zero, com benchmarks reproduzíveis;
-- resultados de bot vs bot podem refletir qualidade da IA, não apenas força real do deck.
+1. A 2.1 organizou a arquitetura.
+2. A 2.2 cria o instrumento de medida e a baseline.
+3. A 2.3 corrige os limites conhecidos que distorcem a medida.
+4. A 2.4 ajusta a qualidade dos bots com base nos dados.
 
-Os controles realizados verificam refatorações e correções de simulação/execução. Eles não estabelecem a força relativa dos nove bots com confiança estatística. Essa avaliação e os limites restantes de simulação/engine continuam como trabalho futuro desta frente.
+### Regras de mudança da fase 2
+
+Herdadas do [plano das IAs](Plano%20de%20Atualiza%C3%A7%C3%A3o%20das%20IAs.md), com a política atual de testes do `AGENTS.md`:
+
+- **Classificar cada lote antes de implementar:**
+  - **Refatoração equivalente:** candidatos, prioridades, decisões por instância e linha escolhida ficam idênticos nos cenários caracterizados (corpus e controles).
+  - **Correção de paridade:** primeiro a divergência contra o runtime é reproduzida. Depois a simulação ou a execução é corrigida e as mudanças de decisão resultantes são documentadas.
+  - **Ajuste de política:** pesos, prioridades e heurísticas. Só é aceito pela diferença medida no harness contra a baseline, com intervalo de Wilson.
+  - As três classes nunca vão no mesmo lote.
+- **Nunca alterar pesos para compensar uma simulação errada.** O limite da 2.3 que afeta um caminho vem antes de qualquer ajuste desse caminho.
+- **Bugs de regra de engine são registrados à parte.** O trabalho de IA não autoriza mudar regras nem textos EN/PT de cartas.
+- **Testes.** Testes novos só a pedido do usuário. A divergência é reproduzida com testes existentes, com o corpus ou com o harness. `npm test` roda a suíte inteira antes de commits que alcançam vários subsistemas. Mudanças que alcançam o duelo passam pelo Bot smoke com `--check-replays`.
+- **Casos obrigatórios, quando pertinentes:**
+  - os dois assentos e as duas perspectivas;
+  - cópias iguais com instâncias distintas;
+  - custos insuficientes e redutores;
+  - campo cheio;
+  - efeitos negados e OPT;
+  - compras desconhecidas com replanejamento;
+  - invariância a informação oculta;
+  - o mesmo plano na geração, na simulação e na execução.
+- **Exit code zero não basta.**
+  - Erros, stderr, bloqueios, falhas de execução, motivos de divergência e timeouts são inspecionados.
+  - Qualquer ocorrência nova impede o aceite até ser explicada.
+  - Capturas parciais não contam.
+  - Totais de conjuntos de testes que se sobrepõem não são somados.
+- **Só se comparam execuções com a mesma configuração efetiva, registrada.** Toda mudança de comportamento do bot invalida a baseline em vigor: é preciso medir de novo antes de comparar.
+- **Ponte de batalha.** Mudanças nela pedem uma comparação separada com `plannerMode=always` e `plannerTurnMode=mainBattleMain2`, sem alterar orçamentos.
+- **Replay.** Itens que mudam a interpretação de replay exigem bump próprio de `CANONICAL_REPLAY_ENGINE_VERSION` e o portão `canonicalReplay`/`canonicalDriver`.
+- **Arquitetura:**
+  - o conhecimento estratégico fica no pacote do deck;
+  - a busca comum não conhece nomes de cartas;
+  - a execução do Bot revalida fonte, custo, alvo, material e posição e nunca troca uma instância em silêncio.
+
+### 2.1 Arquitetura e paridade — concluída
+
+Registrada no [plano das IAs](Plano%20de%20Atualiza%C3%A7%C3%A3o%20das%20IAs.md), concluído em 07/10/2026. Nove IAs migradas para a infraestrutura comum de geração, simulação declarativa e decisões exatas. Pesos, prioridades, orçamentos, cartas e presets foram preservados.
+
+Os números de evidência do plano não servem como referência para a fase 2:
+
+- A matriz de 56 duelos e os totais de 45/46 divergências e 514 branches não suportados vêm de uma revisão anterior à fase 1.5.
+- Os artefatos locais (`.cache/ai-architecture/`) não existem mais.
+
+As limitações que o plano deixou abertas estão na 2.3. A dos quatro casos de Devourer foi resolvida na fase 1.5.
+
+### 2.2 Harness de benchmark — próximo passo
+
+Nenhum peso, heurística, preset ou carta é ajustado antes de o harness produzir uma baseline. Não há baseline anterior utilizável: a v1 é gerada do zero.
+
+**Base.**
+
+- **Execução:** o laço de matchups de [run_bot_arena_smoke.ts](../scripts/run_bot_arena_smoke.ts). Já roda sem renderer, aceita seeds e matchups e coleta os contadores de divergência por duelo.
+- **Esqueleto do benchmark:** [run_techzero_benchmark.ts](../scripts/run_techzero_benchmark.ts) e [analyze_techzero_benchmark.ts](../scripts/analyze_techzero_benchmark.ts). Trazem pares semeados com troca de assento, checkpoint e retomada por caso, validação da abertura e classificação do fim do duelo.
+- **O que é específico do Tech-Zero:** a variante fallback, as métricas de combo e de letal e a projeção de batalha. Isso vira opcional por preset.
+- **Divergência de H3:** o analisador atual conta o limite de turnos como empate, contra H3. É preciso corrigir.
+- **Comparador:** o comparador entre execuções nunca foi commitado e entra no escopo.
+
+**Execução.**
+
+- **Ambiente:** headless em Node, sem renderer e sem `requestAnimationFrame`.
+- **Delays:** o delay de apresentação da IA (`presentationDelay`, em `src/core/bot/mainPhaseSession.ts:185-191`) ignora `disablePresentationDelays` (item `tests-ci:2`(d) da 1.5). O harness aplica o gate ou zera os delays, e registra isso.
+- **Perfil de orçamento (H1):**
+  - o mesmo do duelo normal: beam 2/2/100 (`src/core/bot/mainPhaseController.ts:247-249`);
+  - a Arena `instant` usa 60 nós, e a API `BotArena.setSearchParams` já aceita o valor;
+  - falta só expor o perfil no harness e gravá-lo;
+  - o modo `critical` que a Arena impõe ao planner não muda decisões hoje, mas também fica registrado.
+- **Guarda de stall:**
+  - Hoje só existem limites locais: Main Phase com 128 decisões e 64 execuções; Battle Phase com 32 tentativas e 3 seguidas sem progresso.
+  - Um duelo travado em outro ponto só termina pelo relógio e vira `timeout`.
+  - O harness acrescenta uma guarda determinística de decisões e ações por turno, que encerra o duelo como `error`. O relógio fica só como rede de segurança e também reporta `error`.
+
+**Matriz e métricas.**
+
+- **Matriz 9×9:** todos os pares de presets. Cada seed é jogada nas duas ordens de assento: 81 × N duelos.
+- **Espelhos:** ficam fora do win rate por preset e servem só para medir o viés de assento.
+- **Registro por duelo:** a seed efetiva do `Game` e quem começou. A alternância de quem começa é conferida, não presumida.
+- **Win rate:** por matchup e por preset, com intervalo de Wilson de 95%.
+- **Limite de turnos (H3):** decide por PV e a fração de duelos que bateu nele é reportada.
+- **Erros e timeouts:** ficam fora do win rate (D4), mas são reportados por matchup e triados como defeito.
+- **Métricas diagnósticas,** separadas do win rate:
+  - **duração** do duelo;
+  - **divergências** simulação × runtime (`executionMismatches` + `failedExecutions`), normalizadas pelo número de comparações. Só cobrem decisões do TurnLineSearch;
+  - **motivos de divergência**;
+  - **branches não suportados**, por marcador;
+  - **`failedActions` classificado por motivo.** O valor bruto mistura substituições legítimas com falhas reais;
+  - **latência por decisão e nós avaliados.**
+
+**Registro e reprodução.**
+
+- **Cabeçalho de cada execução:**
+  - commit e flag de árvore suja;
+  - `engineVersion` e `cardDatabaseSignature`;
+  - perfil efetivo de beam e de planner;
+  - limite de turnos e timeout;
+  - hash das listas Main/Extra dos presets;
+  - seeds;
+  - versão do Node e hash do lockfile.
+- **Saída:** JSONL por duelo e um resumo JSON, fora do repositório (H5).
+- **Critério de aceite:** duas execuções com a mesma configuração produzem JSONL idêntico. Os campos de relógio ficam numa subchave à parte.
+
+**Controles rápidos** (não medem força):
+
+- **Corpus determinístico de 108 casos** ([run_ai_architecture_corpus.ts](../scripts/run_ai_architecture_corpus.ts)): funciona em `main`.
+  - Usa um orçamento de diagnóstico e não exercita `Game` vivo nem Chain.
+  - O digest atual difere dos registrados no plano, então a baseline do corpus é gerada de novo junto com a v1.
+  - O script sai da lista de remoção do backlog (`tests-ci:8`).
+- **Matriz de controle de 7 pares** (seeds 4242 e 9713, os dois assentos, natural e ponte): roda com o smoke atual, com os 14 matchups explícitos e uma execução por seed.
+- **Smoke com `--check-replays`:** é portão de fidelidade de replay, não fonte de métrica, porque roda sem limite de turnos.
+
+**Decisões (aprovadas pelo usuário em 10/10/2026 com as recomendações):**
+
+| # | Decisão | Recomendação aprovada |
+| --- | --- | --- |
+| H1 | Perfil de orçamento canônico | O do duelo normal (beam 2/2/100), sem delays. O `instant` (60 nós) fica para smokes |
+| H2 | Tamanho da amostra | Piloto com N = 2 para medir o tempo por duelo; depois N = 20 (1.620 duelos). Isso dá cerca de ±15 pontos percentuais por matchup e ±5,5 por preset, sem contar os espelhos |
+| H3 | Limite de turnos (revisão de D4(b)) | Manter a decisão por PV e reportar a fração de duelos que bateu no limite |
+| H4 | Captura de replay canônico nos duelos do harness | Adiar. O smoke já captura, mas sem limite de turnos. Com limite, é preciso serializá-lo no setup de replay, o que é mudança de contrato com bump próprio. A seed já reproduz o duelo |
+| H5 | Onde ficam os resultados | Fora do repositório, numa pasta local ignorada pelo git. O resumo da baseline é citado no plano da fase 2 |
+
+### 2.3 Limites conhecidos de simulação, engine e replay
+
+Cada correção é uma correção de paridade ou de regra, medida contra a baseline. Itens confirmados no código em 10/10/2026:
+
+> Corrigido em 11/10/2026, antes da 2.2: Shadow-Heart Demon Arctroth não causava dano em ataque direto, nem para o humano. O efeito de ataque entrava na Chain sem monstro adversário em batalha, falhava e abortava a Damage Step. O coletor da Damage Step passou a honrar `requireDefender`, e o efeito de ataque da carta o declara.
+
+| Item | Causa confirmada | Correção esperada |
+| --- | --- | --- |
+| LP exibido quando a Damage Step aborta | A apresentação do ataque antecipa a perda de PV (`src/core/game/combat/resolution.ts:782-823`) e a Damage Step a consome depois. Se a Damage Step abortar, o contador mostra o dano esperado até a próxima atualização de PV, embora a engine não tenha aplicado nada | Desfazer a perda antecipada quando a Damage Step abortar |
+| Posição de Special Summon na simulação | O chooser simulado (`src/core/ai/common/simulatedActions/shared.ts:1170-1192`) ignora `specialSummonPositions`. O runtime aplica `byTargetRef` → `byName` → `default` → chooser. Exemplo: Gecko simulado em DEF e real em ATK | Mesma precedência na simulação comum |
+| Void Lost Throne na simulação | `position: "choice"` vira filtro de carta em `buildActionFilter` (`src/core/ai/common/targetSelection.ts`), e a busca simulada fica sempre vazia. O handler simulado também ignora `optional: true` | Não tratar `position` de ações de summon como filtro; respeitar `optional` |
+| Preferência de alvo sem `targetPreference` | A simulação Luminarch ordena por DEF (`preferDefense`, em `src/core/ai/luminarch/simulation.ts:1388`), e o runtime ordena por ATK | Preferência explícita por efeito, sem mudar o default global às cegas |
+| Reações do oponente | A simulação descarta fontes viradas para baixo (`src/core/ai/common/simulation.ts:1169-1174`). Reações de backrow aparecem como `opponent_reaction_mismatch` | Decidir entre um modelo conservador de backrow e só acompanhar a métrica |
+| Cobertura de handlers simulados | 88 de 110 tipos de action. Dos 22 sem handler, 15 são usados por cartas: `banish_destroyed_monster`, `buff_atk_by_lp_gained_this_turn`, `call_of_haunted_summon_and_bind` (vínculo Trap–monstro), `damage_from_destroyed_atk`, `destroy_attacker_on_archetype_destruction`, `end_battle_phase`, `grant_second_attack`, `mirror_force_destroy_all`, `negate_attack`, `reduce_self_atk`, `schedule_return_from_banished`, `shuffle_opponent_field_to_deck`, `special_summon_matching_level`, `special_summon_self_as_trap_monster` e `upkeep_pay_or_send_to_grave` | Priorizar os tipos que aparecem em linhas da Main Phase. A limpeza do vínculo vai na movimentação simulada comum |
+| Branches não suportados do Tech-Zero | Quase todos vêm da decisão exata do alvo de negação do Reactor Dragon, rejeitada no estado clonado (`src/core/ai/common/targetSelection.ts:733-739`) | Corrigir a política Tech-Zero e o contrato de seleção exata |
+| GameTree com informação oculta | Nos nós do oponente, lê a mão e o Deck reais (`src/core/ai/BaseStrategy.ts:582-592`, ativo em sete estratégias). Quebra a invariância a informação oculta, que o corpus não exercita | Projetar o oponente com a mesma máscara pública do TurnLineSearch. Controle de invariância no runtime |
+| Batalha gulosa | Um ataque por vez, escolhido pelo delta de um passo (`src/core/bot/battleController.ts:126-298`). Não planeja sequências nem letal | Generalizar a projeção sequencial pública de batalha, mantendo os ajustes por arquétipo |
+| `executed` pós-efeito | `src/core/chain/afterResolution.ts:29` sobrescreve `executed` do resultado primário quando uma ação posterior falha. Defeito latente | Preservar `executed`. Sem bump |
+| Visibilidade pós-efeito da Arena | `notifyChainLinkOutcome` roda antes das ações pós-efeito (`src/core/chain/resolution.ts:208-209`). Falhas pós-efeito não aparecem nas estatísticas de Chain | Depois do item anterior. Muda `chain_link_resolution`, exige bump e atualizar as asserções de comportamento atual em `test/ai/arenaChainOutcomes.test.ts` |
+| `engine-bugs:5` | `card_moved`/`card_to_grave` não são aguardados por padrão (`src/core/game/zones/movement.ts`) | Inverter o default. Muda a ordem em toda a engine: exige bump e goldens |
+| `decision-broker:10` | No playback, escolhas de IA fora do broker são recalculadas, não lidas do replay | Gravá-las. Exige bump. Convém fazer antes da 2.4, para que replays sobrevivam a mudanças de política |
+
+### 2.4 Ajuste de qualidade guiado por dados
+
+Começa depois da baseline v1. Para cada caminho, começa só depois de corrigidos os limites da 2.3 que o afetam. Cada lote é um ajuste de política, medido contra a baseline.
 
 Revisar principalmente:
 
@@ -87,47 +232,19 @@ Revisar principalmente:
 - Extra Deck;
 - condições de finalização.
 
-### Primeiro entregável: harness de benchmark
+Resíduos por nome de carta a migrar para hooks por arquétipo ou para avaliação genérica por efeito:
 
-Nenhum peso, heurística, preset ou carta é ajustado antes de o harness produzir uma baseline. Sem ela, não há como saber se uma mudança de IA melhorou ou piorou um bot.
+- **Regras de resposta em `src/core/chain/botResponsePolicy.ts`:** Luminarch Holy Shield (`:108` e `:269`), Mirror Force (`:213`), Call of the Haunted (`:224`) e Void Mirror Dimension (`:241`).
+- **Tipo de ação `special_summon_sanctum_protector`:** está na busca comum e no executor do Bot. A simulação já usa o caminho genérico, então a migração é uma refatoração equivalente.
 
-**Base.** Generalizar [run_techzero_benchmark.ts](../scripts/run_techzero_benchmark.ts) e [analyze_techzero_benchmark.ts](../scripts/analyze_techzero_benchmark.ts) para qualquer par de presets. Os dois scripts já geram casos semeados com troca de assento e analisam a saída por duelo. O comparador citado no [plano das IAs](Plano%20de%20Atualiza%C3%A7%C3%A3o%20das%20IAs.md) nunca foi commitado, e o harness o substitui.
+Conhecimento protegido: a tabela "Diagnóstico arquitetural" do plano das IAs lista o que pertence a cada deck. Exemplos: reservas de Esporos, economia de Hollow, marcos de Ascensão, preferências de materiais e proteção de bosses. Um ajuste não troca esse conhecimento por uma regra genérica nem o move para a busca comum.
 
-**Escopo:**
+Métricas opcionais por preset, vindas do benchmark Tech-Zero: conversão de letal, combos e ablação "estratégia especializada × fallback". Elas medem diretamente "linhas de combo" e "condições de finalização".
 
-1. **Matriz 9×9.** Todos os pares de presets, espelhos incluídos. Cada seed é jogada nas duas ordens de assento, o que anula a vantagem de quem começa. Para N seeds, são 81 × N duelos.
-2. **Métricas.** Win rate por matchup e por preset, com intervalo de Wilson de 95%. Também entram empates por limite de turnos, separados dos demais, duração em turnos e erros. Duelos encerrados por erro ou pela rede de segurança do relógio ficam fora do win rate (D4 da fase 1.5).
-3. **Execução headless.** Sem renderer e sem delays de apresentação. Uma guarda determinística limita decisões e ações por turno (`determinism:4b`, passo 4). O relógio fica só como rede de segurança e, quando dispara, reporta `error`.
-4. **Configuração registrada.** Cada resultado grava commit, `engineVersion`, `cardDatabaseSignature`, perfil de orçamento, limite de turnos e seeds. Um duelo é reproduzido pela seed e pela configuração, porque RNG de regras e RNG da IA são semeados.
-5. **Saída.** JSONL por duelo e um resumo JSON, fora de `docs/`.
-6. **Baseline v1.** A primeira execução completa vira a referência. A matriz de 56 duelos do plano das IAs não é comparável, porque é anterior à separação do RNG da IA (`determinism:1`/`:3`) e à contabilidade nova da Arena (`determinism:4a`).
+Restrições conhecidas:
 
-**Decisões (aprovadas pelo usuário em 10/10/2026 com as recomendações):**
-
-| # | Decisão | Recomendação |
-| --- | --- | --- |
-| H1 | Perfil de orçamento canônico: o do duelo normal (beam com 100 nós, `src/core/bot/mainPhaseController.ts:249`) ou o da Arena `instant` (60 nós, `src/core/BotArena.ts:112`) | Duelo normal: mede o bot que o jogador enfrenta. O `instant` fica para smokes |
-| H2 | Tamanho da amostra | Piloto com N = 2 para medir o tempo por duelo; depois N = 20 (1.620 duelos). Isso dá cerca de ±15 pontos percentuais por matchup e ±5,5 por preset |
-| H3 | Limite de turnos (revisão de D4(b)): decidir por PV ou contar como empate | Manter a decisão por PV e reportar a fração de duelos que bateu no limite, para que a métrica possa ser recalculada como empate |
-| H4 | Captura de replay canônico nos duelos do harness | Adiar. Exige serializar o limite de turnos no setup de replay, o que é mudança de contrato com bump próprio. A seed já reproduz o duelo |
-| H5 | Onde ficam os resultados | Fora do repositório (pasta local ignorada pelo git). O resumo da baseline é citado no plano da fase 2 |
-
-### Pendências herdadas da fase 1.5
-
-Itens com destino "Fase 2" no [plano da fase 1.5](Plano%20da%20Fase%201.5%20-%20Saneamento.md#fora-do-escopo-da-fase-15):
-
-- **Lacuna de visibilidade pós-efeito da Arena.**
-  - Pré-requisito: a continuação pós-efeito preservar `executed` do resultado primário quando uma ação posterior falha (`src/core/chain/afterResolution.ts:29`; consumidores em `src/core/chain/responseWindow.ts:185-187` e `src/core/chain/activation.ts:1382-1393`).
-  - Só depois entra qualquer etapa nova de `chain_link_resolution`, que muda o contrato de replay (`src/core/contracts/replay.ts:251,300`).
-- **Busca da IA:**
-  - `decision-broker:10`: escolhas de IA fora do broker recalculadas no playback; exige bump;
-  - `engine-bugs:5`: `card_moved`/`card_to_grave` aguardados por padrão; exige bump.
-- **Qualidade da IA:**
-  - regras por nome de carta em `botResponsePolicy.ts`;
-  - cobertura de handlers simulados;
-  - leitura de mãos ocultas no GameTree;
-  - modelo de batalha guloso.
-- **Escolha de modo da IA Arcanist.** A IA escolhe o modo pelo rótulo (`src/core/ai/arcanist/priorities.ts`). A preferência fica sob a chave `action_case_choice` e não chega à ativação por casos.
+- **Ranking de busca Bloomrot.** O recálculo da análise é redundante para a ordenação, mas atualiza o contexto que a resposta de Chain usa sem `game` (`src/core/ai/BloomrotStrategy.ts:535-541` e `:270-273`). Só pode sair se essa responsabilidade for realocada.
+- **Ciclos de camada (`engine-bugs:14`).** Só depois da baseline v1, como refatoração equivalente, com corpus e harness inalterados.
 
 ---
 

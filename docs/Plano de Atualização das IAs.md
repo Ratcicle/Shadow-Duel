@@ -4,6 +4,12 @@
 
 **Estado:** implementação e validação focada concluídas em 07/10/2026; limitações remanescentes registradas na seção 6.
 
+> **Nota (10/10/2026):** este plano cobre a parte **2.1 (arquitetura e paridade)** da fase 2. A continuação está na seção 2 do [roadmap](Roadmap%20Inicial%20Shadow%20Duel.md): harness de benchmark (2.2), limites conhecidos (2.3) e ajuste guiado por dados (2.4). As limitações da seção 6 foram reconferidas no código e estão na 2.3; a do Devourer foi resolvida na fase 1.5. O conteúdo abaixo é o registro histórico do plano. Algumas regras foram substituídas:
+> - a política de testes do `AGENTS.md` permite `npm test`;
+> - testes novos só entram a pedido do usuário;
+> - os artefatos de `.cache/ai-architecture/` não existem mais;
+> - os números de evidência não servem de referência para comparações na fase 2.
+
 **Referência inicial:** commit `2b8f1178a95b60a3513bf1fdc8c84bf323dc978d`.
 
 ## 1. Objetivo e limites

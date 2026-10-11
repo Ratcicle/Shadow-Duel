@@ -968,7 +968,7 @@ Nos testes de playback desta etapa, as políticas de IA movidas para `resolveAI`
   - Em `src/core/ai/miragebound/knowledge.ts`, `OASIS_RETURN_CASE_ID`/`OASIS_SHIFT_CASE_ID`; `src/core/ai/miragebound/targeting.ts` passa a usá-los, sem depender do rótulo traduzido.
   - Validação: `test/mirageboundOasisP1.test.ts`, os replays Miragebound e o Bot smoke com Miragebound.
   - **Executado (10/10/2026):** o teste existente de `chooseActionCase` em `test/mirageboundOasisP1.test.ts` passou a declarar a preferência por `preferredCaseIds`, o novo contrato.
-  - **Para a fase 2:** a IA Arcanist também escolhe casos pelo rótulo (`getLibraryChoiceNames`/`getMeetingChoiceNames` em `src/core/ai/arcanist/priorities.ts`). Em runtime, a preferência fica sob a chave `action_case_choice`, que não casa com o ID do efeito da ativação por casos, e por isso não é aplicada em nenhum idioma. A mudança de `:5` não altera esse comportamento.
+  - **Corrigido em 10/10/2026:** uma versão anterior desta nota dizia que a preferência de caso da IA Arcanist não chegava ao runtime. Estava errado. A estratégia resolve o caso na simulação, comparando com o texto inline em inglês, e entrega o ID estável em `decisions.cases[effect.id]` (`src/core/ai/ArcanistStrategy.ts:205-218`). O `AutoSelector` honra esse ID antes de pontuar candidatos (`src/core/AutoSelector.ts:333-344`). A escolha independe do idioma, e não há pendência.
 - [x] **`ui-i18n:6`**: o select do Laboratório passa a ser montado a partir de `getAvailableBotPresets()` (`src/core/bot/presets.ts`). Remover as `<option>` fixas de `index.html`.
   - `resolveLaboratoryBotPreset(value, available)` exportado de `src/ui/main/laboratoryController.ts`, com aviso na importação. A cópia do aviso segue D19.
 - [x] **`ui-i18n:7`**: `BotArena.dispose()` para, limpa `activeGame` e destrói o renderer, mantendo os analytics. Acrescentar `try/finally` no laço de `startArena` e `botArenaInstance?.dispose()` em `src/ui/main/botArenaController.ts`.
@@ -1162,7 +1162,7 @@ Todas são corrigidas só no teste, na Etapa 1.
 | `decision-broker:11`: fonte de decisão por assento, controladores no setup de replay | Fase 7 (Online) | Duelos normais são sempre player = humano, bot = IA |
 | `ui-i18n:11`: demais `innerHTML` com interpolação e CSP | Backlog, antes do Online | Hoje todos os dados vêm empacotados |
 | `ui-i18n:12`: mensagens de log do core em PT/EN fixo | Backlog | Migração grande (433 chamadas), feita por domínio |
-| `tests-ci:8`: branches mescladas e obsoletas, 14 assets sem referência (16 MB; decisão do diretor), `scripts/run_ai_architecture_corpus.ts`, `skills-lock.json`, bumps de dependências (vite 8 fica na fase 2) | Backlog | Não bloqueiam a 1.5; cada remoção exige aprovação |
+| `tests-ci:8`: branches mescladas e obsoletas, 14 assets sem referência (16 MB; decisão do diretor), `skills-lock.json`, bumps de dependências (vite 8, fora das frentes de IA) | Backlog | Não bloqueiam a 1.5; cada remoção exige aprovação |
 | `createRuntimeGame` estrito por padrão (`test/helpers/game.ts:51`) | Depois do CI verde, medido no CI | Só é mensurável com a suíte global |
 | Regras por nome de carta em `botResponsePolicy.ts:108,213,224,241,269` | Fase 2 (IA) | Qualidade da IA, não determinismo |
 | Lacuna de visibilidade pós-efeito da Arena e `afterResolution.ts:29` (`executed`) | Fase 2 (harness) | A notificação nova toca o contrato de replay; a correção de `executed` vem antes dela |
