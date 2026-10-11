@@ -2,9 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  BACKROW_REACTION_SEVERITY,
   COMPARISON_SCHEMA,
   COMPARISON_SCHEMA_VERSION,
   DUELS_FILE,
+  FAILED_MARK_PREFIX,
   GUARD_COUNTERS,
   GUARD_FLOOR,
   HEADER_FILE,
@@ -39,6 +41,7 @@ import {
   type RunEnd,
   type RunHeader,
   type RunIdentity,
+  type Seat,
 } from "./benchmark/schema.js";
 import {
   DRAW_POINTS,
@@ -167,6 +170,8 @@ export interface ValidationReport {
   /** Cases refused by the effective profile and delay checks (config_drift). */
   configDrift: Array<{ caseId: string; message: string | null }>;
   crossCheckFailures: Array<{ caseId: string; diffs: CrossCheckDiff[] }>;
+  /** Seats whose severities without FAILED_MARK_PREFIX do not add up to planning.mismatches. */
+  severitySumViolations: Array<{ caseId: string; seat: Seat; mismatches: number; severities: number }>;
   mathRandomCases: string[];
   identityChangedDuringRun: boolean | null;
 }
@@ -233,7 +238,10 @@ export interface PresetDiagnostics {
     rate: Interval | null;
     rateExcludingNotExecuted: Interval | null;
   };
+  /** Severities of the divergences; they add up to divergence.mismatches. */
   mismatchBySeverity: Counter;
+  /** FAILED_MARK_PREFIX keys: marks on failed executions, outside the divergences. */
+  failureMarks: Counter;
   mismatchByPath: Counter;
   terminations: Counter;
   unsupported: { tlsBranches: number; tlsByFamily: Counter; tlsByMarker: Counter; beamGreedyByFamily: Counter; beamGreedyByMarker: Counter };
@@ -313,6 +321,11 @@ function guardLimits(config: RunConfig): Record<GuardCounterName, number> {
   return { decisions: config.stallGuard.decisionsPerTurn, actions: config.stallGuard.actionsPerTurn, progress: config.stallGuard.progressPerTurn };
 }
 
+/** A mismatchBySeverity key that marks a failed comparison; it never counts as a divergence. */
+function isFailureMark(key: string): boolean {
+  return key.startsWith(FAILED_MARK_PREFIX);
+}
+
 function validate(run: LoadedRun, allowIncomplete: boolean): ValidationReport {
   const { header, records } = run;
   const planned = plannedCases(header);
@@ -389,12 +402,20 @@ function validate(run: LoadedRun, allowIncomplete: boolean): ValidationReport {
     .map(record => ({ caseId: record.caseId, message: record.outcome.message }));
   const crossCheckFailures = records.filter(record => record.crossCheck.status === "failed")
     .map(record => ({ caseId: record.caseId, diffs: record.crossCheck.diffs }));
+  const severitySumViolations = records.flatMap(record => SEATS.flatMap(seat => {
+    const planning = record.seatMetrics?.[seat].planning;
+    if (!planning) return [];
+    const severities = Object.entries(planning.mismatchBySeverity)
+      .reduce((sum, [key, count]) => isFailureMark(key) ? sum : sum + count, 0);
+    return severities === planning.mismatches ? [] : [{ caseId: record.caseId, seat, mismatches: planning.mismatches, severities }];
+  }));
   const mathRandomCases = records.filter(record => record.diag.mathRandomCalls > 0).map(record => record.caseId);
   const identityChangedDuringRun = run.runEnd ? run.runEnd.identityChangedDuringRun : null;
   const duplicates = run.source === "duels" ? run.duplicates : [];
   const ok = (allowIncomplete || missing.length === 0) && !duplicates.length && !seedMismatches.length &&
     !startAlternation.violations.length && !rngSymmetryViolations.length && !beamProfileViolations.length &&
-    !configDrift.length && !crossCheckFailures.length && !mathRandomCases.length && identityChangedDuringRun !== true;
+    !configDrift.length && !crossCheckFailures.length && !severitySumViolations.length && !mathRandomCases.length &&
+    identityChangedDuringRun !== true;
   return {
     ok,
     plannedCases: planned.length,
@@ -408,6 +429,7 @@ function validate(run: LoadedRun, allowIncomplete: boolean): ValidationReport {
     beamProfileViolations,
     configDrift,
     crossCheckFailures,
+    severitySumViolations,
     mathRandomCases,
     identityChangedDuringRun,
   };
@@ -504,7 +526,7 @@ function emptyDiagnostics(): PresetDiagnostics {
     duels: 0,
     turns: distribution([]),
     divergence: { comparisons: 0, mismatches: 0, failedNotExecuted: 0, failedExecutedRejected: 0, rate: null, rateExcludingNotExecuted: null },
-    mismatchBySeverity: {}, mismatchByPath: {}, terminations: {},
+    mismatchBySeverity: {}, failureMarks: {}, mismatchByPath: {}, terminations: {},
     unsupported: { tlsBranches: 0, tlsByFamily: {}, tlsByMarker: {}, beamGreedyByFamily: {}, beamGreedyByMarker: {} },
     failedActions: { attempts: 0, failed: 0, blocked: 0, byClass: {}, byCode: {}, blockedByCode: {} },
     nodes: { tls: 0, searches: 0, tlsPerSearch: null, beamGreedySimulations: 0, beamGreedySimulationsPerDecision: null },
@@ -531,7 +553,9 @@ function presetDiagnostics(preset: string, records: readonly DuelRecordV1[]): Pr
       result.divergence.mismatches += planning.mismatches;
       result.divergence.failedNotExecuted += planning.failed.notExecuted;
       result.divergence.failedExecutedRejected += planning.failed.executedRejected;
-      mergeCounter(result.mismatchBySeverity, planning.mismatchBySeverity);
+      for (const [key, count] of Object.entries(planning.mismatchBySeverity)) {
+        increment(isFailureMark(key) ? result.failureMarks : result.mismatchBySeverity, key, count);
+      }
       mergeCounter(result.mismatchByPath, planning.mismatchByPath);
       mergeCounter(result.terminations, planning.terminations);
       result.unsupported.tlsBranches += metrics.unsupported.tlsBranches;
@@ -562,7 +586,7 @@ function presetDiagnostics(preset: string, records: readonly DuelRecordV1[]): Pr
     divergence.comparisons - divergence.failedNotExecuted));
   result.nodes.tlsPerSearch = roundOrNull(ratio(result.nodes.tls, result.nodes.searches), 3);
   result.nodes.beamGreedySimulationsPerDecision = roundOrNull(ratio(result.nodes.beamGreedySimulations, result.decisions.mainPhase), 3);
-  for (const key of ["mismatchBySeverity", "mismatchByPath", "terminations", "mainPhaseExits", "plannerProfiles"] as const) {
+  for (const key of ["mismatchBySeverity", "failureMarks", "mismatchByPath", "terminations", "mainPhaseExits", "plannerProfiles"] as const) {
     result[key] = sortedCounter(result[key]);
   }
   for (const key of ["tlsByFamily", "tlsByMarker", "beamGreedyByFamily", "beamGreedyByMarker"] as const) {
@@ -832,6 +856,7 @@ export function renderSummaryMarkdown(summary: BenchmarkSummary): string {
     `| Perfil de beam | ${validation.beamProfileViolations.length ? `${validation.beamProfileViolations.length} divergências` : "ok"} |`,
     `| Perfil e delays efetivos | ${validation.configDrift.length ? `${validation.configDrift.length} casos com deriva` : "ok"} |`,
     `| Cross-check com o DuelTracker | ${validation.crossCheckFailures.length ? `${validation.crossCheckFailures.length} falhas` : "ok"} |`,
+    `| Severidades somam as divergências | ${validation.severitySumViolations.length ? `${validation.severitySumViolations.length} assentos com outra soma` : "ok"} |`,
     `| Math.random no duelo | ${validation.mathRandomCases.length ? `${validation.mathRandomCases.length} casos` : "0"} |`,
     `| Identidade estável | ${validation.identityChangedDuringRun === null ? "não verificada" : validation.identityChangedDuringRun ? "mudou" : "ok"} |`,
     "",
@@ -844,6 +869,7 @@ export function renderSummaryMarkdown(summary: BenchmarkSummary): string {
     ...validation.beamProfileViolations.map(entry => `beam: ${entry.caseId} (${entry.beam}, esperado ${entry.expected})`),
     ...validation.configDrift.map(entry => `deriva de configuração: ${entry.caseId} (${entry.message ?? "—"})`),
     ...validation.crossCheckFailures.map(entry => `cross-check: ${entry.caseId} (${entry.diffs.map(diff => `${diff.seat}.${diff.field} ${diff.observer}≠${diff.tracker}`).join(", ")})`),
+    ...validation.severitySumViolations.map(entry => `severidades: ${entry.caseId} ${entry.seat} (soma ${entry.severities} ≠ ${entry.mismatches} divergências)`),
     ...validation.mathRandomCases.map(caseId => `Math.random: ${caseId}`),
   ];
   if (violations.length) lines.push(...violations.map(entry => `- ${entry}`), "");
@@ -906,14 +932,22 @@ export function renderSummaryMarkdown(summary: BenchmarkSummary): string {
       `${numberText(diagnostics.nodes.beamGreedySimulationsPerDecision)} | ${diagnostics.decisions.mainPhase} (${diagnostics.decisions.measured}) | ` +
       `${diagnostics.guardPeaks.decisions}/${diagnostics.guardPeaks.actions}/${diagnostics.guardPeaks.progress} |`);
   }
-  lines.push("", "| Preset | Motivos de divergência | Caminhos dos diffs | Branches não suportados (TLS, por família) | Falhas por classe | Saídas da Main Phase | Perfis do planner |",
-    "| --- | --- | --- | --- | --- | --- | --- |");
+  lines.push("", "Os motivos e as reações de backrow do oponente somam as divergências. Uma reação de backrow é a divergência só no oponente " +
+      "em que uma carta virada para baixo da backrow dele saiu da zona ou foi revelada.", "",
+    "| Preset | Motivos de divergência | Reações de backrow do oponente | Caminhos dos diffs | Branches não suportados (TLS, por família) | Falhas por classe | Saídas da Main Phase | Perfis do planner |",
+    "| --- | --- | ---: | --- | --- | --- | --- | --- |");
   for (const [preset, diagnostics] of Object.entries(summary.diagnostics?.byPreset ?? {})) {
     if (!diagnostics.duels) continue;
-    lines.push(`| ${cell(preset)} | ${cell(counterText(diagnostics.mismatchBySeverity))} | ${cell(counterText(diagnostics.mismatchByPath, 4))} | ` +
+    const { [BACKROW_REACTION_SEVERITY]: backrowReactions = 0, ...otherSeverities } = diagnostics.mismatchBySeverity;
+    lines.push(`| ${cell(preset)} | ${cell(counterText(otherSeverities))} | ${backrowReactions} | ${cell(counterText(diagnostics.mismatchByPath, 4))} | ` +
       `${cell(counterText(diagnostics.unsupported.tlsByFamily))} | ${cell(counterText(diagnostics.failedActions.byClass))} | ` +
       `${cell(counterText(diagnostics.mainPhaseExits))} | ${cell(counterText(diagnostics.plannerProfiles, 3))} |`);
   }
+  const failureMarks = Object.entries(summary.diagnostics?.byPreset ?? {})
+    .filter(([, diagnostics]) => diagnostics.duels && Object.keys(diagnostics.failureMarks).length)
+    .map(([preset, diagnostics]) => `${preset} (${counterText(diagnostics.failureMarks)})`);
+  lines.push("", `Marcas em falhas de execução (prefixo \`${FAILED_MARK_PREFIX}\`, fora da soma das divergências): ` +
+    `${failureMarks.length ? failureMarks.join("; ") : "nenhuma"}.`);
   const presetMetrics = summary.presetMetrics;
   if (presetMetrics && (presetMetrics["techzero-combo"] || presetMetrics.lethal)) {
     lines.push("", "## Métricas opcionais por preset", "");

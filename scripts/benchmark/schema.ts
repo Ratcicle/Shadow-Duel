@@ -489,6 +489,17 @@ export interface ProfilesRecord {
   planner: { player: Counter; bot: Counter };
 }
 
+// Keys of planning.mismatchBySeverity (phase 2.3 plan, E4). A key without
+// FAILED_MARK_PREFIX is the severity of one divergent comparison, so those keys
+// add up to planning.mismatches, an invariant the analyzer checks. A key with
+// the prefix marks a failed comparison (planning.failed), whose reason stays
+// action_failed, and stays outside that sum.
+export const FAILED_MARK_PREFIX = "failed:";
+/** Only the opponent diverged, and a card of its face-down backrow left its zone or was revealed. */
+export const BACKROW_REACTION_SEVERITY = "opponent_backrow_reaction";
+/** The planned action failed while a card of the opponent's face-down backrow left its zone or was revealed. */
+export const FAILED_BACKROW_REACTION_KEY = `${FAILED_MARK_PREFIX}${BACKROW_REACTION_SEVERITY}`;
+
 export interface SeatMetrics {
   preset: string;
   decisions: { mainPhase: number; measured: number; broker: number };
@@ -499,6 +510,7 @@ export interface SeatMetrics {
     matches: number;
     mismatches: number;
     failed: { notExecuted: number; executedRejected: number };
+    /** Severities of the divergent comparisons, plus FAILED_MARK_PREFIX marks outside their sum. */
     mismatchBySeverity: Counter;
     mismatchByPath: Counter;
     terminations: Counter;

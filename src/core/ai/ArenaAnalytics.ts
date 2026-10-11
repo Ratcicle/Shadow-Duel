@@ -7,7 +7,7 @@ import type {
   ChainLinkResolutionOutcome,
   EventCard,
 } from "../contracts/events.js";
-import type { TurnLineTerminationReason } from "../contracts/ai.js";
+import type { PlanningDiffSeverity, TurnLineTerminationReason } from "../contracts/ai.js";
 
 
 type Seat = "player" | "bot";
@@ -130,6 +130,7 @@ export interface ArenaProgressEntry {
   plannerReason?: string | null;
   mismatchReason?: string;
   diffSeverity?: string;
+  opponentBackrowReacted?: boolean;
   matched?: boolean;
   diffs?: unknown[];
 }
@@ -585,6 +586,14 @@ function planningActionLabel(action: PlanningAction | string | null = null) {
     action.index;
   return card != null ? `${type}:${card}` : type;
 }
+
+/**
+ * A failed plan execution keeps its reason, action_failed. This extra reason
+ * marks the failures in which the opponent responded from its face-down
+ * backrow; the benchmark harness records the same key.
+ */
+const BACKROW_REACTION_FAILURE_REASON =
+  "failed:opponent_backrow_reaction" satisfies `failed:${PlanningDiffSeverity}`;
 
 function createPlanningStats() {
   return {
@@ -2731,6 +2740,9 @@ export class DuelTracker {
       if (entry.stage === "ai_plan_execution_failed") {
         planning.failedExecutions += 1;
         addCount(planning.mismatchReasons, entry.mismatchReason || "action_failed");
+        if (entry.opponentBackrowReacted === true) {
+          addCount(planning.mismatchReasons, BACKROW_REACTION_FAILURE_REASON);
+        }
       } else if (entry.matched) {
         planning.executionMatches += 1;
       } else {

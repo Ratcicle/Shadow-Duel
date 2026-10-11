@@ -349,6 +349,11 @@ export interface PlanningStateSummary {
   opponent: PlanningPlayerSummary;
 }
 
+/**
+ * The opponent_* severities mean that only the opponent diverged:
+ * opponent_backrow_reaction when a card of its face-down backrow responded,
+ * opponent_state_mismatch otherwise.
+ */
 export type PlanningDiffSeverity =
   | "none"
   | "minor"
@@ -358,7 +363,8 @@ export type PlanningDiffSeverity =
   | "counter_mismatch"
   | "blueprint_mismatch"
   | "hand_deck_mismatch"
-  | "opponent_reaction_mismatch";
+  | "opponent_backrow_reaction"
+  | "opponent_state_mismatch";
 
 export interface PlanningSummaryDiff {
   path: string;

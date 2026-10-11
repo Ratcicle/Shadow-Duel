@@ -13,6 +13,7 @@ import type { SummonMethod } from "../../src/core/contracts/summon.js";
 import {
   DUEL_RECORD_VERSION,
   DUEL_SCHEMA,
+  FAILED_BACKROW_REACTION_KEY,
   GUARD_STAGE_RING_SIZE,
   MISMATCH_SAMPLE_LIMIT,
   SEATS,
@@ -482,6 +483,8 @@ export class DuelObserver {
       if (seat.executedSinceDecision) planning.failed.executedRejected += 1;
       else planning.failed.notExecuted += 1;
       severity = textOrNull(read(details, "mismatchReason")) ?? "action_failed";
+      // Same mark as the tracker's: a declared failed: key, outside the severities.
+      if (read(details, "opponentBackrowReacted") === true) increment(planning.mismatchBySeverity, FAILED_BACKROW_REACTION_KEY);
     } else if (read(details, "matched")) {
       planning.matches += 1;
       return;

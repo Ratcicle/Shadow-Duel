@@ -6,6 +6,7 @@ import {
   diffPlanningSummaries,
   fingerprintAction,
   isMeaningfulPlanningDiff,
+  opponentBackrowReacted,
   summarizePlanningState,
 } from "../ai/common/planningDiagnostics.js";
 import {
@@ -390,6 +391,9 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
         matched: !!actionSuccess && !meaningfulDiff,
         diffSeverity: actionSuccess ? diff.severity : "action_failed",
         mismatchReason: actionSuccess ? diff.severity : "action_failed",
+        // The severity's backrow check, also for a failed action, whose reason
+        // stays action_failed.
+        opponentBackrowReacted: opponentBackrowReacted(expectedSummary, actualSummary),
         diffs: compactPlanningDiffs(diff.diffs || [], 6),
         plannedMilestones: (pendingPlannerTrace.milestones || []).slice(0, 8),
         plannerReason: pendingPlannerTrace.reason || null,

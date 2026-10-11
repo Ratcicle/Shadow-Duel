@@ -25,6 +25,10 @@ class CaptureError extends Error {
   }
 }
 
+function guardOperation(finalizing: boolean): string {
+  return finalizing ? "phase_guard" : "action_guard";
+}
+
 function errorMessage(error: unknown): string {
   try {
     let cause = error;
@@ -95,10 +99,17 @@ export class MainPhaseSession {
     this.finalizationOutcome = "invalidated";
   }
 
+  /**
+   * The guard label covers only the synchronous check. A throw keeps it for the
+   * caller's catch; a normal return restores the operation that asked for it.
+   */
   private actionGuard(finalizing = false) {
-    this.operation = finalizing ? "phase_guard" : "action_guard";
-    return this.game.canStartAction({ actor: this.bot, kind: finalizing ? "phase_change" : "bot_main_action",
+    const previous = this.operation;
+    this.operation = guardOperation(finalizing);
+    const guard = this.game.canStartAction({ actor: this.bot, kind: finalizing ? "phase_change" : "bot_main_action",
       phaseReq: ["main1", "main2"], silent: true });
+    this.operation = previous;
+    return guard;
   }
 
   async waitUntilReady(finalizing = false): Promise<boolean> {
@@ -110,7 +121,7 @@ export class MainPhaseSession {
         this.stopReason ??= "guard_blocked";
         this.status = "failed";
         this.finalizationOutcome = "guard_blocked";
-        this.failure("guard_blocked", this.operation, new Error(`${guard.code}: ${guard.reason}`));
+        this.failure("guard_blocked", guardOperation(finalizing), new Error(`${guard.code}: ${guard.reason}`));
         return false;
       }
       // A human selection/Chain may take arbitrarily long. Waiting consumes no
@@ -167,10 +178,17 @@ export class MainPhaseSession {
     const accepted = await this.bot.executeMainPhaseAction(this.game, action);
     if (accepted) this.counts.accepted++;
     else this.counts.rejected++;
+    // A step keeps its label only while it runs: an exception leaves it for
+    // plan()'s catch, and every normal return hands the session back to planning.
+    this.operation = "planning";
     if (!this.active()) return accepted;
     // The legacy rejection refresh also recomputes passive state. Include its
     // completion in the observed outcome, rather than changing it after capture.
-    if (!accepted) { this.operation = "refresh_board"; await this.game.updateBoard(); }
+    if (!accepted) {
+      this.operation = "refresh_board";
+      await this.game.updateBoard();
+      this.operation = "planning";
+    }
     if (!await this.waitUntilReady()) return accepted;
     const changed = before !== this.capture();
     if (changed) this.counts.changes++;
