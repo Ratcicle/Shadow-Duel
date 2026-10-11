@@ -37,6 +37,18 @@ export interface VisibleBattleProjection {
   nodes: number;
 }
 
+/** Outcome of one attack; the caller applies destruction, LP and protection use. */
+export interface VisibleBattleStep {
+  attackerDestroyed: boolean;
+  targetDestroyed: boolean;
+  /** The once-per-turn battle protection prevented this destruction and is now used. */
+  attackerProtectionUsed: boolean;
+  targetProtectionUsed: boolean;
+  /** Battle damage taken by each player after prevention; a negative value heals. */
+  damageToAttackingPlayer: number;
+  damageToDefendingPlayer: number;
+}
+
 interface BattleNode {
   ownAlive: boolean[];
   opposingAlive: boolean[];
@@ -93,6 +105,63 @@ function uncertaintyReasons(self: VisibleBattlePlayer, opponent: VisibleBattlePl
   return [...reasons];
 }
 
+function isProtectedFromBattle(card: BattleCard, owner: Pick<VisibleBattlePlayer, "id">,
+  source: Pick<VisibleBattlePlayer, "id">, turnCounter: number): boolean {
+  return !card.isFacedown && (!!card.battleIndestructible || ("cannotBeDestroyedByBattle" in card && !!card.cannotBeDestroyedByBattle) ||
+    !!card.tempBattleIndestructible || hasSimulatedProtection(card, "battle_destruction", turnCounter,
+      { ownerId: owner.id, sourceOwnerId: source.id }));
+}
+
+/**
+ * One attack over public stats: battle destruction after immunities and the
+ * once-per-turn protection, then battle damage after prevention and healing.
+ * A missing target is a direct attack. `protectionUsed` is the state before it.
+ */
+export function resolveVisibleBattleStep(
+  attacker: BattleCard, target: BattleCard | null | undefined,
+  players: { attacking: Pick<VisibleBattlePlayer, "id">; defending: Pick<VisibleBattlePlayer, "id"> },
+  turnCounter: number, protectionUsed: { attacker: boolean; target: boolean },
+): VisibleBattleStep {
+  const step: VisibleBattleStep = {
+    attackerDestroyed: false, targetDestroyed: false,
+    attackerProtectionUsed: false, targetProtectionUsed: false,
+    damageToAttackingPlayer: 0, damageToDefendingPlayer: 0,
+  };
+  const destroy = (defending: boolean) => {
+    const card = defending ? target : attacker;
+    if (!card || isProtectedFromBattle(card, defending ? players.defending : players.attacking,
+      defending ? players.attacking : players.defending, turnCounter)) return;
+    if (!card.isFacedown && card.battleIndestructibleOncePerTurn &&
+        !(defending ? protectionUsed.target : protectionUsed.attacker)) {
+      if (defending) step.targetProtectionUsed = true;
+      else step.attackerProtectionUsed = true;
+      return;
+    }
+    if (defending) step.targetDestroyed = true;
+    else step.attackerDestroyed = true;
+  };
+  const inflict = (amount: number, defending: boolean, card?: BattleCard) => {
+    if (card && !card.isFacedown && card.preventsBattleDamageToController) return;
+    const damage = Math.max(0, amount) * (card && !card.isFacedown && card.battleDamageHealsControllerThisTurn ? -1 : 1);
+    if (defending) step.damageToDefendingPlayer = damage;
+    else step.damageToAttackingPlayer = damage;
+  };
+  const atk = Math.max(0, getEffectiveAtk(attacker));
+  if (!target) inflict(atk, true);
+  else {
+    const stat = getBattleStatForAttackTarget(target);
+    if (!target.isFacedown && target.position === "attack") {
+      if (atk > stat || atk === stat && atk > 0) destroy(true);
+      if (atk < stat || atk === stat && atk > 0) destroy(false);
+      if (atk > stat) inflict(atk - stat, true, target);
+      else if (atk < stat) inflict(stat - atk, false, attacker);
+    } else if (atk > stat) {
+      destroy(true); inflict(getPiercingDamage(attacker, atk, stat), true, target);
+    } else if (atk < stat) inflict(stat - atk, false, attacker);
+  }
+  return step;
+}
+
 /**
  * Bounded arithmetic projection over the public board. It does not resolve effects
  * or expose a second duel runtime; uncertain interactions suppress lethal claims.
@@ -124,25 +193,6 @@ export function evaluateVisibleBattle(
     const lost = node.ownAlive.filter(alive => !alive).length;
     return (lethal ? 1000 : 0) + ((opponent.lp || 0) - node.opposingLp) / 500 + destroyed * 3 -
       ((self.lp || 0) - node.ownLp) / 500 - lost * 4 - node.attacks.length * 0.01;
-  };
-  const protectedFromBattle = (card: BattleCard, owner: VisibleBattlePlayer, source: VisibleBattlePlayer): boolean =>
-    !card.isFacedown && (!!card.battleIndestructible || ("cannotBeDestroyedByBattle" in card && !!card.cannotBeDestroyedByBattle) ||
-      !!card.tempBattleIndestructible || hasSimulatedProtection(card, "battle_destruction", turnCounter,
-        { ownerId: owner.id, sourceOwnerId: source.id }));
-  const destroy = (node: BattleNode, index: number, defending: boolean) => {
-    const card = (defending ? opposing : own)[index];
-    if (!card || protectedFromBattle(card, defending ? opponent : self, defending ? self : opponent)) return;
-    const used = defending ? node.opposingProtectionUsed : node.ownProtectionUsed;
-    if (!card.isFacedown && card.battleIndestructibleOncePerTurn && !used[index]) {
-      used[index] = true; return;
-    }
-    (defending ? node.opposingAlive : node.ownAlive)[index] = false;
-  };
-  const inflict = (node: BattleNode, amount: number, defending: boolean, card?: BattleCard) => {
-    if (card && !card.isFacedown && card.preventsBattleDamageToController) return;
-    const damage = Math.max(0, amount) * (card && !card.isFacedown && card.battleDamageHealsControllerThisTurn ? -1 : 1);
-    if (defending) node.opposingLp = Math.max(0, node.opposingLp - damage);
-    else node.ownLp = Math.max(0, node.ownLp - damage);
   };
   const expand = (node: BattleNode): BattleNode[] => {
     if (node.ownLp <= 0 || node.opposingLp <= 0 || turnCounter === 1) return [];
@@ -184,19 +234,19 @@ export function evaluateVisibleBattle(
             ...(target ? battleUncertainties : [])])] };
         next.used[index] = used + 1;
         if (target?.instanceId != null) next.attackedTargets[index]?.add(target.instanceId);
-        const atk = Math.max(0, getEffectiveAtk(card));
-        if (!target || targetIndex == null) inflict(next, atk, true);
-        else {
-          const stat = getBattleStatForAttackTarget(target);
-          if (!target.isFacedown && target.position === "attack") {
-            if (atk > stat || atk === stat && atk > 0) destroy(next, targetIndex, true);
-            if (atk < stat || atk === stat && atk > 0) destroy(next, index, false);
-            if (atk > stat) inflict(next, atk - stat, true, target);
-            else if (atk < stat) inflict(next, stat - atk, false, card);
-          } else if (atk > stat) {
-            destroy(next, targetIndex, true); inflict(next, getPiercingDamage(card, atk, stat), true, target);
-          } else if (atk < stat) inflict(next, stat - atk, false, card);
+        const step = resolveVisibleBattleStep(card, target, { attacking: self, defending: opponent }, turnCounter, {
+          attacker: !!next.ownProtectionUsed[index],
+          target: targetIndex != null && !!next.opposingProtectionUsed[targetIndex],
+        });
+        if (step.attackerProtectionUsed) next.ownProtectionUsed[index] = true;
+        if (step.attackerDestroyed) next.ownAlive[index] = false;
+        if (targetIndex != null) {
+          if (step.targetProtectionUsed) next.opposingProtectionUsed[targetIndex] = true;
+          if (step.targetDestroyed) next.opposingAlive[targetIndex] = false;
         }
+        // Only nodes with positive LP expand, so a player without damage keeps its LP.
+        next.ownLp = Math.max(0, next.ownLp - step.damageToAttackingPlayer);
+        next.opposingLp = Math.max(0, next.opposingLp - step.damageToDefendingPlayer);
         if (next.ownAlive[index] !== node.ownAlive[index] ||
             targetIndex != null && next.opposingAlive[targetIndex] !== node.opposingAlive[targetIndex]) {
           next.uncertainties = [...new Set([...next.uncertainties, ...destructionUncertainties])];
