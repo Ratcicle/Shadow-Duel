@@ -70,6 +70,7 @@ Blocos: preparação e instrumento (L00–L01), defeito e extrações (L02–L03
 | Lote | Commit | Medição | Resultado |
 | --- | --- | --- | --- |
 | L00 | `f4f0d4f` | R0 N = 5 (`canonical-f4f0d4f-21712b08`, `deterministicDigest` `276cdf30…`); ponte R0 N = 2 (`1a1dafdd…`); controles | R0 idêntico à v1 nos 405 casos em comum (única diferença de identidade: o commit). Controles idênticos aos da v1 (corpus `3d54efc8…`). Ponte sem erros nem defeitos. O R0 traz 1 defeito, o caso já conhecido `bloomrot:void:2`. Valores v27 congelados em `.cache/plan23-probes/v27-envelope.json` |
+| L01 | `c768440` | N = 5 (`canonical-c768440-21712b08`, `deterministicDigest` `c986ee1c…`); controles | Registros idênticos ao R0 nos 405 casos com os campos de divergência ignorados; vencedores, turnos, aberturas e decisões iguais. Vocabulário novo esperado: `opponent_backrow_reaction` (52 no N = 5), `opponent_state_mismatch` e `failed:opponent_backrow_reaction` (13). Taxa de divergência menor só onde havia artefatos de contador zerado (Arcanist 0,070 → 0,046; Bloomrot 0,155 → 0,102). O defeito `bloomrot:void:2` continua e passa de `operation: 'action_guard'` a `'planning'`. Controles: corpus idêntico; nos smokes só mudam motivos e contagens de divergência do planejamento (3 artefatos de contador em `spellTrap`, antes `host_equip_mismatch`, somem) |
 
 ## Objetivo e limites
 
@@ -300,12 +301,12 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 
 **Tarefas**
 
-- [ ] `src/core/bot/mainPhaseSession.ts:98-99`: `actionGuard()` aplica `phase_guard`/`action_guard` só durante `canStartAction` e restaura o rótulo anterior no retorno normal. `waitUntilReady` passa o rótulo explícito para `failure`. `execute()` volta a `planning` em cada retorno normal. Nenhum dos dois usa `finally`, para que uma exceção do executor continue rotulada `execute_action` (asserção de `test/ai/mainPhaseRecovery.test.ts`).
-- [ ] `summarizeCounters` (`src/core/ai/common/planningDiagnostics.ts:152`): ignorar contadores com valor 0, como o runtime. Não mexer no hash do TurnLineSearch nem em `setCounterValue`; a representação na simulação é corrigida em L08.
-- [ ] Severidade `opponent_backrow_reaction` em `PlanningDiffSeverity` (`src/core/contracts/ai.ts`), atribuída por um helper genérico chamado em `classifyDiff`. Critério: uma carta do oponente que estava virada para baixo em spellTrap/fieldSpell no estado esperado e no real saiu da zona ou ficou com a face para cima. O helper usa só `instanceId` e `faceDown`, que a máscara pública já preserva.
-- [ ] Rótulo residual renomeado para `opponent_state_mismatch` (D8).
-- [ ] O mesmo helper roda no `comparePayload` do controlador, inclusive em `action_failed`, cujo motivo continua `action_failed`. A marca entra no ArenaAnalytics e no observer do harness com a chave declarada `failed:opponent_backrow_reaction` (E4). No observer, o ramo de falha (`scripts/benchmark/observer.ts:476-491`) passa a incrementar só essa chave; os contadores `planning.failed` não mudam. `DUEL_RECORD_VERSION` não muda.
-- [ ] `summarize` (`scripts/analyze_benchmark.ts`) separa as reações de backrow do resto e mostra o prefixo `failed:` numa linha própria, fora da soma de divergências. Ele confere o invariante de E4: a soma das chaves de `mismatchBySeverity` sem o prefixo `failed:` é igual a `planning.mismatches`. O esquema documenta o prefixo e o invariante.
+- [x] `src/core/bot/mainPhaseSession.ts:98-99`: `actionGuard()` aplica `phase_guard`/`action_guard` só durante `canStartAction` e restaura o rótulo anterior no retorno normal. `waitUntilReady` passa o rótulo explícito para `failure`. `execute()` volta a `planning` em cada retorno normal. Nenhum dos dois usa `finally`, para que uma exceção do executor continue rotulada `execute_action` (asserção de `test/ai/mainPhaseRecovery.test.ts`).
+- [x] `summarizeCounters` (`src/core/ai/common/planningDiagnostics.ts:152`): ignorar contadores com valor 0, como o runtime. Não mexer no hash do TurnLineSearch nem em `setCounterValue`; a representação na simulação é corrigida em L08.
+- [x] Severidade `opponent_backrow_reaction` em `PlanningDiffSeverity` (`src/core/contracts/ai.ts`), atribuída por um helper genérico chamado em `classifyDiff`. Critério: uma carta do oponente que estava virada para baixo em spellTrap/fieldSpell no estado esperado e no real saiu da zona ou ficou com a face para cima. O helper usa só `instanceId` e `faceDown`, que a máscara pública já preserva.
+- [x] Rótulo residual renomeado para `opponent_state_mismatch` (D8).
+- [x] O mesmo helper roda no `comparePayload` do controlador, inclusive em `action_failed`, cujo motivo continua `action_failed`. A marca entra no ArenaAnalytics e no observer do harness com a chave declarada `failed:opponent_backrow_reaction` (E4). No observer, o ramo de falha (`scripts/benchmark/observer.ts:476-491`) passa a incrementar só essa chave; os contadores `planning.failed` não mudam. `DUEL_RECORD_VERSION` não muda.
+- [x] `summarize` (`scripts/analyze_benchmark.ts`) separa as reações de backrow do resto e mostra o prefixo `failed:` numa linha própria, fora da soma de divergências. Ele confere o invariante de E4: a soma das chaves de `mismatchBySeverity` sem o prefixo `failed:` é igual a `planning.mismatches`. O esquema documenta o prefixo e o invariante.
 
 **Validação**
 
