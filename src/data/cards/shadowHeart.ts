@@ -234,6 +234,7 @@ export const shadowHeartCards = [
         requireZone: "field",
         requireFaceup: true,
         requireSelfAsAttacker: true,
+        requireDefender: true,
         promptUser: false,
         actions: [
           {

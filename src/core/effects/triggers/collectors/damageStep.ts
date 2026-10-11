@@ -144,6 +144,9 @@ async function collectDamageStepEvent<Name extends DamageCollectorEventName>(
         ) {
           continue;
         }
+        if (effect.requireDefender === true && !payload.defender) {
+          continue;
+        }
         if (
           effect.requireSelfAsDefender === true &&
           payload.defender !== card
