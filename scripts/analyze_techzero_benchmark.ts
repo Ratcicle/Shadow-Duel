@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
+import { drawPointsText, drawValuePt, scorePoints } from "./benchmark/statistics.js";
 
 type Seat = "player" | "bot";
 type Variant = "specialized" | "fallback";
@@ -123,12 +124,17 @@ function parseReports(value: unknown, variant: Variant) {
 
 function newSeatSummary() {
   return { games: 0, normalGames: 0, wins: 0, losses: 0, draws: 0, maxTurns: 0, timeout: 0,
-    normalWinRatePercent: null as number | null };
+    normalWinRatePercent: null as number | null,
+    // H3: LP zero plus the turn limit decided by remaining LP; timeout and error stay out (D4).
+    decidedGames: 0, decidedWins: 0, decidedLosses: 0, decidedDraws: 0, winRatePercent: null as number | null };
 }
 function newSummary(isMirror: boolean) {
   return {
     duels: 0, isMirror, normalWinRatePercent: null as number | null,
+    winRatePercent: null as number | null, maxTurnsFraction: null as number | null,
     outcomes: { lpZero: { games: 0, wins: isMirror ? null : 0, losses: isMirror ? null : 0, draws: 0,
+      winsBySeat: { player: 0, bot: 0 } },
+    decided: { games: 0, wins: isMirror ? null : 0, losses: isMirror ? null : 0, draws: 0,
       winsBySeat: { player: 0, bot: 0 } }, draws: 0, maxTurns: 0, timeout: 0, error: 0, cancelled: 0, other: counter() },
     seats: { player: newSeatSummary(), bot: newSeatSummary() },
     decisions: { count: 0, totalMs: 0, meanMs: null as number | null },
@@ -179,6 +185,20 @@ function addCase(summary: Summary, entry: ParsedCase): void {
     case "cancelled": summary.outcomes.cancelled += 1; break;
     default: increment(summary.outcomes.other, endReason);
   }
+  // H3: the turn limit is decided by remaining LP, as the Arena already does.
+  const decided = endReason === "lp_zero" || endReason === "max_turns";
+  if (decided) {
+    const outcome = summary.outcomes.decided;
+    outcome.games += 1;
+    if (winner === "draw") outcome.draws += 1;
+    else {
+      outcome.winsBySeat[winner] += 1;
+      if (!summary.isMirror) {
+        if (winner === entry.techZeroSeat) outcome.wins = (outcome.wins ?? 0) + 1;
+        else outcome.losses = (outcome.losses ?? 0) + 1;
+      }
+    }
+  }
   for (const owner of controlled) {
     const stats = summary.seats[owner];
     stats.games += 1;
@@ -187,6 +207,12 @@ function addCase(summary: Summary, entry: ParsedCase): void {
       if (winner === owner) stats.wins += 1;
       else if (winner === "draw") stats.draws += 1;
       else stats.losses += 1;
+    }
+    if (decided) {
+      stats.decidedGames += 1;
+      if (winner === owner) stats.decidedWins += 1;
+      else if (winner === "draw") stats.decidedDraws += 1;
+      else stats.decidedLosses += 1;
     }
     if (endReason === "max_turns") stats.maxTurns += 1;
     if (endReason === "timeout") stats.timeout += 1;
@@ -264,9 +290,13 @@ function summarize(cases: readonly ParsedCase[], opponent: string): Summary {
   const summary = newSummary(opponent === "techzero");
   for (const entry of cases) if (entry.opponent === opponent) addCase(summary, entry);
   summary.normalWinRatePercent = percentage(summary.outcomes.lpZero.wins, summary.outcomes.lpZero.games);
+  const decided = summary.outcomes.decided;
+  summary.winRatePercent = percentage(decided.wins === null ? null : scorePoints(decided.wins, decided.draws), decided.games);
+  summary.maxTurnsFraction = decided.games ? Math.round(summary.outcomes.maxTurns * 10000 / decided.games) / 10000 : null;
   for (const owner of ["player", "bot"] as const) {
     const stats = summary.seats[owner];
     stats.normalWinRatePercent = percentage(stats.wins, stats.normalGames);
+    stats.winRatePercent = percentage(scorePoints(stats.decidedWins, stats.decidedDraws), stats.decidedGames);
   }
   if (summary.decisions.count) summary.decisions.meanMs = summary.decisions.totalMs / summary.decisions.count;
   if (summary.runtime.measuredDuels) summary.runtime.meanMs = summary.runtime.totalMs / summary.runtime.measuredDuels;
@@ -298,7 +328,9 @@ export function analyzeReports(specializedInput: unknown, fallbackInput: unknown
       const second = summarize(fallback.cases, opponent);
       return { opponent, specialized: first, fallback: second,
         normalWinRateDeltaPoints: first.normalWinRatePercent === null || second.normalWinRatePercent === null ? null :
-          Math.round((first.normalWinRatePercent - second.normalWinRatePercent) * 100) / 100 };
+          Math.round((first.normalWinRatePercent - second.normalWinRatePercent) * 100) / 100,
+        winRateDeltaPoints: first.winRatePercent === null || second.winRatePercent === null ? null :
+          Math.round((first.winRatePercent - second.winRatePercent) * 100) / 100 };
     }),
   };
 }
@@ -306,19 +338,21 @@ export function analyzeReports(specializedInput: unknown, fallbackInput: unknown
 type Analysis = ReturnType<typeof analyzeReports>;
 function cell(value: string | number | null): string { return value === null ? "—" : String(value).replaceAll("|", "\\|").replaceAll("\n", " "); }
 function decimal(value: number | null): string { return value === null ? "—" : value.toFixed(2); }
+function fraction(value: number | null): string { return value === null ? "—" : value.toFixed(4); }
 function labels(counts: Counter): string { return Object.entries(counts).filter(([, count]) => count > 0).map(([name, count]) => `${name}: ${count}`).join("; ") || "—"; }
 
 export function renderMarkdown(analysis: Analysis): string {
   const lines = ["# Benchmark Tech-Zero", "",
     `${analysis.validation.pairedCases} cenários correspondentes por variante; seeds, assentos e aberturas idênticos. Seed base: ${analysis.validation.randomSeed}.`, "",
     "## Resultados por oponente", "",
-    "Vitórias normais exigem término por LP. Limite de turnos e timeout ficam separados, mesmo quando a Arena atribui vencedor por LP restante. A taxa usa somente partidas terminadas por LP; os denominadores por assento aparecem na tabela. No espelho, P/B/E indica vitórias de player/bot/empates; não há taxa do arquétipo.", "",
-    "| Oponente | Variante | n | LP: V/D/E ou P/B/E | Taxa LP | Player: V/n LP | Bot: V/n LP | Empates totais | Limite | Timeout | Erro |",
-    "| --- | --- | ---: | --- | ---: | --- | --- | ---: | ---: | ---: | ---: |"];
+    `A taxa principal (Taxa H3) usa as partidas decididas: término por PV zerado e limite de turnos decidido pelos PV restantes; PV iguais no limite valem ${drawValuePt()}, (V + ${drawPointsText("pt-BR")}·E)/decididas. Timeout e erro ficam fora da taxa (D4) e aparecem em colunas próprias. Limite/decididos é a fração das partidas decididas que bateu no limite de turnos. A coluna Só PV zerado é a taxa antiga, só com partidas terminadas por PV, e fica como diagnóstico; os denominadores por assento aparecem na tabela. No espelho, P/B/E indica vitórias de player/bot/empates; não há taxa do arquétipo.`, "",
+    "| Oponente | Variante | n | Decididas: V/D/E ou P/B/E | Taxa H3 | Limite/decididos | LP: V/D/E ou P/B/E | Só PV zerado | Player: V/n LP | Bot: V/n LP | Empates totais | Limite | Timeout | Erro |",
+    "| --- | --- | ---: | --- | ---: | ---: | --- | ---: | --- | --- | ---: | ---: | ---: | ---: |"];
   for (const row of analysis.rows) for (const variant of ["specialized", "fallback"] as const) {
     const stats = row[variant];
     const lp = stats.outcomes.lpZero;
-    lines.push(`| ${cell(row.opponent)} | ${variant} | ${stats.duels} | ${stats.isMirror ? `${lp.winsBySeat.player}/${lp.winsBySeat.bot}/${lp.draws}` : `${lp.wins}/${lp.losses}/${lp.draws}`} | ${decimal(stats.normalWinRatePercent)} | ${stats.seats.player.wins}/${stats.seats.player.normalGames} (${decimal(stats.seats.player.normalWinRatePercent)}%) | ${stats.seats.bot.wins}/${stats.seats.bot.normalGames} (${decimal(stats.seats.bot.normalWinRatePercent)}%) | ${stats.outcomes.draws} | ${stats.outcomes.maxTurns} | ${stats.outcomes.timeout} | ${stats.outcomes.error} |`);
+    const decided = stats.outcomes.decided;
+    lines.push(`| ${cell(row.opponent)} | ${variant} | ${stats.duels} | ${stats.isMirror ? `${decided.winsBySeat.player}/${decided.winsBySeat.bot}/${decided.draws}` : `${decided.wins}/${decided.losses}/${decided.draws}`} | ${decimal(stats.winRatePercent)} | ${fraction(stats.maxTurnsFraction)} | ${stats.isMirror ? `${lp.winsBySeat.player}/${lp.winsBySeat.bot}/${lp.draws}` : `${lp.wins}/${lp.losses}/${lp.draws}`} | ${decimal(stats.normalWinRatePercent)} | ${stats.seats.player.wins}/${stats.seats.player.normalGames} (${decimal(stats.seats.player.normalWinRatePercent)}%) | ${stats.seats.bot.wins}/${stats.seats.bot.normalGames} (${decimal(stats.seats.bot.normalWinRatePercent)}%) | ${stats.outcomes.draws} | ${stats.outcomes.maxTurns} | ${stats.outcomes.timeout} | ${stats.outcomes.error} |`);
   }
   lines.push("", "## Combos, decisões e custo", "",
     "Combos exigem invocações reais de M, Portal e um boss por Sincro no mesmo turno e assento. Decisões e seus tempos pertencem ao Tech-Zero (ambos no espelho). Nós medem somente TurnLineSearch dos dois assentos; Beam/Greedy não estão instrumentados. A duração inclui os dois bots. Latência média é ponderada pelo número de decisões. Tempos são os observados na execução, sem pressupor CPU isolada. Letal perdido conta uma oportunidade comprovada sem vitória naquele turno; projeções com informação oculta não provam letal.", "",

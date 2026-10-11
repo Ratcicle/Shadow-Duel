@@ -7,12 +7,22 @@ import Bot from "../src/core/Bot.js";
 import Game from "../src/core/Game.js";
 import ShadowHeartStrategy from "../src/core/ai/ShadowHeartStrategy.js";
 import { registerStrategy, resolveRegisteredStrategy } from "../src/core/ai/StrategyRegistry.js";
-import { evaluateTechZeroVisibleBattle, type TechZeroBattleProjection } from "../src/core/ai/techzero/battle.js";
+import { evaluateTechZeroVisibleBattle } from "../src/core/ai/techzero/battle.js";
+import {
+  TECH_ZERO_COMBO_IDS,
+  summarizeBattles,
+  techZeroComboMetrics,
+  type BattleObservation,
+  type ObservedSummon,
+} from "./benchmark/observer.js";
+import { installMemoryStorage } from "./benchmark/environment.js";
 import type { ArenaDuelResult } from "../src/core/contracts/arena.js";
 import type { BotGamePort } from "../src/core/contracts/bot.js";
 import type { GameOptions } from "../src/core/contracts/game.js";
 import type { GamePlayer } from "../src/core/contracts/player.js";
-import type { SummonMethod } from "../src/core/contracts/summon.js";
+
+// Shared with the benchmark harness; re-exported under the original names.
+export { summarizeBattles, type BattleObservation };
 
 const { default: BotArena } = await import("../src/core/BotArena.js");
 const DEFAULT_OPPONENTS = Bot.getAvailablePresets().map(preset => preset.id);
@@ -99,7 +109,7 @@ export function parseBenchmarkArgs(argv: readonly string[] = process.argv.slice(
     }
   }
   validateCases(options);
-  options.out ||= `techzero-benchmark-${options.variant}.json`;
+  options.out ||= path.join(".cache", "benchmark", "techzero", `techzero-benchmark-${options.variant}.json`);
   return options;
 }
 
@@ -114,18 +124,6 @@ interface OpeningSnapshot {
   random: ReturnType<Game["getRandomState"]>;
   player: OpeningSeat;
   bot: OpeningSeat;
-}
-
-interface ObservedSummon {
-  seat: Seat;
-  turn: number;
-  cardId: number;
-  method: SummonMethod;
-}
-
-export interface BattleObservation extends TechZeroBattleProjection {
-  seat: Seat;
-  turn: number;
 }
 
 function openingSeat(player: GamePlayer): OpeningSeat {
@@ -148,7 +146,7 @@ export class BenchmarkGame extends Game {
     super(options);
     BenchmarkGame.current = this;
     this.on("after_summon", ({ card, player, method }) => {
-      if (card.id == null || ![503, 509, 515, 516, 517].includes(card.id)) return;
+      if (card.id == null || !TECH_ZERO_COMBO_IDS.includes(card.id)) return;
       if (player.id !== "player" && player.id !== "bot") return;
       this.summons.push({ seat: player.id, turn: this.turnCounter, cardId: card.id, method });
     });
@@ -174,20 +172,7 @@ export class BenchmarkGame extends Game {
   }
 
   comboMetrics() {
-    return Object.fromEntries((["player", "bot"] as const).map(seat => {
-      const summons = this.summons.filter(summon => summon.seat === seat);
-      const comboTurns = [...new Set(summons.map(summon => summon.turn))].filter(turn => {
-        const turnSummons = summons.filter(summon => summon.turn === turn);
-        return turnSummons.some(summon => summon.cardId === 503) &&
-          turnSummons.some(summon => summon.cardId === 509) &&
-          turnSummons.some(summon => summon.cardId >= 515 && summon.method === "synchro");
-      });
-      return [seat, {
-        summonsById: Object.fromEntries([503, 509, 515, 516, 517].map(id =>
-          [id, summons.filter(summon => summon.cardId === id).length])),
-        comboTurns,
-      }];
-    }));
+    return techZeroComboMetrics(this.summons);
   }
 }
 
@@ -201,18 +186,6 @@ class BenchmarkBot extends Bot {
     }
     super.playBattlePhase(game);
   }
-}
-
-export function summarizeBattles(observations: readonly BattleObservation[], completed: ArenaDuelResult | null) {
-  const battles = observations.map(battle => ({ ...battle,
-    converted: battle.lethal && completed?.type === "completed" && completed.reason === "lp_zero" &&
-      completed?.winner === battle.seat && completed.turns === battle.turn,
-  }));
-  return {
-    battles,
-    provenLethalOpportunities: battles.filter(battle => battle.lethal).length,
-    unconvertedProvenLethals: battles.filter(battle => battle.lethal && !battle.converted).length,
-  };
 }
 
 async function runCase(scenario: BenchmarkCase) {
@@ -255,20 +228,7 @@ export async function runBenchmark(options: BenchmarkOptions) {
   const originalLog = console.log;
   const originalWarn = console.warn;
   const originalError = console.error;
-  const storageDescriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
-  const needsStorage = typeof globalThis.localStorage === "undefined";
-  if (needsStorage) {
-    const values = new Map<string, string>();
-    const storage: Storage = {
-      get length() { return values.size; },
-      key: index => [...values.keys()][index] ?? null,
-      getItem: key => values.get(key) ?? null,
-      setItem: (key, value) => { values.set(key, String(value)); },
-      removeItem: key => { values.delete(key); },
-      clear: () => { values.clear(); },
-    };
-    Object.defineProperty(globalThis, "localStorage", { configurable: true, value: storage });
-  }
+  const restoreStorage = installMemoryStorage();
   const results: Array<Awaited<ReturnType<typeof runCase>> & { consoleErrors: string[]; consoleWarnings: string[] }> = [];
   const startedAt = new Date().toISOString();
   const output = path.resolve(options.out);
@@ -302,10 +262,7 @@ export async function runBenchmark(options: BenchmarkOptions) {
     console.log = originalLog;
     console.warn = originalWarn;
     console.error = originalError;
-    if (needsStorage) {
-      if (storageDescriptor) Object.defineProperty(globalThis, "localStorage", storageDescriptor);
-      else Reflect.deleteProperty(globalThis, "localStorage");
-    }
+    restoreStorage();
   }
 }
 
