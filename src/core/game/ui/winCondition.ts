@@ -92,7 +92,7 @@ export function checkWinCondition(this: WinConditionHost) {
               }
             : null,
           onMenu: () => {
-            document.getElementById("start-screen")?.classList.remove("hidden");
+            window.dispatchEvent(new CustomEvent("shadow-duel-main-menu"));
           },
           onRematch: () => {
             window.dispatchEvent(new CustomEvent("shadow-duel-rematch"));

@@ -7,6 +7,7 @@ import type { EquipLink, LpDisplayState } from "./renderer/types.js";
 import type { PlayerId } from "../core/contracts/primitives.js";
 import type { FieldPlacementSession } from "./renderer/placement.js";
 import { disposeLpPresentation } from "./renderer/animations.js";
+import { releaseBodyOverlays } from "./renderer/modals.js";
 
 /**
  * Renderer - Main UI rendering class for Shadow Duel
@@ -23,6 +24,8 @@ class Renderer implements GameUI {
   declare leftMouseHeldForChainSkip: boolean;
   declare chainSkipInputCleanup: (() => void) | null;
   declare activeTrapModalCancel: (() => void) | null;
+  /** Body-mounted modal overlays and how each is released on destroy. */
+  declare activeOverlays: Map<HTMLElement, () => void>;
   declare activeFieldPlacement: FieldPlacementSession | null;
   declare activeEquipLinks: EquipLink[];
   declare equipLinkResizeHandler: (() => void) | null;
@@ -55,6 +58,7 @@ class Renderer implements GameUI {
     this.leftMouseHeldForChainSkip = false;
     this.chainSkipInputCleanup = null;
     this.activeTrapModalCancel = null;
+    this.activeOverlays = new Map();
     this.activeFieldPlacement = null;
     this.activeEquipLinks = [];
     this.equipLinkResizeHandler = null;
@@ -187,6 +191,7 @@ class Renderer implements GameUI {
     this.chainSkipInputCleanup = null;
     this.activeTrapModalCancel?.();
     this.activeTrapModalCancel = null;
+    releaseBodyOverlays(this);
     this.clearFloatingCounterTooltip?.();
     this.destroyEquipLinkIndicators?.();
     this.pixiVfx?.destroy?.();

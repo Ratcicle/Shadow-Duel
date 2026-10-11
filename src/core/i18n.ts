@@ -24,13 +24,14 @@ interface CardTranslation {
 }
 interface LocalePayload {
   cards: Record<string, CardTranslation>;
-  ui: Record<string, unknown>;
-  effectChoices: Record<string, unknown>;
+  // Every top-level section that is not card data (ui, effects, effectChoices...).
+  texts: Record<string, unknown>;
 }
 type TextParams = Readonly<Record<string, unknown>>;
 type LocaleLabels = Record<SupportedLocale, Record<string, string>>;
 
 import { cardDatabase } from "../data/cards.js";
+import type { EffectActivationCase, EffectDefinition } from "./contracts/effects.js";
 import { publicUrl } from "./publicUrl.js";
 
 const LOCALE_STORAGE_KEY = "shadowduel_locale";
@@ -353,6 +354,108 @@ const DEFAULT_LOCALE_TEXTS = {
       back: "Back to Laboratory",
       restart: "Restart duel",
       startError: "Could not start the Laboratory duel.",
+      title: "Laboratory",
+      subtitle: "Build a manual scenario to test cards on both sides.",
+      close: "Close",
+      randomizeBy: "Randomize by",
+      randomizeAll: "Randomize all",
+      randomizeSide: "Randomize side",
+      randomizeZone: "Draw",
+      export: "Export",
+      import: "Import",
+      clear: "Clear",
+      side: "Side",
+      zone: "Zone",
+      card: "Card",
+      cardPlaceholder: "Type the card name",
+      position: "Position",
+      attack: "Attack",
+      defense: "Defense",
+      facedown: "Face-down",
+      facedownTag: "face-down",
+      add: "Add",
+      modeGroup: "Laboratory mode",
+      modeTest: "Test Mode",
+      modeDuel: "Duel Mode",
+      useBot: "Play against a bot",
+      revealBotHand: "Reveal the bot's hand",
+      start: "Start",
+      allArchetypes: "All",
+      empty: "Empty",
+      unknownCard: "Unknown card",
+      owners: {
+        player: "Player 1",
+        bot: "Player 2",
+      },
+      zones: {
+        deck: "Deck",
+        extraDeck: "Extra Deck",
+        hand: "Hand",
+        field: "Field",
+        spellTrap: "Spells/Traps",
+        fieldSpell: "Field Spell",
+        graveyard: "Graveyard",
+      },
+      alerts: {
+        zoneLimit: "{zone} reached its limit of {max}.",
+        invalidForZone: "This card is not valid for the selected zone.",
+        chooseCard: "Choose a card to add.",
+        cardNotFound: "Card not found.",
+      },
+      warnings: {
+        invalidCard: "Invalid card ignored in {zone}.",
+        cardInvalidForZone: "{card} is not valid for {zone}.",
+        zoneTrimmed: "{zone} exceeded its limit and was trimmed.",
+        unknownBotPreset: "Unknown bot preset ignored: {preset}.",
+      },
+      importState: {
+        notObject: "The Laboratory file must contain a JSON object.",
+        incompatibleVersion: "Incompatible Laboratory version.",
+        invalidFormat: "Invalid Laboratory format.",
+        missingSetup: "Laboratory setup is missing or invalid.",
+        readError: "Could not read the Laboratory JSON: {message}",
+        success: "Laboratory state imported successfully.",
+        warnings: "Warnings:",
+        error: "Could not import the Laboratory state: {message}",
+      },
+    },
+    botArena: {
+      title: "Bot Arena",
+      close: "Close",
+      decks: "Decks",
+      seat1: "Bot 1 (Player)",
+      seat2: "Bot 2 (Opponent)",
+      defaultDeck: "Default Deck",
+      settings: "Settings",
+      numDuels: "Number of duels",
+      speed: "Speed",
+      instant: "Instant",
+      autoPause: "Auto-pause on draw/error",
+      results: "Results",
+      completed: "Completed",
+      statusLabel: "Status",
+      wins1: "Bot 1 wins",
+      wins2: "Bot 2 wins",
+      draws: "Draws",
+      avgTurns: "Average turns",
+      waiting: "Waiting to start...",
+      start: "Start",
+      exportStrategic: "Export Strategic JSON",
+      cancel: "Cancel",
+      status: {
+        ready: "Ready",
+        running: "Running...",
+        error: "Error",
+        done: "Done",
+      },
+      errorAlert: "Arena error: {message}",
+      duelWin1: "Duel {duel}: ✅ Bot 1 won ({turns} turns)",
+      duelWin2: "Duel {duel}: ❌ Bot 2 won ({turns} turns)",
+      duelTimeout: "Duel {duel}: ⏱️ Timeout, outside the results ({turns} turns)",
+      duelDraw: "Duel {duel}: 🔄 Draw ({turns} turns)",
+      finished: "✔️ Arena finished! {completed} duels{timeouts}.",
+      finishedTimeouts: ", {count} by timeout (outside the results)",
+      noStrategicReport: "No strategic report available yet.",
     },
     deckBuilder: {
       title: "My Deck",
@@ -464,47 +567,18 @@ const DEFAULT_LOCALE_TEXTS = {
   effectChoices: {
     arcanist_grand_library_ignition: {
       message: "Choose an Arcanist Grand Library effect.",
-      cases: {
-        arcanist_grand_library_summon: {
-          label: "Pay 2000 LP; Special Summon Arcanist",
-          description:
-            "No monsters: pay 2000 LP and Special Summon 1 Level 4 or lower Arcanist from your Deck.",
-        },
-        arcanist_grand_library_search_equip: {
-          label: "Add an Arcanist Equip Spell",
-          description:
-            "With an Arcanist monster: add 1 Arcanist Equip Spell from your Deck to your hand.",
-        },
-      },
     },
     meeting_arcanists_choose_effect: {
       message: "Choose a Meeting of the Arcanists effect.",
-      cases: {
-        meeting_arcanists_discard_monsters: {
-          label: "Discard 2 Arcanist monsters",
-          description:
-            "Discard 2 Arcanist monsters; add 1 Arcanist Spell from your Deck to your hand.",
-        },
-        meeting_arcanists_discard_spells: {
-          label: "Discard 2 Arcanist Spells",
-          description:
-            "Discard 2 Arcanist Spells; add 1 Level 4 or lower Arcanist monster from your Deck to your hand.",
-        },
-      },
     },
     miragebound_oasis_ignition: {
       message: "Choose a Miragebound Oasis effect.",
-      cases: {
-        miragebound_oasis_recycle_search: {
-          label: "Return Miragebound; add another",
-          description:
-            "Return 1 Miragebound monster you control; add a different Miragebound monster from your Deck to your hand.",
-        },
-        miragebound_oasis_shift_weaken: {
-          label: "Change an opponent monster's position",
-          description: "Target 1 opponent monster; change its battle position.",
-        },
-      },
+    },
+    bloomrot_root_network_recover: {
+      message: "Choose a Bloomrot Root Network effect.",
+    },
+    bloomrot_queen_hollow_grove_remove_and_heal: {
+      message: "Choose a Bloomrot Queen of the Hollow Grove effect.",
     },
     burning_west_wanted_reward: {
       message: 'Choose a "Wanted in the Burning West" reward.',
@@ -636,6 +710,8 @@ const CARD_KIND_SUBTYPE_PHRASES: Record<
   },
 };
 
+const CARD_SECTION_KEYS = new Set(["cards", "cardTranslations", "translations"]);
+
 const LOCALE_SOURCES = {
   // English text is the canonical card data in cards.js.
   "pt-br": "locales/pt-br.json",
@@ -703,10 +779,9 @@ let lastCoverageLogLocale: SupportedLocale | null = null;
 
 function normalizeLocalePayload(payload: unknown): LocalePayload {
   const cards: LocalePayload["cards"] = {};
-  const ui: LocalePayload["ui"] = {};
-  const effectChoices: LocalePayload["effectChoices"] = {};
+  const texts: LocalePayload["texts"] = {};
   if (!isObject(payload)) {
-    return { cards, ui, effectChoices };
+    return { cards, texts };
   }
 
   const sections: Record<string, unknown>[] = [];
@@ -746,14 +821,12 @@ function normalizeLocalePayload(payload: unknown): LocalePayload {
     });
   });
 
-  if (isObject(payload.ui)) {
-    Object.assign(ui, payload.ui);
-  }
-  if (isObject(payload.effectChoices)) {
-    Object.assign(effectChoices, payload.effectChoices);
-  }
+  Object.entries(payload).forEach(([sectionKey, sectionValue]) => {
+    if (CARD_SECTION_KEYS.has(sectionKey) || !isObject(sectionValue)) return;
+    texts[sectionKey] = sectionValue;
+  });
 
-  return { cards, ui, effectChoices };
+  return { cards, texts };
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -960,7 +1033,7 @@ export function getUIText(
   const path = String(key || "").trim();
   if (!path) return fallback ?? "";
 
-  const localeValue = getPathValue(normalizedLocales[currentLocale], path);
+  const localeValue = getPathValue(normalizedLocales[currentLocale]?.texts, path);
   const defaultValue = getPathValue(DEFAULT_LOCALE_TEXTS, path);
   const fallbackValue =
     typeof localeValue === "string"
@@ -971,6 +1044,33 @@ export function getUIText(
           ? fallback
           : path;
   return interpolateText(fallbackValue, params);
+}
+
+let activationCaseIndex: Map<string, EffectActivationCase> | null = null;
+
+/**
+ * Localized text of an activation case. Without a translation it falls back
+ * to the inline text of the card definition, then to the case ID.
+ */
+export function getActivationCaseText(
+  effectId: string,
+  caseId: string,
+  field: "label" | "description",
+): string {
+  if (!activationCaseIndex) {
+    activationCaseIndex = new Map();
+    const definitions: readonly { readonly effects?: readonly EffectDefinition[] }[] = cardDatabase;
+    for (const card of definitions) {
+      for (const effect of card.effects || []) {
+        for (const activationCase of effect.activationCases || []) {
+          activationCaseIndex.set(`${effect.id}:${activationCase.id}`, activationCase);
+        }
+      }
+    }
+  }
+  const inline = activationCaseIndex.get(`${effectId}:${caseId}`)?.[field];
+  const fallback = inline || (field === "label" ? caseId : "");
+  return getUIText(`effectChoices.${effectId}.cases.${caseId}.${field}`, {}, fallback);
 }
 
 function humanizeCounterType(counterType: unknown) {

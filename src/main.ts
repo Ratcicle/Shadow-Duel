@@ -68,7 +68,21 @@ function setLabelForControl(control: HTMLElement | null, value: string) {
   }
 }
 
+/** Static markup names its text by i18n key; the HTML copy is the PT fallback. */
+function applyMarkupLocalization(root: ParentNode) {
+  root.querySelectorAll<HTMLElement>("[data-i18n]").forEach((element) => {
+    setText(element, getUIText(element.dataset.i18n, {}, element.textContent));
+  });
+  root.querySelectorAll<HTMLElement>("[data-i18n-aria-label]").forEach((element) => {
+    element.setAttribute("aria-label", getUIText(element.dataset.i18nAriaLabel));
+  });
+  root.querySelectorAll<HTMLInputElement>("[data-i18n-placeholder]").forEach((element) => {
+    element.placeholder = getUIText(element.dataset.i18nPlaceholder);
+  });
+}
+
 function applyStaticLocalization() {
+  applyMarkupLocalization(document);
   bindPlacementPreference(dom.startScreen.placementSelect, dom.startScreen.placementLabel, placementPreference);
   setText(dom.startScreen.startDuelButton, uiText("start.startDuel"));
   setText(dom.startScreen.deckBuilderButton, uiText("start.myDeck"));
@@ -171,6 +185,11 @@ const botArena = createBotArenaController({
   Bot,
   ShadowHeartStrategy,
   LuminarchStrategy,
+  onBeforeStart: () => {
+    previewPanelLayout?.cancelInteraction();
+    gameLauncher.disposeActiveGame("start_bot_arena");
+    if (dom.laboratory.duelControls) dom.laboratory.duelControls.hidden = true;
+  },
 });
 
 function startDuel() {
@@ -187,6 +206,7 @@ function startDuel() {
   dom.startScreen.root?.classList.add("hidden");
   dom.deckBuilder.root?.classList.add("hidden");
   if (dom.laboratory.duelControls) dom.laboratory.duelControls.hidden = true;
+  botArena.dispose();
   gameLauncher.startNormalDuel(config);
 }
 
@@ -203,6 +223,7 @@ async function launchLaboratoryDuel(restart = false) {
   ];
   for (const button of buttons) if (button) button.disabled = true;
   laboratory.hideForDuel(dom.deckBuilder.root);
+  botArena.dispose();
   try {
     if (restart) {
       await gameLauncher.restartLaboratoryDuel();
@@ -241,6 +262,14 @@ function returnToLaboratory() {
   gameLauncher.disposeActiveGame("return_to_laboratory");
   if (dom.laboratory.duelControls) dom.laboratory.duelControls.hidden = true;
   laboratory.open();
+}
+
+function returnToMainMenu() {
+  if (laboratoryTransitionInProgress) return;
+  previewPanelLayout?.cancelInteraction();
+  gameLauncher.disposeActiveGame("return_to_menu");
+  if (dom.laboratory.duelControls) dom.laboratory.duelControls.hidden = true;
+  dom.startScreen.root?.classList.remove("hidden");
 }
 
 async function rematch() {
@@ -287,6 +316,7 @@ function bindMainEvents() {
     if (gameLauncher.getActiveGame()?.laboratoryModeEnabled === true) void rematch();
   });
   window.addEventListener("shadow-duel-rematch", rematch);
+  window.addEventListener("shadow-duel-main-menu", returnToMainMenu);
 }
 
 function ensureDomReady(fn: () => void) {

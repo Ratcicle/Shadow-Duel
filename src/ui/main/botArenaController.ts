@@ -11,6 +11,11 @@ import type {
 } from "../../core/contracts/arena.js";
 import type { MainDom } from "./domRefs.js";
 import type { ValidationPanel } from "./validationPanel.js";
+import { getUIText } from "../../core/i18n.js";
+
+function arenaText(key: string, params: Readonly<Record<string, unknown>> = {}) {
+  return getUIText(`ui.botArena.${key}`, params);
+}
 interface ArenaControllerOptions {
   dom: MainDom["botArena"];
   startScreenRoot: HTMLElement | null;
@@ -20,6 +25,8 @@ interface ArenaControllerOptions {
   Bot: typeof BotRuntime;
   ShadowHeartStrategy: typeof ShadowHeartStrategyRuntime;
   LuminarchStrategy: typeof LuminarchStrategyRuntime;
+  /** Releases any other duel before the Arena takes over the board. */
+  onBeforeStart?: () => void;
 }
 declare global {
   interface Window {
@@ -36,6 +43,7 @@ export function createBotArenaController({
   Bot,
   ShadowHeartStrategy,
   LuminarchStrategy,
+  onBeforeStart,
 }: ArenaControllerOptions) {
   let botArenaInstance: BotArenaRuntime | null = null;
   if (typeof window !== "undefined") {
@@ -60,7 +68,7 @@ export function createBotArenaController({
   function populateDecks() {
     if (!dom.deckSeat1Select || !dom.deckSeat2Select) return;
     const options = [
-      { id: "default", label: "Deck Padrão" },
+      { id: "default", label: arenaText("defaultDeck") },
       ...Bot.getAvailablePresets().map((preset) => ({
         id: preset.id,
         label: preset.label,
@@ -102,8 +110,11 @@ export function createBotArenaController({
     dom.wins2.textContent = "0";
     dom.draws.textContent = "0";
     dom.avgTurns.textContent = "-";
-    dom.status.textContent = "Pronto";
-    dom.log.innerHTML = '<p class="log-entry">Aguardando início...</p>';
+    dom.status.textContent = arenaText("status.ready");
+    const waiting = document.createElement("p");
+    waiting.className = "log-entry";
+    waiting.textContent = arenaText("waiting");
+    dom.log.replaceChildren(waiting);
     if (dom.exportStrategicButton) {
       dom.exportStrategicButton.disabled =
         !botArenaInstance?.getAnalytics?.()?.duelRecords?.length;
@@ -138,11 +149,13 @@ export function createBotArenaController({
     if (dom.exportStrategicButton) {
       dom.exportStrategicButton.disabled = true;
     }
-    dom.status.textContent = "Executando...";
+    dom.status.textContent = arenaText("status.running");
 
     dom.modal.classList.add("hidden");
     startScreenRoot?.classList.add("hidden");
 
+    onBeforeStart?.();
+    dispose();
     botArenaInstance = new BotArena(
       Game,
       Bot,
@@ -165,8 +178,8 @@ export function createBotArenaController({
       );
     } catch (err) {
       console.error("Bot Arena error:", err);
-      alert(`Erro na arena: ${(err as Error).message}`);
-      dom.status.textContent = "Erro";
+      alert(arenaText("errorAlert", { message: (err as Error).message }));
+      dom.status.textContent = arenaText("status.error");
       dom.startButton.disabled = false;
       dom.cancelButton.disabled = false;
       if (dom.exportStrategicButton) {
@@ -201,42 +214,16 @@ export function createBotArenaController({
       if (result.type === "error") {
         addLogEntry(`❌ ${result.message}`, "error");
       } else {
-        let className;
-        let winnerText;
-
+        const params = { duel: result.duelNumber, turns: result.turns };
         if (result.winner === "player") {
-          className = "win-1";
-          winnerText = "Bot 1 venceu";
-          addLogEntry(
-            `Duel ${result.duelNumber}: ✅ ${winnerText} (${result.turns} turnos)`,
-            className,
-          );
-          return;
+          addLogEntry(arenaText("duelWin1", params), "win-1");
         } else if (result.winner === "bot") {
-          className = "win-2";
-          winnerText = "Bot 2 venceu";
-          addLogEntry(
-            `Duel ${result.duelNumber}: ❌ ${winnerText} (${result.turns} turnos)`,
-            className,
-          );
-          return;
+          addLogEntry(arenaText("duelWin2", params), "win-2");
         } else if (result.reason === "timeout") {
           // A wall-clock timeout is not a result: it stays out of the rates.
-          className = "draw";
-          winnerText = "Timeout, fora do resultado";
-          addLogEntry(
-            `Duel ${result.duelNumber}: ⏱️ ${winnerText} (${result.turns} turnos)`,
-            className,
-          );
-          return;
+          addLogEntry(arenaText("duelTimeout", params), "draw");
         } else {
-          className = "draw";
-          winnerText = "Empate";
-          addLogEntry(
-            `Duel ${result.duelNumber}: 🔄 ${winnerText} (${result.turns} turnos)`,
-            className,
-          );
-          return;
+          addLogEntry(arenaText("duelDraw", params), "draw");
         }
       }
     }
@@ -247,9 +234,9 @@ export function createBotArenaController({
 
     if (
       dom.log.children.length === 1 &&
-      dom.log.children[0]!.textContent === "Aguardando início..."
+      dom.log.children[0]!.textContent === arenaText("waiting")
     ) {
-      dom.log.innerHTML = "";
+      dom.log.replaceChildren();
     }
 
     const entry = document.createElement("p");
@@ -268,17 +255,17 @@ export function createBotArenaController({
       dom.exportStrategicButton.disabled =
         !botArenaInstance?.getAnalytics?.()?.duelRecords?.length;
     }
-    dom.status.textContent = "Concluído";
+    dom.status.textContent = arenaText("status.done");
     const timeouts = result.drawsByTimeout > 0
-      ? `, ${result.drawsByTimeout} por timeout (fora do resultado)`
+      ? arenaText("finishedTimeouts", { count: result.drawsByTimeout })
       : "";
-    addLogEntry(`✔️ Arena concluída! ${result.completed} duelos${timeouts}.`);
+    addLogEntry(arenaText("finished", { completed: result.completed, timeouts }));
     dom.modal.classList.remove("hidden");
   }
 
   function downloadStrategicReport() {
     if (!botArenaInstance?.getAnalytics?.()?.duelRecords?.length) {
-      addLogEntry("Nenhum relatório estratégico disponível ainda.", "error");
+      addLogEntry(arenaText("noStrategicReport"), "error");
       return;
     }
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -297,9 +284,15 @@ export function createBotArenaController({
     dom.closeButton?.addEventListener("click", close);
   }
 
+  /** Releases the Arena duel and renderer; the last batch's analytics stay exportable. */
+  function dispose() {
+    botArenaInstance?.dispose();
+  }
+
   return {
     bind,
     close,
+    dispose,
     getInstance: () => botArenaInstance,
     open,
     start,

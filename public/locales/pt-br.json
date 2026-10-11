@@ -303,7 +303,109 @@
       "duelControls": "Controles do Laboratório",
       "back": "Voltar ao Laboratório",
       "restart": "Reiniciar duelo",
-      "startError": "Não foi possível iniciar o duelo do Laboratório."
+      "startError": "Não foi possível iniciar o duelo do Laboratório.",
+      "title": "Laboratório",
+      "subtitle": "Monte um cenário manual para testar cartas dos dois lados.",
+      "close": "Fechar",
+      "randomizeBy": "Aleatorizar por",
+      "randomizeAll": "Aleatorizar tudo",
+      "randomizeSide": "Aleatorizar lado",
+      "randomizeZone": "Sortear",
+      "export": "Exportar",
+      "import": "Importar",
+      "clear": "Limpar",
+      "side": "Lado",
+      "zone": "Zona",
+      "card": "Carta",
+      "cardPlaceholder": "Digite o nome da carta",
+      "position": "Posição",
+      "attack": "Ataque",
+      "defense": "Defesa",
+      "facedown": "Baixada",
+      "facedownTag": "baixada",
+      "add": "Adicionar",
+      "modeGroup": "Modo do Laboratório",
+      "modeTest": "Modo Teste",
+      "modeDuel": "Modo Duelo",
+      "useBot": "Jogar contra bot",
+      "revealBotHand": "Revelar mão do bot",
+      "start": "Iniciar",
+      "allArchetypes": "Todos",
+      "empty": "Vazio",
+      "unknownCard": "Carta desconhecida",
+      "owners": {
+        "player": "Jogador 1",
+        "bot": "Jogador 2"
+      },
+      "zones": {
+        "deck": "Deck",
+        "extraDeck": "Extra Deck",
+        "hand": "Mão",
+        "field": "Campo",
+        "spellTrap": "Magias/Armadilhas",
+        "fieldSpell": "Campo Mágico",
+        "graveyard": "Cemitério"
+      },
+      "alerts": {
+        "zoneLimit": "{zone} atingiu o limite de {max}.",
+        "invalidForZone": "Esta carta não é válida para a zona selecionada.",
+        "chooseCard": "Escolha uma carta para adicionar.",
+        "cardNotFound": "Carta não encontrada."
+      },
+      "warnings": {
+        "invalidCard": "Carta inválida ignorada em {zone}.",
+        "cardInvalidForZone": "{card} não é válido para {zone}.",
+        "zoneTrimmed": "{zone} excedeu o limite e foi cortado.",
+        "unknownBotPreset": "Preset de bot desconhecido ignorado: {preset}."
+      },
+      "importState": {
+        "notObject": "Arquivo de Laboratório deve conter um objeto JSON.",
+        "incompatibleVersion": "Versão de Laboratório incompatível.",
+        "invalidFormat": "Formato de Laboratório inválido.",
+        "missingSetup": "Setup de Laboratório ausente ou inválido.",
+        "readError": "Erro ao ler JSON do Laboratório: {message}",
+        "success": "Estado do Laboratório importado com sucesso.",
+        "warnings": "Avisos:",
+        "error": "Erro ao importar estado do Laboratório: {message}"
+      }
+    },
+    "botArena": {
+      "title": "Bot Arena",
+      "close": "Fechar",
+      "decks": "Decks",
+      "seat1": "Bot 1 (Jogador)",
+      "seat2": "Bot 2 (Oponente)",
+      "defaultDeck": "Deck Padrão",
+      "settings": "Configuração",
+      "numDuels": "Número de duelos",
+      "speed": "Velocidade",
+      "instant": "Instantâneo",
+      "autoPause": "Pausar automaticamente em empate/erro",
+      "results": "Resultados",
+      "completed": "Concluídos",
+      "statusLabel": "Status",
+      "wins1": "Vitórias Bot 1",
+      "wins2": "Vitórias Bot 2",
+      "draws": "Empates",
+      "avgTurns": "Média de turnos",
+      "waiting": "Aguardando início...",
+      "start": "Iniciar",
+      "exportStrategic": "Exportar JSON estratégico",
+      "cancel": "Cancelar",
+      "status": {
+        "ready": "Pronto",
+        "running": "Executando...",
+        "error": "Erro",
+        "done": "Concluído"
+      },
+      "errorAlert": "Erro na arena: {message}",
+      "duelWin1": "Duelo {duel}: ✅ Bot 1 venceu ({turns} turnos)",
+      "duelWin2": "Duelo {duel}: ❌ Bot 2 venceu ({turns} turnos)",
+      "duelTimeout": "Duelo {duel}: ⏱️ Timeout, fora do resultado ({turns} turnos)",
+      "duelDraw": "Duelo {duel}: 🔄 Empate ({turns} turnos)",
+      "finished": "✔️ Arena concluída! {completed} duelos{timeouts}.",
+      "finishedTimeouts": ", {count} por timeout (fora do resultado)",
+      "noStrategicReport": "Nenhum relatório estratégico disponível ainda."
     },
     "deckBuilder": {
       "title": "Meu Deck",
@@ -414,14 +516,35 @@
     "miragebound_oasis_ignition": {
       "message": "Escolha um efeito do Oásis dos Vinculados à Miragem.",
       "cases": {
-        "miragebound_oasis_recycle_search": {
-          "label": "Devolver Vinculado; adicionar outro",
-          "description": "Devolva 1 monstro Vinculado à Miragem que você controla; adicione 1 monstro Vinculado à Miragem com nome diferente do Deck à mão."
+        "miragebound_oasis_return_weaken": {
+          "label": "Devolver monstro \"Vinculados à Miragem\"; o monstro do oponente perde 400 de ATK/DEF",
+          "description": "Escolha 1 monstro \"Vinculados à Miragem\" que você controla e 1 monstro que seu oponente controla; devolva o primeiro alvo para a mão e, se isso acontecer, o segundo alvo perde 400 de ATK/DEF até o final deste turno."
         },
         "miragebound_oasis_shift_weaken": {
-          "label": "Mudar posição de monstro oponente",
-          "description": "Escolha 1 monstro do oponente; mude sua posição de batalha."
+          "label": "Mudar a posição de batalha de 1 monstro com a face para cima do oponente",
+          "description": "Escolha 1 monstro com a face para cima que seu oponente controla; mude sua posição de batalha."
         }
+      }
+    },
+    "bloomrot_root_network_recover": {
+      "message": "Escolha um efeito da Podriflora Rede de Raízes.",
+      "cases": {
+        "search_level_4_monster": {
+          "label": "Remover 2 Marcadores de Esporo; adicionar 1 monstro \"Podriflora\" de Nível 4 ou menor",
+          "description": "Remova 2 Marcadores de Esporo do campo; adicione 1 monstro \"Podriflora\" de Nível 4 ou menor do seu Deck à sua mão."
+        },
+        "recover_graveyard_card": {
+          "label": "Remover 3 Marcadores de Esporo; adicionar 1 card \"Podriflora\" do Cemitério",
+          "description": "Remova 3 Marcadores de Esporo do campo; adicione 1 card \"Podriflora\" do seu Cemitério à sua mão."
+        }
+      }
+    },
+    "bloomrot_queen_hollow_grove_remove_and_heal": {
+      "message": "Escolha um efeito da Podriflora Rainha do Bosque Oco.",
+      "cases": {
+        "remove_1": { "label": "Remover 1 Marcador de Esporo; ganhar 500 PV" },
+        "remove_2": { "label": "Remover 2 Marcadores de Esporo; ganhar 1000 PV" },
+        "remove_3": { "label": "Remover 3 Marcadores de Esporo; ganhar 1500 PV" }
       }
     },
     "burning_west_wanted_reward": {

@@ -7,7 +7,7 @@ import type {
   GameCard,
 } from "../src/core/contracts/cards.js";
 import type { GamePlayer } from "../src/core/contracts/player.js";
-import { record, required, unsafeFixture } from "./helpers/fixtures.js";
+import { cardDefinition, record, required, unsafeFixture } from "./helpers/fixtures.js";
 import type { RuntimeGame } from "./helpers/game.js";
 import { createRuntimeGame } from "./helpers/game.js";
 
@@ -15,10 +15,12 @@ import Card from "../src/core/Card.js";
 import type Renderer from "../src/ui/Renderer.js";
 import { _getContextDescription, showChainResponseModal, type TrapModalOptions } from "../src/ui/renderer/trapModals.js";
 import { cardDatabaseByName } from "./helpers/fixtures.js";
-import { getUIText } from "../src/core/i18n.js";
 
 test("Chain response displays the activation mode before the opponent chooses", async () => {
-  const label = getUIText("effectChoices.meeting_arcanists_choose_effect.cases.meeting_arcanists_discard_monsters.label");
+  // English shows the approved inline text of the card's activation case.
+  const label = required(cardDefinition("Meeting of the Arcanists").effects
+    ?.find(effect => effect.id === "meeting_arcanists_choose_effect")?.activationCases
+    ?.find(activationCase => activationCase.id === "meeting_arcanists_discard_monsters")?.label, "inline case label");
   let displayed = false;
   const renderer = unsafeFixture<Renderer>({
     showUnifiedTrapModal: async (options: TrapModalOptions) => {

@@ -45,6 +45,40 @@ import {
   renderCompactSelectionCard,
 } from "./selectionModals.js";
 
+/**
+ * Mounts a modal overlay on document.body under the Renderer's registry.
+ * When the Renderer is destroyed, `release` frees what the overlay holds
+ * (listeners, timers) and removes it without answering it: a pending
+ * continuation is dropped, never resolved with an automatic choice.
+ */
+export function mountBodyOverlay(
+  renderer: Renderer | null,
+  overlay: HTMLElement,
+  release: () => void = () => overlay.remove(),
+): void {
+  // Like destroy, tolerate partial presentation hosts without a registry.
+  const overlays = renderer?.activeOverlays;
+  if (overlays) {
+    for (const mounted of overlays.keys()) {
+      if (!mounted.isConnected) overlays.delete(mounted);
+    }
+  }
+  document.body.appendChild(overlay);
+  overlays?.set(overlay, release);
+}
+
+/** Releases every overlay still mounted by the Renderer; idempotent. */
+export function releaseBodyOverlays(renderer: Renderer): void {
+  const overlays = renderer.activeOverlays;
+  if (!overlays) return;
+  const mounted = [...overlays];
+  overlays.clear();
+  for (const [overlay, release] of mounted) {
+    if (overlay.isConnected) release();
+    overlay.remove();
+  }
+}
+
 let activeConfirmPrompt: {
   overlay: HTMLElement;
   resolve: (value: boolean) => void;
@@ -149,6 +183,7 @@ export function toggleExtraDeckModal(this: Renderer, show: boolean): void {
 
 /** Shared UI prompt; also attached to Renderer without requiring renderer state. */
 export function showConfirmPrompt(
+  this: Renderer | void,
   message: string,
   options: ConfirmPromptOptions = {},
 ): boolean | Promise<boolean> {
@@ -223,7 +258,7 @@ export function showConfirmPrompt(
     content.appendChild(messageEl);
     content.appendChild(actions);
     overlay.appendChild(content);
-    document.body.appendChild(overlay);
+    mountBodyOverlay(this || null, overlay, () => release());
 
     let resolved = false;
     const cleanup = () => {
@@ -235,14 +270,18 @@ export function showConfirmPrompt(
       }
     };
 
-    const finish = (value: boolean) => {
-      if (resolved) return;
+    const release = () => {
       resolved = true;
       document.removeEventListener("keydown", onKeyDown, true);
       cleanup();
       if (activeConfirmPrompt && activeConfirmPrompt.overlay === overlay) {
         activeConfirmPrompt = null;
       }
+    };
+
+    const finish = (value: boolean) => {
+      if (resolved) return;
+      release();
       resolve(value);
     };
 
@@ -343,7 +382,8 @@ export function showDuelStartAnnouncement(
     panel.textContent = String(message);
 
     overlay.appendChild(panel);
-    document.body.appendChild(overlay);
+    // An announcement is not a choice: releasing it completes it as shown.
+    mountBodyOverlay(this, overlay, () => cleanup());
 
     let resolved = false;
     let hideTimer: ReturnType<typeof setTimeout> | null = null;
@@ -738,5 +778,5 @@ export function showSearchModalVisual(
   modalContent.appendChild(actions);
 
   overlay.appendChild(modalContent);
-  document.body.appendChild(overlay);
+  mountBodyOverlay(this, overlay);
 }

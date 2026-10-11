@@ -192,29 +192,29 @@
       <div class="laboratory-panel">
         <div class="laboratory-header">
           <div>
-            <h2>Laboratório</h2>
-            <p>Monte um cenário manual para testar cartas dos dois lados.</p>
+            <h2 data-i18n="ui.laboratory.title">Laboratório</h2>
+            <p data-i18n="ui.laboratory.subtitle">Monte um cenário manual para testar cartas dos dois lados.</p>
           </div>
-          <button type="button" id="laboratory-close" aria-label="Fechar">
+          <button type="button" id="laboratory-close" aria-label="Fechar" data-i18n-aria-label="ui.laboratory.close">
             &times;
           </button>
         </div>
 
         <div class="laboratory-toolbar">
-          <label for="laboratory-archetype">Aleatorizar por</label>
+          <label for="laboratory-archetype" data-i18n="ui.laboratory.randomizeBy">Aleatorizar por</label>
           <select id="laboratory-archetype"></select>
-          <button type="button" id="laboratory-random-all">
+          <button type="button" id="laboratory-random-all" data-i18n="ui.laboratory.randomizeAll">
             Aleatorizar tudo
           </button>
-          <button type="button" id="laboratory-export">Exportar</button>
-          <button type="button" id="laboratory-import">Importar</button>
+          <button type="button" id="laboratory-export" data-i18n="ui.laboratory.export">Exportar</button>
+          <button type="button" id="laboratory-import" data-i18n="ui.laboratory.import">Importar</button>
           <input
             type="file"
             id="laboratory-import-file"
             accept="application/json,.json"
             hidden
           />
-          <button type="button" id="laboratory-clear">Limpar</button>
+          <button type="button" id="laboratory-clear" data-i18n="ui.laboratory.clear">Limpar</button>
         </div>
 
         <div id="laboratory-body" class="laboratory-body"></div>
@@ -222,36 +222,37 @@
         <div class="laboratory-add-card">
           <div class="laboratory-add-grid">
             <label>
-              Lado
+              <span data-i18n="ui.laboratory.side">Lado</span>
               <select id="laboratory-add-owner">
-                <option value="player">Jogador 1</option>
-                <option value="bot">Jogador 2</option>
+                <option value="player" data-i18n="ui.laboratory.owners.player">Jogador 1</option>
+                <option value="bot" data-i18n="ui.laboratory.owners.bot">Jogador 2</option>
               </select>
             </label>
             <label>
-              Zona
+              <span data-i18n="ui.laboratory.zone">Zona</span>
               <select id="laboratory-add-zone"></select>
             </label>
             <label>
-              Carta
+              <span data-i18n="ui.laboratory.card">Carta</span>
               <input
                 id="laboratory-card-search"
                 list="laboratory-card-options"
                 placeholder="Digite o nome da carta"
+                data-i18n-placeholder="ui.laboratory.cardPlaceholder"
               />
             </label>
             <label>
-              Posição
+              <span data-i18n="ui.laboratory.position">Posição</span>
               <select id="laboratory-position">
-                <option value="attack">Ataque</option>
-                <option value="defense">Defesa</option>
+                <option value="attack" data-i18n="ui.laboratory.attack">Ataque</option>
+                <option value="defense" data-i18n="ui.laboratory.defense">Defesa</option>
               </select>
             </label>
             <label class="laboratory-check">
               <input type="checkbox" id="laboratory-facedown" />
-              Baixada
+              <span data-i18n="ui.laboratory.facedown">Baixada</span>
             </label>
-            <button type="button" id="laboratory-add-card-btn">
+            <button type="button" id="laboratory-add-card-btn" data-i18n="ui.laboratory.add">
               Adicionar
             </button>
           </div>
@@ -259,34 +260,29 @@
         </div>
 
         <div class="laboratory-options">
-          <div class="laboratory-mode-toggle" role="group" aria-label="Modo do Laboratório">
-            <button type="button" class="active" data-laboratory-mode="test">
+          <div class="laboratory-mode-toggle" role="group" aria-label="Modo do Laboratório" data-i18n-aria-label="ui.laboratory.modeGroup">
+            <button type="button" class="active" data-laboratory-mode="test" data-i18n="ui.laboratory.modeTest">
               Modo Teste
             </button>
-            <button type="button" data-laboratory-mode="duel">
+            <button type="button" data-laboratory-mode="duel" data-i18n="ui.laboratory.modeDuel">
               Modo Duelo
             </button>
           </div>
           <label class="laboratory-check">
             <input type="checkbox" id="laboratory-use-bot" />
-            Jogar contra bot
+            <span data-i18n="ui.laboratory.useBot">Jogar contra bot</span>
           </label>
           <span id="laboratory-bot-archetype-wrap" class="laboratory-bot-archetype-wrap hidden">
-            <select id="laboratory-bot-archetype">
-              <option value="shadowheart">Shadow-Heart</option>
-              <option value="luminarch">Luminarch</option>
-              <option value="void">Void</option>
-              <option value="dragon">Dragon</option>
-            </select>
+            <select id="laboratory-bot-archetype"></select>
           </span>
           <label class="laboratory-check">
             <input type="checkbox" id="laboratory-reveal-bot-hand" />
-            Revelar mão do bot
+            <span data-i18n="ui.laboratory.revealBotHand">Revelar mão do bot</span>
           </label>
         </div>
 
         <div class="laboratory-footer">
-          <button type="button" id="laboratory-start">Iniciar</button>
+          <button type="button" id="laboratory-start" data-i18n="ui.laboratory.start">Iniciar</button>
         </div>
       </div>
     </div>
@@ -295,28 +291,28 @@
     <div id="bot-arena-modal" class="overlay hidden">
       <div class="bot-arena-panel">
         <div class="arena-header">
-          <h2>Bot Arena</h2>
-          <button type="button" class="close-arena" aria-label="Close">
+          <h2 data-i18n="ui.botArena.title">Bot Arena</h2>
+          <button type="button" class="close-arena" aria-label="Close" data-i18n-aria-label="ui.botArena.close">
             &times;
           </button>
         </div>
         <div class="arena-body">
           <div class="arena-setup">
             <div class="arena-section">
-              <h3>Decks</h3>
+              <h3 data-i18n="ui.botArena.decks">Decks</h3>
               <div class="config-row">
-                <label for="arena-deck-seat1">Bot 1 (Player)</label>
+                <label for="arena-deck-seat1" data-i18n="ui.botArena.seat1">Bot 1 (Player)</label>
                 <select id="arena-deck-seat1"></select>
               </div>
               <div class="config-row">
-                <label for="arena-deck-seat2">Bot 2 (Opponent)</label>
+                <label for="arena-deck-seat2" data-i18n="ui.botArena.seat2">Bot 2 (Opponent)</label>
                 <select id="arena-deck-seat2"></select>
               </div>
             </div>
             <div class="arena-section">
-              <h3>Config</h3>
+              <h3 data-i18n="ui.botArena.settings">Config</h3>
               <div class="config-row">
-                <label for="arena-num-duels">Numero de duelos</label>
+                <label for="arena-num-duels" data-i18n="ui.botArena.numDuels">Numero de duelos</label>
                 <select id="arena-num-duels">
                   <option value="1">1</option>
                   <option value="5">5</option>
@@ -328,16 +324,16 @@
                 </select>
               </div>
               <div class="config-row">
-                <label for="arena-speed">Velocidade</label>
+                <label for="arena-speed" data-i18n="ui.botArena.speed">Velocidade</label>
                 <select id="arena-speed">
                   <option value="1x">1x</option>
                   <option value="2x">2x</option>
                   <option value="4x">4x</option>
-                  <option value="instant">Instant</option>
+                  <option value="instant" data-i18n="ui.botArena.instant">Instant</option>
                 </select>
               </div>
               <div class="config-row checkbox">
-                <label for="arena-auto-pause">
+                <label for="arena-auto-pause" data-i18n="ui.botArena.autoPause">
                   Auto pause em empate/erro
                 </label>
                 <input type="checkbox" id="arena-auto-pause" />
@@ -345,44 +341,44 @@
             </div>
           </div>
           <div class="arena-stats">
-            <h3>Resultados</h3>
+            <h3 data-i18n="ui.botArena.results">Resultados</h3>
             <div class="stats-grid">
               <div class="stat-box">
-                <div class="stat-label">Concluidos</div>
+                <div class="stat-label" data-i18n="ui.botArena.completed">Concluidos</div>
                 <div class="stat-value" id="arena-completed">0</div>
               </div>
               <div class="stat-box">
-                <div class="stat-label">Status</div>
-                <div class="stat-value" id="arena-status">Pronto</div>
+                <div class="stat-label" data-i18n="ui.botArena.statusLabel">Status</div>
+                <div class="stat-value" id="arena-status" data-i18n="ui.botArena.status.ready">Pronto</div>
               </div>
               <div class="stat-box">
-                <div class="stat-label">Vitorias Bot 1</div>
+                <div class="stat-label" data-i18n="ui.botArena.wins1">Vitorias Bot 1</div>
                 <div class="stat-value" id="arena-wins-1">0</div>
               </div>
               <div class="stat-box">
-                <div class="stat-label">Vitorias Bot 2</div>
+                <div class="stat-label" data-i18n="ui.botArena.wins2">Vitorias Bot 2</div>
                 <div class="stat-value" id="arena-wins-2">0</div>
               </div>
               <div class="stat-box">
-                <div class="stat-label">Empates</div>
+                <div class="stat-label" data-i18n="ui.botArena.draws">Empates</div>
                 <div class="stat-value" id="arena-draws">0</div>
               </div>
               <div class="stat-box">
-                <div class="stat-label">Media de turnos</div>
+                <div class="stat-label" data-i18n="ui.botArena.avgTurns">Media de turnos</div>
                 <div class="stat-value" id="arena-avg-turns">-</div>
               </div>
             </div>
             <div class="arena-log" id="arena-log">
-              <p class="log-entry">Aguardando inicio...</p>
+              <p class="log-entry" data-i18n="ui.botArena.waiting">Aguardando inicio...</p>
             </div>
           </div>
         </div>
         <div class="arena-footer">
-          <button id="btn-arena-start" class="primary">Iniciar</button>
-          <button id="btn-arena-export-strategic" class="secondary" disabled>
+          <button id="btn-arena-start" class="primary" data-i18n="ui.botArena.start">Iniciar</button>
+          <button id="btn-arena-export-strategic" class="secondary" disabled data-i18n="ui.botArena.exportStrategic">
             Export Strategic JSON
           </button>
-          <button id="btn-arena-cancel" class="secondary">Cancelar</button>
+          <button id="btn-arena-cancel" class="secondary" data-i18n="ui.botArena.cancel">Cancelar</button>
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { getEligibleSelectionCandidates, pruneExcludedSelections } from "../../core/game/selection/contract.js";
 import type Renderer from "../Renderer.js";
+import { mountBodyOverlay } from "./modals.js";
 import type { UiCard, UiCardElement, EffectDisplay } from "./types.js";
 import type { SupportedLocale } from "../../core/i18n.js";
 import type {
@@ -787,7 +788,7 @@ export function showTargetSelection(
   content.appendChild(actions);
 
   overlay.appendChild(content);
-  document.body.appendChild(overlay);
+  mountBodyOverlay(this, overlay);
 
   updateConfirmState();
 
@@ -1028,7 +1029,7 @@ export function showDestructionNegationPrompt(
   content.appendChild(actions);
 
   overlay.appendChild(content);
-  document.body.appendChild(overlay);
+  mountBodyOverlay(this, overlay);
 }
 
 /**
@@ -1082,7 +1083,7 @@ export function showFusionTargetModal(
   content.appendChild(grid);
   content.appendChild(cancelBtn);
   overlay.appendChild(content);
-  document.body.appendChild(overlay);
+  mountBodyOverlay(this, overlay);
 }
 
 /**
@@ -1182,7 +1183,7 @@ export function showFusionMaterialSelection<T extends UiCard>(
   content.appendChild(grid);
   content.appendChild(actions);
   overlay.appendChild(content);
-  document.body.appendChild(overlay);
+  mountBodyOverlay(this, overlay);
 
   updateButtons();
 }
@@ -1332,7 +1333,7 @@ export function showCardGridSelectionModal<T extends UiCard>(
   modal.appendChild(actions);
 
   overlay.appendChild(modal);
-  document.body.appendChild(overlay);
+  mountBodyOverlay(this, overlay);
 }
 
 /**
@@ -1452,7 +1453,7 @@ export function showTriggerOrderModal(
     actions.appendChild(confirm);
     modal.appendChild(actions);
     overlay.appendChild(modal);
-    document.body.appendChild(overlay);
+    mountBodyOverlay(this, overlay);
   });
 }
 
@@ -1507,7 +1508,7 @@ export function showIgnitionActivateModal(
   modal.appendChild(desc);
   modal.appendChild(actions);
   overlay.appendChild(modal);
-  document.body.appendChild(overlay);
+  mountBodyOverlay(this, overlay);
 }
 
 /**

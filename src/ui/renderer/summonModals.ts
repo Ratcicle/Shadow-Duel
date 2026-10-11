@@ -1,4 +1,5 @@
 import type Renderer from "../Renderer.js";
+import { mountBodyOverlay } from "./modals.js";
 import type { UiCard } from "./types.js";
 import type { UiRect } from "../../core/contracts/ui.js";
 import type { PlayerId } from "../../core/contracts/primitives.js";
@@ -177,7 +178,7 @@ export function showSummonModal(
   modal.style.position = "fixed";
   modal.style.zIndex = "200";
 
-  document.body.appendChild(modal);
+  mountBodyOverlay(this, modal, () => cleanup());
 
   if (rect) {
     positionHandChoiceModalAboveCard(modal, content, rect);
@@ -264,7 +265,7 @@ export function showConditionalSummonPrompt(
     });
   });
 
-  document.body.appendChild(modal);
+  mountBodyOverlay(this, modal);
   return promise;
 }
 
@@ -366,7 +367,7 @@ export function showTierChoiceModal(
     modal.appendChild(actions);
 
     overlay.appendChild(modal);
-    document.body.appendChild(overlay);
+    mountBodyOverlay(this, overlay);
   });
 }
 
@@ -417,7 +418,7 @@ export function showSpellChoiceModal(
   modal.style.position = "fixed";
   modal.style.zIndex = "200";
 
-  document.body.appendChild(modal);
+  mountBodyOverlay(this, modal, () => cleanup());
 
   if (rect) {
     const contentEl =
@@ -530,7 +531,7 @@ export function showPositionChoiceModal(
   modal.style.position = "fixed";
   modal.style.zIndex = "200";
 
-  document.body.appendChild(modal);
+  mountBodyOverlay(this, modal, () => cleanup());
 
   const rect = cardEl?.getBoundingClientRect();
   if (rect) {
@@ -685,5 +686,5 @@ export function showSpecialSummonPositionModal(
     });
 
   document.addEventListener("keydown", keyHandler);
-  document.body.appendChild(modal);
+  mountBodyOverlay(this, modal, () => cleanup());
 }

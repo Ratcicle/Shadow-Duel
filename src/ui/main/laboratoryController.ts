@@ -6,6 +6,8 @@ import type { PlayerId } from "../../core/contracts/primitives.js";
 import type { LaboratoryDuelConfig } from "./gameLauncher.js";
 import { normalizeScenarioSetup } from "../../core/game/devTools/setup.js";
 import { FIELD_SLOTS, chooseAutomaticFieldSlot } from "../../core/game/zones/placement.js";
+import { getAvailableBotPresets } from "../../core/bot/presets.js";
+import { getUIText } from "../../core/i18n.js";
 import type { ScenarioDefinition } from "../../core/game/devTools/setup.js";
 type LabZone =
   | "deck"
@@ -24,7 +26,6 @@ interface LabEntry {
 type LabSide = { lp: number } & Record<LabZone, LabEntry[]>;
 interface LabZoneConfig {
   id: LabZone;
-  label: string;
   max: number | null;
   defaultCount: number;
 }
@@ -49,28 +50,35 @@ const cardDatabase: readonly DeckCard[] = rawCardDatabase;
 const cardDatabaseById: ReadonlyMap<number, DeckCard> = rawCardDatabaseById;
 
 const LAB_ZONE_CONFIG: readonly [LabZoneConfig, ...LabZoneConfig[]] = [
-  { id: "deck", label: "Deck", max: null, defaultCount: 20 },
-  {
-    id: "extraDeck",
-    label: "Extra Deck",
-    max: MAX_EXTRA_DECK_SIZE,
-    defaultCount: 5,
-  },
-  { id: "hand", label: "Mão", max: null, defaultCount: 4 },
-  { id: "field", label: "Campo", max: 5, defaultCount: 2 },
-  { id: "spellTrap", label: "Magias/Armadilhas", max: 5, defaultCount: 1 },
-  { id: "fieldSpell", label: "Campo Mágico", max: 1, defaultCount: 1 },
-  { id: "graveyard", label: "Cemitério", max: null, defaultCount: 2 },
+  { id: "deck", max: null, defaultCount: 20 },
+  { id: "extraDeck", max: MAX_EXTRA_DECK_SIZE, defaultCount: 5 },
+  { id: "hand", max: null, defaultCount: 4 },
+  { id: "field", max: 5, defaultCount: 2 },
+  { id: "spellTrap", max: 5, defaultCount: 1 },
+  { id: "fieldSpell", max: 1, defaultCount: 1 },
+  { id: "graveyard", max: null, defaultCount: 2 },
 ];
 
-const LAB_ZONE_LABELS = Object.fromEntries(
-  LAB_ZONE_CONFIG.map((zone) => [zone.id, zone.label]),
-);
+function labText(key: string, params: Readonly<Record<string, unknown>> = {}) {
+  return getUIText(`ui.laboratory.${key}`, params);
+}
 
-const LAB_OWNER_LABELS = {
-  player: "Jogador 1",
-  bot: "Jogador 2",
-};
+function labZoneLabel(zone: LabZone) {
+  return labText(`zones.${zone}`);
+}
+
+function labOwnerLabel(owner: PlayerId) {
+  return labText(`owners.${owner}`);
+}
+
+export function resolveLaboratoryBotPreset(
+  value: unknown,
+  available: readonly { id: string }[],
+): string | null {
+  return typeof value === "string" && available.some((preset) => preset.id === value)
+    ? value
+    : null;
+}
 
 export function createLaboratoryController({
   dom,
@@ -212,12 +220,25 @@ export function createLaboratoryController({
   }
 
   function populateControls() {
+    if (dom.botArchetypeSelect) {
+      const presets = getAvailableBotPresets();
+      const selected = resolveLaboratoryBotPreset(dom.botArchetypeSelect.value, presets);
+      dom.botArchetypeSelect.replaceChildren();
+      presets.forEach((preset) => {
+        const option = document.createElement("option");
+        option.value = preset.id;
+        option.textContent = preset.label;
+        dom.botArchetypeSelect!.appendChild(option);
+      });
+      if (selected) dom.botArchetypeSelect.value = selected;
+    }
+
     if (dom.addZoneSelect) {
       dom.addZoneSelect!.innerHTML = "";
       LAB_ZONE_CONFIG.forEach((zone) => {
         const option = document.createElement("option");
         option.value = zone.id;
-        option.textContent = zone.label;
+        option.textContent = labZoneLabel(zone.id);
         dom.addZoneSelect!.appendChild(option);
       });
     }
@@ -236,7 +257,7 @@ export function createLaboratoryController({
       [...archetypes].forEach((name) => {
         const option = document.createElement("option");
         option.value = name;
-        option.textContent = name === "all" ? "Todos" : name;
+        option.textContent = name === "all" ? labText("allArchetypes") : name;
         dom.archetypeSelect!.appendChild(option);
       });
     }
@@ -263,13 +284,23 @@ export function createLaboratoryController({
 
       const header = document.createElement("div");
       header.className = "laboratory-side-header";
-      header.innerHTML = `
-        <h3>${LAB_OWNER_LABELS[owner as PlayerId]}</h3>
-        <label class="laboratory-lp">LP
-          <input type="number" min="0" max="99999" step="any" value="${side.lp}" data-lab-lp="${owner}" />
-        </label>
-        <button type="button" data-lab-random-side="${owner}">Aleatorizar lado</button>
-      `;
+      const title = document.createElement("h3");
+      title.textContent = labOwnerLabel(owner as PlayerId);
+      const lpLabel = document.createElement("label");
+      lpLabel.className = "laboratory-lp";
+      const lpInput = document.createElement("input");
+      lpInput.type = "number";
+      lpInput.min = "0";
+      lpInput.max = "99999";
+      lpInput.step = "any";
+      lpInput.value = String(side.lp);
+      lpInput.dataset.labLp = owner;
+      lpLabel.append("LP", lpInput);
+      const randomSide = document.createElement("button");
+      randomSide.type = "button";
+      randomSide.dataset.labRandomSide = owner;
+      randomSide.textContent = labText("randomizeSide");
+      header.append(title, lpLabel, randomSide);
       panel.appendChild(header);
 
       const zones = document.createElement("div");
@@ -287,10 +318,13 @@ export function createLaboratoryController({
         const maxText = zoneConfig.max ? ` / ${zoneConfig.max}` : "";
         const headerEl = document.createElement("div");
         headerEl.className = "laboratory-zone-header";
-        headerEl.innerHTML = `
-          <span>${zoneConfig.label} (${entries.length}${maxText})</span>
-          <button type="button" data-lab-random-zone="${owner}:${zoneConfig.id}">Sortear</button>
-        `;
+        const zoneTitle = document.createElement("span");
+        zoneTitle.textContent = `${labZoneLabel(zoneConfig.id)} (${entries.length}${maxText})`;
+        const randomZone = document.createElement("button");
+        randomZone.type = "button";
+        randomZone.dataset.labRandomZone = `${owner}:${zoneConfig.id}`;
+        randomZone.textContent = labText("randomizeZone");
+        headerEl.append(zoneTitle, randomZone);
         zone.appendChild(headerEl);
 
         const list = document.createElement("div");
@@ -298,7 +332,7 @@ export function createLaboratoryController({
         if (entries.length === 0) {
           const empty = document.createElement("span");
           empty.className = "laboratory-empty";
-          empty.textContent = "Vazio";
+          empty.textContent = labText("empty");
           list.appendChild(empty);
         } else {
           entries.forEach((entry, index) => {
@@ -308,13 +342,17 @@ export function createLaboratoryController({
             const meta = [];
             if (entry.position)
               meta.push(entry.position === "defense" ? "DEF" : "ATK");
-            if (entry.facedown) meta.push("baixada");
-            chip.innerHTML = `
-              <span title="${card?.name || "Carta desconhecida"}">${card?.name || "Carta desconhecida"}${
-                meta.length ? ` (${meta.join(", ")})` : ""
-              }</span>
-              <button type="button" data-lab-remove="${owner}:${zoneConfig.id}:${index}">&times;</button>
-            `;
+            if (entry.facedown) meta.push(labText("facedownTag"));
+            const cardName =
+              (card && getCardDisplayName(card)) || card?.name || labText("unknownCard");
+            const name = document.createElement("span");
+            name.title = cardName;
+            name.textContent = meta.length ? `${cardName} (${meta.join(", ")})` : cardName;
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.dataset.labRemove = `${owner}:${zoneConfig.id}:${index}`;
+            remove.textContent = "×";
+            chip.append(name, remove);
             list.appendChild(chip);
           });
         }
@@ -330,7 +368,7 @@ export function createLaboratoryController({
     const zoneConfig = getLabZoneConfig(zone);
     const entries = getLabZone(owner, zone);
     if (zoneConfig.max && entries.length >= zoneConfig.max) {
-      alert(`${zoneConfig.label} atingiu o limite de ${zoneConfig.max}.`);
+      alert(labText("alerts.zoneLimit", { zone: labZoneLabel(zoneConfig.id), max: zoneConfig.max }));
       return false;
     }
     const card = getLabCard(entry);
@@ -340,7 +378,7 @@ export function createLaboratoryController({
         (candidate) => candidate.id !== card.id,
       )
     ) {
-      alert("Esta carta não é válida para a zona selecionada.");
+      alert(labText("alerts.invalidForZone"));
       return false;
     }
     const added = cloneLabEntry(entry);
@@ -360,7 +398,7 @@ export function createLaboratoryController({
     const zone = dom.addZoneSelect?.value || laboratorySelection.zone;
     const rawName = dom.cardSearchInput?.value?.trim();
     if (!rawName) {
-      alert("Escolha uma carta para adicionar.");
+      alert(labText("alerts.chooseCard"));
       return;
     }
     const lower = rawName.toLowerCase();
@@ -370,7 +408,7 @@ export function createLaboratoryController({
         (getCardDisplayName(item) || "").toLowerCase() === lower,
     );
     if (!card) {
-      alert("Carta não encontrada.");
+      alert(labText("alerts.cardNotFound"));
       return;
     }
     if (addCardToZone(owner, zone, getLabEntryForCard(card, zone))) {
@@ -551,14 +589,17 @@ export function createLaboratoryController({
   ): LabEntry | null {
     const card = resolveLabCardData(entry);
     if (!card) {
-      warnings.push(`Carta inválida ignorada em ${LAB_ZONE_LABELS[zone]}.`);
+      warnings.push(labText("warnings.invalidCard", { zone: labZoneLabel(zone) }));
       return null;
     }
     const validForZone = getLabCandidates(zone, "all").some(
       (candidate) => candidate.id === card.id,
     );
     if (!validForZone) {
-      warnings.push(`${card.name} não é válido para ${LAB_ZONE_LABELS[zone]}.`);
+      warnings.push(labText("warnings.cardInvalidForZone", {
+        card: getCardDisplayName(card) || card.name,
+        zone: labZoneLabel(zone),
+      }));
       return null;
     }
     const normalized: LabEntry = { id: card.id };
@@ -583,14 +624,14 @@ export function createLaboratoryController({
 
   function normalizeImportedState(payload: unknown) {
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-      throw new Error("Arquivo de Laboratório deve conter um objeto JSON.");
+      throw new Error(labText("importState.notObject"));
     }
 
     let setupPayload: unknown = null;
     let optionsPayload: Record<string, unknown> = {};
     const record = payload as Record<string, unknown>;
     if (record.type === "shadow-duel-laboratory-state") {
-      if (record.version !== 1 && record.version !== 2) throw new Error("Versão de Laboratório incompatível.");
+      if (record.version !== 1 && record.version !== 2) throw new Error(labText("importState.incompatibleVersion"));
       setupPayload = record.setup;
       optionsPayload = {
         ...record,
@@ -600,10 +641,10 @@ export function createLaboratoryController({
       setupPayload = payload;
       optionsPayload = record;
     } else {
-      throw new Error("Formato de Laboratório inválido.");
+      throw new Error(labText("importState.invalidFormat"));
     }
     if (!setupPayload || typeof setupPayload !== "object") {
-      throw new Error("Setup de Laboratório ausente ou inválido.");
+      throw new Error(labText("importState.missingSetup"));
     }
     setupPayload = normalizeScenarioSetup(setupPayload as ScenarioDefinition, {
       requireFieldSlots: record.type === "shadow-duel-laboratory-state" && record.version === 2,
@@ -635,7 +676,7 @@ export function createLaboratoryController({
         for (const rawEntry of raw) {
           if (entries.length >= limit) {
             warnings.push(
-              `${LAB_ZONE_LABELS[zone]} excedeu o limite e foi cortado.`,
+              labText("warnings.zoneTrimmed", { zone: labZoneLabel(zone) }),
             );
             break;
           }
@@ -653,6 +694,16 @@ export function createLaboratoryController({
     normalizeSide("player");
     normalizeSide("bot");
 
+    const importedBotPreset = resolveLaboratoryBotPreset(
+      optionsPayload.botPreset,
+      getAvailableBotPresets(),
+    );
+    if (optionsPayload.botPreset !== undefined && !importedBotPreset) {
+      warnings.push(
+        labText("warnings.unknownBotPreset", { preset: String(optionsPayload.botPreset) }),
+      );
+    }
+
     return {
       setup: normalizedSetup,
       options: {
@@ -667,9 +718,7 @@ export function createLaboratoryController({
             ? optionsPayload.revealBotHand
             : dom.revealBotHandInput?.checked === true,
         botPreset:
-          typeof optionsPayload.botPreset === "string"
-            ? optionsPayload.botPreset
-            : dom.botArchetypeSelect?.value || null,
+          importedBotPreset ?? (dom.botArchetypeSelect?.value || null),
       },
       warnings,
     };
@@ -681,7 +730,7 @@ export function createLaboratoryController({
     try {
       parsed = JSON.parse(await file.text());
     } catch (err) {
-      alert(`Erro ao ler JSON do Laboratório: ${(err as Error).message}`);
+      alert(labText("importState.readError", { message: (err as Error).message }));
       return;
     }
 
@@ -705,13 +754,11 @@ export function createLaboratoryController({
       updateAddControls();
       render();
       const warningText = result.warnings.length
-        ? `\n\nAvisos:\n- ${result.warnings.join("\n- ")}`
+        ? `\n\n${labText("importState.warnings")}\n- ${result.warnings.join("\n- ")}`
         : "";
-      alert(`Estado do Laboratório importado com sucesso.${warningText}`);
+      alert(`${labText("importState.success")}${warningText}`);
     } catch (err) {
-      alert(
-        `Erro ao importar estado do Laboratório: ${(err as Error).message}`,
-      );
+      alert(labText("importState.error", { message: (err as Error).message }));
     }
   }
 

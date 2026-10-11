@@ -196,6 +196,6 @@ test("Oasis simulation policy reads the preference by parent activation effect I
     "The pure mode-selection policy reads the supplied cases and activation context without accessing the actor"));
   const choices = [{ id: modes[0], label: "return" }, { id: modes[1], label: "shift" }];
   assert.equal(strategy.chooseActionCase(choices, { activationContext: {
-    targetPreferences: { miragebound_oasis_ignition: { preferredNames: ["shift"] } },
+    targetPreferences: { miragebound_oasis_ignition: { preferredCaseIds: [modes[1]] } },
   } }), choices[1]);
 });

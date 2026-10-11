@@ -197,6 +197,7 @@ export interface ArenaGamePort {
   gameOver: boolean;
   winner: string | null;
   start(): Promise<unknown>;
+  dispose?(reason?: string): void;
 }
 
 export type ArenaGameConstructor = new (

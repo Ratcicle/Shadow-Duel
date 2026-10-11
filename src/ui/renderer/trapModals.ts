@@ -1,4 +1,5 @@
 import type Renderer from "../Renderer.js";
+import { mountBodyOverlay } from "./modals.js";
 import type { UiCard, EffectDisplay } from "./types.js";
 export interface TrapCandidate extends UiCard {
   card?: UiCard;
@@ -32,6 +33,7 @@ export interface TrapModalResult {
  */
 
 import {
+  getActivationCaseText,
   getCardDisplayName,
   getCardDisplayDescription,
   getUIText,
@@ -195,7 +197,7 @@ export function showUnifiedTrapModal(
       modal.appendChild(actions);
 
       overlay.appendChild(modal);
-      document.body.appendChild(overlay);
+      mountBodyOverlay(this, overlay, handleAbort);
       document.addEventListener("keydown", handleKeydown);
       confirmBtn.focus();
     } else if (cards.length > 1) {
@@ -263,7 +265,7 @@ export function showUnifiedTrapModal(
       modal.appendChild(actions);
 
       overlay.appendChild(modal);
-      document.body.appendChild(overlay);
+      mountBodyOverlay(this, overlay, handleAbort);
       document.addEventListener("keydown", handleKeydown);
       passBtn.focus();
     } else {
@@ -308,8 +310,7 @@ export function showChainResponseModal<T extends TrapCandidate>(
     const effectId: unknown = Reflect.get(lastLink, "effectId");
     const caseId: unknown = Reflect.get(lastLink, "activationCaseId");
     if (typeof effectId === "string" && typeof caseId === "string") {
-      context = { ...context, activationCaseLabel:
-        getUIText(`effectChoices.${effectId}.cases.${caseId}.label`, {}, caseId) };
+      context = { ...context, activationCaseLabel: getActivationCaseText(effectId, caseId, "label") };
     }
   }
   return this.showUnifiedTrapModal({

@@ -634,8 +634,7 @@ export default class BotArena {
     tracker.recordProgress("bot_arena_duel_created", game, { arch1, arch2 });
 
     if (canUseBrowserRenderer(speedConfig)) {
-      const logEl = document.getElementById("action-log-list");
-      if (logEl) logEl.innerHTML = "";
+      document.getElementById("action-log-list")?.replaceChildren();
     }
 
     // Log de início do duelo
@@ -721,6 +720,16 @@ export default class BotArena {
     }
   }
 
+  /** Stops the run and releases its duel and board renderer; analytics stay for export. */
+  dispose(reason = "bot_arena_dispose") {
+    this.stop();
+    const game = this.activeGame;
+    this.activeGame = null;
+    game?.dispose?.(reason);
+    this.renderer?.destroy?.();
+    this.renderer = null;
+  }
+
   async startArena(
     preset1: string,
     preset2: string,
@@ -751,110 +760,113 @@ export default class BotArena {
     };
     const quietLogs = this.shouldUseQuietLogs(speedConfig);
 
-    for (let i = 1; i <= numDuels; i += 1) {
-      if (this.stopRequested) break;
+    try {
+      for (let i = 1; i <= numDuels; i += 1) {
+        if (this.stopRequested) break;
 
-      let result: ArenaDuelResult;
-      try {
-        if (quietLogs) {
-          const originalLog: (...data: unknown[]) => void = console.log;
-          console.log = () => {};
-          try {
-            result = await this.runDuel(
-              preset1,
-              preset2,
-              speedConfig,
-              i,
-              deckData,
-            );
-          } finally {
-            console.log = originalLog;
+        let result: ArenaDuelResult;
+        try {
+          if (quietLogs) {
+            const originalLog: (...data: unknown[]) => void = console.log;
+            console.log = () => {};
+            try {
+              result = await this.runDuel(
+                preset1,
+                preset2,
+                speedConfig,
+                i,
+                deckData,
+              );
+            } finally {
+              console.log = originalLog;
+            }
+          } else {
+            result = await this.runDuel(preset1, preset2, speedConfig, i, deckData);
           }
-        } else {
-          result = await this.runDuel(preset1, preset2, speedConfig, i, deckData);
+        } catch (err) {
+          // runDuel keeps the failed duel's seed even after it releases activeGame.
+          const randomSeed = this.activeDuelSeed ?? this.getDuelRandomSeed(i);
+          this.activeGame = null;
+          this.activeDuelSeed = undefined;
+          result = {
+            duelNumber: i,
+            ...(randomSeed === undefined ? {} : { randomSeed }),
+            winner: "draw",
+            turns: 0,
+            type: "error",
+            reason: END_REASONS.ERROR,
+            message: (err as Error)?.message || "Unknown error",
+            totalTimeMs: 0,
+          };
+
+          // Registrar erro no analytics
+          this.analytics.recordDuel({
+            duelNumber: i,
+            seed: randomSeed ?? null,
+            archetype1: preset1 === "default" ? "custom" : preset1,
+            archetype2: preset2 === "default" ? "custom" : preset2,
+            winner: "draw",
+            turns: 0,
+            reason: END_REASONS.ERROR,
+            finalLP: { player: 0, bot: 0 },
+            totalTimeMs: 0,
+            errors: [(err as Error)?.message || "Unknown error"],
+          });
         }
-      } catch (err) {
-        // runDuel keeps the failed duel's seed even after it releases activeGame.
-        const randomSeed = this.activeDuelSeed ?? this.getDuelRandomSeed(i);
-        this.activeGame = null;
-        this.activeDuelSeed = undefined;
-        result = {
-          duelNumber: i,
-          ...(randomSeed === undefined ? {} : { randomSeed }),
-          winner: "draw",
-          turns: 0,
-          type: "error",
-          reason: END_REASONS.ERROR,
-          message: (err as Error)?.message || "Unknown error",
-          totalTimeMs: 0,
-        };
 
-        // Registrar erro no analytics
-        this.analytics.recordDuel({
-          duelNumber: i,
-          seed: randomSeed ?? null,
-          archetype1: preset1 === "default" ? "custom" : preset1,
-          archetype2: preset2 === "default" ? "custom" : preset2,
-          winner: "draw",
-          turns: 0,
-          reason: END_REASONS.ERROR,
-          finalLP: { player: 0, bot: 0 },
-          totalTimeMs: 0,
-          errors: [(err as Error)?.message || "Unknown error"],
-        });
-      }
+        if (!result || result.type === "cancelled") {
+          break;
+        }
 
-      if (!result || result.type === "cancelled") {
-        break;
-      }
-
-      if (result.reason === END_REASONS.TIMEOUT) {
-        // Not completed: never a win or a draw; reported in drawsByTimeout.
-        stats.drawsByTimeout += 1;
-      } else {
-        stats.completed += 1;
-        stats.totalTurns += result.turns || 0;
-        stats.totalTimeMs += result.totalTimeMs || 0;
-
-        if (result.winner === "player") {
-          stats.wins1 += 1;
-        } else if (result.winner === "bot") {
-          stats.wins2 += 1;
+        if (result.reason === END_REASONS.TIMEOUT) {
+          // Not completed: never a win or a draw; reported in drawsByTimeout.
+          stats.drawsByTimeout += 1;
         } else {
-          stats.draws += 1;
-          if (result.reason === END_REASONS.MAX_TURNS) {
-            stats.drawsByMaxTurns += 1;
+          stats.completed += 1;
+          stats.totalTurns += result.turns || 0;
+          stats.totalTimeMs += result.totalTimeMs || 0;
+
+          if (result.winner === "player") {
+            stats.wins1 += 1;
+          } else if (result.winner === "bot") {
+            stats.wins2 += 1;
+          } else {
+            stats.draws += 1;
+            if (result.reason === END_REASONS.MAX_TURNS) {
+              stats.drawsByMaxTurns += 1;
+            }
           }
         }
-      }
 
-      const avgTurns =
-        stats.completed > 0
-          ? (stats.totalTurns / stats.completed).toFixed(1)
-          : "-";
+        const avgTurns =
+          stats.completed > 0
+            ? (stats.totalTurns / stats.completed).toFixed(1)
+            : "-";
 
-      if (typeof onProgress === "function") {
-        onProgress({
-          completed: stats.completed,
-          wins1: stats.wins1,
-          wins2: stats.wins2,
-          draws: stats.draws,
-          drawsByTimeout: stats.drawsByTimeout,
-          drawsByMaxTurns: stats.drawsByMaxTurns,
-          avgTurns,
-          lastResult: result,
-        });
-      }
+        if (typeof onProgress === "function") {
+          onProgress({
+            completed: stats.completed,
+            wins1: stats.wins1,
+            wins2: stats.wins2,
+            draws: stats.draws,
+            drawsByTimeout: stats.drawsByTimeout,
+            drawsByMaxTurns: stats.drawsByMaxTurns,
+            avgTurns,
+            lastResult: result,
+          });
+        }
 
-      if (autoPause && (result.type === "error" || result.winner === "draw")) {
-        this.stopRequested = true;
-        break;
+        if (autoPause && (result.type === "error" || result.winner === "draw")) {
+          this.stopRequested = true;
+          break;
+        }
       }
+    } finally {
+      // Finalizar batch
+      this.activeGame = null;
+      this.analytics.endBatch();
+      this.isRunning = false;
     }
-
-    // Finalizar batch
-    this.analytics.endBatch();
-    this.isRunning = false;
 
     if (typeof onComplete === "function") {
       const batchStats = this.analytics.getBatchStats();

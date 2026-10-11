@@ -34,7 +34,14 @@ export function log(this: Renderer, message: string): void {
   const mm = String(now.getMinutes()).padStart(2, "0");
   const ss = String(now.getSeconds()).padStart(2, "0");
 
-  entry.innerHTML = `<span class="log-time">${hh}:${mm}:${ss}</span><span class="log-text">${message}</span>`;
+  const time = document.createElement("span");
+  time.className = "log-time";
+  time.textContent = `${hh}:${mm}:${ss}`;
+  const text = document.createElement("span");
+  text.className = "log-text";
+  text.textContent = String(message);
+  entry.appendChild(time);
+  entry.appendChild(text);
   logList.appendChild(entry);
 
   const maxEntries = 80;

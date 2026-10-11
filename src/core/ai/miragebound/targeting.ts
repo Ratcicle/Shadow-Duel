@@ -1,5 +1,5 @@
 import type { MirageboundActivationContext, MirageboundAnalysis, MirageboundCard, MirageboundContext, MirageboundLineAction, MirageboundPreference, MirageboundStatCard } from "./contracts.js";
-import { MB, MIRAGEBOUND, OASIS_RETURN_LABEL, OASIS_SHIFT_LABEL, RECURSION_TARGET_IDS, RETURN_TARGET_IDS, getBattleStat, getBestOwnBattleStat, getEffectiveAtk, getEffectiveDef, getInstanceIds, getOpponentCards, isAttackPositionThreat, uniqueValues } from "./knowledge.js";
+import { MB, MIRAGEBOUND, OASIS_RETURN_CASE_ID, OASIS_SHIFT_CASE_ID, RECURSION_TARGET_IDS, RETURN_TARGET_IDS, getBattleStat, getBestOwnBattleStat, getEffectiveAtk, getEffectiveDef, getInstanceIds, getOpponentCards, isAttackPositionThreat, uniqueValues } from "./knowledge.js";
 import { estimateCardValue, estimateMonsterValue } from "../StrategyUtils.js";
 import { buildBounceNameProfile, buildMirageboundCostPreferences, getMirageboundCardValue } from "./resourcePolicy.js";
 import { buildAutoActivationContext } from "../common/preferencePolicy.js";
@@ -222,12 +222,12 @@ export function buildMirageboundTargetPreferences(sourceCard: MirageboundCard, a
     miragebound_oasis_ignition: {
       intent: "benefit",
       role: "named_preference",
-      preferredNames: analysis.hasMeaningfulBounce
-        ? [OASIS_RETURN_LABEL]
-        : [OASIS_SHIFT_LABEL],
-      avoidNames: analysis.hasMeaningfulBounce
-        ? [OASIS_SHIFT_LABEL]
-        : [OASIS_RETURN_LABEL],
+      preferredCaseIds: analysis.hasMeaningfulBounce
+        ? [OASIS_RETURN_CASE_ID]
+        : [OASIS_SHIFT_CASE_ID],
+      avoidCaseIds: analysis.hasMeaningfulBounce
+        ? [OASIS_SHIFT_CASE_ID]
+        : [OASIS_RETURN_CASE_ID],
     },
     miragebound_false_king_return_cost: {
       intent: "cost",
@@ -350,14 +350,9 @@ export function chooseActionCase<Case extends object>(cases: readonly Case[] = [
     (context as MirageboundContext).activationContext?.actionContext?.targetPreferences ||
     (context as MirageboundContext).activationContext?.targetPreferences ||
     {};
-  const preferredLabels = preferences.miragebound_oasis_ignition?.preferredNames || [];
+  const preferredCaseIds = preferences.miragebound_oasis_ignition?.preferredCaseIds || [];
   const preferredCase = (cases as readonly Case[]).find((choiceCase) =>
-    preferredLabels.some(
-      (label) =>
-        (choiceCase as {label?:string})?.label === label ||
-        (choiceCase as {id?:string})?.id === label ||
-        (choiceCase as {description?:string})?.description?.includes?.(label),
-    ),
+    preferredCaseIds.includes((choiceCase as {id?:string})?.id ?? ""),
   );
   if (preferredCase) return preferredCase;
   return (cases as readonly Case[])[0];

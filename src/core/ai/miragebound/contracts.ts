@@ -173,6 +173,8 @@ export interface MirageboundPreference {
   purpose?: string;
   preferredNames?: string[];
   avoidNames?: string[];
+  preferredCaseIds?: string[];
+  avoidCaseIds?: string[];
   preferNames?: string[];
   preserveNames?: string[];
   preferredInstanceIds?: Array<string | number>;

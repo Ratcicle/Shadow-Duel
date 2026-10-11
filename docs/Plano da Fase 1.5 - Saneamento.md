@@ -21,26 +21,27 @@
 | 4 | ✅ Pipeline único `verify` → `deploy-pages`, ruleset em `main`, **Pages atualizado** | Etapa 3, D6–D8 | S |
 | 5 | ✅ Determinismo sem bump (RNG da IA, invariantes, Tech-Zero, Arena) | Etapa 4, D3, D4 | M |
 | 6 | ✅ Bugs de engine sem bump e política de falhas | Etapa 5, D11–D13 | M |
-| 7 | Pacote de replay com bump único `engine-rules-v27` (broker, hash, bugs que mudam replay) | Etapas 5–6, D5, D14–D16 | L |
-| 8 | UI e i18n (rótulos PT, log sem `innerHTML`, Laboratório, vazamentos) | D17–D19 para os itens de texto | M |
+| 7 | ✅ Pacote de replay com bump único `engine-rules-v27` (broker, hash, bugs que mudam replay) | Etapas 5–6, D5, D14–D16 | L |
+| 8 | ✅ UI e i18n (rótulos PT, log sem `innerHTML`, Laboratório, vazamentos) | — | M |
 | 9 | Encerramento e passagem para a fase 2 (harness de benchmark) | Etapas 0–8 | S |
 
 As Etapas 0–3 levam o CI ao verde e já têm todas as decisões necessárias (D1, D2, D9 e D10, tomadas em 08/10/2026). As demais decisões podem ser tomadas ao chegar na etapa correspondente.
 
 ## Convenções deste plano
 
-- Testes focados são executados com Git Bash, um processo por vez:
-  ```bash
-  T='node --import=tsx --test --test-concurrency=1'   # arquivos que importam SVG registram o loader por conta própria
-  $T test/arquivo.test.ts
-  $T --test-name-pattern="<regex>" test/arquivo.test.ts
-  ```
-- `npm test`, `npm run check` e qualquer suíte global continuam proibidos localmente (`AGENTS.md:173`). A suíte global roda apenas no CI:
-  - Até a Etapa 4, o portão global é o workflow `Verify` disparado por push de uma branch. Hoje ele roda em push de qualquer branch (`.github/workflows/verify.yml:3-5`). Para acompanhar: `gh run list --workflow Verify --branch <branch>`.
-  - A partir da Etapa 4, o portão global é o check obrigatório `verify` do PR.
+- As regras de teste seguem a seção "Executar / Testar" do `AGENTS.md`:
+  - **Sem testes novos por correção ou implementação.** Um teste novo só é criado a pedido do usuário. As tarefas são validadas com os testes já existentes do caminho alterado e de seus consumidores diretos, e com duelos headless Bot vs Bot com `--check-replays` quando a mudança alcança o duelo.
+  - Durante o trabalho, rodam os arquivos do caminho alterado, um processo por vez:
+    ```bash
+    T='node --import=tsx --test --test-concurrency=1'   # arquivos que importam SVG registram o loader por conta própria
+    $T test/arquivo.test.ts
+    $T --test-name-pattern="<regex>" test/arquivo.test.ts
+    ```
+  - `npm test` roda a suíte inteira localmente, num processo só (cerca de 2 min). É usado antes de commit ou PR de mudanças que alcançam vários subsistemas.
+  - O CI (`Verify`, job `verify`) roda em todo push para `main` e em todo PR. Acompanhar com `gh run list --branch main` e `gh run view --log-failed`. Um `verify` vermelho em `main` é prioridade.
 - Commit, push, PR e merge só acontecem a pedido do usuário.
 - Scripts, filtros e logs descartáveis ficam fora do repo, numa pasta temporária. Em `docs/` entram apenas arquivos Markdown.
-- `CANONICAL_REPLAY_ENGINE_VERSION` (`src/core/contracts/replay.ts:27`, hoje `engine-rules-v25`) só muda quando muda a interpretação de replays. A fase 1.5 prevê dois bumps: `engine-rules-v26` na Etapa 3 (D1, regra de ativação de Magias) e `engine-rules-v27` na Etapa 7 (pacote de replay).
+- `CANONICAL_REPLAY_ENGINE_VERSION` (`src/core/contracts/replay.ts:27`, hoje `engine-rules-v27`) só muda quando muda a interpretação de replays. A fase 1.5 previa dois bumps, ambos já aplicados: `engine-rules-v26` na Etapa 3 (D1, regra de ativação de Magias) e `engine-rules-v27` na Etapa 7 (pacote de replay). A Etapa 8 não muda replay.
 - **Regra de golden nas Etapas 5 e 6:** um item cujos testes focados de replay mudem um golden, um checkpoint de hash ou decisões gravadas **não entra em `main`**. Ele passa para a branch de integração `fase15/replay-v27` (Etapa 7) e é entregue junto com o bump. Todo PR das Etapas 5 e 6 inclui na validação `test/replay/canonicalReplay.test.ts`, `test/replay/canonicalDriver.test.ts` e os arquivos de replay do caminho tocado. "Goldens inalterados" é portão obrigatório. Casos plausíveis:
   - o reparo silencioso `resolving → idle` que `determinism:2` passa a rodar (`src/core/game/zones/invariants.ts:442-446`);
   - `engine-bugs:4`, cuja especificação já prevê um golden movido.
@@ -115,6 +116,7 @@ As Etapas 0–3 levam o CI ao verde e já têm todas as decisões necessárias (
 | D14 | `decision-broker:1`: rotear pelo broker só o humano ou humano e IA. | Ambos (o bump já é necessário por causa de `:2` e `:3`) | Etapa 7 |
 | D15 | Void Lost Throne passa a usar a UI genérica de seleção (a mesma de `add_from_zone_to_hand`) em vez do modal de busca (`decision-broker:3`). | Sim | Etapa 7 |
 | D16 | Guard estático contra prompts humanos fora do broker (`decision-broker:12`) ou confiar apenas em testes de replay por carta. Se houver guard, onde ele vive: como regra de `scripts/audit_typescript_escapes.ts` (escopo atual do alias `typescript`) ou em teste, o que exige emendar `AGENTS.md` para ampliar o escopo do alias. | Guard por AST com allowlist, como regra da auditoria existente (`npm run audit:typescript-escapes`), sem emenda | Etapa 7 |
+| D17–D19 | **Aprovadas em 10/10/2026** com as recomendações. D17: o texto concreto de `effectChoices` foi aprovado sem ajustes em 10/10/2026. Ele reaproveita os bullets PT/EN aprovados das cartas e acrescenta as mensagens EN das duas cartas Bloomrot. D18: remover os defaults EN por caso. D19: a cópia de UI é escrita na Etapa 8 e revisada pelo diretor antes do merge. | — | — |
 | D17 | **Texto do diretor para `effectChoices`** (`ui-i18n:4`): rótulo e descrição de `miragebound_oasis_return_weaken` (sugestão sem palavras novas: reaproveitar o bullet PT aprovado em `public/locales/pt-br.json:1114`); apagar o órfão `miragebound_oasis_recycle_search`; ressincronizar `shift_weaken` com "face-up"/"com a face para cima"; mensagem e rótulos PT de Bloomrot Root Network (2 casos) e Bloomrot Queen of the Hollow Grove (3 casos). | Aguardar texto | Etapa 8 (`ui-i18n:4`) |
 | D18 | **Defaults EN de `effectChoices`** (`ui-i18n:5`): remover os defaults por caso, deixando valer o texto inline aprovado da carta, ou manter cópia EN separada. A decisão vem antes da mudança. | Remover | Etapa 8 (`ui-i18n:5`) |
 | D19 | **Cópia de UI** (não é texto de carta): aviso do Laboratório (`ui-i18n:6`), textos EN da Arena/Laboratório (`ui-i18n:10`), e se "Jogador 1/2" (`src/ui/main/gameLauncher.ts:101-102`) deve ser localizado. | Revisão do diretor antes do merge | Etapa 8 |
@@ -937,50 +939,52 @@ Nos testes de playback desta etapa, as políticas de IA movidas para `resolveAI`
 
 ## Etapa 8 — UI e i18n
 
-**Objetivo:** corrigir os defeitos de apresentação confirmados. `ui-i18n:1`, `:2`, `:3`, `:6` e `:8` não dependem das etapas de engine e podem ser preparados em paralelo desde a Etapa 4. `ui-i18n:7` também, mas com a coordenação descrita abaixo. Os merges passam pelo `verify`.
+**Objetivo:** corrigir os defeitos de apresentação confirmados. Os pré-requisitos de engine já estão em `main`: `determinism:4a` (Etapa 5) e o pacote `engine-rules-v27` (Etapa 7). A Etapa 8 não muda a interpretação de replays nem as definições de cartas.
 
-**Coordenação de arquivos compartilhados:**
-- `ui-i18n:7` edita `src/core/BotArena.ts` e `test/ai/arenaConfiguration.test.ts`, os mesmos arquivos de `determinism:4a` (Etapa 5). Ele entra depois de `determinism:4a` e é rebaseado sobre ele; não sobem em paralelo.
-- `ui-i18n:3` edita `src/core/AutoSelector.ts`, que é compartilhado pelos consumidores de IA. Ele vai numa branch própria e é rebaseado sobre qualquer PR aberto que toque o arquivo.
+**Política de testes (`AGENTS.md`):** nenhuma tarefa cria arquivo ou caso de teste novo, salvo pedido do usuário. Cada tarefa é validada com os testes existentes do caminho alterado. As tarefas que alcançam o duelo também passam pelo Bot smoke com `--check-replays`, e as de apresentação por conferência no navegador (preview do Vite). Se uma mudança quebrar um stub de teste existente que dependa do comportamento antigo (por exemplo, um `actionLog` que só aceita `innerHTML`), o stub é ajustado ao novo contrato. Isso não enfraquece a asserção.
 
 **Tarefas**
 
-- [ ] **`ui-i18n:1`**: carregador genérico em `src/core/i18n.ts`.
+- [x] **`ui-i18n:1`**: carregador genérico em `src/core/i18n.ts`.
   - `CARD_SECTION_KEYS = new Set(["cards","cardTranslations","translations"])`.
   - `LocalePayload = { cards; texts }`.
-  - `normalizeLocalePayload` (`:704-757`) copia toda seção de topo que não seja de cartas.
-  - `getUIText` (`:963`) lê `.texts`.
-  - Novo `test/localization/localeSections.test.ts`: os 22 `activationLabelKey` resolvem para o PT de `public/locales/pt-br.json:374-386`, e toda folha de seção que não é de carta resolve exatamente.
-- [ ] **`ui-i18n:2`**: em `src/ui/renderer/log.ts:37`, construir o log com `createElement`/`textContent`.
-  - Teste em `test/ui/playerHud.test.ts`: o stub de `actionLog` implementa `children.length`, `firstChild`, `removeChild`, `appendChild`, `scrollTop` e `scrollHeight`, e o setter de `innerHTML` lança.
-- [ ] **`ui-i18n:3`** (antes de `:4`): o problema é **latente**. Hoje o mesmo caso vence em EN e em PT; só a margem muda.
-  - Adicionar `preferredCaseIds`/`avoidCaseIds` a `AutoSelectorPreference` (`src/core/AutoSelector.ts`, perto de `:134`), casados com `candidate.cardRef.id` quando `zone === "choice"`.
-  - Em `src/core/ai/miragebound/knowledge.ts`, `OASIS_RETURN_CASE_ID`/`OASIS_SHIFT_CASE_ID`; `src/core/ai/miragebound/targeting.ts:221-230` e `:347-361` passam a usá-los.
-  - O teste precisa **falhar antes da correção**: rótulos PT nos dois casos (simulando `ui-i18n:4`) e asserção do caso vencedor, ou de uma diferença de score igual entre locales, em `test/mirageboundOasisP1.test.ts`.
-- [ ] **`ui-i18n:6`**: o select do Laboratório passa a ser montado a partir de `getAvailableBotPresets()` (`src/core/bot/presets.ts:97-103`). Remover as `<option>` de `index.html:274-279`.
-  - `resolveLaboratoryBotPreset(value, available)` exportado de `src/ui/main/laboratoryController.ts`, com aviso na importação (`:669-672`).
-  - Novo `test/ui/laboratoryBotPresets.test.ts`. A cópia do aviso segue D19.
-- [ ] **`ui-i18n:7`** (depois de `determinism:4a`): `BotArena.dispose()` para, limpa `activeGame` e destrói o renderer, mantendo os analytics. Acrescentar `try/finally` no laço de `startArena` e `botArenaInstance?.dispose()` em `src/ui/main/botArenaController.ts:146`.
-  - Testes em `test/ai/arenaConfiguration.test.ts`.
-  - Conferir a classe do canvas em `src/ui/pixi/PixiVfxLayer.ts:337-340` antes da checagem manual.
-- [ ] **`ui-i18n:8`**: em `src/core/game/ui/winCondition.ts:94-96`, `onMenu` dispara `shadow-duel-main-menu`, com um listener em `src/main.ts` que chama `disposeActiveGame("return_to_menu")`. Acrescentar `onBeforeStart` em `ArenaControllerOptions`.
-  - Teste em `test/gameLauncher.test.ts`.
-- [ ] **`ui-i18n:4`** (D17; depois de `:3`): dados de `effectChoices` em `public/locales/pt-br.json` e `src/core/i18n.ts`, mais um teste de cobertura e de órfãos em `test/localization/localeSections.test.ts`, no mesmo commit do texto.
-- [ ] **`ui-i18n:5`** (D18 decidida antes): remover de `DEFAULT_LOCALE_TEXTS.effectChoices` (`src/core/i18n.ts`) os rótulos e descrições por caso, mantendo `message`.
-  - Teste: em EN, os textos resolvidos são iguais ao texto inline das cartas.
+  - `normalizeLocalePayload` copia toda seção de topo que não seja de cartas. Hoje ele copia só `ui` e `effectChoices`, e a seção `effects` do PT (`public/locales/pt-br.json:374-386`, os 22 `activationLabelKey`) se perde.
+  - `getUIText` lê `.texts`.
+  - Conferência: os rótulos de `effects.*` resolvem em PT no navegador, e `test/localization/genericEffects.test.ts` continua verde.
+- [x] **`ui-i18n:2`**: em `src/ui/renderer/log.ts`, construir o log com `createElement`/`textContent`, sem `innerHTML`.
+- [x] **`ui-i18n:3`** (antes de `:4`): o problema é **latente**. Hoje o mesmo caso vence em EN e em PT; só a margem muda.
+  - Adicionar `preferredCaseIds`/`avoidCaseIds` a `AutoSelectorPreference` (`src/core/AutoSelector.ts`), casados com `candidate.cardRef.id` quando `zone === "choice"`.
+  - Em `src/core/ai/miragebound/knowledge.ts`, `OASIS_RETURN_CASE_ID`/`OASIS_SHIFT_CASE_ID`; `src/core/ai/miragebound/targeting.ts` passa a usá-los, sem depender do rótulo traduzido.
+  - Validação: `test/mirageboundOasisP1.test.ts`, os replays Miragebound e o Bot smoke com Miragebound.
+  - **Executado (10/10/2026):** o teste existente de `chooseActionCase` em `test/mirageboundOasisP1.test.ts` passou a declarar a preferência por `preferredCaseIds`, o novo contrato.
+  - **Para a fase 2:** a IA Arcanist também escolhe casos pelo rótulo (`getLibraryChoiceNames`/`getMeetingChoiceNames` em `src/core/ai/arcanist/priorities.ts`). Em runtime, a preferência fica sob a chave `action_case_choice`, que não casa com o ID do efeito da ativação por casos, e por isso não é aplicada em nenhum idioma. A mudança de `:5` não altera esse comportamento.
+- [x] **`ui-i18n:6`**: o select do Laboratório passa a ser montado a partir de `getAvailableBotPresets()` (`src/core/bot/presets.ts`). Remover as `<option>` fixas de `index.html`.
+  - `resolveLaboratoryBotPreset(value, available)` exportado de `src/ui/main/laboratoryController.ts`, com aviso na importação. A cópia do aviso segue D19.
+- [x] **`ui-i18n:7`**: `BotArena.dispose()` para, limpa `activeGame` e destrói o renderer, mantendo os analytics. Acrescentar `try/finally` no laço de `startArena` e `botArenaInstance?.dispose()` em `src/ui/main/botArenaController.ts`.
+  - Conferir a classe do canvas em `src/ui/pixi/PixiVfxLayer.ts` antes da checagem manual.
+- [x] **`ui-i18n:8`**: em `src/core/game/ui/winCondition.ts`, `onMenu` dispara `shadow-duel-main-menu`, com um listener em `src/main.ts` que chama `disposeActiveGame("return_to_menu")`. Acrescentar `onBeforeStart` em `ArenaControllerOptions`.
+- [x] **`ui-i18n:4`** (texto de D17 aprovado em 10/10/2026; depois de `:3`): dados de `effectChoices` em `public/locales/pt-br.json` e `src/core/i18n.ts`.
+  - Oasis: novo caso `miragebound_oasis_return_weaken`, apagar o órfão `miragebound_oasis_recycle_search` e ressincronizar `miragebound_oasis_shift_weaken`.
+  - Mensagem e rótulos PT de Bloomrot Root Network (`bloomrot_root_network_recover`, 2 casos) e de Bloomrot Queen of the Hollow Grove (`bloomrot_queen_hollow_grove_remove_and_heal`, 3 casos).
+- [x] **`ui-i18n:5`** (D18: remover): remover de `DEFAULT_LOCALE_TEXTS.effectChoices` (`src/core/i18n.ts`) os rótulos e descrições por caso, mantendo `message`. Em EN, passa a valer o texto inline das cartas.
   - Não há risco para a IA: o rótulo EN de `shift` é igual ao inline.
-- [ ] **`ui-i18n:9`** (corrigido): registro `activeOverlays` no Renderer e helper `mountBodyOverlay` em `src/ui/renderer/modals.ts` para as 19 chamadas de `document.body.appendChild`.
-  - Callbacks idempotentes em relação aos fechamentos que já existem: `Game.dispose` já fecha a seleção de alvo (`test/gameLauncher.test.ts:251-339`), e o modal de trap já é resolvido.
+  - **Executado (10/10/2026):** os defaults por caso saíram de Grand Library, Meeting of the Arcanists e Miragebound Oasis, que têm texto inline. Os de "Wanted in the Burning West" ficaram, porque os casos de `choose_action_case` não têm texto inline e o default EN é a única cópia. As mensagens EN das duas cartas Bloomrot entraram conforme D17.
+  - O modal de resposta de Chain mostrava o rótulo do caso só pela tradução, com o ID como fallback. Ele passou a usar `getActivationCaseText` (`src/core/i18n.ts`): tradução → texto inline da carta → ID. O teste existente `test/trapChainResponse.test.ts`, que derivava o esperado do default EN removido, agora deriva do texto inline da carta.
+- [x] **`ui-i18n:9`** (depois de `:8`): registro `activeOverlays` no Renderer e helper `mountBodyOverlay` em `src/ui/renderer/modals.ts` para as chamadas de `document.body.appendChild`.
+  - Callbacks idempotentes em relação aos fechamentos que já existem: `Game.dispose` já fecha a seleção de alvo, e o modal de trap já é resolvido.
   - Usar a semântica de **abort/valor inerte**, não "cancel", e nunca uma escolha automática.
-  - Se os testes criarem um Renderer real, `test/gameLauncher.test.ts` precisa importar `../scripts/register_node_asset_loader.js`.
-- [ ] **`ui-i18n:10`**: chaves `ui.botArena.*`/`ui.laboratory.*` (o PT reaproveita as strings atuais). Os controladores usam `getUIText`; os chips do Laboratório usam `getCardDisplayName` e `textContent`; as refs ficam em `src/ui/main/domRefs.ts` e são aplicadas em `src/main.ts:73-81`. A cópia EN passa pela revisão de D19.
+  - **Executado (10/10/2026):** `mountBodyOverlay(renderer, overlay, release)` e `releaseBodyOverlays(renderer)` em `src/ui/renderer/modals.ts`, chamados por `Renderer.destroy`. Os 18 modais montados em `document.body` passam pelo registro. `release` remove o overlay e os listeners globais (`keydown`, `mousedown`) sem responder: a continuação pendente é descartada. Exceções que já existiam: o anúncio de início de duelo, que não é escolha, termina como exibido; o modal de trap mantém a resolução por `activeTrapModalCancel`. O tooltip flutuante de marcadores fica fora, porque é um singleton compartilhado já limpo no `destroy`. `showConfirmPrompt` também é chamado sem Renderer (`src/main.ts`) e, nesse caso, só monta o overlay.
+- [x] **`ui-i18n:10`**: chaves `ui.botArena.*`/`ui.laboratory.*` (o PT reaproveita as strings atuais). Os controladores usam `getUIText`; os chips do Laboratório usam `getCardDisplayName` e `textContent`; as refs ficam em `src/ui/main/domRefs.ts` e são aplicadas em `src/main.ts`. A cópia EN passa pela revisão de D19.
+  - **Executado (10/10/2026):** em vez de uma ref por elemento, o `index.html` marca os textos estáticos com `data-i18n`, `data-i18n-aria-label` e `data-i18n-placeholder`, aplicados por `applyMarkupLocalization` em `src/main.ts`. O texto do HTML continua como fallback PT. Os controladores usam `ui.botArena.*`/`ui.laboratory.*`. Os painéis do Laboratório deixaram de usar `innerHTML`, e os chips mostram o nome localizado da carta.
+  - **D19 aprovada pelo usuário em 10/10/2026:** a cópia EN nova, o PT acentuado da Arena ("Número", "Concluídos", "Vitórias", "Média", "Aguardando início") e o log da Arena em PT ("Duelo" em vez de "Duel"). Os nomes dos participantes do Laboratório continuam "Jogador 1/2" (`src/ui/main/gameLauncher.ts`, fixado em `test/gameLauncher.test.ts`); os cabeçalhos do painel usam `ui.laboratory.owners.*`.
 
 **Validação**
+
+Somente testes existentes, escolhidos pelo caminho alterado:
 
 ```bash
 npm run typecheck
 npm run audit:typescript-escapes
-$T test/localization/localeSections.test.ts
 $T test/localization/genericEffects.test.ts
 $T test/trapChainResponse.test.ts
 $T test/cardDescriptionFormatting.test.ts
@@ -991,16 +995,23 @@ $T test/replay/mirageboundPriorityOneReplay.test.ts
 $T test/replay/mirageboundSourcePresenceS02.test.ts
 $T --test-name-pattern="P1 pooled costs" test/replay/bloomrotPriorityOneReplay.test.ts
 $T --test-name-pattern="P2 canonical" test/replay/bloomrotPriorityTwoReplay.test.ts
-$T test/ui/laboratoryBotPresets.test.ts
-$T --test-name-pattern="Laboratory" test/gameLauncher.test.ts
 $T test/gameLauncher.test.ts
 $T test/ai/arenaConfiguration.test.ts
 $T --test-name-pattern="progress and analytics" test/ai/arenaSeed.test.ts
 $T test/contracts/uiAdapter.test.ts
+node --import=tsx --import=./scripts/register_node_asset_loader.ts scripts/run_bot_arena_smoke.ts --matchups "miragebound:bloomrot,arcanist:burningwest" --duels 2 --check-replays
 npm run build
+npm test   # antes do commit, porque a etapa alcança i18n, IA, UI e Arena
 ```
 
-Manual: abrir a Arena três vezes em 1x e confirmar que não sobram canvases. O portão global é o PR com `verify`.
+Manual, no preview do Vite:
+- Em PT, os rótulos de `effects.*` e de `effectChoices` aparecem em PT.
+- O log de ações funciona sem `innerHTML`.
+- O Laboratório lista os 9 presets.
+- Ao abrir a Arena três vezes em 1x, não sobram canvases nem overlays.
+- Voltar ao menu pela tela de vitória descarta o duelo.
+
+O CI (`verify`) roda no push para `main`.
 
 **Critério de saída:**
 - Os rótulos PT de efeito aparecem em PT.
@@ -1010,16 +1021,15 @@ Manual: abrir a Arena três vezes em 1x e confirmar que não sobram canvases. O 
 - `:4`, `:5` e `:10` entram somente com o texto aprovado.
 
 **Dependências:**
-- `:4` depende de `:3` e de D17.
-- `:5` depende de D18.
-- `:7` depende de `determinism:4a` (arquivos compartilhados).
+- `:4` depende de `:3`. O texto de D17 já foi aprovado.
+- `:5` segue D18 (remover).
 - `:9` depende de `:8`.
-- `:10` depende de `:1`, `:6` e D19.
+- `:10` depende de `:1` e `:6`. A cópia segue D19.
 
 **Riscos:**
 - `ui-i18n:9` toca cerca de 18 modais. Uma continuação depois do dispose precisa ser inerte.
 - Refs de DOM faltando deixam o fallback PT aparecendo.
-- Conflito de rebase entre `ui-i18n:7` e `determinism:4a`. Mitigação: a ordem fixa acima.
+- Sem testes novos, regressões de i18n e de dispose só aparecem nos testes existentes, no Bot smoke e na conferência manual. Mitigação: o roteiro manual acima é obrigatório antes do commit.
 
 **Esforço:** M.
 
@@ -1048,7 +1058,7 @@ Manual: abrir a Arena três vezes em 1x e confirmar que não sobram canvases. O 
 
 **Critério de saída:** roadmap atualizado e escopo do harness aprovado pelo usuário.
 
-**Dependências:** Etapas 0–8. `ui-i18n:4`, `:5` e `:10` podem continuar pendentes por falta de texto.
+**Dependências:** Etapas 0–8. `ui-i18n:4` pode continuar pendente se o texto concreto de D17 não for aprovado, e `:10` se a cópia de D19 não for revisada.
 
 **Riscos:** a fase 2 começar sem as baselines medidas de novo.
 

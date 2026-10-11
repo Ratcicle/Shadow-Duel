@@ -133,6 +133,8 @@ interface AutoSelectorPreference {
   purpose?: string;
   preferredNames?: string[];
   avoidNames?: string[];
+  preferredCaseIds?: string[];
+  avoidCaseIds?: string[];
   defensiveNames?: string[];
   offensiveNames?: string[];
   preferredInstanceIds?: Array<string | number>;
@@ -646,7 +648,8 @@ export default class AutoSelector {
       if (
         targetPreference?.role === "removal" ||
         targetPreference?.role === "named_preference" ||
-        targetPreference?.preferredNames?.length
+        targetPreference?.preferredNames?.length ||
+        targetPreference?.preferredCaseIds?.length
       ) {
         return (
           getNamedPreferenceTargetScore(baseCard, targetPreference, candidate) +
@@ -680,7 +683,8 @@ export default class AutoSelector {
       const targetPreference = getTargetPreference(context);
       if (
         targetPreference?.role === "named_preference" ||
-        targetPreference?.preferredNames?.length
+        targetPreference?.preferredNames?.length ||
+        targetPreference?.preferredCaseIds?.length
       ) {
         return (
           getNamedPreferenceTargetScore(baseCard, targetPreference, candidate) +
@@ -1019,6 +1023,14 @@ function listIncludesInstance(
   return candidateIds.some((id) => normalized.has(String(id)));
 }
 
+// Effect-choice candidates carry the case id; their names are localized labels.
+function getChoiceCaseId(
+  candidate: AutoSelectionCandidate | null | undefined,
+): string | null {
+  const id = candidate?.zone === "choice" ? candidate.cardRef?.id : null;
+  return id === null || id === undefined ? null : String(id);
+}
+
 function getNamedPreferenceTargetScore(
   card: AutoSelectorScorableCard | null | undefined,
   preference: AutoSelectorPreference = {},
@@ -1028,9 +1040,12 @@ function getNamedPreferenceTargetScore(
   const preferredNames = preference.preferredNames || [];
   const avoidNames = preference.avoidNames || [];
   const candidateIds = getCandidateInstanceIds(card, candidate);
+  const caseId = getChoiceCaseId(candidate);
   let score = estimateCardValue(card);
   if (card.name && preferredNames.includes(card.name)) score += 40;
   if (card.name && avoidNames.includes(card.name)) score -= 30;
+  if (caseId && (preference.preferredCaseIds || []).includes(caseId)) score += 40;
+  if (caseId && (preference.avoidCaseIds || []).includes(caseId)) score -= 30;
   if (listIncludesInstance(preference.preferredInstanceIds, candidateIds)) {
     score += 55;
   }

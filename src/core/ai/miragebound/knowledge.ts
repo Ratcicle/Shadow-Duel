@@ -21,9 +21,9 @@ export const MB = Object.freeze({
   REBEL: "Miragebound Rebel",
 });
 
-export const OASIS_RETURN_LABEL = 'Return a "Miragebound" monster; weaken an opponent monster';
+export const OASIS_RETURN_CASE_ID = "miragebound_oasis_return_weaken";
 
-export const OASIS_SHIFT_LABEL = "Change an opponent monster's position";
+export const OASIS_SHIFT_CASE_ID = "miragebound_oasis_shift_weaken";
 
 export const RETURN_TARGET_IDS = [
   "miragebound_dancer_bounce_target",
