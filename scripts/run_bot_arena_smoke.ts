@@ -2,6 +2,8 @@ import fs from "node:fs";
 import Bot from "../src/core/Bot.js";
 import BotArena from "../src/core/BotArena.js";
 import Game from "../src/core/Game.js";
+import { replayCanonicalDuel } from "../src/core/game/replay/driver.js";
+import type { ReplayDriverGamePort } from "../src/core/contracts/replay.js";
 import type {
   ArenaCompletionStats,
   ArenaDuelResult,
@@ -21,6 +23,15 @@ interface SmokeOptions {
   plannerCandidateLimit: number | null;
   out: string | null | undefined;
   verbose: boolean;
+  checkReplays: boolean;
+}
+
+interface ReplayCheckResult {
+  duelNumber: number;
+  ok: boolean;
+  commands: number;
+  decisions: string;
+  message: string | null;
 }
 
 type StrategicReport = ReturnType<BotArena["exportStrategicReport"]>;
@@ -68,6 +79,7 @@ function parseArgs(argv = process.argv.slice(2)) {
     plannerCandidateLimit: null,
     out: null,
     verbose: false,
+    checkReplays: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -103,6 +115,7 @@ function parseArgs(argv = process.argv.slice(2)) {
       options.plannerCandidateLimit = Number(next()) || null;
     } else if (arg === "--out") options.out = next();
     else if (arg === "--verbose") options.verbose = true;
+    else if (arg === "--check-replays") options.checkReplays = true;
   }
 
   options.duels = Math.max(1, Math.floor(options.duels || 1));
@@ -195,9 +208,63 @@ function compactStrategicReport(report: StrategicReport | null) {
   };
 }
 
+// --check-replays: every Arena duel records a canonical replay, which then
+// plays back in a fresh Game with the same controllers (a bot in each seat).
+// A divergence means some live path is not captured as a command or decision.
+function createReplayCapturingGame(captured: Game[]) {
+  return class ReplayCapturingGame extends Game {
+    constructor(gameOptions: ConstructorParameters<typeof Game>[0] = {}) {
+      // The turn limit is not part of the canonical setup, so capture refuses it;
+      // these duels end by LP or by the Arena timeout.
+      const captureOptions = { ...gameOptions, captureReplay: true };
+      delete captureOptions.maxTurnCounter;
+      super(captureOptions);
+      captured.push(this);
+    }
+  };
+}
+
+async function checkArenaReplays(games: readonly Game[], seat1: string, seat2: string) {
+  const results: ReplayCheckResult[] = [];
+  for (const [index, game] of games.entries()) {
+    const duelNumber = index + 1;
+    const exported = game.exportReplay({ download: false });
+    if (!exported) {
+      results.push({ duelNumber, ok: false, commands: 0, decisions: "0/0", message: "no replay recorded" });
+      continue;
+    }
+    const replay: unknown = JSON.parse(JSON.stringify(exported));
+    const first = new Bot(seat1);
+    const second = new Bot(seat2);
+    first.id = "player";
+    const playback = new Game({ replayMode: "playback", captureReplay: false, opponentOverride: second });
+    // Seats are wired as BotArena wires them.
+    playback.player = first;
+    playback.player.game = playback;
+    playback.bot.game = playback;
+    playback.disablePresentationDelays = true;
+    playback.phaseDelayMs = 0;
+    const decisions = () => `${playback.decisionBroker.replayCursor}/${exported.decisions.length}`;
+    try {
+      // The concrete Game provides the driver's port, as its own headless Game does.
+      const result = await replayCanonicalDuel(replay, { game: playback as ReplayDriverGamePort });
+      results.push({ duelNumber, ok: true, commands: result.commands, decisions: decisions(), message: null });
+    } catch (error) {
+      results.push({ duelNumber, ok: false, commands: exported.commands.length, decisions: decisions(),
+        message: error instanceof Error ? error.message : String(error) });
+    } finally {
+      playback.dispose("smoke-replay-check");
+    }
+  }
+  return results;
+}
+
 async function runMatchup(matchup: string, options: SmokeOptions) {
   const [seat1, seat2] = splitMatchup(matchup);
-  const arena = new BotArena(Game, Bot);
+  const capturedGames: Game[] = [];
+  const arena = options.checkReplays
+    ? new BotArena(createReplayCapturingGame(capturedGames), Bot)
+    : new BotArena(Game, Bot);
   // BotArena normalizes the raw CLI mode strings against its supported modes.
   arena.setSearchParams({ ...plannerOptions(options), randomSeed: options.randomSeed } as ArenaSearchOptions);
 
@@ -216,6 +283,12 @@ async function runMatchup(matchup: string, options: SmokeOptions) {
   );
 
   const strategicReport = arena.exportStrategicReport();
+  // Let commands still settling after the Arena stops polling finish first.
+  if (options.checkReplays) await new Promise(resolve => setTimeout(resolve, 200));
+  const replayCheck = options.checkReplays
+    ? await checkArenaReplays(capturedGames, seat1, seat2)
+    : undefined;
+  if (replayCheck?.some(result => !result.ok)) process.exitCode = 1;
   return {
     matchup,
     seat1,
@@ -223,6 +296,7 @@ async function runMatchup(matchup: string, options: SmokeOptions) {
     duels,
     completion: compactCompletion(completion),
     strategicReport: compactStrategicReport(strategicReport),
+    ...(replayCheck ? { replayCheck } : {}),
   };
 }
 

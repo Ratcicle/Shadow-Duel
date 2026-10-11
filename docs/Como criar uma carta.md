@@ -1195,11 +1195,11 @@ npm run generate:actions
 npm run check:actions-doc
 ```
 
-Execute somente os testes diretamente ligados à carta/action e aos caminhos
-alterados, inclusive no encerramento. Justifique dependências e consumidores
-diretos (Chain, decisões, replay, simulação/IA) conforme o impacto. Auditorias,
-build e smokes são separados e somente quando pertinentes. Siga `AGENTS.md`;
-`npm test` e `npm run check` não são gates automáticos.
+Rode os testes existentes ligados à carta/action e aos consumidores diretos
+(Chain, decisões, replay, simulação/IA) conforme o impacto; `npm test` roda a
+suíte inteira em cerca de 2 minutos antes de commit/PR. Não crie teste novo sem
+pedido do usuário. Auditorias, build e o Bot smoke com `--check-replays` são
+separados e somente quando pertinentes. Siga `AGENTS.md`.
 
 ## Metadados canônicos de ativação e uso
 

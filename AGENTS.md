@@ -3,8 +3,8 @@
 **Regra de ouro:** Todo código adicionado ou alterado deve seguir o padrão Shadow Duel: genérico, flexível e pensando nas adições futuras.
 
 O projeto é uma aplicação TypeScript com contratos strict. Novas mudanças
-devem preservar esses contratos e passar as verificações pertinentes, com testes
-diretamente relacionados aos arquivos e caminhos alterados.
+devem preservar esses contratos e passar as verificações pertinentes (ver
+"Executar / Testar").
 
 O compilador oficial é TypeScript 7.0.2 via alias `@typescript/native`; os
 scripts de typecheck/watch chamam seu CLI explicitamente. O alias `typescript`
@@ -140,7 +140,7 @@ Os contratos fundamentais ficam em [src/core/contracts/chain.ts](src/core/contra
 | `afterResolution.ts` | Continuação pós-efeito, janela filha CL1, barreira de triggers e projeções dos contextos suspensos |
 | `finalization.ts` | Destino e cleanup pós-Chain de Spell/Trap |
 
-Os métodos anexados são expostos no tipo da fachada por declaration merging, sem class fields emitidos. Ao alterar o Chain, execute somente os testes de Chain e de consumidores diretamente afetados, inclusive no encerramento. Justifique a cobertura de decisões, replay e IA pelo caminho alterado; Bot smoke é necessário apenas quando pertinente ao impacto, com cenários focados.
+Os métodos anexados são expostos no tipo da fachada por declaration merging, sem class fields emitidos. Ao alterar o Chain, rode os testes de Chain e dos consumidores afetados (decisões, replay e IA) e, quando a mudança alcançar o duelo, o Bot smoke com `--check-replays` nos cenários pertinentes.
 
 **Estrutura modular de [src/core/effects/](src/core/effects/):**
 
@@ -169,17 +169,28 @@ npm run dev                   # Inicia o servidor Vite
 npm run typecheck             # Verifica contratos TypeScript
 npm run build                 # Gera o build quando pertinente
 npm run preview               # Serve o build de produção localmente
+npm test                      # Suíte inteira num processo só (cerca de 2 min)
 ```
-Durante todo o trabalho, inclusive no encerramento e antes de commit/PR, execute somente testes diretamente relacionados aos arquivos e caminhos alterados. Inclua dependências compartilhadas e consumidores diretos (Chain, decisões, replay, simulação e IA) conforme o impacto e justifique o alcance escolhido. Não execute `npm test`, `npm run check` ou outra suíte global automaticamente, mesmo em mudanças que afetem múltiplos subsistemas; uma solicitação explícita futura do usuário pode autorizar execução global. `npm test -- <arquivos ou globs em test/>` executa somente os arquivos indicados e aceita apenas as flags `--test-*` da allowlist do runner, no formato `--flag=valor`; sem argumentos, executa a suíte global e continua proibido localmente sem pedido explícito. Para testes focados, use o Node diretamente com os arquivos selecionados:
+**Testes novos.** Não crie teste novo a cada correção ou implementação; crie só quando o usuário pedir. Valide mudanças com os testes já existentes do caminho alterado e com duelos headless Bot vs Bot com replay (abaixo).
+
+**Rodar testes.** `npm test` roda a suíte inteira num processo só, um teste por vez, em cerca de 2 minutos; use-o antes de commit/PR de mudanças que alcancem vários subsistemas. Durante o trabalho, prefira os arquivos do caminho alterado e de seus consumidores diretos (Chain, decisões, replay, simulação e IA): `npm test -- <arquivos ou globs em test/>`, que aceita apenas as flags `--test-*` da allowlist do runner, no formato `--flag=valor`, ou o Node diretamente:
 
 ```bash
 node --import=tsx --test --test-concurrency=1 test/caminho/arquivo.test.ts
 ```
 
+Os arquivos de teste compartilham o processo no `npm test` e no CI. Um teste não pode deixar estado global alterado (idioma, `localStorage`, mocks em protótipos, definições de cartas): copie definições antes de passá-las a código que as altere e restaure o que mudar.
+
+**Duelos headless com replay.** O Bot smoke com `--check-replays` grava um replay canônico de cada duelo do Arena e o reproduz num `Game` novo, com bots nos dois assentos. Uma divergência (código de saída 1) aponta um caminho ao vivo que não gera comando ou decisão. Escolha matchups que exercitem o caminho alterado:
+
+```bash
+node --import=tsx --import=./scripts/register_node_asset_loader.ts scripts/run_bot_arena_smoke.ts --matchups "void:bloomrot,techzero:shadowheart" --duels 2 --check-replays
+```
+
 **Gate de CI.** O workflow `Verify` (job `verify`) executa a verificação completa no GitHub Actions em todo push para `main` e em todo PR. O site só é publicado quando o `verify` passa. Push direto em `main` é permitido; o `main` só bloqueia force push e exclusão.
 - **Acompanhamento:** depois de cada push em `main` ou PR, acompanhe o resultado com `gh run list --branch main` e `gh run view --log-failed`. Um `verify` vermelho em `main` é prioridade e não deve permanecer.
 - **Branch e PR:** mudanças grandes de engine, Chain, replay ou IA podem usar branch e PR para validar no CI antes de entrar em `main`, quando o usuário pedir.
-- **Testes locais:** a política não muda; execute apenas testes focados. Se o `verify` falhar, reproduza localmente somente os arquivos que falharam, com o comando focado, e corrija a causa.
+- **Testes no CI:** o passo de testes divide os arquivos em quatro partes paralelas, cada uma num processo só. Se o `verify` falhar, reproduza localmente os arquivos que falharam e corrija a causa.
 - **Testes e textos:** não desative, pule nem enfraqueça testes para obter CI verde, e não altere textos de cartas para satisfazer testes; divergências de texto são reportadas ao diretor criativo.
 - **Pedido do usuário:** commit, push, PR e merge continuam exigindo pedido do usuário.
 
@@ -380,7 +391,7 @@ my_action_type: direct("handleMyAction", handleMyAction),
 **E declarar em `actionCatalog.ts`** com a categoria correta e os campos esperados.
 
 Depois, execute `npm run validate:actions`, `npm run generate:actions`,
-`npm run check:actions-doc`, typecheck e somente os testes diretamente ligados ao
+`npm run check:actions-doc`, typecheck e os testes existentes ligados ao
 handler/action e aos consumidores afetados, conforme a política acima.
 
 ---

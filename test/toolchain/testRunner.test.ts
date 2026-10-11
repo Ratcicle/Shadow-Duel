@@ -33,14 +33,16 @@ test("default invocation loads tsx without preloading the asset loader and passe
     ...BASE_ARGS,
     "--test-concurrency=1",
     "--test-timeout=120000",
+    "--test-isolation=none",
     DEFAULT_TEST_GLOB,
   ]);
   assert.ok(args.join(" ").length < 300, "node --test expands the glob; no file list is forwarded");
 });
 
-test("explicit concurrency and timeout replace the defaults without duplicates", () => {
-  const args = argsOf(createTestRunnerInvocation(["--test-concurrency=3", "--test-timeout=5000"], root));
-  assert.deepEqual(args, [...BASE_ARGS, "--test-concurrency=3", "--test-timeout=5000", DEFAULT_TEST_GLOB]);
+test("explicit concurrency, timeout and isolation replace the defaults without duplicates", () => {
+  const explicit = ["--test-concurrency=3", "--test-timeout=5000", "--test-isolation=process"];
+  const args = argsOf(createTestRunnerInvocation(explicit, root));
+  assert.deepEqual(args, [...BASE_ARGS, ...explicit, DEFAULT_TEST_GLOB]);
 });
 
 test("allowlisted test flags pass through in the --flag=value form", () => {
@@ -52,7 +54,8 @@ test("allowlisted test flags pass through in the --flag=value form", () => {
     "--test-shard=1/2",
   ];
   const args = argsOf(createTestRunnerInvocation(flags, root));
-  assert.deepEqual(args, [...BASE_ARGS, ...flags, "--test-concurrency=1", "--test-timeout=120000", DEFAULT_TEST_GLOB]);
+  assert.deepEqual(args, [...BASE_ARGS, ...flags, "--test-concurrency=1", "--test-timeout=120000",
+    "--test-isolation=none", DEFAULT_TEST_GLOB]);
 });
 
 test("flags outside the allowlist and the space-separated form are rejected", () => {
@@ -107,6 +110,7 @@ test("a bare -- ends the options and is not forwarded", () => {
     ...BASE_ARGS,
     "--test-concurrency=1",
     "--test-timeout=120000",
+    "--test-isolation=none",
     "test/lpPresentation.test.ts",
   ]);
   // After the marker an argument that looks like a flag is a path and must be contained in test/.

@@ -20,12 +20,12 @@ O projeto usa Vite para desenvolvimento e build. As dependências de runtime em
 [package.json](../package.json) são `pixi.js`, para efeitos visuais, e
 `@tabler/icons`, consumida por importações SVG pontuais na UI.
 
-Use Node 24 (`>=24.21.0 <25`) e `npm ci`. Durante todo o trabalho, inclusive
-no encerramento, execute somente testes diretamente relacionados aos arquivos
-e caminhos alterados, justificando dependências e consumidores diretos conforme
-`AGENTS.md`. Execute typecheck, auditorias, validação de Chain/actions e build
-separadamente quando pertinentes; não use `npm test` ou `npm run check`
-automaticamente. Execução global exige solicitação explícita futura do usuário. Ambos os projetos usam
+Use Node 24 (`>=24.21.0 <25`) e `npm ci`. Durante o trabalho, rode os testes
+existentes do caminho alterado e de seus consumidores diretos; `npm test` roda a
+suíte inteira num processo só, em cerca de 2 minutos, antes de commit/PR de
+mudanças amplas. Testes novos só quando o usuário pedir; a política completa está
+em `AGENTS.md`. Execute typecheck, auditorias, validação de Chain/actions e build
+separadamente quando pertinentes. Ambos os projetos usam
 `allowJs: false` e as opções strict de [tsconfig.base.json](../tsconfig.base.json).
 O compilador oficial é TypeScript 7.0.2, instalado pelo alias `@typescript/native`;
 os scripts de typecheck/watch chamam seu CLI explicitamente. O alias `typescript`
@@ -467,8 +467,8 @@ pelos efeitos visuais do duelo.
 |---|---|
 | [generate_action_catalog_doc.ts](../scripts/generate_action_catalog_doc.ts) | Gera [docs/Catalogo de actions.md](Catalogo%20de%20actions.md). |
 | [validate_action_catalog.ts](../scripts/validate_action_catalog.ts) | Compara `ActionByType`, catálogo, `ACTION_BINDINGS`, registry, labels, exemplos e tipos usados pelas cartas. |
-| [run_tests.ts](../scripts/run_tests.ts) | Executa os testes Node com `tsx`, sem pré-carregar o loader de assets: arquivos que importam SVG registram `scripts/register_node_asset_loader.ts` por conta própria, porque o pré-carregamento deixa cada processo várias vezes mais lento. Sem argumentos, passa o glob `test/**/*.test.ts` ao `node --test`; caminhos ou globs dentro de `test/` filtram os arquivos. Encerra com código 1, sem executar testes, quando um caminho não tem correspondência, fica fora de `test/`, aponta para a própria raiz `test/` ou corresponde a arquivos que não sejam `*.test.ts`, e também quando recebe uma flag inválida; um `--` isolado encerra as opções. Aceita apenas as flags `--test-name-pattern`, `--test-skip-pattern`, `--test-concurrency`, `--test-timeout`, `--test-reporter`, `--test-reporter-destination` e `--test-shard`, no formato `--flag=valor`. Os padrões são concorrência 1 e timeout de 120 s por teste; o timeout não encerra um arquivo travado no carregamento do módulo ou com handles abertos. |
-| [run_bot_arena_smoke.ts](../scripts/run_bot_arena_smoke.ts) | Smoke test curto da Bot Arena por CLI. |
+| [run_tests.ts](../scripts/run_tests.ts) | Executa os testes Node com `tsx`, sem pré-carregar o loader de assets: arquivos que importam SVG registram `scripts/register_node_asset_loader.ts` por conta própria, porque o pré-carregamento deixa cada processo várias vezes mais lento. Sem argumentos, passa o glob `test/**/*.test.ts` ao `node --test`; caminhos ou globs dentro de `test/` filtram os arquivos. Encerra com código 1, sem executar testes, quando um caminho não tem correspondência, fica fora de `test/`, aponta para a própria raiz `test/` ou corresponde a arquivos que não sejam `*.test.ts`, e também quando recebe uma flag inválida; um `--` isolado encerra as opções. Aceita apenas as flags `--test-name-pattern`, `--test-skip-pattern`, `--test-concurrency`, `--test-isolation`, `--test-timeout`, `--test-reporter`, `--test-reporter-destination` e `--test-shard`, no formato `--flag=valor`. Os padrões são concorrência 1, timeout de 120 s por teste e todos os arquivos num processo só (`--test-isolation=none`); o timeout não encerra um arquivo travado no carregamento do módulo ou com handles abertos. |
+| [run_bot_arena_smoke.ts](../scripts/run_bot_arena_smoke.ts) | Smoke test curto da Bot Arena por CLI. Com `--check-replays`, grava o replay canônico de cada duelo e o reproduz num `Game` novo com bots nos dois assentos; uma divergência encerra com código 1. |
 | [audit_chain_metadata.ts](../scripts/audit_chain_metadata.ts) | Audita metadados canônicos de ativação, uso e Chain. |
 | [audit_typescript_escapes.ts](../scripts/audit_typescript_escapes.ts) | Audita escapes de tipagem usando a API de AST do alias `typescript`. |
 | [register_node_asset_loader.ts](../scripts/register_node_asset_loader.ts) e [node_asset_loader_hooks.ts](../scripts/node_asset_loader_hooks.ts) | Registro e hooks para carregar assets, incluindo SVG, nos fluxos Node. |

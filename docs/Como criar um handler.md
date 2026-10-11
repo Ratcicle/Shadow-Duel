@@ -430,11 +430,11 @@ npm run generate:actions
 npm run check:actions-doc
 ```
 
-Execute somente os testes diretamente ligados ao handler/action e aos caminhos
-alterados, inclusive no encerramento. Justifique dependências e consumidores
-diretos (Chain, decisões, replay, simulação/IA) conforme o impacto. Auditorias,
-build e smokes são separados e somente quando pertinentes. Siga `AGENTS.md`;
-`npm test` e `npm run check` não são gates automáticos.
+Rode os testes existentes ligados ao handler/action e aos consumidores diretos
+(Chain, decisões, replay, simulação/IA) conforme o impacto; `npm test` roda a
+suíte inteira em cerca de 2 minutos antes de commit/PR. Não crie teste novo sem
+pedido do usuário. Auditorias, build e o Bot smoke com `--check-replays` são
+separados e somente quando pertinentes. Siga `AGENTS.md`.
 
 ## Boas práticas
 
@@ -464,4 +464,4 @@ build e smokes são separados e somente quando pertinentes. Siga `AGENTS.md`;
 9. UI não é chamada diretamente quando `targets` resolve o caso.
 10. `needsSelection` segue o formato esperado.
 11. Preview foi atualizado se a action pode falhar antes da ativação.
-12. As verificações pertinentes e os testes diretamente relacionados passam, com alcance justificado conforme `AGENTS.md`, e o jogo abre sem erros do `CardDatabaseValidator`.
+12. As verificações pertinentes e os testes existentes do caminho passam, conforme `AGENTS.md`, e o jogo abre sem erros do `CardDatabaseValidator`.

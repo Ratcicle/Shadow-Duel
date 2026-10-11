@@ -34,10 +34,12 @@ const ALLOWED_TEST_FLAGS: ReadonlySet<string> = new Set([
 // Defaults apply only when the caller does not pass the flag (D10). The
 // timeout applies per test: it does not stop a file that hangs at module top
 // level or keeps open handles after its tests finish. In CI that case is
-// covered by the job's `timeout-minutes`.
+// covered by the job's `timeout-minutes`. Every file runs in one process: one
+// Node start for the whole run instead of one per file.
 const DEFAULT_TEST_FLAGS: ReadonlyArray<readonly [flag: string, value: string]> = [
   ["--test-concurrency", "1"],
   ["--test-timeout", "120000"],
+  ["--test-isolation", "none"],
 ];
 
 export type TestRunnerInvocation =
