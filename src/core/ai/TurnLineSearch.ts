@@ -1,5 +1,11 @@
 import { moveCardToZone } from "./common/zones.js";
-import { createPlanningCopy, hasPendingPassiveRestoration, projectRuntimeEffectUsage, projectRuntimeReplacementEffects } from "./common/planningCopy.js";
+import {
+  createPlanningCopy,
+  hasPendingPassiveRestoration,
+  projectRuntimeEffectUsage,
+  projectRuntimeReplacementEffects,
+  registerPublicOpponentProjection,
+} from "./common/planningCopy.js";
 import { PLANNING_PLAYER_FIELDS, PLANNING_STATE_FIELDS, PLANNING_ZONES } from "./common/stateFingerprint.js";
 import { applySimulatedFieldSpellBattleDrawRewards, isSimulatedMainPhaseActionSupported } from "./common/simulation.js";
 import { hasSimulatedProtection } from "./common/simulatedActions/lifecycle.js";
@@ -74,7 +80,6 @@ type PlannerCard = SimulatedCardState & {
   storedEffects?: PlannerBlueprintEntry[];
 };
 type PlannerPlayer = SimulatedPlayerState;
-type PlannerCardInput = NonNullable<AiPlayerInput["hand"]>[number];
 type PlannerPlayerInput = AiPlayerInput & { name?: string };
 
 interface LegacyAltTributeView {
@@ -536,24 +541,8 @@ function clonePlanningState(
     : perspectiveBot || game?.bot || game?.player;
 
   const copy = createPlanningCopy();
-  if (publicOpponent && opponent) {
-    // Register before copying either participant: links to the same hidden card
-    // must resolve to the same opaque projection, never to a second full copy.
-    const hide = (card: PlannerCardInput | null | undefined, monster = false) => {
-      if (!card) return;
-      const projection: PlannerCardInput & { _simUnknownCard: true } = { _simUnknownCard: true };
-      copy.copyFields(card, projection, ["instanceId", "fieldPresenceId", "fieldSlot", "isFacedown", "position", "controller", "originalOwner"]);
-      if (monster) projection.cardKind = "monster";
-      copy.registerCardProjection(card, projection);
-    };
-    for (const zone of ["hand", "deck", "extraDeck"] as const) {
-      for (const card of opponent[zone] || []) hide(card);
-    }
-    for (const card of opponent.field || []) if (card?.isFacedown) hide(card, true);
-    for (const card of opponent.spellTrap || []) if (card?.isFacedown) hide(card);
-    if (opponent.fieldSpell?.isFacedown) hide(opponent.fieldSpell);
-    for (const card of opponent.banished || []) if (card?.isFacedown) hide(card);
-  }
+  // Registered before either participant is copied, so links reuse the opaque projection.
+  if (publicOpponent && opponent) registerPublicOpponentProjection(copy, opponent);
   const state = {
     player: clonePlayerState(opponent || game?.player, copy),
     bot: clonePlayerState(sourceBot, copy),

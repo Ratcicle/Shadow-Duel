@@ -2,8 +2,10 @@ import { copyPlanningActionPresence } from "./actionIdentity.js";
 import { copyModeledPassiveContributions, hasUnmodeledTemporaryPassiveSuppression } from "../../effects/passives/passiveBuffs.js";
 import type {
   AiCardInput,
+  AiPlayerInput,
   AiStateInput,
   AiStateShape,
+  SimulatedCardShape,
   SimulatedCardState,
 } from "../../contracts/aiState.js";
 import {
@@ -205,4 +207,35 @@ export function createPlanningCopy(planningCardsOnly = false) {
   }
 
   return { cloneCardForSim, copyFields, copyValue, registerPlayerCopy, registerCardProjection };
+}
+
+/** Public placement fields kept by an opaque projection of a hidden card. */
+export const PUBLIC_UNKNOWN_CARD_FIELDS = [
+  "instanceId", "fieldPresenceId", "fieldSlot", "isFacedown", "position", "controller", "originalOwner",
+] as const satisfies readonly (keyof SimulatedCardShape)[];
+
+/**
+ * Replace the opponent's hidden cards with opaque projections: Hand, Deck and
+ * Extra Deck, plus face-down cards on the field, in the backrow and banished.
+ * Register before copying either participant: links to the same hidden card
+ * must resolve to the same opaque projection, never to a second full copy.
+ */
+export function registerPublicOpponentProjection(
+  copy: Pick<ReturnType<typeof createPlanningCopy>, "copyFields" | "registerCardProjection">,
+  opponent: AiPlayerInput,
+): void {
+  const hide = (card: AiCardInput | null | undefined, monster = false) => {
+    if (!card) return;
+    const projection: AiCardInput & { _simUnknownCard: true } = { _simUnknownCard: true };
+    copy.copyFields(card, projection, PUBLIC_UNKNOWN_CARD_FIELDS);
+    if (monster) projection.cardKind = "monster";
+    copy.registerCardProjection(card, projection);
+  };
+  for (const zone of ["hand", "deck", "extraDeck"] as const) {
+    for (const card of opponent[zone] || []) hide(card);
+  }
+  for (const card of opponent.field || []) if (card?.isFacedown) hide(card, true);
+  for (const card of opponent.spellTrap || []) if (card?.isFacedown) hide(card);
+  if (opponent.fieldSpell?.isFacedown) hide(opponent.fieldSpell);
+  for (const card of opponent.banished || []) if (card?.isFacedown) hide(card);
 }
