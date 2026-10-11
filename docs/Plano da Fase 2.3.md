@@ -65,6 +65,12 @@ A coluna "Depende de" só lista dependências funcionais: o código do lote usa 
 
 Blocos: preparação e instrumento (L00–L01), defeito e extrações (L02–L03), paridade de poda (L04–L08), informação oculta (L09–L13, M1), paridade de invocação (L14–L16), batalha (L17–L19), engine e apresentação sem bump (L20–L22), pacote v28 (L23–L27) e fechamento (L28).
 
+## Acompanhamento
+
+| Lote | Commit | Medição | Resultado |
+| --- | --- | --- | --- |
+| L00 | `f4f0d4f` | R0 N = 5 (`canonical-f4f0d4f-21712b08`, `deterministicDigest` `276cdf30…`); ponte R0 N = 2 (`1a1dafdd…`); controles | R0 idêntico à v1 nos 405 casos em comum (única diferença de identidade: o commit). Controles idênticos aos da v1 (corpus `3d54efc8…`). Ponte sem erros nem defeitos. O R0 traz 1 defeito, o caso já conhecido `bloomrot:void:2`. Valores v27 congelados em `.cache/plan23-probes/v27-envelope.json` |
+
 ## Objetivo e limites
 
 **A 2.3 entrega:**
@@ -181,7 +187,7 @@ npm run benchmark -- --seeds 5 --workers 10 --preset-metrics techzero-combo --ou
 npm run benchmark:analyze -- compare .cache/benchmark/2.3/<elo anterior> .cache/benchmark/2.3/<lote> --markdown -
 # prova N = 2 (não cria elo)
 npm run benchmark -- --seeds 2 --workers 10 --preset-metrics techzero-combo --out .cache/benchmark/2.3/<lote>
-npm run benchmark:analyze -- compare .cache/benchmark/2.3/<elo anterior> .cache/benchmark/2.3/<lote> --expect-identical --allow-config-diff seeds.count --markdown -
+npm run benchmark:analyze -- compare .cache/benchmark/2.3/<elo anterior> .cache/benchmark/2.3/<lote> --expect-identical --allow-config-diff seeds.count,seeds.values,matrix.plannedCases,matrix.caseListSha256 --markdown -
 # controles (todo lote)
 npm run benchmark -- controls --workers 10 --compare-with .cache/benchmark/2.3/<lote anterior>-controls --out .cache/benchmark/2.3/<lote>-controls
 ```
@@ -202,11 +208,12 @@ npm run benchmark -- controls --workers 10 --compare-with .cache/benchmark/2.3/<
 | Fatia com `--cases` | Só diagnóstico dirigido, quando o N = 5 não mostra o efeito esperado. Inelegível a baseline | Variável |
 | N = 20 intermediário (M1) | Depois de L13 | ~50 min |
 
-- **Cadeia.** O primeiro elo é o R0 (L00), idêntico aos k = 0..4 da v1. Os elos são só os pontos N = 5 e o M1. O elo anterior de um lote é o último desses pontos antes dele; uma prova N = 2 não cria elo. Por isso L04 é comparado com L02, L10 com L08, L14 com o M1, L20 a L24 com L19, L25 com L24 e L26 com L24. Contra a v1 ou contra N diferentes, usar `--allow-config-diff seeds.count`.
+- **Cadeia.** O primeiro elo é o R0 (L00), idêntico aos k = 0..4 da v1. Os elos são só os pontos N = 5 e o M1. O elo anterior de um lote é o último desses pontos antes dele; uma prova N = 2 não cria elo. Por isso L04 é comparado com L02, L10 com L08, L14 com o M1, L20 a L24 com L19, L25 com L24 e L26 com L24. Contra a v1 ou contra N diferentes, usar `--allow-config-diff seeds.count,seeds.values,matrix.plannedCases,matrix.caseListSha256`.
 - **Controles.** Todo lote roda controles, então eles formam uma cadeia própria: cada lote compara os seus com os do lote anterior.
 - **Ponte "antes e depois".** O "antes" é a execução da ponte no commit do elo anterior. Quando o elo anterior também rodou a ponte, a execução é reaproveitada.
 - **Lotes sem ponte.** L04–L08 mudam handlers, coletores e seleção da simulação comum, não o passo de batalha da ponte nem a projeção da raiz do TurnLineSearch; o efeito deles na ponte natural aparece no N = 5. L11 só toca o GameTree. L17 só toca o simulador do laço vivo (`Bot.simulateBattle`), que a ponte não usa.
 - **Mesma configuração.** Só se comparam execuções com a mesma configuração efetiva registrada.
+- **N diferentes.** Com N diferente, além de `seeds.count` mudam os campos derivados `seeds.values`, `matrix.plannedCases` e `matrix.caseListSha256`. Os quatro precisam estar em `--allow-config-diff`; com só `seeds.count`, o `compare` sai com código 2 (incomparável) mesmo com os registros iguais.
 
 ### Critério de aceite de um lote que muda decisões
 
@@ -257,14 +264,14 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 
 **Tarefas**
 
-- [ ] Publicar a branch `fase2/limites-conhecidos` (a pedido do usuário).
-- [ ] `npm ci` e conferir a identidade do ambiente contra `.cache/benchmark/canonical-facccc9-0e7dbbda/run-end.json` (Node v24.21.0 e hash do lockfile).
-- [ ] **R0:** `npm run benchmark -- --seeds 5 --workers 10 --preset-metrics techzero-combo --out .cache/benchmark/2.3/R0`, seguido de `compare` contra a v1 com `--expect-identical --allow-config-diff seeds.count`.
-- [ ] **Controles:** `npm run benchmark -- controls --workers 10 --compare-with .cache/benchmark/controls-facccc9 --out .cache/benchmark/2.3/R0-controls`.
-- [ ] **Ponte R0:** `npm run benchmark -- --seeds 2 --workers 10 --preset-metrics techzero-combo --planner-mode always --planner-turn-mode mainBattleMain2 --out .cache/benchmark/2.3/R0-ponte`. Não é elegível a baseline por causa do override.
-- [ ] Congelar, fora do repositório (`.cache/plan23-probes/v27-envelope.json`), os valores v27 do envelope do fixture de `test/replay/canonicalReplay.test.ts`: hash, comprimento e hashes de comando. Eles alimentam o passo histórico de L27.
-- [ ] Conferir que as sondas citadas estão em `.cache/plan23-probes/` e rodam a partir de lá.
-- [ ] Abrir a tabela de acompanhamento por lote.
+- [x] Publicar a branch `fase2/limites-conhecidos` (a pedido do usuário).
+- [x] `npm ci` e conferir a identidade do ambiente contra `.cache/benchmark/canonical-facccc9-0e7dbbda/run-end.json` (Node v24.21.0 e hash do lockfile).
+- [x] **R0:** `npm run benchmark -- --seeds 5 --workers 10 --preset-metrics techzero-combo --out .cache/benchmark/2.3/R0`, seguido de `compare` contra a v1 com `--expect-identical --allow-config-diff seeds.count,seeds.values,matrix.plannedCases,matrix.caseListSha256`.
+- [x] **Controles:** `npm run benchmark -- controls --workers 10 --compare-with .cache/benchmark/controls-facccc9 --out .cache/benchmark/2.3/R0-controls`.
+- [x] **Ponte R0:** `npm run benchmark -- --seeds 2 --workers 10 --preset-metrics techzero-combo --planner-mode always --planner-turn-mode mainBattleMain2 --out .cache/benchmark/2.3/R0-ponte`. Não é elegível a baseline por causa do override.
+- [x] Congelar, fora do repositório (`.cache/plan23-probes/v27-envelope.json`), os valores v27 do envelope do fixture de `test/replay/canonicalReplay.test.ts`: hash, comprimento e hashes de comando. Eles alimentam o passo histórico de L27.
+- [x] Conferir que as sondas citadas estão em `.cache/plan23-probes/` e rodam a partir de lá.
+- [x] Abrir a tabela de acompanhamento por lote.
 
 **Validação**
 
@@ -382,7 +389,7 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 - Testes: `test/contracts/triggerCollectors`, `test/ai/techZeroBattle`, `bloomrotPriorityOneAttackLock`, `test/fieldPresencePassives`, `test/swordOfTwoDarks`, `test/ai/architectureShadowHeartMigration`, `planningExecution`, `commonSimulation`, `cloneProfiles` e `searchBehavior`. Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
 - Portão de golden (o lote toca o runtime).
 
-**Medição:** prova N = 2 com `--expect-identical --allow-config-diff seeds.count` contra o N = 5 de L02 (162 casos em comum), mais controles idênticos.
+**Medição:** prova N = 2 com `--expect-identical --allow-config-diff seeds.count,seeds.values,matrix.plannedCases,matrix.caseListSha256` contra o N = 5 de L02 (162 casos em comum), mais controles idênticos.
 
 **Critério de saída:** equivalência provada.
 
