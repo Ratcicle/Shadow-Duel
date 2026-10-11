@@ -267,8 +267,18 @@ export function isActiveAttackPriorityTarget(
   );
 }
 
+/** Card fields read by the base attack limit, shared by runtime and planning cards. */
+export interface BaseAttackLimitCard {
+  readonly attackLimitThisTurn?: number | null | undefined;
+  readonly extraAttacks?: number | null | undefined;
+  readonly dynamicExtraAttacks?: {
+    readonly source?: string;
+    readonly name?: string | null | undefined;
+  } | null | undefined;
+}
+
 export function hasExplicitAttackLimitThisTurn(
-  card: GameCard | null | undefined,
+  card: Pick<BaseAttackLimitCard, "attackLimitThisTurn"> | null | undefined,
 ): boolean {
   return (
     card?.attackLimitThisTurn !== undefined &&
@@ -277,17 +287,23 @@ export function hasExplicitAttackLimitThisTurn(
   );
 }
 
-function getDynamicAttackLimit(
-  game: AttackAvailabilityHost,
-  attacker: GameCard | null | undefined,
-): number | null {
-  if (attacker?.dynamicExtraAttacks?.source !== "graveyard_count") {
-    return null;
+/**
+ * Base attack limit from the card and its owner's Graveyard: an explicit limit
+ * this turn, else the dynamic Graveyard count, else 1 plus the extra attacks.
+ * Second attacks and attacks on every opponent monster stay with the callers.
+ */
+export function getBaseAttackLimit(
+  attacker: BaseAttackLimitCard,
+  ownerGraveyard: readonly ({ readonly name?: string | null | undefined } | null | undefined)[],
+): number {
+  if (hasExplicitAttackLimitThisTurn(attacker)) {
+    return Math.max(0, Math.floor(Number(attacker.attackLimitThisTurn)));
   }
   const dea = attacker.dynamicExtraAttacks;
-  const owner = attacker.owner === "player" ? game.player : game.bot;
-  return (owner?.graveyard || []).filter((c) => c && c.name === dea.name)
-    .length;
+  if (dea?.source === "graveyard_count") {
+    return Math.max(0, ownerGraveyard.filter((c) => c && c.name === dea.name).length);
+  }
+  return Math.max(1, 1 + Number(attacker.extraAttacks || 0));
 }
 
 export function getMonsterAttackLimit(
@@ -295,14 +311,8 @@ export function getMonsterAttackLimit(
   attacker: GameCard | null | undefined,
 ): number {
   if (!attacker) return 0;
-  if (hasExplicitAttackLimitThisTurn(attacker)) {
-    return Math.max(0, Math.floor(Number(attacker.attackLimitThisTurn)));
-  }
-  const dynamicAttackLimit = getDynamicAttackLimit(this, attacker);
-  if (dynamicAttackLimit !== null) {
-    return Math.max(0, dynamicAttackLimit);
-  }
-  return Math.max(1, 1 + Number(attacker.extraAttacks || 0));
+  const owner = attacker.owner === "player" ? this.player : this.bot;
+  return getBaseAttackLimit(attacker, owner?.graveyard || []);
 }
 
 function findAttackPassiveSourceZone(
