@@ -1,20 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import Game from "../../src/core/Game.js";
 import Bot from "../../src/core/Bot.js";
-import { validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
+import { hashCanonicalGameState, validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
+import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
 import { hasCommandInFlight } from "../../src/core/game/replay/capture.js";
 
 const deck = [3, 3, 3, 4, 4, 4, 5, 5, 5, 7, 7, 7, 8, 8, 9, 9, 9, 1, 1, 1];
 const modes = ["lifecycle-skip", "lifecycle-next", "transition-skip", "transition-next", "human-control"] as const;
 for (const mode of modes) test(`phase scheduling preserves fresh playback after ${mode}`, async t => {
-  const directory = mkdtempSync(join(tmpdir(), "shadow-duel-phase-replay-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
   const live = new Game({ captureReplay: true, randomSeed: 9401, chainResponseTimeoutMs: 0 });
   t.after(() => live.dispose());
   live.phaseDelayMs = 0;
@@ -36,14 +30,21 @@ for (const mode of modes) test(`phase scheduling preserves fresh playback after 
   const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: mode }))));
   live.dispose();
   if (!mode.startsWith("transition")) assert.equal(replay.decisions.length, 1);
-  const file = join(directory, "replay.json");
-  writeFileSync(file, JSON.stringify(replay));
-  const environment = { ...process.env };
-  delete environment.NODE_TEST_CONTEXT;
-  const child = spawnSync(process.execPath, ["--import=tsx", "--import=./scripts/register_node_asset_loader.ts",
-    "--test", "--test-concurrency=1", fileURLToPath(new URL("../helpers/replayPhaseAiWorker.ts", import.meta.url))],
-  { encoding: "utf8", timeout: 15000, env: { ...environment, PHASE_AI_REPLAY_FILE: file } });
-  assert.equal(child.status, 0, child.stdout + child.stderr);
+  // Playback in a Game the driver creates from the JSON alone: it executes only
+  // the recorded commands and never starts an AI move by itself.
+  const moves = t.mock.method(Bot.prototype, "makeMove");
+  const result = await replayCanonicalDuel(JSON.parse(JSON.stringify(replay)));
+  t.after(() => result.game.dispose?.());
+  assert.equal(result.ok, true);
+  assert.ok(replay.result);
+  assert.equal(result.finalStateHash, replay.result.finalStateHash);
+  assert.equal(result.game.decisionBroker.replayCursor, replay.decisions.length);
+  const cursor = result.game.decisionBroker.replayCursor;
+  // Let real callbacks queued by phase entry run after the driver has returned.
+  await new Promise(resolve => setTimeout(resolve, 100));
+  assert.equal(moves.mock.callCount(), 0, "playback must only execute recorded commands");
+  assert.equal(result.game.decisionBroker.replayCursor, cursor);
+  assert.equal(hashCanonicalGameState(result.game), result.finalStateHash);
 });
 
 for (const entry of ["transition", "lifecycle"] as const) {

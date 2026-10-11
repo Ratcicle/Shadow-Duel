@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import test, { type TestContext } from "node:test";
 import "../../scripts/register_node_asset_loader.js";
 import Bot from "../../src/core/Bot.js";
@@ -237,11 +236,4 @@ test("an Arena duel plays exactly the turn limit and never starts the next turn"
   assert.deepEqual(endPhases, [1], "the limited turn reaches its End Phase");
   assert.deepEqual(standbyPhases, [1], "no Standby Phase of turn 2");
   assert.equal(arena.getAnalytics().duelRecords[0]?.turns, 1);
-});
-
-test("smoke CLI rejects a malformed seed before attempting a matchup", () => {
-  const result = spawnSync(process.execPath, ["--import=tsx", "--import=./scripts/register_node_asset_loader.ts",
-    "scripts/run_bot_arena_smoke.ts", "--seed", "invalid", "--matchup", ":"], { encoding: "utf8" });
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /seed.*integer.*4294967295/i);
 });

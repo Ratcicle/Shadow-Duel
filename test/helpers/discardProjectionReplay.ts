@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import type { CanonicalReplay, ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
 import { createCanonicalStateSnapshot, validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
 import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
@@ -63,8 +62,8 @@ export function installDiscardScenario(
 }
 
 /** Child-process entry: playback must not reuse live objects, UI, or AI decisions. */
-export async function replayDiscardScenarioFromStdin() {
-  const payload: DiscardReplayPayload = JSON.parse(readFileSync(0, "utf8"));
+/** Replays a recorded discard scenario in another Game with the same setup. */
+export async function replayDiscardScenario(payload: DiscardReplayPayload) {
   const replay = validateCanonicalReplay(payload.replay);
   const game = createRuntimeGame({ captureReplay: false, replayMode: "playback", laboratoryMode: true,
     laboratoryUseBot: false, chainResponseTimeoutMs: 0 });
@@ -78,7 +77,7 @@ export async function replayDiscardScenarioFromStdin() {
   setLocale("pt-br");
   try {
     const result = await replayCanonicalDuel(replay, {
-      game: unsafeFixture<ReplayDriverGamePort>(game, "Concrete Game with the same deterministic initial position in a fresh process."),
+      game: unsafeFixture<ReplayDriverGamePort>(game, "Concrete Game with the same deterministic initial position."),
     });
     assert.equal(result.ok, true);
     assert.equal(result.finalStateHash, replay.result?.finalStateHash);

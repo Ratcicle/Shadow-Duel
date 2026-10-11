@@ -1,19 +1,18 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import test from "node:test";
 import type { GameCard } from "../../src/core/contracts/cards.js";
 import { createCanonicalStateSnapshot, validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
 import { setLocale } from "../../src/core/i18n.js";
 import { required } from "../helpers/fixtures.js";
 import { completeTestSelections, createRuntimeGame } from "../helpers/game.js";
-import { discardReplayDeck, installDiscardScenario, type DiscardReplayPayload, type DiscardScenario } from "../helpers/discardProjectionReplay.js";
+import { discardReplayDeck, installDiscardScenario, replayDiscardScenario, type DiscardReplayPayload, type DiscardScenario } from "../helpers/discardProjectionReplay.js";
 
 for (const seat of ["player", "bot"] as const) {
   for (const controller of ["human", "ai"] as const) {
     const scenarios: DiscardScenario[] = ["redirect-empty", "redirect-existing", "facedown"];
     if (controller === "human") scenarios.push("fill-last-slot", "pass-response");
     for (const scenario of scenarios) {
-      test(`discard replay in a fresh process ${seat}/${controller}/${scenario}`, { timeout: 20000 }, async t => {
+      test(`discard replay in another Game ${seat}/${controller}/${scenario}`, { timeout: 20000 }, async t => {
         setLocale("en");
         const game = createRuntimeGame({ captureReplay: true, randomSeed: 6641, laboratoryMode: true,
           laboratoryUseBot: false, chainResponseTimeoutMs: 0 });
@@ -112,11 +111,8 @@ for (const seat of ["player", "bot"] as const) {
         assert.equal(replay.commands.length, 1);
         const payload: DiscardReplayPayload = { seat, controller, scenario, replay,
           snapshot: createCanonicalStateSnapshot(game), random: game.getRandomState() };
-        const child = spawnSync(process.execPath, ["--import=tsx", "--import=./scripts/register_node_asset_loader.ts",
-          "--input-type=module", "--eval",
-          'import { replayDiscardScenarioFromStdin } from "./test/helpers/discardProjectionReplay.ts"; await replayDiscardScenarioFromStdin();',
-        ], { input: JSON.stringify(payload), encoding: "utf8", timeout: 15000 });
-        assert.equal(child.status, 0, `${child.error?.message || ""}\n${child.stdout}\n${child.stderr}`);
+        // The JSON round trip keeps the boundary of a saved replay file.
+        await replayDiscardScenario(JSON.parse(JSON.stringify(payload)));
       });
     }
   }

@@ -70,13 +70,34 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run build
 
-      # Every test file runs in one process: most of the step was one Node start
-      # per file. Tests run one at a time, so they never interleave in the
-      # shared process. A file that leaks global state into a later file is a
-      # bug in that test. Replaces D20 (two isolated processes at a time).
+      # The test files are split into four shards that run side by side, one
+      # per runner core. Each shard runs its files in one process (one Node
+      # start, not one per file), one test at a time, so tests never interleave
+      # in the shared process. A file that leaks global state into a later file
+      # is a bug in that test. Each shard's output is printed after it ends;
+      # a failed shard is printed outside a collapsed group.
       - name: Tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: npm test -- --test-isolation=none --test-concurrency=1
+        run: |
+          shards=4
+          pids=()
+          for shard in $(seq 1 "$shards"); do
+            npm test -- --test-isolation=none --test-concurrency=1 --test-shard="$shard/$shards" > "test-shard-$shard.log" 2>&1 &
+            pids+=("$!")
+          done
+          status=0
+          for shard in $(seq 1 "$shards"); do
+            if wait "${pids[$((shard - 1))]}"; then
+              echo "::group::Test shard $shard/$shards passed"
+              cat "test-shard-$shard.log"
+              echo "::endgroup::"
+            else
+              status=1
+              echo "::error::Test shard $shard/$shards failed"
+              cat "test-shard-$shard.log"
+            fi
+          done
+          exit "$status"
 
       # Only a fully green run on a push to main publishes `dist`. Vite's base
       # is static, so configure-pages is not needed.
