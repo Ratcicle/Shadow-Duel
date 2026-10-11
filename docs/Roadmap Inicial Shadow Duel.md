@@ -8,7 +8,7 @@ Este documento registra a direção geral de desenvolvimento do **Shadow Duel** 
 | --- | --- |
 | Estabilização pós-TypeScript | Concluída em 06/10/2026. |
 | Saneamento (fase 1.5) | Concluído em 10/10/2026: CI `Verify` verde como portão de `main` e do deploy, replay `engine-rules-v27`, determinismo de IA e Arena, bugs de engine e correções de UI/i18n. |
-| IAs atuais | Arquitetura e paridade (2.1) e harness de benchmark (2.2) concluídos. A baseline v1 mede a força relativa dos nove bots. Próximo passo: limites conhecidos (2.3). |
+| IAs atuais | Arquitetura e paridade (2.1) e harness de benchmark (2.2) concluídos. A baseline v1 mede a força relativa dos nove bots. Limites conhecidos (2.3) em andamento, com plano próprio. |
 | Carmim Real | Catálogo proposto, com decisões de regra em aberto; cartas e IA ainda não implementadas. |
 | Suporte adicional de Burning West e Bloomrot | Planejado; escopo e necessidade dependem do diagnóstico dos decks e das IAs. |
 | Gauntlet | Planejado, ainda não implementado. |
@@ -66,7 +66,7 @@ Os itens adiados estão na seção "Fora do escopo da fase 1.5" do plano. Os que
 
 ## 2. Aprimoramento das IAs atuais
 
-**Status:** 2.1 concluída em **07/10/2026**. 2.2 concluída em **11/10/2026**, com a baseline v1 registrada abaixo. O próximo passo é a 2.3.
+**Status:** 2.1 concluída em **07/10/2026**. 2.2 concluída em **11/10/2026**, com a baseline v1 registrada abaixo. 2.3 em andamento desde **11/10/2026**.
 
 **Objetivo:** aproximar a qualidade dos bots antes de usar a Bot Arena como referência séria de balanceamento. Resultados de bot vs bot podem refletir a qualidade da IA, e não só a força real do deck. Por isso, a força relativa dos nove bots precisa ser medida com benchmarks reproduzíveis e intervalos de confiança.
 
@@ -265,30 +265,36 @@ Melhorar esses três pontos exige mudanças em `src/`, fora deste lote.
 
 ### 2.3 Limites conhecidos de simulação, engine e replay
 
-Cada correção é uma correção de paridade ou de regra, medida contra a baseline. Itens confirmados no código em 10/10/2026:
+**Status:** em andamento desde 11/10/2026, na branch `fase2/limites-conhecidos`. Lotes, decisões D1–D10, política de medição e critérios de saída: [Plano da Fase 2.3](Plano%20da%20Fase%202.3.md).
+
+Cada correção é uma correção de paridade, de regra, de instrumentação ou de apresentação, medida em cadeia contra a baseline v1. Nenhum ajuste de política entra na 2.3. Itens reconferidos no código em 11/10/2026 (HEAD `79c3868`):
 
 > Corrigido em 11/10/2026, antes da 2.2: Shadow-Heart Demon Arctroth não causava dano em ataque direto, nem para o humano. O efeito de ataque entrava na Chain sem monstro adversário em batalha, falhava e abortava a Damage Step. O coletor da Damage Step passou a honrar `requireDefender`, e o efeito de ataque da carta o declara.
 
-| Item | Causa confirmada | Correção esperada |
-| --- | --- | --- |
-| LP exibido quando a Damage Step aborta | A apresentação do ataque antecipa a perda de PV (`src/core/game/combat/resolution.ts:782-823`) e a Damage Step a consome depois. Se a Damage Step abortar, o contador mostra o dano esperado até a próxima atualização de PV, embora a engine não tenha aplicado nada | Desfazer a perda antecipada quando a Damage Step abortar |
-| Posição de Special Summon na simulação | O chooser simulado (`src/core/ai/common/simulatedActions/shared.ts:1170-1192`) ignora `specialSummonPositions`. O runtime aplica `byTargetRef` → `byName` → `default` → chooser. Exemplo: Gecko simulado em DEF e real em ATK | Mesma precedência na simulação comum |
-| Void Lost Throne na simulação | `position: "choice"` vira filtro de carta em `buildActionFilter` (`src/core/ai/common/targetSelection.ts`), e a busca simulada fica sempre vazia. O handler simulado também ignora `optional: true` | Não tratar `position` de ações de summon como filtro; respeitar `optional` |
-| Preferência de alvo sem `targetPreference` | A simulação Luminarch ordena por DEF (`preferDefense`, em `src/core/ai/luminarch/simulation.ts:1388`), e o runtime ordena por ATK | Preferência explícita por efeito, sem mudar o default global às cegas |
-| Reações do oponente | A simulação descarta fontes viradas para baixo (`src/core/ai/common/simulation.ts:1169-1174`). Reações de backrow aparecem como `opponent_reaction_mismatch` | Decidir entre um modelo conservador de backrow e só acompanhar a métrica |
-| Cobertura de handlers simulados | 88 de 110 tipos de action. Dos 22 sem handler, 15 são usados por cartas: `banish_destroyed_monster`, `buff_atk_by_lp_gained_this_turn`, `call_of_haunted_summon_and_bind` (vínculo Trap–monstro), `damage_from_destroyed_atk`, `destroy_attacker_on_archetype_destruction`, `end_battle_phase`, `grant_second_attack`, `mirror_force_destroy_all`, `negate_attack`, `reduce_self_atk`, `schedule_return_from_banished`, `shuffle_opponent_field_to_deck`, `special_summon_matching_level`, `special_summon_self_as_trap_monster` e `upkeep_pay_or_send_to_grave` | Priorizar os tipos que aparecem em linhas da Main Phase. A limpeza do vínculo vai na movimentação simulada comum |
-| Branches não suportados do Tech-Zero | Quase todos vêm da decisão exata do alvo de negação do Reactor Dragon, rejeitada no estado clonado (`src/core/ai/common/targetSelection.ts:733-739`) | Corrigir a política Tech-Zero e o contrato de seleção exata |
-| GameTree com informação oculta | Nos nós do oponente, lê a mão e o Deck reais (`src/core/ai/BaseStrategy.ts:582-592`, ativo em sete estratégias). Quebra a invariância a informação oculta, que o corpus não exercita | Projetar o oponente com a mesma máscara pública do TurnLineSearch. Controle de invariância no runtime |
-| Batalha gulosa | Um ataque por vez, escolhido pelo delta de um passo (`src/core/bot/battleController.ts:126-298`). Não planeja sequências nem letal | Generalizar a projeção sequencial pública de batalha, mantendo os ajustes por arquétipo |
-| `executed` pós-efeito | `src/core/chain/afterResolution.ts:29` sobrescreve `executed` do resultado primário quando uma ação posterior falha. Defeito latente | Preservar `executed`. Sem bump |
-| Visibilidade pós-efeito da Arena | `notifyChainLinkOutcome` roda antes das ações pós-efeito (`src/core/chain/resolution.ts:208-209`). Falhas pós-efeito não aparecem nas estatísticas de Chain | Depois do item anterior. Muda `chain_link_resolution`, exige bump e atualizar as asserções de comportamento atual em `test/ai/arenaChainOutcomes.test.ts` |
-| `engine-bugs:5` | `card_moved`/`card_to_grave` não são aguardados por padrão (`src/core/game/zones/movement.ts`) | Inverter o default. Muda a ordem em toda a engine: exige bump e goldens |
-| `decision-broker:10` | No playback, escolhas de IA fora do broker são recalculadas, não lidas do replay | Gravá-las. Exige bump. Convém fazer antes da 2.4, para que replays sobrevivam a mudanças de política |
-| Equipamentos na batalha simulada da ponte (achado da baseline v1) | `detachEquipsForDestroyedMonster` (`src/core/ai/TurnLineSearch.ts:988-1016`) supõe que todo equipamento é de quem controla o monstro destruído. Com Bloomrot Overgrowth, que se equipa ao oponente, a cópia fica em duas zonas e sem `fieldSlot`, e a busca lança `Invalid or duplicate canonical field position.`: o bot perde o resto da Main 1. Aconteceu em 4 dos 1.620 duelos. O mesmo atalho duplica no Cemitério os equipamentos do próprio jogador. O estado real e os replays não são afetados | Destruir na ponte com o movimento simulado genérico (`moveCardToZone` com `state`), como `destroySimulatedCard` já faz. Testado numa cópia: some o erro e a duplicação, sem mudar nenhum vencedor numa amostra de 233 duelos. Muda decisões, então pede baseline nova |
+| Item | Causa confirmada | Correção na 2.3 | Lotes |
+| --- | --- | --- | --- |
+| Equipamentos na batalha simulada da ponte (achado da baseline v1) | `detachEquipsForDestroyedMonster` (`src/core/ai/TurnLineSearch.ts:988-1016`) supõe que todo equipamento é de quem controla o monstro destruído. Com Bloomrot Overgrowth, que se equipa ao oponente, a cópia fica em duas zonas e a busca lança `Invalid or duplicate canonical field position.`: o bot perde o resto da Main 1. Aconteceu em 4 dos 1.620 duelos. O mesmo atalho duplica no Cemitério os equipamentos do próprio jogador. O estado real e os replays não são afetados | Destruir na ponte com o movimento simulado genérico (`moveCardToZone` com `state`), como `destroySimulatedCard` já faz. Muda decisões | L02 |
+| LP exibido quando a Damage Step aborta | A apresentação do ataque antecipa a perda de PV (`src/core/game/combat/resolution.ts:768-824`) e a Damage Step a consome depois. Se a Damage Step abortar, o contador mostra o dano esperado até a próxima atualização de PV. As falhas de planejamento também saíam rotuladas `action_guard` | Método novo `releaseHeldLpLoss` no `GameUI` (115 métodos no Renderer), com salto ao PV real (D7). O rótulo do diagnóstico é corrigido à parte | L01, L20 |
+| Posição de Special Summon na simulação | O chooser simulado (`src/core/ai/common/simulatedActions/shared.ts:1170-1192`) ignora `specialSummonPositions`. O runtime aplica `byTargetRef` → `byName` → `default` → chooser. Exemplo: Gecko simulado em DEF e real em ATK | Mesma precedência na simulação comum, só nos handlers em que o runtime a aplica. O runtime não muda | L14 |
+| Void Lost Throne na simulação | `position: "choice"` vira filtro de carta em `buildActionFilter` (`src/core/ai/common/targetSelection.ts`), e a busca simulada fica sempre vazia. O `optional: true` já está em paridade: o bot sempre confirma (`src/core/actionHandlers/resources.ts:1547`) | Não tratar `position` de ações de summon como filtro; registrar a busca e a invocação simuladas como no runtime | L15 |
+| Preferência de alvo sem `targetPreference` | A simulação Luminarch ordena por DEF (`preferDefense`, em `src/core/ai/luminarch/simulation.ts:1388`), e o runtime ordena por ATK | A simulação adota o default do runtime (ATK). Uma preferência explícita por efeito só entra na 2.4, se o diretor quiser DEF | L16 |
+| Reações do oponente | A simulação descarta fontes viradas para baixo (`src/core/ai/common/simulation.ts:1169-1174`). Reações de backrow aparecem como `opponent_reaction_mismatch`, e cerca de 21% desses casos eram artefato de contador zerado | Só acompanhar a métrica (D8): separar a reação de backrow, marcá-la também em `action_failed` e renomear o resíduo para `opponent_state_mismatch`. O modelo conservador de backrow fica para a 2.4 | L01 |
+| Cobertura de handlers simulados | 88 de 110 tipos de action têm handler simulado. O efeito mensurável está em dois pontos: a origem na mão em `after_summon` (125 marcadores espúrios de `special_summon_matching_level`, todos com a Void Mirror Dimension na mão) e o vínculo do Call of the Haunted | Fonte na mão só pela regra do runtime; limpeza do vínculo na movimentação simulada comum e handler `call_of_haunted_summon_and_bind`. Os handlers sem exposição vão para o backlog. Os gatilhos de batalha na ponte ficam para o primeiro lote do caminho de batalha da 2.4 (D9) | L07, L19 |
+| Branches não suportados do Tech-Zero | O alvo de negação do Reactor Dragon responde por cerca de 65% dos marcadores: a seleção exata é rejeitada quando não há candidato legal ou o alvo já está negado (`src/core/ai/common/targetSelection.ts:734-740`). A família `add_status:passive_recalculation` (11.977 na v1) tem outra causa | Seleção exata sem candidatos igual ao runtime; coletor exato sem alvos negados; passivas negadas lidas ou recalculadas de forma genérica | L04, L05, L06 |
+| Contador zerado na simulação (novo) | A simulação guarda o contador com valor 0 (`src/core/ai/common/counters.ts:76-90`), e o runtime remove a chave. Muda o hash e a deduplicação do TurnLineSearch | Remover a chave como o runtime | L08 |
+| GameTree com informação oculta | Nos nós do oponente, lê a mão e o Deck reais (`src/core/ai/BaseStrategy.ts:582-592`, ativo em sete estratégias). Quebra a invariância a informação oculta, que o corpus não exercita | Projetar o oponente com a mesma máscara pública do TurnLineSearch. O nó do oponente só com recursos ocultos vira horizonte (D3). Controle de invariância no harness | L09, L11 |
+| Informação oculta no Beam/Greedy, no laço de batalha e pelo `_gameRef` (novo) | O Beam/Greedy clona a mão, o Deck e as cartas viradas para baixo reais do oponente (`src/core/ai/BeamSearch.ts:152-170`). O clone do laço de batalha não é mascarado, e o ATK oculto é lido em `src/core/bot/battleController.ts:253`. O ChainAwareness lê `effects` e `cardKind` de cartas viradas para baixo (`src/core/ai/ChainAwareness.ts:180-278`). As projeções opacas carregam uso de OPT por nome | Raízes só com a projeção pública, sem identidade oculta pelo `_gameRef` nem pelo jogo vivo. Nenhum prior de backrow na 2.3 | L10, L12, L13 |
+| Batalha gulosa | Um ataque por vez, escolhido pelo delta de um passo (`src/core/bot/battleController.ts:126-298`). O simulador desse passo ignora proteções, prevenção e cura de dano, o empate 0 × 0 e os equipamentos, e o limite de ataques difere do runtime | Na 2.3, só a paridade do simulador de um passo e do limite base de ataques. A generalização da projeção sequencial é ajuste de política e vai para a 2.4 | L17, L18 |
+| `executed` pós-efeito | `src/core/chain/afterResolution.ts:29` sobrescreve `executed` do resultado primário quando uma ação posterior falha. Defeito latente | Preservar `executed`. Sem bump | L21 |
+| Visibilidade pós-efeito da Arena | `notifyChainLinkOutcome` roda antes das ações pós-efeito (`src/core/chain/resolution.ts:208-209`). Falhas pós-efeito não aparecem nas estatísticas de Chain | Etapa aditiva `after_resolution` em `chain_link_resolution`, no pacote v28. Atualiza as asserções de comportamento atual em `test/ai/arenaChainOutcomes.test.ts` | L23 |
+| `engine-bugs:5` | O `card_moved` já é aguardado; o ramo "destacado" só gera um falso `detached_event_emit`. O defeito real é o `card_to_grave`, destacado por padrão, que aparece na limpeza de Equip quando o hospedeiro sai do campo fora de Chain | `card_to_grave` aguardado e o trigger do Equip na mesma SEGOC do hospedeiro (D6), no pacote v28. O `card_moved` perde o falso destacamento | L24, L25 |
+| `decision-broker:10` | No playback, escolhas de IA fora do broker são recalculadas, não lidas do replay. Um dos agendadores da IA (`src/core/effects/actions/combat.ts`) nem checa `replayMode` | Gates de playback antes do pacote. Depois, todos os sítios gravados, inclusive as regras fixas de bot no engine, com `setup.controllers` e playback estrito (D5) | L22, L26 |
+
+O pacote de replay (L23–L26) termina num único bump `engine-rules-v28` (L27, D4). Os replays v27 salvos deixam de carregar depois do merge. A 2.3 fecha com a baseline v2 (N = 20), medida no commit final (L28).
 
 ### 2.4 Ajuste de qualidade guiado por dados
 
-Começa depois da baseline v1. Para cada caminho, começa só depois de corrigidos os limites da 2.3 que o afetam. Cada lote é um ajuste de política, medido contra a baseline.
+Começa depois da baseline v2, medida no fechamento da 2.3, que passa a ser a referência dos ajustes. Para cada caminho, começa só depois de corrigidos os limites da 2.3 que o afetam. Cada lote é um ajuste de política, medido contra a baseline.
 
 Revisar principalmente:
 
@@ -311,6 +317,9 @@ Métricas opcionais por preset, vindas do benchmark Tech-Zero: conversão de let
 
 Restrições conhecidas:
 
+- **Caminho de batalha.** Começa pelos gatilhos de batalha na ponte (`grant_second_attack`, `damage_from_destroyed_atk`, `destroy_attacker_on_archetype_destruction` e `banish_destroyed_monster`), como lote de paridade com medição própria, antes de qualquer ajuste de batalha (D9 do [plano da 2.3](Plano%20da%20Fase%202.3.md)).
+- **Projeção sequencial de batalha.** A generalização da batalha gulosa (valor de continuação aditivo com peso medido, coerência entre a ponte e o laço vivo e letal sob incerteza) é ajuste de política e vem da 2.3 (D1). Só entra depois dos gatilhos de batalha na ponte e da paridade de batalha da 2.3: ponte sem defeitos, laço mascarado, simulador de um passo e limite base de ataques.
+- **Modelo de backrow.** Na 2.3 as reações do oponente só são acompanhadas (D8). O modelo conservador, com um prior público por quantidade, zona e turno no lugar do desconto fixo de `src/core/ai/BaseStrategy.ts:197-201`, é ajuste de política e só entra depois do bloco de informação oculta da 2.3.
 - **Ranking de busca Bloomrot.** O recálculo da análise é redundante para a ordenação, mas atualiza o contexto que a resposta de Chain usa sem `game` (`src/core/ai/BloomrotStrategy.ts:535-541` e `:270-273`). Só pode sair se essa responsabilidade for realocada.
 - **Ciclos de camada (`engine-bugs:14`).** Só depois da baseline v1, como refatoração equivalente, com corpus e harness inalterados.
 
@@ -498,7 +507,7 @@ A implementação deve ser feita **depois do Renderer Three.js**, para que esse 
 | --- | --- | --- |
 | 1 | Estabilização pós-TypeScript | Concluída |
 | 1.5 | Saneamento | Concluído |
-| 2 | IAs atuais | 2.1 e 2.2 concluídas, baseline v1 registrada; próximo passo: 2.3 |
+| 2 | IAs atuais | 2.1 e 2.2 concluídas, baseline v1 registrada; 2.3 em andamento |
 | 3 | Carmim Real | — |
 | 4 | Burning West + Bloomrot | — |
 | 5 | Modo Gauntlet | — |
@@ -518,7 +527,7 @@ Exemplo de organização da etapa concluída:
 
 Organização prevista para a próxima etapa:
 
-**Projeto principal:** aprimoramento das IAs (2.3 e 2.4, medidas contra a baseline v1)  
+**Projeto principal:** aprimoramento das IAs (2.3 medida contra a baseline v1; 2.4 contra a v2)  
 **Projeto paralelo:** preparação final do Carmim Real
 
 A meta é sempre terminar cada fase com um **Shadow Duel mais estável, completo e jogável**, evitando vários sistemas grandes incompletos ao mesmo tempo.
