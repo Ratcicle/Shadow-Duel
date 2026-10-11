@@ -2,12 +2,13 @@
 
 Este documento registra a direção geral de desenvolvimento do **Shadow Duel** para evitar dispersão entre múltiplas frentes e preservar uma ordem de prioridades clara.
 
-## Estado de referência — 07/10/2026
+## Estado de referência — 10/10/2026
 
 | Frente | Estado conferido no repositório |
 | --- | --- |
 | Estabilização pós-TypeScript | Concluída em 06/10/2026. |
-| IAs atuais | Plano de arquitetura e paridade concluído para os nove bots. Comparação estatística de força e limites remanescentes continuam pendentes. |
+| Saneamento (fase 1.5) | Concluído em 10/10/2026: CI `Verify` verde como portão de `main` e do deploy, replay `engine-rules-v27`, determinismo de IA e Arena, bugs de engine e correções de UI/i18n. |
+| IAs atuais | Plano de arquitetura e paridade concluído para os nove bots. A fase 2 começa pelo harness de benchmark; a comparação estatística de força continua pendente. |
 | Carmim Real | Catálogo proposto, com decisões de regra em aberto; cartas e IA ainda não implementadas. |
 | Suporte adicional de Burning West e Bloomrot | Planejado; escopo e necessidade dependem do diagnóstico dos decks e das IAs. |
 | Gauntlet | Planejado, ainda não implementado. |
@@ -45,6 +46,24 @@ Esta é a fundação para todas as etapas seguintes.
 
 ---
 
+## 1.5. Saneamento
+
+**Status:** concluído em **10/10/2026**. Etapas, decisões e pendências estão no [Plano da Fase 1.5](Plano%20da%20Fase%201.5%20-%20Saneamento.md).
+
+Entregas:
+
+- CI `Verify` verde, com testes em quatro partes paralelas, publicando o site só depois de um `verify` verde;
+- `main` protegida contra force push e exclusão;
+- runner de testes confiável e rápido;
+- replay canônico `engine-rules-v27`, com decisões humanas gravadas pelo broker e hash ampliado;
+- RNG da IA separado do RNG de regras, e Arena sem vitória por timeout;
+- bugs de engine confirmados corrigidos;
+- rótulos PT, log sem `innerHTML`, Laboratório com os nove presets e sem vazamento de Renderer entre execuções.
+
+Os itens adiados estão na seção "Fora do escopo da fase 1.5" do plano. Os que pertencem à fase 2 aparecem abaixo.
+
+---
+
 ## 2. Aprimoramento das IAs atuais
 
 **Status:** [plano de arquitetura e paridade](Plano%20de%20Atualiza%C3%A7%C3%A3o%20das%20IAs.md) concluído em **07/10/2026**, com validação focada, corpus determinístico e matriz de 56 duelos. Pesos, prioridades, budgets, cartas, presets e balanceamento foram preservados. Mudanças de decisão por correções de paridade e limitações conhecidas estão discriminadas no plano.
@@ -67,6 +86,48 @@ Revisar principalmente:
 - preservação de board;
 - Extra Deck;
 - condições de finalização.
+
+### Primeiro entregável: harness de benchmark
+
+Nenhum peso, heurística, preset ou carta é ajustado antes de o harness produzir uma baseline. Sem ela, não há como saber se uma mudança de IA melhorou ou piorou um bot.
+
+**Base.** Generalizar [run_techzero_benchmark.ts](../scripts/run_techzero_benchmark.ts) e [analyze_techzero_benchmark.ts](../scripts/analyze_techzero_benchmark.ts) para qualquer par de presets. Os dois scripts já geram casos semeados com troca de assento e analisam a saída por duelo. O comparador citado no [plano das IAs](Plano%20de%20Atualiza%C3%A7%C3%A3o%20das%20IAs.md) nunca foi commitado, e o harness o substitui.
+
+**Escopo:**
+
+1. **Matriz 9×9.** Todos os pares de presets, espelhos incluídos. Cada seed é jogada nas duas ordens de assento, o que anula a vantagem de quem começa. Para N seeds, são 81 × N duelos.
+2. **Métricas.** Win rate por matchup e por preset, com intervalo de Wilson de 95%. Também entram empates por limite de turnos, separados dos demais, duração em turnos e erros. Duelos encerrados por erro ou pela rede de segurança do relógio ficam fora do win rate (D4 da fase 1.5).
+3. **Execução headless.** Sem renderer e sem delays de apresentação. Uma guarda determinística limita decisões e ações por turno (`determinism:4b`, passo 4). O relógio fica só como rede de segurança e, quando dispara, reporta `error`.
+4. **Configuração registrada.** Cada resultado grava commit, `engineVersion`, `cardDatabaseSignature`, perfil de orçamento, limite de turnos e seeds. Um duelo é reproduzido pela seed e pela configuração, porque RNG de regras e RNG da IA são semeados.
+5. **Saída.** JSONL por duelo e um resumo JSON, fora de `docs/`.
+6. **Baseline v1.** A primeira execução completa vira a referência. A matriz de 56 duelos do plano das IAs não é comparável, porque é anterior à separação do RNG da IA (`determinism:1`/`:3`) e à contabilidade nova da Arena (`determinism:4a`).
+
+**Decisões (aprovadas pelo usuário em 10/10/2026 com as recomendações):**
+
+| # | Decisão | Recomendação |
+| --- | --- | --- |
+| H1 | Perfil de orçamento canônico: o do duelo normal (beam com 100 nós, `src/core/bot/mainPhaseController.ts:249`) ou o da Arena `instant` (60 nós, `src/core/BotArena.ts:112`) | Duelo normal: mede o bot que o jogador enfrenta. O `instant` fica para smokes |
+| H2 | Tamanho da amostra | Piloto com N = 2 para medir o tempo por duelo; depois N = 20 (1.620 duelos). Isso dá cerca de ±15 pontos percentuais por matchup e ±5,5 por preset |
+| H3 | Limite de turnos (revisão de D4(b)): decidir por PV ou contar como empate | Manter a decisão por PV e reportar a fração de duelos que bateu no limite, para que a métrica possa ser recalculada como empate |
+| H4 | Captura de replay canônico nos duelos do harness | Adiar. Exige serializar o limite de turnos no setup de replay, o que é mudança de contrato com bump próprio. A seed já reproduz o duelo |
+| H5 | Onde ficam os resultados | Fora do repositório (pasta local ignorada pelo git). O resumo da baseline é citado no plano da fase 2 |
+
+### Pendências herdadas da fase 1.5
+
+Itens com destino "Fase 2" no [plano da fase 1.5](Plano%20da%20Fase%201.5%20-%20Saneamento.md#fora-do-escopo-da-fase-15):
+
+- **Lacuna de visibilidade pós-efeito da Arena.**
+  - Pré-requisito: a continuação pós-efeito preservar `executed` do resultado primário quando uma ação posterior falha (`src/core/chain/afterResolution.ts:29`; consumidores em `src/core/chain/responseWindow.ts:185-187` e `src/core/chain/activation.ts:1382-1393`).
+  - Só depois entra qualquer etapa nova de `chain_link_resolution`, que muda o contrato de replay (`src/core/contracts/replay.ts:251,300`).
+- **Busca da IA:**
+  - `decision-broker:10`: escolhas de IA fora do broker recalculadas no playback; exige bump;
+  - `engine-bugs:5`: `card_moved`/`card_to_grave` aguardados por padrão; exige bump.
+- **Qualidade da IA:**
+  - regras por nome de carta em `botResponsePolicy.ts`;
+  - cobertura de handlers simulados;
+  - leitura de mãos ocultas no GameTree;
+  - modelo de batalha guloso.
+- **Escolha de modo da IA Arcanist.** A IA escolhe o modo pelo rótulo (`src/core/ai/arcanist/priorities.ts`). A preferência fica sob a chave `action_case_choice` e não chega à ativação por casos.
 
 ---
 
@@ -248,15 +309,18 @@ A implementação deve ser feita **depois do Renderer Three.js**, para que esse 
 
 ## Ordem resumida
 
-1. **Estabilização pós-TypeScript — concluída**
-2. **IAs atuais — arquitetura/paridade concluídas; avaliação de força pendente**
-3. **Carmim Real**
-4. **Burning West + Bloomrot**
-5. **Modo Gauntlet**
-6. **Relíquias Arcanistas**
-7. **Modo Online**
-8. **Three.js definitivo**
-9. **Indicadores visuais de estado dos efeitos**
+| Fase | Frente | Estado |
+| --- | --- | --- |
+| 1 | Estabilização pós-TypeScript | Concluída |
+| 1.5 | Saneamento | Concluído |
+| 2 | IAs atuais | Arquitetura e paridade concluídas; próximo passo: harness de benchmark |
+| 3 | Carmim Real | — |
+| 4 | Burning West + Bloomrot | — |
+| 5 | Modo Gauntlet | — |
+| 6 | Relíquias Arcanistas | — |
+| 7 | Modo Online | — |
+| 8 | Three.js definitivo | — |
+| 9 | Indicadores visuais de estado dos efeitos | — |
 
 ---
 
@@ -269,7 +333,7 @@ Exemplo de organização da etapa concluída:
 
 Organização prevista para a próxima etapa:
 
-**Projeto principal:** aprimoramento das IAs  
+**Projeto principal:** aprimoramento das IAs, começando pelo harness de benchmark  
 **Projeto paralelo:** preparação final do Carmim Real
 
 A meta é sempre terminar cada fase com um **Shadow Duel mais estável, completo e jogável**, evitando vários sistemas grandes incompletos ao mesmo tempo.

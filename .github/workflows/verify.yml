@@ -2,8 +2,8 @@ name: Verify
 
 # Single pipeline: `verify` runs every check and, on a push to main, uploads
 # the Pages artifact built from the same commit; `deploy-pages` publishes it.
-# The job id and name `verify` are the required status check context of the
-# main ruleset; renaming the job blocks merges.
+# The main ruleset only blocks deletion and force pushes; the job name
+# `verify` is what the docs and `gh run` checks refer to.
 on:
   push:
     branches: [main]

@@ -1,5 +1,16 @@
 # Shadow Duel — Plano da Fase 1.5 (Saneamento)
 
+## Estado final — 10/10/2026
+
+| Item | Estado |
+| --- | --- |
+| CI (`Verify`) | Verde em `main`. Typecheck, auditorias, validação de actions e build rodam como passos independentes, e os testes em quatro partes paralelas. Último commit de etapa verificado: `543d79e` (Etapa 8) |
+| GitHub Pages | Publicado pelo job `deploy-pages` depois de cada `verify` verde em `main` |
+| Proteção de `main` | Ruleset `main-gate`: bloqueia exclusão e force push. O push direto continua permitido (D7 revisada) |
+| Replay | `engine-rules-v27`, com os dois bumps previstos (`v26` na Etapa 3, `v27` na Etapa 7) |
+| Suíte de testes | 8.054 testes (8.046 passam, 8 pulados). `npm test` roda tudo localmente em cerca de 2 min |
+| Pendências | Itens adiados em "Fora do escopo da fase 1.5". Os da fase 2 estão listados no roadmap, junto com a especificação do harness de benchmark |
+
 ## Estado de referência — 08/10/2026
 
 | Item | Estado |
@@ -23,7 +34,7 @@
 | 6 | ✅ Bugs de engine sem bump e política de falhas | Etapa 5, D11–D13 | M |
 | 7 | ✅ Pacote de replay com bump único `engine-rules-v27` (broker, hash, bugs que mudam replay) | Etapas 5–6, D5, D14–D16 | L |
 | 8 | ✅ UI e i18n (rótulos PT, log sem `innerHTML`, Laboratório, vazamentos) | — | M |
-| 9 | Encerramento e passagem para a fase 2 (harness de benchmark) | Etapas 0–8 | S |
+| 9 | ✅ Encerramento e passagem para a fase 2 (harness especificado no roadmap; escopo e decisões H1–H5 aprovados em 10/10/2026) | Etapas 0–8 | S |
 
 As Etapas 0–3 levam o CI ao verde e já têm todas as decisões necessárias (D1, D2, D9 e D10, tomadas em 08/10/2026). As demais decisões podem ser tomadas ao chegar na etapa correspondente.
 
@@ -1041,9 +1052,9 @@ O CI (`verify`) roda no push para `main`.
 
 **Tarefas**
 
-- [ ] Marcar no próprio `docs/Plano da Fase 1.5 - Saneamento.md` o estado final de cada etapa.
-- [ ] Atualizar `docs/Roadmap Inicial Shadow Duel.md`: fase 1.5 concluída; a fase 2 começa pelo **harness de benchmark** como primeiro entregável.
-- [ ] Especificar o harness (documento curto em `docs/`, ou seção do roadmap):
+- [x] Marcar no próprio `docs/Plano da Fase 1.5 - Saneamento.md` o estado final de cada etapa.
+- [x] Atualizar `docs/Roadmap Inicial Shadow Duel.md`: fase 1.5 concluída; a fase 2 começa pelo **harness de benchmark** como primeiro entregável.
+- [x] Especificar o harness (documento curto em `docs/`, ou seção do roadmap). Feito como seção "Primeiro entregável: harness de benchmark" do roadmap, com as decisões H1–H5:
   - Base: `scripts/run_techzero_benchmark.ts` e `analyze_techzero_benchmark.ts`. O comparador citado em `docs/Plano de Atualização das IAs.md` nunca foi commitado.
   - Matriz 9x9 dos presets e intervalos de confiança.
   - Execução headless com guarda determinística de decisões/ações por turno (`determinism:4b`, passo 4). O relógio fica só como rede de segurança e reporta `error`.
@@ -1051,14 +1062,18 @@ O CI (`verify`) roda no push para `main`.
   - Captura de replay opt-in. Exige serializar o limite de turnos no setup de replay, o que é mudança de contrato com bump próprio.
   - Revisão de D4(b) (MAX_TURNS por LP ou empate).
   - Rebaselining das métricas depois de `determinism:1`/`:3`/`:4a`.
-- [ ] Registrar na fase 2 a lacuna de visibilidade pós-efeito da Arena. O pré-requisito é `afterResolution.ts:28` preservar `executed` (`src/core/chain/afterResolution.ts:28`, consumidores `responseWindow.ts:187` e `activation.ts:1384-1392`). Só depois vem qualquer nova etapa de `chain_link_resolution`, que mexe no contrato de replay (`src/core/contracts/replay.ts:245,294`).
-- [ ] Conferir que `AGENTS.md` (contagens de métodos anexados, seção de CI e runner) e `docs/Estrutura do Projeto.md` refletem o código.
+- [x] Registrar na fase 2 a lacuna de visibilidade pós-efeito da Arena. O pré-requisito é a continuação pós-efeito preservar `executed` (`src/core/chain/afterResolution.ts:29`, consumidores `responseWindow.ts:185-187` e `activation.ts:1382-1393`). Só depois vem qualquer nova etapa de `chain_link_resolution`, que mexe no contrato de replay (`src/core/contracts/replay.ts:251,300`). Registrado em "Pendências herdadas da fase 1.5", no roadmap.
+- [x] Conferir que `AGENTS.md` (contagens de métodos anexados, seção de CI e runner) e `docs/Estrutura do Projeto.md` refletem o código.
+  - As contagens conferem com os manifests: 114 métodos do Renderer, 222 do Game em 61 grupos, 16 wrappers de replay e 92 do Chain em 16 grupos.
+  - As seções de CI e runner conferem com `.github/workflows/verify.yml`, `scripts/run_tests.ts` e o ruleset `main-gate`.
+  - Corrigido o comentário de `verify.yml` que chamava o `verify` de check obrigatório do ruleset; o ruleset só bloqueia exclusão e force push.
+  - `docs/Estrutura do Projeto.md` passou a citar os mecanismos da Etapa 8.
 
 **Validação:** documental. Conferir texto, links e consistência. Nenhum teste.
 
 **Critério de saída:** roadmap atualizado e escopo do harness aprovado pelo usuário.
 
-**Dependências:** Etapas 0–8. `ui-i18n:4` pode continuar pendente se o texto concreto de D17 não for aprovado, e `:10` se a cópia de D19 não for revisada.
+**Dependências:** Etapas 0–8.
 
 **Riscos:** a fase 2 começar sem as baselines medidas de novo.
 
@@ -1150,7 +1165,7 @@ Todas são corrigidas só no teste, na Etapa 1.
 | `tests-ci:8`: branches mescladas e obsoletas, 14 assets sem referência (16 MB; decisão do diretor), `scripts/run_ai_architecture_corpus.ts`, `skills-lock.json`, bumps de dependências (vite 8 fica na fase 2) | Backlog | Não bloqueiam a 1.5; cada remoção exige aprovação |
 | `createRuntimeGame` estrito por padrão (`test/helpers/game.ts:51`) | Depois do CI verde, medido no CI | Só é mensurável com a suíte global |
 | Regras por nome de carta em `botResponsePolicy.ts:108,213,224,241,269` | Fase 2 (IA) | Qualidade da IA, não determinismo |
-| Lacuna de visibilidade pós-efeito da Arena e `afterResolution.ts:28` (`executed`) | Fase 2 (harness) | A notificação nova toca o contrato de replay; a correção de `executed` vem antes dela |
+| Lacuna de visibilidade pós-efeito da Arena e `afterResolution.ts:29` (`executed`) | Fase 2 (harness) | A notificação nova toca o contrato de replay; a correção de `executed` vem antes dela |
 | Cobertura de handlers simulados (88 de 110), leitura de mãos ocultas no GameTree, modelo de batalha guloso | Fase 2 | Melhoria de IA |
 | Ordenação por `localeCompare` de candidatos de Chain (`chain/activationDiscovery.ts:610-612`, `chain/legality.ts:300-303`) | Backlog | Determinística dentro do duelo; trocar por `compareCodeUnits` por consistência |
 | Unificar o alias de turno de set: `canActivateTrap` lê só `turnSetOn` (`src/core/game/spellTrap/verification.ts:41-43`), enquanto a descoberta da Chain usa `setTurn ?? turnSetOn` (`src/core/chain/activationDiscovery.ts:338`) | Backlog (hardening opcional da triagem Scrapyard) | Sem falha ativa: `techzero-ai:scrapyard` é resolvido no teste. Validar com os testes focados de Chain e de trap (`test/chain/consumerContracts.test.ts`, `test/trapChainResponse.test.ts`, `--test-name-pattern="Scrapyard"` em `test/ai/techZeroPriorityTwoSimulation.test.ts`) |

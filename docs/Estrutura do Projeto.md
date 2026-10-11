@@ -89,7 +89,7 @@ Shadow-Duel/
 
 ### `src/main.ts`
 
-Bootstrap da SPA. Inicializa o locale, coleta referências de DOM, cria os controllers em [src/ui/main/](../src/ui/main/) e conecta ações globais como iniciar duelo, abrir telas, alternar idioma, laboratório e Bot Arena.
+Bootstrap da SPA. Inicializa o locale, coleta referências de DOM, cria os controllers em [src/ui/main/](../src/ui/main/) e conecta ações globais como iniciar duelo, abrir telas, alternar idioma, laboratório e Bot Arena. Textos estáticos do `index.html` declaram a chave i18n em `data-i18n`, `data-i18n-aria-label` ou `data-i18n-placeholder`, e o texto do HTML fica como fallback. Voltar ao menu pela tela de fim de duelo (`shadow-duel-main-menu`) descarta o duelo ativo.
 
 `main.ts` deve continuar como composição de módulos. Lógica de deck builder, laboratório, Bot Arena, persistência e renderização pertence aos controllers dedicados.
 
@@ -166,7 +166,7 @@ Textos visíveis no jogo. Hoje há [pt-br.json](../public/locales/pt-br.json), c
 | [actionHandlers/index.ts](../src/core/actionHandlers/index.ts) | API pública do registry, bindings e handlers por categoria. |
 | [AutoSelector.ts](../src/core/AutoSelector.ts) | Resolve contratos de seleção para IA/bot. Não deve substituir decisões humanas. |
 | [UIAdapter.ts](../src/core/UIAdapter.ts) | Ponte entre `Game` e `Renderer` para prompts e atualização visual. |
-| [i18n.ts](../src/core/i18n.ts) | Carregamento de locale e helpers como `getCardDisplayName` e `getCardDisplayDescription`. |
+| [i18n.ts](../src/core/i18n.ts) | Carregamento de locale e helpers como `getCardDisplayName`, `getCardDisplayDescription` e `getActivationCaseText`. Toda seção de topo do locale que não seja de cartas fica disponível para `getUIText`. |
 | [publicUrl.ts](../src/core/publicUrl.ts) | Resolução de URLs de assets e locales pela base pública do Vite. |
 
 ### `src/core/bot/`
@@ -442,7 +442,7 @@ fachada expõe esses métodos por declaration merging, sem emitir class fields.
 | [indicators.ts](../src/ui/renderer/indicators.ts) | Badges e marcadores de estado. |
 | [equipLinks.ts](../src/ui/renderer/equipLinks.ts) | Indicadores, hover/foco e linhas SVG dos vínculos de equipamento. |
 | [log.ts](../src/ui/renderer/log.ts) | Log do duelo. |
-| [modals.ts](../src/ui/renderer/modals.ts) | Modais genéricos. |
+| [modals.ts](../src/ui/renderer/modals.ts) | Modais genéricos e o registro de overlays montados em `document.body` (`mountBodyOverlay`). No `destroy`, o Renderer os libera sem responder às escolhas pendentes. |
 | [preview.ts](../src/ui/renderer/preview.ts) | Preview grande de cartas. |
 | [selectionModals.ts](../src/ui/renderer/selectionModals.ts) | Modais de seleção. |
 | [placement.ts](../src/ui/renderer/placement.ts) | Escolha manual de slot, atualização e cancelamento da sessão de colocação. |
