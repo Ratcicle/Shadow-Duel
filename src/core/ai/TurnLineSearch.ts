@@ -6,7 +6,7 @@ import {
   projectRuntimeReplacementEffects,
   registerPublicOpponentProjection,
 } from "./common/planningCopy.js";
-import { PLANNING_PLAYER_FIELDS, PLANNING_STATE_FIELDS, PLANNING_ZONES } from "./common/stateFingerprint.js";
+import { PLANNING_PLAYER_FIELDS, PLANNING_STATE_FIELDS } from "./common/stateFingerprint.js";
 import { applySimulatedFieldSpellBattleDrawRewards, isSimulatedMainPhaseActionSupported } from "./common/simulation.js";
 import { hasSimulatedProtection } from "./common/simulatedActions/lifecycle.js";
 import { replaceSimulatedBattleDestruction } from "./common/simulatedActions/destruction.js";
@@ -33,7 +33,7 @@ import {
   selectTributeIndicesByValue,
 } from "../game/summon/tributeValue.js";
 import { canUseNormalSummonForCard } from "../Player.js";
-import { withPlanningExecutionContext } from "./common/planningExecution.js";
+import { runWithUnknownLocationGuard, withPlanningExecutionContext } from "./common/planningExecution.js";
 import { createPlanningOwnerPolicy } from "./common/planningOwner.js";
 import { withoutLiveGameReference } from "./common/gameTreeSimulation.js";
 import type { GameTreeModels, PlanningModel } from "../contracts/aiPlanning.js";
@@ -737,28 +737,9 @@ function simulatePlanningAction(
 ): PlanningState {
   if (typeof strategy?.simulateMainPhaseAction === "function") {
     if (models) {
-      const unknownLocations = () => {
-        const locations = new Map<PlannerCard, string>();
-        for (const player of [state.bot, state.player]) {
-          for (const zone of PLANNING_ZONES) {
-            for (const card of player[zone]) if (card._simUnknownCard) {
-              locations.set(card, `${player.id}:${zone}:${card.isFacedown === true}`);
-            }
-          }
-          if (player.fieldSpell?._simUnknownCard) {
-            locations.set(player.fieldSpell, `${player.id}:fieldSpell:${player.fieldSpell.isFacedown === true}`);
-          }
-        }
-        return locations;
-      };
-      const before = unknownLocations();
-      withoutLiveGameReference(state, () => withPlanningExecutionContext(state,
+      runWithUnknownLocationGuard(state, () => withoutLiveGameReference(state, () => withPlanningExecutionContext(state,
         (_state, owner) => createPlanningOwnerPolicy(state, owner, models),
-        () => strategy.simulateMainPhaseAction?.(state, action)));
-      const after = unknownLocations();
-      if ([...before].some(([card, location]) => after.get(card) !== location)) {
-        state._simRequiresReplan = true;
-      }
+        () => strategy.simulateMainPhaseAction?.(state, action))));
     } else {
       strategy.simulateMainPhaseAction(state, action);
     }
