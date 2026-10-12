@@ -79,8 +79,6 @@ interface ActionPreferenceContext {
 }
 
 interface TargetSelectionOptions {
-  /** Opt-in runtime optional-selection policy; absence preserves legacy planning refusal. */
-  useRuntimeOptionalTargets?: boolean;
   costPayment?: ChainCostPayment;
   referenceSnapshots?: Record<string, SimulatedReferenceSnapshot[]>;
   targetPreferences?: TargetPreferenceMap | null;
@@ -957,13 +955,13 @@ export function selectSimulatedTargets({
       : normalizeCount(target.count, 1);
     const min = count.min;
     const max = count.max;
-    let pickCount = intent === "cost" ? min : max;
-    if (options.useRuntimeOptionalTargets && intent !== "cost") {
-      pickCount = selectRuntimeOptionalCount(target, ordered, count, self, opponent, intent);
-    } else if (min === 0 && intent !== "cost") {
-      pickCount = 0;
-    }
     const exact = exactSelection(target.id, filtered, count);
+    // Outside costs, take as many targets as the runtime AutoSelector does
+    // for the bot: the minimum of a range, or one optional target only when
+    // it would choose it. An exact plan keeps its own count.
+    let pickCount = intent === "cost" || exact !== undefined
+      ? min
+      : selectRuntimeOptionalCount(target, ordered, count, self, opponent, intent);
     const pooledCost = intent === "cost" ? effect?.activationCosts?.find(action =>
       action.type === "remove_counters_from_field" && action.targetRef === target.id) : undefined;
     if (exact === undefined && pooledCost?.type === "remove_counters_from_field") {

@@ -265,8 +265,6 @@ export function isSimulatedSourcePresenceValid(
 }
 
 export interface SimulatedActionOptions {
-  /** Reuse runtime optional-target policy only for explicitly migrated consumers. */
-  useRuntimeOptionalTargets?: boolean;
   /** Nested continuation batches share the already completed preflight. */
   _contextualReferencePreflight?: {
     readonly effect: EffectDefinition | null | undefined;
