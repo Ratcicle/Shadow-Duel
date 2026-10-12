@@ -42,6 +42,7 @@ Diagnósticos da v1 que os lotes perseguem (N = 20, salvo indicação):
 | L07c | `conditional_summon_from_hand` simulada só com a carta na mão | Paridade | Sim | Não | — |
 | L07d | `special_summon_from_zone` simulada só com o alvo na zona declarada | Paridade | Sim | Não | — |
 | L07e | `special_summon_from_zone` simulada com alvo múltiplo sem `count` | Paridade | Sim | Não | L07d |
+| L07f | Quantidade de alvos com faixa opcional pela regra do runtime em todos os presets | Paridade | Sim | Não | L07e |
 | L08 | Contador zerado removido na simulação | Paridade | Sim | Não | — |
 | L09 | Controle de invariância a informação oculta (opt-in, gancho mínimo em `src/`) e guarda estrutural que só registra | Instrumentação | Não | Não | L03 |
 | L10 | Projeções opacas sem uso de OPT por nome | Paridade | Sim | Não | L09 |
@@ -262,7 +263,7 @@ O placar não é critério de aceite na 2.3. O N = 5 dá cerca de ±11 pp por pr
 
 | Item | Quantidade | Tempo |
 | --- | --- | --- |
-| Pontos N = 5 | 25 (R0 e 24 lotes: L01, L02, L04–L08, L07b–L07e, L10–L19, L24, L25b e L26) | ~5 h |
+| Pontos N = 5 | 26 (R0 e 25 lotes: L01, L02, L04–L08, L07b–L07f, L10–L19, L24, L25b e L26) | ~5,2 h |
 | Provas N = 2 | 8 (L03, L09, L20–L23, L25 e L27) | ~40 min |
 | Ponte N = 2 | 13: R0, o "depois" dos 9 lotes de ponte e o "antes" que não pode ser reaproveitado (nos commits de L08, L11 e L17) | ~1,1 h |
 | Controle de invariância | 13 (L09–L19, M1 e L28) | ~50 min |
@@ -640,7 +641,7 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 
 ## L07e — `special_summon_from_zone` simulada com alvo múltiplo sem `count`
 
-**Item:** divergência exposta por L07d (decisão do usuário, 12/10/2026: lote de paridade próprio, medido depois de L07d).
+**Item:** divergência exposta por L07d (decisão do usuário, 12/10/2026: lote de paridade próprio, medido depois de L07d). A escolha de quantidade pela regra do runtime na simulação do Void (`useRuntimeOptionalTargets`, como o Dragon), da mesma classe, entrou no lote por decisão do usuário (12/10/2026), a partir da validação de L07e: sem ela, a simulação do Void Haunter passa a prever 2 ou 3 Void Hollow, e o bot invoca 1.
 
 **Objetivo:** quando o alvo seleciona várias cartas e a action não declara `count`, a simulação invoca todos os alvos válidos, como o handler do runtime (`src/core/actionHandlers/summon/fromZone.ts:413-527`). Hoje ela limita a `count.max`, que vale 1 por padrão (`src/core/ai/common/simulatedActions/summon.ts`).
 
@@ -649,6 +650,7 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 - [ ] Reproduzir nos dois assentos com a sonda de L07d (`scratchpad/plan23/L07d/count_oracle.mts`): o Void Haunter com 3 Void Hollow invoca 3 no runtime e 1 na simulação; o Magmatic Obsidian Leviathan com 2 alvos invoca 2 e 1.
 - [ ] Alinhar a quantidade da simulação à do runtime no caminho com `targetRef`, sem nomes de carta; cada invocação continua individual e sequencial.
 - [ ] Conferir os outros caminhos simulados que aplicam `count.max` por padrão a uma seleção do runtime. Só entra divergência reproduzida.
+- [ ] Na simulação do Void, escolher a quantidade de alvos pela regra do AutoSelector do runtime (`useRuntimeOptionalTargets` em `VoidStrategy.ts`). A mesma divergência nos outros presets vai para L07f.
 
 **Validação**
 
@@ -664,6 +666,36 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 - Mais invocações previstas mudam a avaliação das linhas do Void e do Shadow-Heart. O teste de sinal decide, sem compensação.
 
 **Esforço:** P.
+
+---
+
+## L07f — Quantidade de alvos com faixa opcional pela regra do runtime
+
+**Item:** divergência exposta por L07e (decisão do usuário, 12/10/2026: lote de paridade próprio, medido depois de L07e).
+
+**Objetivo:** fora de custos, `selectSimulatedTargets` (`src/core/ai/common/targetSelection.ts`) escolhe o máximo de uma faixa opcional de alvos, e o bot no runtime escolhe pela regra do AutoSelector (`getDesiredCount`, `src/core/AutoSelector.ts`: o mínimo quando ele é maior que 0). Só o Dragon e, desde L07e, o Void usam a regra do runtime (`useRuntimeOptionalTargets`). O lote aplica a regra a todos os presets, de forma genérica. Se a escolha do AutoSelector é boa política fica para a 2.4.
+
+**Tarefas**
+
+- [ ] Reproduzir com a sonda de L07e (`scratchpad/plan23/L07e/probe_select.mjs` e `select_summary.cjs`), nos dois assentos. No N = 1 de L07e: Luminarch Holy Shield {1,3} seleciona 3 na simulação e 1 no runtime; Bloomrot Spore Cloud {1,2} seleciona 2 em 50 de 76 e 1; Miragebound Glass Sovereign {1,2} seleciona 2 em 174 de 378 e 1. O Tech-Zero, com planos exatos, e o Dragon já estão em paridade.
+- [ ] Tornar a regra do runtime o padrão da seleção simulada fora de custos, sem nomes de carta e sem flag por estratégia; manter os planos exatos e as preferências declaradas.
+- [ ] Conferir as estratégias que dependiam da escolha do máximo (avaliação, geração e prioridades) e os testes que fixam a quantidade.
+
+**Validação**
+
+- Testes: os de seleção e de simulação dos presets afetados (`exactDecisionSimulation`, `commonSimulation`, `architectureLuminarchMigration`, `architectureMirageboundMigration`, `bloomrotResolutionChoices`, `architectureVoidMigration`, `dragon*` do caminho), os de L07–L07e e o portão de golden. Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Smoke: `--matchups luminarch:bloomrot,miragebound:luminarch,bloomrot:miragebound,void:dragon --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07e. Lote de efeito amplo: se o teste de sinal acusar um preset e a investigação não for conclusiva, L07e e L07f são estendidos para N = 10.
+
+**Critério de saída:** critério de aceite geral; na sonda, a quantidade selecionada pela simulação igual à do runtime nas cartas reproduzidas.
+
+**Riscos**
+
+- Luminarch, Bloomrot e Miragebound mudam a avaliação de linhas que contavam com mais alvos. O teste de sinal decide, sem compensação.
+- Algum teste pode fixar a escolha do máximo; ele só muda com o aval do usuário.
+
+**Esforço:** M.
 
 ---
 
@@ -1438,6 +1470,7 @@ O `plan.json` da análise (`.cache/plan23-probes/plan.json`) usava L00–L24. A 
 | L07c | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07b |
 | L07d | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07c |
 | L07e | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07d |
+| L07f | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07e |
 | L26 | L22 | Sem gates e sem regra AST; depende de L24; `--ignore` declarado; N = 5 contra L25b (antes, L24) |
 | L27 | L23 | Projeção v28 → v27 no passo histórico |
 | L28 | L24 | — |
@@ -1486,6 +1519,7 @@ Antes do primeiro lote de cada caminho da 2.4, os itens abaixo passam por uma tr
 | Lacunas da simulação que não dependem da negação: `destroy_on_leave` da The Shadow Heart não é modelado; a trava de Battle Phase do Arcturus não é modelada para os gatilhos do oponente; `applySetStatsToZeroAndNegate` (Sealing the Void) nega sem classificar as passivas | L06. Triagem antes da 2.4 |
 | Divergências latentes de fonte na mão, sem carta no banco que as dispare: em `card_to_grave` o runtime nunca lista cartas da mão; em `card_moved` só as que têm gatilho com `requireZone: "hand"`; em `end_phase`, `spell_activated`, `effect_activated` e `counter_removed` a simulação inclui as fontes de `position_change` na mão e o runtime não | L07. Entram quando uma carta passar a disparar |
 | Semântica de falha das actions simuladas: no runtime, um handler que falha interrompe a lista de actions (`src/core/effects/core.ts`), salvo no-op opcional; na simulação, `fail()` só interrompe com `haltOnFailure`/`stopOnFailure` | L07d. Sem efeito observável no banco atual (nos 25 efeitos com `targetRef`, as actions seguintes já têm halt, não são simuladas ou viram no-op). Paridade de outra classe, para quando uma carta a expuser |
+| Ordem das invocações de `special_summon_from_zone` com `targetRef` quando há menos zonas livres que alvos: o runtime segue a ordem da seleção, e a simulação segue o ranking ou a preferência, que então decide quais cartas entram | L07e. Sem carta de preset com alvos diferentes nesse caminho (o Void Haunter só mira Hollows iguais; o Leviathan não está em preset) |
 
 ### Bugs de regra registrados à parte
 
