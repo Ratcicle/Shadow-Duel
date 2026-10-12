@@ -41,6 +41,7 @@ Diagnósticos da v1 que os lotes perseguem (N = 20, salvo indicação):
 | L07b | `after_summon`: condição `self_in_hand` e `triggerArchetype` na simulação | Paridade | Sim | Não | L07 |
 | L07c | `conditional_summon_from_hand` simulada só com a carta na mão | Paridade | Sim | Não | — |
 | L07d | `special_summon_from_zone` simulada só com o alvo na zona declarada | Paridade | Sim | Não | — |
+| L07e | `special_summon_from_zone` simulada com alvo múltiplo sem `count` | Paridade | Sim | Não | L07d |
 | L08 | Contador zerado removido na simulação | Paridade | Sim | Não | — |
 | L09 | Controle de invariância a informação oculta (opt-in, gancho mínimo em `src/`) e guarda estrutural que só registra | Instrumentação | Não | Não | L03 |
 | L10 | Projeções opacas sem uso de OPT por nome | Paridade | Sim | Não | L09 |
@@ -260,7 +261,7 @@ O placar não é critério de aceite na 2.3. O N = 5 dá cerca de ±11 pp por pr
 
 | Item | Quantidade | Tempo |
 | --- | --- | --- |
-| Pontos N = 5 | 24 (R0 e 23 lotes: L01, L02, L04–L08, L07b–L07d, L10–L19, L24, L25b e L26) | ~4,8 h |
+| Pontos N = 5 | 25 (R0 e 24 lotes: L01, L02, L04–L08, L07b–L07e, L10–L19, L24, L25b e L26) | ~5 h |
 | Provas N = 2 | 8 (L03, L09, L20–L23, L25 e L27) | ~40 min |
 | Ponte N = 2 | 13: R0, o "depois" dos 9 lotes de ponte e o "antes" que não pode ser reaproveitado (nos commits de L08, L11 e L17) | ~1,1 h |
 | Controle de invariância | 13 (L09–L19, M1 e L28) | ~50 min |
@@ -607,15 +608,16 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 
 ## L07d — `special_summon_from_zone` simulada só com o alvo na zona declarada
 
-**Item:** divergência exposta por L07c (decisão do usuário, 12/10/2026: lote de paridade próprio, medido depois de L07c).
+**Item:** divergência exposta por L07c (decisão do usuário, 12/10/2026: lote de paridade próprio, medido depois de L07c). A leitura dos planos pendentes pela visão do dono, da mesma classe, entrou no lote por decisão do usuário (12/10/2026), a partir da validação de L07d: sem ela, a guarda troca um campo previsto que coincidia por acaso (Turbocharge Kaiser com Electrocatapult) por divergência.
 
-**Objetivo:** a action simulada `special_summon_from_zone` (`src/core/ai/common/simulatedActions/summon.ts`, caminho com `targetRef`) recusa um alvo que não está mais na zona declarada, como o handler do runtime (`src/core/actionHandlers/summon/fromZone.ts:430-448`, "Target cards are no longer in the specified zone").
+**Objetivo:** a action simulada `special_summon_from_zone` (`src/core/ai/common/simulatedActions/summon.ts`, caminho com `targetRef`) recusa um alvo que não está mais na zona declarada, como o handler do runtime (`src/core/actionHandlers/summon/fromZone.ts:430-448`, "Target cards are no longer in the specified zone"). `getSimulatedPendingEffectPlans` (`src/core/ai/common/simulation.ts`) lê também os planos do estado por trás da visão do dono no planejamento (`planningOwner.ts`), para que a política do Tech-Zero veja o alvo que a Electrocatapult já reservou, como o runtime vê pela Chain.
 
 **Tarefas**
 
 - [ ] Reproduzir nos dois assentos com a sonda de L07c (`scratchpad/plan23/L07c/val/ssfz_field_repro.mts`): com o revive da Tech-Zero Electrocatapult mirando uma Multimodal Machine que já está no campo, o runtime recusa sem `after_summon`, e a simulação a reinvoca com uma presença nova e `after_summon` com `fromZone: "field"`. No harness aparece em `techzero:burningwest:0` (duas Electrocatapult mirando a mesma máquina; sequência em `scratchpad/plan23/L07c/val/ssfz_seq5.jsonl`).
 - [ ] Na action simulada, conferir a zona do alvo antes de invocar, na mesma ordem de checagens do handler do runtime e sem nomes de carta.
 - [ ] Conferir os outros caminhos de invocação com alvo (`targetRef`) da simulação contra os pares do runtime. Só entra divergência reproduzida.
+- [ ] Ler os planos pendentes pela visão do dono (`resolvePlanningExecutionState` em `planningExecution.ts`), sem nomes de carta.
 
 **Validação**
 
@@ -629,6 +631,36 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 **Riscos**
 
 - Linhas do Tech-Zero que contavam com a reinvocação mudam. O teste de sinal decide, sem compensação.
+- A guarda sem a leitura dos planos pela visão do dono mede uma regressão da linha Kaiser + Electrocatapult. As duas mudanças entram e são medidas juntas.
+
+**Esforço:** P.
+
+---
+
+## L07e — `special_summon_from_zone` simulada com alvo múltiplo sem `count`
+
+**Item:** divergência exposta por L07d (decisão do usuário, 12/10/2026: lote de paridade próprio, medido depois de L07d).
+
+**Objetivo:** quando o alvo seleciona várias cartas e a action não declara `count`, a simulação invoca todos os alvos válidos, como o handler do runtime (`src/core/actionHandlers/summon/fromZone.ts:413-527`). Hoje ela limita a `count.max`, que vale 1 por padrão (`src/core/ai/common/simulatedActions/summon.ts`).
+
+**Tarefas**
+
+- [ ] Reproduzir nos dois assentos com a sonda de L07d (`scratchpad/plan23/L07d/count_oracle.mts`): o Void Haunter com 3 Void Hollow invoca 3 no runtime e 1 na simulação; o Magmatic Obsidian Leviathan com 2 alvos invoca 2 e 1.
+- [ ] Alinhar a quantidade da simulação à do runtime no caminho com `targetRef`, sem nomes de carta; cada invocação continua individual e sequencial.
+- [ ] Conferir os outros caminhos simulados que aplicam `count.max` por padrão a uma seleção do runtime. Só entra divergência reproduzida.
+
+**Validação**
+
+- Testes: os de L07d, mais os de Void e Shadow-Heart da simulação do caminho (`architectureVoidMigration`, `architectureVoidEvents`, `architectureShadowHeartMigration`), `deferredSummonTriggers` e `summonWindows`. Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Smoke: `--matchups void:luminarch,void:dragon,shadowheart:void,void:techzero --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07d.
+
+**Critério de saída:** critério de aceite geral; no oráculo, 0 divergências de quantidade.
+
+**Riscos**
+
+- Mais invocações previstas mudam a avaliação das linhas do Void e do Shadow-Heart. O teste de sinal decide, sem compensação.
 
 **Esforço:** P.
 
@@ -1404,6 +1436,7 @@ O `plan.json` da análise (`.cache/plan23-probes/plan.json`) usava L00–L24. A 
 | L07b | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07 |
 | L07c | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07b |
 | L07d | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07c |
+| L07e | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07d |
 | L26 | L22 | Sem gates e sem regra AST; depende de L24; `--ignore` declarado; N = 5 contra L25b (antes, L24) |
 | L27 | L23 | Projeção v28 → v27 no passo histórico |
 | L28 | L24 | — |
@@ -1451,6 +1484,7 @@ Antes do primeiro lote de cada caminho da 2.4, os itens abaixo passam por uma tr
 | Passivas negadas ainda marcadas: `conditional_status` (Void Serpent Drake) e `position_status`; também `conditional_extra_attacks` quando a negação é removida e os tipos nunca observados (`activation_negation_protection`, `battle_indestructible_if_stat_match`, `conditional_destruction_protection_aura`, `negate_opponent_battle_destruction_prevention`) | L06. O runtime apaga o status na negação e reavalia a condição a cada atualização; a simulação lê o flag cru, que também pode vir de equipamentos. A correção muda a asserção de `test/ai/negatedAuraSimulation.test.ts:135`, que fixa o marcador, e exige o aval do usuário |
 | Lacunas da simulação que não dependem da negação: `destroy_on_leave` da The Shadow Heart não é modelado; a trava de Battle Phase do Arcturus não é modelada para os gatilhos do oponente; `applySetStatsToZeroAndNegate` (Sealing the Void) nega sem classificar as passivas | L06. Triagem antes da 2.4 |
 | Divergências latentes de fonte na mão, sem carta no banco que as dispare: em `card_to_grave` o runtime nunca lista cartas da mão; em `card_moved` só as que têm gatilho com `requireZone: "hand"`; em `end_phase`, `spell_activated`, `effect_activated` e `counter_removed` a simulação inclui as fontes de `position_change` na mão e o runtime não | L07. Entram quando uma carta passar a disparar |
+| Semântica de falha das actions simuladas: no runtime, um handler que falha interrompe a lista de actions (`src/core/effects/core.ts`), salvo no-op opcional; na simulação, `fail()` só interrompe com `haltOnFailure`/`stopOnFailure` | L07d. Sem efeito observável no banco atual (nos 25 efeitos com `targetRef`, as actions seguintes já têm halt, não são simuladas ou viram no-op). Paridade de outra classe, para quando uma carta a expuser |
 
 ### Bugs de regra registrados à parte
 
