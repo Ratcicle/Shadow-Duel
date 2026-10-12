@@ -39,6 +39,7 @@ Diagnósticos da v1 que os lotes perseguem (N = 20, salvo indicação):
 | L06 | Passivas negadas na simulação (`add_status:passive_recalculation`) | Paridade | Sim | Não | — |
 | L07 | `after_summon`: fonte na mão só pela regra do runtime | Paridade | Sim | Não | L03 |
 | L07b | `after_summon`: condição `self_in_hand` e `triggerArchetype` na simulação | Paridade | Sim | Não | L07 |
+| L07c | `conditional_summon_from_hand` simulada só com a carta na mão | Paridade | Sim | Não | — |
 | L08 | Contador zerado removido na simulação | Paridade | Sim | Não | — |
 | L09 | Controle de invariância a informação oculta (opt-in, gancho mínimo em `src/`) e guarda estrutural que só registra | Instrumentação | Não | Não | L03 |
 | L10 | Projeções opacas sem uso de OPT por nome | Paridade | Sim | Não | L09 |
@@ -79,6 +80,7 @@ Blocos: preparação e instrumento (L00–L01), defeito e extrações (L02–L03
 | L05 | `cfe7cf9` | N = 5 (`canonical-cfe7cf9-21712b08`, `deterministicDigest` `6e97935e…`) contra L04; controles | 0 erros e 0 defeitos. Alvo cumprido: `exact_selection:tech_zero_reactor_dragon_negate_target` 60 → 0 (TLS e Beam/Greedy); na sonda, `chosen_already_negated` zera (`none_eligible` vira `empty_ids:all_faceup_negated`, sem marcador). 404/405 casos iguais; a única mudança é o espelho `techzero:techzero:4` (vencedor troca de assento, 9 → 8 turnos), fora do teste de sinal. Ramos não suportados do TLS no Tech-Zero 4.281 → 4.229. Sem novidades; controles idênticos aos de L04. Desvio do plano: a chamada aninhada do Lab passa o efeito envolvente (ver a tarefa) |
 | L06 | `60022c5` | N = 5 (`canonical-60022c5-21712b08`, `deterministicDigest` `ddb1c8e2…`) contra L05; controles | 0 erros e 0 defeitos. Alvo: marcadores `add_status:passive_recalculation` 5.814 → 18 (TLS e Beam/Greedy); ramos não suportados do TLS no Tech-Zero 4.229 → 571. Triagem dos 9 tipos observados, reproduzidos contra o runtime nos dois assentos: saem da marcação os replacements (o runtime ignora fonte negada; os sem suporte nunca são aplicados), a passiva só documentada da The Shadow Heart, `banish_protection`, `conditional_unaffected_by_effects` e `additional_normal_summon` (leitura no uso), `lp_cost_reduction` e `lp_gain_multiplier` (o runtime também ignora a negação) e `battle_phase_activation_lock` (sem leitor na simulação); `conditional_extra_attacks` é recalculado na negação; o rótulo `unknown` deixa de existir. Continua marcado: `conditional_status` (backlog). 2 viradas (`techzero:void:4`, Void → Tech-Zero, e o espelho `techzero:techzero:3`); teste de sinal sem preset significativo; 7 casos com outra duração ou PV, todos com Tech-Zero. Sem novidades. Controles: corpus idêntico; muda só `smoke-bridge-9713` (`techzero:bloomrot`, ramos não suportados 12 → 0) |
 | L07 | `12303eb` | N = 5 (`canonical-12303eb-21712b08`, `deterministicDigest` `8717ddb1…`) contra L06; controles | 0 erros e 0 defeitos. Alvo: `special_summon_matching_level` 9 → 0 (Beam/Greedy); na sonda, 0 disparos da Void Mirror Dimension na mão (eram 101 de 101 nos casos da análise). 404/405 casos iguais: `void:luminarch:1` só muda o PV final, e o espelho `void:void:1` troca de vencedor; teste de sinal sem viradas. Sem novidades; controles idênticos aos de L06. Auditoria das outras listas com mão sem divergência reproduzida. Fixture alterado com aval do usuário, sem asserção mudada: `test/ai/architectureLuminarchResolutionCompletion.test.ts:23` (o gatilho sintético na mão ganha `self_in_hand`). Divergência irmã (`self_in_hand`/`triggerArchetype` ignorados pela simulação) vai para L07b |
+| L07b | `d3bab7e` | N = 5 (`canonical-d3bab7e-21712b08`, `deterministicDigest` `48f1e906…`) contra L07; controles | 0 erros e 0 defeitos. Alvo: na sonda, 0 resoluções de `after_summon` fora da regra do runtime (79 no N = 2 de L07: 75 da Halberd se reinvocando e 4 com a Ascensão da Fortress Aegis); a matriz Halberd/Void Hollow/Void Raven/Iron Raptor cai de 8 divergências para 0 nos dois assentos. 405/405 com o mesmo resultado; só `luminarch:luminarch:1` muda o PV final (outra escolha de Magia). Sem novidades. Controles: corpus idêntico; nos smokes da seed 4242 só mudam estatísticas do planejamento do Luminarch em `shadowheart:luminarch`. O predicado do runtime foi reaproveitado com a visão `{ condition }`; `matchesAfterSummonTrigger` só alargou o tipo de `summonedCard`. Achado novo vai para L07c |
 
 ## Objetivo e limites
 
@@ -256,7 +258,7 @@ O placar não é critério de aceite na 2.3. O N = 5 dá cerca de ±11 pp por pr
 
 | Item | Quantidade | Tempo |
 | --- | --- | --- |
-| Pontos N = 5 | 22 (R0 e 21 lotes: L01, L02, L04–L08, L07b, L10–L19, L24, L25b e L26) | ~4,4 h |
+| Pontos N = 5 | 23 (R0 e 22 lotes: L01, L02, L04–L08, L07b, L07c, L10–L19, L24, L25b e L26) | ~4,6 h |
 | Provas N = 2 | 8 (L03, L09, L20–L23, L25 e L27) | ~40 min |
 | Ponte N = 2 | 13: R0, o "depois" dos 9 lotes de ponte e o "antes" que não pode ser reaproveitado (nos commits de L08, L11 e L17) | ~1,1 h |
 | Controle de invariância | 13 (L09–L19, M1 e L28) | ~50 min |
@@ -548,9 +550,9 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 
 **Tarefas**
 
-- [ ] Reproduzir nos dois assentos com as sondas de L07 (`scratchpad/plan23/L07/halberd_field.mts` e `fix/r2_hand_archetype.mts`): a Luminarch Enchanted Halberd na mão dispara com a Invocação de um monstro que não é Luminarch; o Void Raven na mão dispara com a de um monstro que não é Void; a Halberd no campo se reinvoca quando ela mesma é Invocada do Cemitério (79 resoluções no N = 2 de L07). O runtime recusa os três.
-- [ ] Aplicar na simulação a regra do runtime, reaproveitando `matchesAfterSummonTrigger` ou o predicado de condição que ele usa, sem duplicar a lógica e na mesma ordem de filtros (bloco `after_summon` de `matchesSimulatedEventEffect`, `src/core/ai/common/simulation.ts`).
-- [ ] Conferir se outros eventos leem `effect.condition` no runtime e não na simulação. Só entra divergência reproduzida.
+- [x] Reproduzir nos dois assentos com as sondas de L07 (`scratchpad/plan23/L07/halberd_field.mts` e `fix/r2_hand_archetype.mts`): a Luminarch Enchanted Halberd na mão dispara com a Invocação de um monstro que não é Luminarch; o Void Raven na mão dispara com a de um monstro que não é Void; a Halberd no campo se reinvoca quando ela mesma é Invocada do Cemitério (79 resoluções no N = 2 de L07). O runtime recusa os três.
+- [x] Aplicar na simulação a regra do runtime, reaproveitando `matchesAfterSummonTrigger` ou o predicado de condição que ele usa, sem duplicar a lógica e na mesma ordem de filtros (bloco `after_summon` de `matchesSimulatedEventEffect`, `src/core/ai/common/simulation.ts`).
+- [x] Conferir se outros eventos leem `effect.condition` no runtime e não na simulação. Só entra divergência reproduzida.
 
 **Validação**
 
@@ -564,6 +566,35 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 **Riscos**
 
 - A Halberd faz parte das linhas do Luminarch, e o Void Raven das do Void: os dois presets podem mudar decisões. O teste de sinal decide, sem compensação.
+
+**Esforço:** P.
+
+---
+
+## L07c — `conditional_summon_from_hand` simulada só com a carta na mão
+
+**Item:** divergência exposta por L07b (decisão do usuário, 12/10/2026: lote de paridade próprio, medido depois de L07b).
+
+**Objetivo:** a action simulada `applyConditionalSummonFromHand` (`src/core/ai/common/simulatedActions/summon.ts`) recusa quando a carta não está na mão, como o handler do runtime (`src/core/actionHandlers/summon/conditionalFromHand.ts:93-96`).
+
+**Tarefas**
+
+- [ ] Reproduzir nos dois assentos com a sonda de L07b (`scratchpad/plan23/L07b/moonlit_extra.mts`): a Moonlit Blessing invoca, como se viesse da mão, uma Fusão ou Ascensão devolvida ao Extra Deck, e a Halberd é reinvocada do campo depois de ser invocada da mão por outro efeito. As duas emitem `fromZone: "hand"`. Na fatia Luminarch/Void de L07b foram 209 resoluções (171 e 38).
+- [ ] Exigir a carta na mão na action simulada, na mesma ordem de checagens do handler do runtime e sem nomes de carta.
+- [ ] Conferir os outros handlers simulados de invocação a partir da mão contra os pares do runtime. Só entra divergência reproduzida.
+
+**Validação**
+
+- Testes: os de L07 e L07b, mais os de Luminarch do caminho (`architectureLuminarchMigration`, `architectureLuminarchResolutionCompletion`), `deferredSummonTriggers` e `summonWindows`. Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Smoke: `--matchups luminarch:void,luminarch:dragon,shadowheart:luminarch,luminarch:techzero --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07b.
+
+**Critério de saída:** critério de aceite geral; na sonda, nenhuma invocação "da mão" de carta que não estava na mão.
+
+**Riscos**
+
+- As linhas da Moonlit Blessing do Luminarch mudam. O teste de sinal decide, sem compensação.
 
 **Esforço:** P.
 
@@ -1337,6 +1368,7 @@ O `plan.json` da análise (`.cache/plan23-probes/plan.json`) usava L00–L24. A 
 | L25 | L19 | Movido para dentro do pacote, depois de L24 (E8) |
 | L25b | — | Lote novo (D11), achado de L02 |
 | L07b | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07 |
+| L07c | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07b |
 | L26 | L22 | Sem gates e sem regra AST; depende de L24; `--ignore` declarado; N = 5 contra L25b (antes, L24) |
 | L27 | L23 | Projeção v28 → v27 no passo histórico |
 | L28 | L24 | — |
@@ -1378,7 +1410,7 @@ Antes do primeiro lote de cada caminho da 2.4, os itens abaixo passam por uma tr
 | Identidade do deck do oponente no GameTree (`planningModelId`) | D3. Fica pública assim que as cartas aparecem |
 | `instanceId` de mão e Deck ocultos expostos nas projeções | Canal teórico, comum ao TLS e ao GameTree |
 | Regra AST contra `.strategy.*`/`autoSelector.*` fora de `resolveAI` | E10. Junto com decision-broker:12 |
-| Código morto e limpeza mecânica: `activateTrapFromZone` (mexe no manifest de 222 métodos), `sendCardsToGraveyard` e `sendSourceToGraveAfter` sem uso, as 34 ocorrências de `awaitCardMovedEvent` e os contornos de `position` que L15 torna redundantes | Refatoração equivalente, junto com decision-broker:9 |
+| Código morto e limpeza mecânica: `activateTrapFromZone` (mexe no manifest de 222 métodos), `sendCardsToGraveyard` e `sendSourceToGraveAfter` sem uso, as 34 ocorrências de `awaitCardMovedEvent` e os contornos de `position` que L15 torna redundantes; `EffectEngine.checkEffectCondition`, que repete a regra do `after_summon` e não tem chamadores (achado de L07b) | Refatoração equivalente, junto com decision-broker:9 |
 | Unificar as três cópias de `scheduleAiMoveAfterPaint` (`effects/actions/combat.ts`, `turn/lifecycle.ts` e `turn/transitions.ts`) | E9. Refatoração equivalente; o agendador unificado precisa emitir os mesmos estágios de progresso de hoje, provado por N = 2 sem `--ignore` |
 | Captura de replay canônico nos duelos do harness com limite de turnos (H4 da 2.2) | Exige serializar o limite no setup de replay. Só entra num bump por decisão explícita do usuário |
 | Passivas negadas ainda marcadas: `conditional_status` (Void Serpent Drake) e `position_status`; também `conditional_extra_attacks` quando a negação é removida e os tipos nunca observados (`activation_negation_protection`, `battle_indestructible_if_stat_match`, `conditional_destruction_protection_aura`, `negate_opponent_battle_destruction_prevention`) | L06. O runtime apaga o status na negação e reavalia a condição a cada atualização; a simulação lê o flag cru, que também pode vir de equipamentos. A correção muda a asserção de `test/ai/negatedAuraSimulation.test.ts:135`, que fixa o marcador, e exige o aval do usuário |
