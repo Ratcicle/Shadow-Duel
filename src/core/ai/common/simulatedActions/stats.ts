@@ -1,13 +1,12 @@
 import { addEffectNegation, clearEffectNegation, expireEffectNegation, normalizeNegationDuration as normalizeNegateEffectsDuration } from "../../../effects/negation.js";
 import { removeTrackedDamageStepBuffs, consumeTrackedDamageStepBuffs } from "../../../game/combat/damageStep.js";
-import { isSupportedSimulatedDestructionReplacement } from "./destruction.js";
 import { applyMove } from "./movement.js";
 import { expireFaceupDeclaredValues, restoreFaceupStatuses, trackFaceupStatus } from "../../../Card.js";
 import { applyLevelModification, expireLevelModifications, applyNamedStatChange } from "../../../effects/actions/stats.js";
 import { getCardEffectImmunity, isNonTargetingEffectReference } from "../../../effects/targeting/filters.js";
 import { getEffectiveAtk } from "../cardStats.js";
 import { expireFaceupStatBuffs, removeTrackedStatChange } from "../../../effects/actions/stats.js";
-import { hasUnmodeledTemporaryPassiveSuppression, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, suppressTemporaryDynamicStatIncreasesForDebuff } from "../../../effects/passives/passiveBuffs.js";
+import { clearPassiveExtraAttacksForCard, hasUnmodeledTemporaryPassiveSuppression, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, suppressTemporaryDynamicStatIncreasesForDebuff } from "../../../effects/passives/passiveBuffs.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
 import { applyGrantVoidFusionImmunity as grantFusionImmunity } from "../../../effects/actions/immunity.js";
 import { estimateMonsterValue, hasArchetype } from "../cardValue.js";
@@ -1067,17 +1066,33 @@ export function applyAddStatus(
         if (card.effectsNegated === true) removeFieldAuraBuffContributions(card, field, field.indexOf(card));
         card.effects?.forEach((effect) => {
           if (effect.timing !== "passive") return;
-          if ("replacementEffect" in effect && isSupportedSimulatedDestructionReplacement(effect.replacementEffect)) return;
-          const passiveType = "passive" in effect ? effect.passive?.type : undefined;
+          // Replacements skip negated sources at use time, as in the runtime.
+          // Planning omits the unsupported ones with or without negation.
+          if ("replacementEffect" in effect) return;
+          // A documented passive has no declarative rule; planning never applies it.
+          if (!("passive" in effect)) return;
+          const passiveType = effect.passive.type;
           // These stat families are reconciled by their declared producers.
           if (passiveType === "field_presence_type_summon_count_buff" || passiveType === "activated_card_count_buff" ||
               passiveType === "archetype_count_buff" || passiveType === "graveyard_card_count_buff" || passiveType === "graveyard_archetype_count_buff" || passiveType === "graveyard_type_count_buff" ||
               passiveType === "equipped_field_counter_buff" || passiveType === "equipped_counter_buff" || passiveType === "field_counter_stat_aura") return;
-          // These rules read negation directly at attack/movement time.
+          // These rules read negation directly at use time.
           if (passiveType === "restrict_opponent_summon_turn_attack" || passiveType === "counter_attack_lock" || passiveType === "send_to_grave_replacement" ||
-              passiveType === "conditional_protection" || passiveType === "field_archetype_aura_buff" || passiveType === "event_actions") return;
+              passiveType === "conditional_protection" || passiveType === "field_archetype_aura_buff" || passiveType === "event_actions" ||
+              passiveType === "banish_protection" || passiveType === "conditional_unaffected_by_effects" || passiveType === "additional_normal_summon") return;
+          // These rules are read at use time; the runtime does not gate them on negation either.
+          if (passiveType === "lp_cost_reduction" || passiveType === "lp_gain_multiplier") return;
+          // Planning has no reader for this lock: it binds only the non-turn player
+          // during its controller's Battle Phase.
+          if (passiveType === "battle_phase_activation_lock") return;
+          // The runtime producer drops a negated source's own extra attacks. Their
+          // return depends on equip state that planning does not re-evaluate.
+          if (passiveType === "conditional_extra_attacks" && card.effectsNegated === true) {
+            clearPassiveExtraAttacksForCard(card);
+            return;
+          }
           state._simUnsupportedActions ??= [];
-          state._simUnsupportedActions.push(`add_status:passive_recalculation:${passiveType || "unknown"}`);
+          state._simUnsupportedActions.push(`add_status:passive_recalculation:${passiveType}`);
         });
       }
       const nextValue = status === "effectsNegated"

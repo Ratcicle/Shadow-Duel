@@ -714,7 +714,8 @@ export function clearPassiveBuffsForCard(card: PassiveCleanupCard | null | undef
   modeledPassiveContributions.delete(card);
 }
 
-function clearPassiveExtraAttacksForCard(card: PassiveCleanupCard | null | undefined) {
+/** Remove a card's own passive extra attacks; planning reuses it for a negated source. */
+export function clearPassiveExtraAttacksForCard(card: PassiveCleanupCard | null | undefined) {
   if (!card?.passiveExtraAttackBonuses) {
     if (card) delete card.passiveExtraAttackTargetRestriction;
     return false;

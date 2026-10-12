@@ -94,7 +94,7 @@ export function applyBanishAllGraveyardAndBurn(
 }
 
 /** The modeled replacement path supports only free or single-action costs. */
-export function isSupportedSimulatedDestructionReplacement(replacement: ActionReplacementEffect): boolean {
+function isSupportedSimulatedDestructionReplacement(replacement: ActionReplacementEffect): boolean {
   if (replacement.type !== "destruction" || (replacement.reason && !["any", "battle", "effect"].includes(replacement.reason)) ||
     replacement.costCount || replacement.costFilters || replacement.costZone || replacement.costOwner || replacement.costDestination) return false;
   if (!replacement.costActions?.length) return true;
