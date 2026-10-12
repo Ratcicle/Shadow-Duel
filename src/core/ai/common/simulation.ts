@@ -50,7 +50,7 @@ import { processSimulatedDelayedActions, cleanupSimulatedEndTurn, cleanupExpired
 import { getAvailableFieldSlots } from "../../game/zones/placement.js";
 import { canActivateTrap } from "../../game/spellTrap/verification.js";
 import { resolvePerspectiveSlotForPlayer } from "./perspective.js";
-import { resolvePlanningOwnerPolicy } from "./planningExecution.js";
+import { resolvePlanningExecutionState, resolvePlanningOwnerPolicy } from "./planningExecution.js";
 import type {
   SimulatedActionContextData,
   SimulatedActionOptions,
@@ -1636,7 +1636,8 @@ function withResolutionCompletions(state: SimulatedRuntimeState, queue: Simulate
 
 /** Plans committed within the current simulated trigger opportunity; never persistent state. */
 export function getSimulatedPendingEffectPlans(state: object): readonly SimulatedPendingEffectPlan[] {
-  return simulatedPendingEffectPlans.get(state) || [];
+  // A planning owner view reads the plans of the simulated state behind it.
+  return simulatedPendingEffectPlans.get(state) || simulatedPendingEffectPlans.get(resolvePlanningExecutionState(state)) || [];
 }
 
 function resolveQueuedSimulatedTriggers(state: SimulatedRuntimeState, queue: SimulatedQueuedTrigger[],

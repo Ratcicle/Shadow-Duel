@@ -412,6 +412,10 @@ export function applySpecialSummonFromZone(
     );
   }
   if (action.targetRef) {
+    // As in the runtime handler, a target that is no longer in the declared
+    // zone of a declared owner is refused before the filters are read.
+    candidates = candidates.filter(sourceInConfiguredZone);
+    if (candidates.length === 0) return fail();
     const filters = buildActionFilter(
       action as Parameters<typeof buildActionFilter>[0],
     );

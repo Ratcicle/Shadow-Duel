@@ -28,6 +28,11 @@ export function registerPlanningExecutionView(
   if (view !== sourceState) executionViews.set(view, executionViews.get(sourceState) || sourceState);
 }
 
+/** The simulated state behind a planning owner view (the state itself otherwise). */
+export function resolvePlanningExecutionState(state: object): object {
+  return executionViews.get(state) || state;
+}
+
 export function hasPlanningExecutionContext(state: object): boolean {
   return executionResolvers.has(state) || executionResolvers.has(executionViews.get(state) || state);
 }
