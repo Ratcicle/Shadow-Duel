@@ -28,7 +28,10 @@ export function matchesAfterSummonTrigger(
   occurrence: {
     readonly sourceCard: object;
     readonly owner: { readonly id: string; readonly hand?: readonly object[] };
-    readonly summonedCard: { readonly archetypes?: readonly string[]; readonly archetype?: string | null } | null | undefined;
+    readonly summonedCard: {
+      readonly archetypes?: readonly string[] | undefined;
+      readonly archetype?: string | null | undefined;
+    } | null | undefined;
     readonly summoner: { readonly id: string } | null | undefined;
     readonly method?: string | null | undefined;
     readonly fromZone?: string | null | undefined;

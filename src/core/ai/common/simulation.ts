@@ -5,7 +5,7 @@ import { expireFaceupDeclaredValues, restoreFaceupStatuses } from "../../Card.js
 import { expireEffectNegation } from "../../effects/negation.js";
 import { expireLevelModifications } from "../../effects/actions/stats.js";
 import type { SimulatedEquipHostExitBinding } from "./zones.js";
-import { hasEquipHostExitProof, matchesEquipHostExitSourcePresence } from "../../effects/triggers/collectors/shared.js";
+import { hasEquipHostExitProof, matchesAfterSummonTrigger, matchesEquipHostExitSourcePresence } from "../../effects/triggers/collectors/shared.js";
 import { canTriggerAfterSummonFromHand } from "../../effects/triggers/collectors/afterSummon.js";
 import { getImmediateEventEffectValidationError, isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
 import { captureProcedureTriggerConditions } from "../../effects/conditions/runtime.js";
@@ -1321,6 +1321,16 @@ function matchesSimulatedEventEffect(
     if (summonFrom && payload.fromZone && !matchesZoneFilter(payload.fromZone, summonFrom)) {
       return false;
     }
+    // Runtime `condition` gate (`self_in_hand` and `triggerArchetype`): the
+    // shared after_summon predicate reads it after the gates above and before
+    // `conditions`. Only `condition` is handed over, since the gates above
+    // already mirror the other fields. Temporary registrations skip it, as in
+    // the runtime.
+    const condition = effect.condition;
+    if (!isTemporaryRegistration && condition && !matchesAfterSummonTrigger({ condition }, {
+      sourceCard, owner: sourceEntry.player, summonedCard: eventCard, summoner: eventPlayer,
+      method: payload.method, fromZone: payload.fromZone, sourceZone, phase: state.phase,
+    })) return false;
   }
 
   if (eventName === "lp_change") {
