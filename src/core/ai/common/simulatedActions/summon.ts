@@ -433,8 +433,13 @@ export function applySpecialSummonFromZone(
   const dynamicMax = count?.maxFrom === "opponentFieldCount"
     ? Math.min(opponent.field.length, count.cap ?? 5)
     : Infinity;
+  // As in the runtime handler, a targetRef without a declared count summons
+  // every selected target that is still valid while Monster Zones remain.
+  // The ranking and any preference set the order, which also picks the ones
+  // that enter when zones run short (the runtime keeps the selection order).
+  const summonsEveryTarget = Boolean(action.targetRef) && action.count === undefined;
   const max = Math.min(
-    pickCountForAction(action, 1),
+    summonsEveryTarget ? Infinity : pickCountForAction(action, 1),
     dynamicMax,
     candidates.length,
     5 - (targetPlayer.field || []).length,
@@ -458,7 +463,7 @@ export function applySpecialSummonFromZone(
   }
   if (preferred === null) return fail();
   const chosen: SimulatedCardState[] = [];
-  for (const card of preferred ?? ranked) {
+  for (const card of summonsEveryTarget ? [...(preferred ?? ranked), ...candidates] : preferred ?? ranked) {
     if (chosen.length >= max) break;
     if (!candidates.includes(card) || chosen.includes(card)) continue;
     if (action.distinctNames && chosen.some(other => other.name === card.name)) continue;

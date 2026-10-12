@@ -981,6 +981,7 @@ export default class VoidStrategy extends BaseStrategy {
       archetype: "Void",
       guardLabel: "VoidStrategy",
       strategy: this,
+      useRuntimeOptionalTargets: true,
       activationContext: action?.activationContext,
       rankSearchCandidates: this.rankSearchCandidates.bind(this),
       evaluateRecruitCandidate: this.evaluateRecruitCandidate.bind(this),
