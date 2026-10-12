@@ -43,6 +43,7 @@ Diagnósticos da v1 que os lotes perseguem (N = 20, salvo indicação):
 | L07d | `special_summon_from_zone` simulada só com o alvo na zona declarada | Paridade | Sim | Não | — |
 | L07e | `special_summon_from_zone` simulada com alvo múltiplo sem `count` | Paridade | Sim | Não | L07d |
 | L07f | Quantidade de alvos com faixa opcional pela regra do runtime em todos os presets | Paridade | Sim | Não | L07e |
+| L07g | Master of Mirrors Arcanist: quantidade de Magias devolvidas pela regra do runtime | Paridade | Sim | Não | L07f |
 | L08 | Contador zerado removido na simulação | Paridade | Sim | Não | — |
 | L09 | Controle de invariância a informação oculta (opt-in, gancho mínimo em `src/`) e guarda estrutural que só registra | Instrumentação | Não | Não | L03 |
 | L10 | Projeções opacas sem uso de OPT por nome | Paridade | Sim | Não | L09 |
@@ -264,7 +265,7 @@ O placar não é critério de aceite na 2.3. O N = 5 dá cerca de ±11 pp por pr
 
 | Item | Quantidade | Tempo |
 | --- | --- | --- |
-| Pontos N = 5 | 26 (R0 e 25 lotes: L01, L02, L04–L08, L07b–L07f, L10–L19, L24, L25b e L26) | ~5,2 h |
+| Pontos N = 5 | 27 (R0 e 26 lotes: L01, L02, L04–L08, L07b–L07g, L10–L19, L24, L25b e L26) | ~5,4 h |
 | Provas N = 2 | 8 (L03, L09, L20–L23, L25 e L27) | ~40 min |
 | Ponte N = 2 | 13: R0, o "depois" dos 9 lotes de ponte e o "antes" que não pode ser reaproveitado (nos commits de L08, L11 e L17) | ~1,1 h |
 | Controle de invariância | 13 (L09–L19, M1 e L28) | ~50 min |
@@ -697,6 +698,35 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 - Algum teste pode fixar a escolha do máximo; ele só muda com o aval do usuário.
 
 **Esforço:** M.
+
+---
+
+## L07g — Master of Mirrors Arcanist: quantidade de Magias devolvidas pela regra do runtime
+
+**Item:** divergência exposta por L07f (decisão do usuário, 12/10/2026: lote de paridade próprio, medido depois de L07f).
+
+**Objetivo:** a simulação própria da estratégia do Arcanist (`src/core/ai/arcanist/simulation.ts`, `.slice(0, Math.min(3, ordered.length))`) devolve ao Deck 2 ou 3 Magias "Arcanist" do Cemitério com o efeito de Invocação-Normal do Master of Mirrors Arcanist, e o bot no runtime devolve 1, pela regra do AutoSelector. Esse caminho não passa por `selectSimulatedTargets`, por isso L07f não o alcançou.
+
+**Tarefas**
+
+- [ ] Reproduzir nos dois assentos com a sonda de L07f (`scratchpad/plan23/L07f/mirrors_pipeline.mts`): 4 divergências em 6, iguais antes e depois de L07f. Aparece também no diagnóstico de `arcanist:bloomrot:0`.
+- [ ] Escolher a quantidade pela mesma regra do runtime que L07f adotou na seleção comum, reaproveitando-a sem duplicar lógica e sem nomes de carta no núcleo comum; a preferência por nomes continua só ordenando.
+- [ ] Conferir as outras simulações próprias de estratégia que fixam a quantidade de uma faixa opcional. Só entra divergência reproduzida.
+
+**Validação**
+
+- Testes: os de Arcanist do caminho (`architectureArcanist`, `arcanistDesignDecisions`) e os de L07f. Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Smoke: `--matchups arcanist:bloomrot,arcanist:void,luminarch:arcanist,arcanist:techzero --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07f.
+
+**Critério de saída:** critério de aceite geral; na sonda, 0 divergências de quantidade.
+
+**Riscos**
+
+- A linha do Master of Mirrors do Arcanist muda. O teste de sinal decide, sem compensação.
+
+**Esforço:** P.
 
 ---
 
@@ -1472,6 +1502,7 @@ O `plan.json` da análise (`.cache/plan23-probes/plan.json`) usava L00–L24. A 
 | L07d | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07c |
 | L07e | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07d |
 | L07f | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07e |
+| L07g | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07f |
 | L26 | L22 | Sem gates e sem regra AST; depende de L24; `--ignore` declarado; N = 5 contra L25b (antes, L24) |
 | L27 | L23 | Projeção v28 → v27 no passo histórico |
 | L28 | L24 | — |
@@ -1492,6 +1523,7 @@ O `plan.json` da análise (`.cache/plan23-probes/plan.json`) usava L00–L24. A 
 | Ranking do alvo de negação do Reactor (`techzero/priorities.ts:365-366`) | Política |
 | Resíduo por nome: Void Mirror Dimension em `src/core/chain/botResponsePolicy.ts:240-241` | Já listado nos resíduos por nome da 2.4 |
 | Métrica `lethal` sempre zero e falhas sem código | Limitações do harness que dependem da certificação de letal sob incerteza e de códigos de falha em `src/` |
+| Políticas que supõem mais alvos do que o bot escolhe no runtime: Bloomrot (`resourcePolicy.ts`, o Ancient Husk exige 2 ou mais alvos; `targeting.ts`, `sporePreference(analysis, 2)`) e Luminarch (`defensePolicy.ts`, até 3 nomes preferidos e urgência com 2 ou mais alvos) | L07f. Política: a simulação já segue a quantidade do runtime; se a escolha do mínimo pelo AutoSelector é boa, é decisão da 2.4 |
 
 ### Triagem antes da 2.4
 
