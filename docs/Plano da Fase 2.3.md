@@ -573,28 +573,31 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 
 ## L07c — `conditional_summon_from_hand` simulada só com a carta na mão
 
-**Item:** divergência exposta por L07b (decisão do usuário, 12/10/2026: lote de paridade próprio, medido depois de L07b).
+**Item:** divergência exposta por L07b (decisão do usuário, 12/10/2026: lote de paridade próprio, medido depois de L07b). A paridade do `move` com `allowExtraDeckMonsterToHandIf`, da mesma classe, entrou no lote por decisão do usuário (12/10/2026), a partir da revisão de L07c: sem ela, a guarda da mão troca um estado final correto da Moonlit Blessing por divergência (oráculo de 0 para 4 divergências em 12; fatia Luminarch N = 5 com 4 viradas).
 
-**Objetivo:** a action simulada `applyConditionalSummonFromHand` (`src/core/ai/common/simulatedActions/summon.ts`) recusa quando a carta não está na mão, como o handler do runtime (`src/core/actionHandlers/summon/conditionalFromHand.ts:93-96`).
+**Objetivo:** a action simulada `applyConditionalSummonFromHand` (`src/core/ai/common/simulatedActions/summon.ts`) recusa quando a carta não está na mão, como o handler do runtime (`src/core/actionHandlers/summon/conditionalFromHand.ts:93-96`). O `applyMove` simulado (`src/core/ai/common/simulatedActions/movement.ts`) aplica `allowExtraDeckMonsterToHandIf` como o runtime (`shouldAllowExtraDeckMonsterToHand`, `src/core/effects/actions/movement.ts`), em vez de ler só `allowExtraDeckMonsterToHand`.
 
 **Tarefas**
 
-- [ ] Reproduzir nos dois assentos com a sonda de L07b (`scratchpad/plan23/L07b/moonlit_extra.mts`): a Moonlit Blessing invoca, como se viesse da mão, uma Fusão ou Ascensão devolvida ao Extra Deck, e a Halberd é reinvocada do campo depois de ser invocada da mão por outro efeito. As duas emitem `fromZone: "hand"`. Na fatia Luminarch/Void de L07b foram 209 resoluções (171 e 38).
+- [ ] Reproduzir nos dois assentos com a sonda de L07b (`scratchpad/plan23/L07b/moonlit_extra.mts`) e as de L07c (`scratchpad/plan23/L07c/halberd_field.mts` e `moonlit_oracle.mts`). Na fatia Luminarch/Void de L07b foram 209 resoluções com a carta fora da mão. As 38 da Halberd (20 reinvocações) são a divergência da action: a Halberd é reinvocada do campo depois de ser invocada da mão por outro efeito, emite `fromZone: "hand"`, e o runtime recusa. As 171 da Moonlit Blessing têm uma Fusão ou Ascensão no Extra Deck. Sem o Sanctum of the Luminarch Citadel (39), o runtime também a manda ao Extra Deck, e a condição já recusava. Com ele (132), o runtime leva a carta à mão, mas o `move` simulado, que ignora `allowExtraDeckMonsterToHandIf`, a deixava no Extra Deck, e a simulação a invocava de lá: o estado final coincidia nas 123 invocações, e nas outras 9 a carta ficava no Extra Deck, onde o runtime não a deixa.
+- [ ] Aplicar ao `move` simulado a regra do runtime para monstro do Extra Deck ir à mão, reaproveitando o predicado do runtime com uma visão estrutural do jogador, lido para o controlador do efeito a cada movimento e sem nomes de carta.
 - [ ] Exigir a carta na mão na action simulada, na mesma ordem de checagens do handler do runtime e sem nomes de carta.
 - [ ] Conferir os outros handlers simulados de invocação a partir da mão contra os pares do runtime. Só entra divergência reproduzida.
 
 **Validação**
 
-- Testes: os de L07 e L07b, mais os de Luminarch do caminho (`architectureLuminarchMigration`, `architectureLuminarchResolutionCompletion`), `deferredSummonTriggers` e `summonWindows`. Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Oráculo da Moonlit Blessing (`scratchpad/plan23/L07c/moonlit_oracle.mts`): runtime contra simulação nos dois assentos, com e sem o Sanctum, para alvos de Fusão, Ascensão e Main Deck. Esperado: 0 divergências em 12.
+- Testes: os de L07 e L07b, os de Luminarch do caminho (`architectureLuminarchMigration`, `architectureLuminarchResolutionCompletion`), `deferredSummonTriggers`, `summonWindows` e os do `move` (`test/contracts/fieldPlacementActions`, `test/ai/fieldPositions`). Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
 - Smoke: `--matchups luminarch:void,luminarch:dragon,shadowheart:luminarch,luminarch:techzero --duels 2 --check-replays`.
 
 **Medição:** N = 5 contra L07b.
 
-**Critério de saída:** critério de aceite geral; na sonda, nenhuma invocação "da mão" de carta que não estava na mão.
+**Critério de saída:** critério de aceite geral; na sonda, nenhuma invocação "da mão" de carta que não estava na mão; no oráculo da Moonlit Blessing, 0 divergências.
 
 **Riscos**
 
-- As linhas da Moonlit Blessing do Luminarch mudam. O teste de sinal decide, sem compensação.
+- Mudam as linhas do Luminarch que dependiam da reinvocação da Halberd. A Moonlit Blessing com o Sanctum continua invocando a Fusão ou a Ascensão, agora a partir da mão. O teste de sinal decide, sem compensação.
+- A guarda da mão sem a paridade do `move` mede uma regressão. As duas mudanças entram e são medidas juntas.
 
 **Esforço:** P.
 
