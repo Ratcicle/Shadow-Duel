@@ -74,6 +74,7 @@ Blocos: preparação e instrumento (L00–L01), defeito e extrações (L02–L03
 | L02 | `fbcfea3` | N = 5 (`canonical-fbcfea3-21712b08`, `deterministicDigest` `295e6dc1…`); ponte N = 2 (`canonical-fbcfea3-43624ae9`, `06569a41…`); controles | 0 erros e 0 defeitos: o `bloomrot:void:2` some do N = 5, e o recorte dirigido dos 4 casos da v1 cai de 4 para 0 defeitos. Varredura dos 233 duelos: 0 violações e 0 exceções de simulação. Nenhum vencedor trocado no N = 5 nem na ponte; teste de sinal sem viradas em todos os presets. Duração ou PV mudam em 3 casos do N = 5 (`bloomrot:bloomrot:0` 22 → 24 turnos; `void:luminarch:4` 11 → 9; `bloomrot:burningwest:4` só PV) e em 1 da ponte (`bloomrot:dragon:1`, só PV). Ponte: sem novidades além do vocabulário de L01; divergência menor no Arcanist (0,074 → 0,044) e no Bloomrot (0,171 → 0,116). Controles: corpus idêntico; nos smokes só mudam estatísticas internas de planejamento dos presets que usam a ponte. E1 fica sem efeito observável: sem o dono do efeito, a proteção `opponent_effects` não se aplica, como no `destroyCard` do runtime. Achados registrados à parte: par de batalha não resolvido no runtime e proteção de banimento na destruição |
 | L03 | `7843a8f`…`34bbca7` (6 commits) | Prova N = 2 (`canonical-34bbca7-4feb2064`, `deterministicDigest` `132f7ac9…`); controles | Equivalência provada: 162/162 registros iguais ao N = 5 de L02 com `--expect-identical`, sem novidades; controles idênticos aos de L02 (`controlsDigest` `6b278099…`). Um commit por extração. Fora da lista do plano, só o tipo do parâmetro `preferredPosition` de `performSummonFromHand`, alargado porque o retorno de `resolveContextualSummonPosition` deixou de ser implícito |
 | L04 | `ff8515f` | N = 5 (`canonical-ff8515f-21712b08`, `deterministicDigest` `c0dc4471…`) contra L02; controles | 0 erros e 0 defeitos. Alvo: ramos não suportados do TLS no Tech-Zero 12.398 → 4.281, e a classe `sim:empty_ids:no_faceup` do Reactor deixa de marcar (também `chosen_already_negated:none_eligible`, sem candidato legal; `eligible_exists` fica para L05). 2 viradas (`miragebound:techzero:2`, a favor do Tech-Zero, e o espelho `techzero:techzero:3`); teste de sinal sem preset significativo (Miragebound 0 × 1, Tech-Zero 1 × 0). 23 casos com outra duração ou PV, todos com Tech-Zero: começando, ele fecha o combo do Reactor no turno 1 e algumas vitórias passam de T3 para T5 (risco previsto, sem compensação). Novidades explicadas, ambas da família de L06: `add_status:passive_recalculation:additional_normal_summon` (Reactor negando o Tech-Zero Connector Dragon em `techzero:techzero:0`) e `...:conditional_status` (negação do Void Serpent Drake em `void:techzero:3`, junto com `banish_protection`). Controles: corpus idêntico; em cada smoke muda só o Tech-Zero × Bloomrot da seed, por 230 disparos da classe `empty_ids:no_faceup` |
+| L05 | `cfe7cf9` | N = 5 (`canonical-cfe7cf9-21712b08`, `deterministicDigest` `6e97935e…`) contra L04; controles | 0 erros e 0 defeitos. Alvo cumprido: `exact_selection:tech_zero_reactor_dragon_negate_target` 60 → 0 (TLS e Beam/Greedy); na sonda, `chosen_already_negated` zera (`none_eligible` vira `empty_ids:all_faceup_negated`, sem marcador). 404/405 casos iguais; a única mudança é o espelho `techzero:techzero:4` (vencedor troca de assento, 9 → 8 turnos), fora do teste de sinal. Ramos não suportados do TLS no Tech-Zero 4.281 → 4.229. Sem novidades; controles idênticos aos de L04. Desvio do plano: a chamada aninhada do Lab passa o efeito envolvente (ver a tarefa) |
 
 ## Objetivo e limites
 
@@ -445,9 +446,9 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 
 **Tarefas**
 
-- [ ] `collectExactTargetCandidates` (`targetSelection.ts`) passa a receber o efeito ou as actions e exclui monstros com `effectsNegated` quando `requiresUnnegatedTarget` vale. É o mesmo predicado da simulação e do runtime.
-- [ ] A chamada aninhada do Lab (`src/core/ai/techzero/priorities.ts`) passa `{ actions: action.actions }`.
-- [ ] A política continua emitindo `[]` sem candidato, sinal de que os guardas de `TechZeroStrategy.ts` dependem. O ranking do alvo (`priorities.ts:365-366`) não muda.
+- [x] `collectExactTargetCandidates` (`targetSelection.ts`) passa a receber o efeito ou as actions e exclui monstros com `effectsNegated` quando `requiresUnnegatedTarget` vale. É o mesmo predicado da simulação e do runtime.
+- [x] A chamada aninhada do Lab (`src/core/ai/techzero/priorities.ts`) passa o efeito envolvente, e não `{ actions: action.actions }` como previsto. É o que a simulação faz na escolha opcional (`localEffect` mantém as actions do efeito), e o runtime resolve essa escolha com `timing: "resolution"`, que desliga a exigência de alvo não negado. Com só as actions aninhadas, uma escolha local que negasse o próprio alvo excluiria monstros que o runtime aceita. No banco atual, os 14 alvos locais de `optional_target_actions` dão o mesmo resultado nas duas formas.
+- [x] A política continua emitindo `[]` sem candidato, sinal de que os guardas de `TechZeroStrategy.ts` dependem. O ranking do alvo (`priorities.ts:365-366`) não muda.
 
 **Validação**
 
@@ -462,7 +463,7 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 **Riscos**
 
 - No caso raro de alvo já negado, muda a escolha real. Replays v27 do Tech-Zero com esse caso podem divergir no playback até L26 (ver "Premissa do merge atômico"). Um teste de replay afetado segue E12.
-- Sem as actions aninhadas do Lab, o filtro não vale ali.
+- ~~Sem as actions aninhadas do Lab, o filtro não vale ali.~~ Não se confirmou: a exigência só vale na ativação, e a chamada aninhada usa o efeito envolvente, como a simulação.
 
 **Esforço:** P.
 
