@@ -2,6 +2,7 @@ import { restoreFaceupStatuses } from "../../../Card.js";
 import { refreshSimulatedFieldAuras } from "../zones.js";
 import type { SimulatedMoveReceipt } from "../zones.js";
 import { captureCostMarkerEvidence } from "../../../effects/costs/summonMarkers.js";
+import { shouldAllowExtraDeckMonsterToHand } from "../../../effects/actions/movement.js";
 import { clearFieldPresenceSummonTarget } from "../../../effects/triggers/counters.js";
 import { appendSimulatedFieldCard } from "../zones.js";
 import { restoreFieldExitStatuses } from "../../../Card.js";
@@ -330,7 +331,7 @@ export function applyMove(
           : action.player === "opponent" ? opponent : action.player === "self" ? self : owner;
         if (!canMoveCardToZone(destination, card, to, owner, {
           state, requireDestination: action.requireDestination === true,
-          allowExtraDeckMonsterToHand: action.allowExtraDeckMonsterToHand === true,
+          allowExtraDeckMonsterToHand: shouldAllowExtraDeckMonsterToHand(action, { player: self }),
         })) return STOP_SIMULATION;
       }
     }
@@ -370,7 +371,8 @@ export function applyMove(
     const receipt: { value: SimulatedMoveReceipt | null } = { value: null };
     if (moveCardToZone(destPlayer || owner, card, to, owner, { state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer: self,
       ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}), onMoveCommitted: result => { receipt.value = result; },
-      allowExtraDeckMonsterToHand: action.allowExtraDeckMonsterToHand === true,
+      // The runtime's Extra Deck to Hand rule, read for the effect's controller at each move.
+      allowExtraDeckMonsterToHand: shouldAllowExtraDeckMonsterToHand(action, { player: self }),
       requireDestination: payingCost && action.requireDestination === true })) {
       if (fromZone === "field" && to !== "field") clearSimulatedTemporaryControl(state, card);
       if (action.resetAttackFlags) {

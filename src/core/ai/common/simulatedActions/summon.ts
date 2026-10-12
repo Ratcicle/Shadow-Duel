@@ -1209,13 +1209,16 @@ export function applyConditionalSummonFromHand(
     applySimulatedActions,
   } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
+  const chosen = targets[0];
+  // As in the runtime handler, only a chosen card still in the Hand can be
+  // summoned; the Hand is checked before the condition and the free zones.
+  if (!chosen || !targetPlayer.hand?.includes(chosen)) return;
   if ((targetPlayer.field || []).length >= 5) return;
   if (
     action.condition &&
     !evaluateSimulatedConditions(action.condition, { state, selfId, options })
   ) return;
-  const chosen = targets[0];
-  if (chosen && canSimSpecialSummon(chosen, targetPlayer)) {
+  if (canSimSpecialSummon(chosen, targetPlayer)) {
     removeCardFromZones(targetPlayer, chosen);
     applySummonState(
       chosen,
