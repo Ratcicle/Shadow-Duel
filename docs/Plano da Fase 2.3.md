@@ -57,8 +57,9 @@ Diagnósticos da v1 que os lotes perseguem (N = 20, salvo indicação):
 | L23 | Etapa `after_resolution` em `chain_link_resolution` | Instrumentação (contrato de evento) | Não | Pacote v28 | L21 |
 | L24 | `card_to_grave` aguardado e Equip na mesma SEGOC do hospedeiro | Regra | Sim (raro) | Pacote v28 | — |
 | L25 | `card_moved` sem falso destacamento | Refatoração equivalente | Não | Pacote v28 | L24 |
+| L25b | Efeitos de par de batalha resolvidos no runtime (Quick Draw in the Burning West) | Regra | Sim | Pacote v28 | L24 |
 | L26 | decision-broker:10: escolhas da IA gravadas e playback estrito | Contrato de replay | Não | Pacote v28 | L22, L24 |
-| L27 | Bump `engine-rules-v28` | Contrato de replay | Não | Bump | L23, L24, L25, L26 |
+| L27 | Bump `engine-rules-v28` | Contrato de replay | Não | Bump | L23, L24, L25, L25b, L26 |
 | L28 | Baseline v2 e fechamento | Medição e documentação | Não | Não | L27 |
 
 A coluna "Depende de" só lista dependências funcionais: o código do lote usa o que o outro lote entrega. A cadeia de medição segue a ordem dos IDs, e cada lote é medido contra o elo anterior (ver "Cadeia" em "Política de medição"). Quando a ordem também protege a atribuição de uma medida, ou quando o critério de saída usa um instrumento ou um resultado de outro lote, isso aparece em "Dependência de medição" na seção do lote. Todo lote que usa o controle de invariância (L10 a L19) tem L09 como dependência de medição.
@@ -124,6 +125,7 @@ Blocos: preparação e instrumento (L00–L01), defeito e extrações (L02–L03
 | D8 | Reações do oponente só acompanhadas na 2.3; o modelo de backrow fica para a 2.4. O rótulo residual passa a ser `opponent_state_mismatch` | L01 |
 | D9 | Os gatilhos de batalha na ponte (`grant_second_attack`, `damage_from_destroyed_atk`, `destroy_attacker_on_archetype_destruction` e `banish_destroyed_monster`) ficam fora da 2.3. Eles são o primeiro lote do caminho de batalha da 2.4, antes de qualquer ajuste ali, com medição própria | Fora do escopo |
 | D10 | O controle de invariância pode ter um gancho mínimo em `src/`, num lote de instrumentação que não muda decisões | L09 |
+| D11 | (12/10/2026) O runtime não resolve os efeitos de par de batalha desde `3256e50` (achado de L02, Quick Draw in the Burning West). A correção entra como lote de regra dentro do pacote v28, coberta pelo mesmo bump | L25b, L27 |
 
 **Fluxo de trabalho (definido pelo usuário):** branch remota `fase2/limites-conhecidos`, commit e push por lote, PR e merge só no fim da 2.3. Os commits e pushes são feitos pelo usuário ou a pedido dele.
 
@@ -214,7 +216,7 @@ npm run benchmark -- controls --workers 10 --compare-with .cache/benchmark/2.3/<
 | Fatia com `--cases` | Só diagnóstico dirigido, quando o N = 5 não mostra o efeito esperado. Inelegível a baseline | Variável |
 | N = 20 intermediário (M1) | Depois de L13 | ~50 min |
 
-- **Cadeia.** O primeiro elo é o R0 (L00), idêntico aos k = 0..4 da v1. Os elos são só os pontos N = 5 e o M1. O elo anterior de um lote é o último desses pontos antes dele; uma prova N = 2 não cria elo. Por isso L04 é comparado com L02, L10 com L08, L14 com o M1, L20 a L24 com L19, L25 com L24 e L26 com L24. Contra a v1 ou contra N diferentes, usar `--allow-config-diff seeds.count,seeds.values,matrix.plannedCases,matrix.caseListSha256`.
+- **Cadeia.** O primeiro elo é o R0 (L00), idêntico aos k = 0..4 da v1. Os elos são só os pontos N = 5 e o M1. O elo anterior de um lote é o último desses pontos antes dele; uma prova N = 2 não cria elo. Por isso L04 é comparado com L02, L10 com L08, L14 com o M1, L20 a L24 com L19, L25 e L25b com L24 e L26 com L25b. Contra a v1 ou contra N diferentes, usar `--allow-config-diff seeds.count,seeds.values,matrix.plannedCases,matrix.caseListSha256`.
 - **Controles.** Todo lote roda controles, então eles formam uma cadeia própria: cada lote compara os seus com os do lote anterior.
 - **Ponte "antes e depois".** O "antes" é a execução da ponte no commit do elo anterior. Quando o elo anterior também rodou a ponte, a execução é reaproveitada.
 - **Lotes sem ponte.** L04–L08 mudam handlers, coletores e seleção da simulação comum, não o passo de batalha da ponte nem a projeção da raiz do TurnLineSearch; o efeito deles na ponte natural aparece no N = 5. L11 só toca o GameTree. L17 só toca o simulador do laço vivo (`Bot.simulateBattle`), que a ponte não usa.
@@ -252,7 +254,7 @@ O placar não é critério de aceite na 2.3. O N = 5 dá cerca de ±11 pp por pr
 
 | Item | Quantidade | Tempo |
 | --- | --- | --- |
-| Pontos N = 5 | 20 (R0 e 19 lotes: L01, L02, L04–L08, L10–L19, L24 e L26) | ~4 h |
+| Pontos N = 5 | 21 (R0 e 20 lotes: L01, L02, L04–L08, L10–L19, L24, L25b e L26) | ~4,2 h |
 | Provas N = 2 | 8 (L03, L09, L20–L23, L25 e L27) | ~40 min |
 | Ponte N = 2 | 13: R0, o "depois" dos 9 lotes de ponte e o "antes" que não pode ser reaproveitado (nos commits de L08, L11 e L17) | ~1,1 h |
 | Controle de invariância | 13 (L09–L19, M1 e L28) | ~50 min |
@@ -1132,6 +1134,46 @@ Ver "Política de medição". Roda no commit de L13, com o controle de invariân
 
 **Esforço:** P.
 
+### L25b — Efeitos de par de batalha resolvidos no runtime
+
+**Item:** bug de regra exposto por L02 (D11). Desde `3256e50`, `register_battle_pair_effect` registra a entrada em `temporaryBattlePairEffects`, mas nada a resolve: só a prévia de PV a lê (`src/core/game/combat/resolution.ts`). A Quick Draw in the Burning West (457) não destrói o monstro do oponente no início da Damage Step, e a finalização adiada da Magia (`deferFinalizationUntil: "battle_pair_effect"`) nunca roda, então ela fica virada para cima na zona. A ponte da IA simula a destruição.
+
+**Objetivo:** o runtime volta a resolver os efeitos de par de batalha, e a Magia de origem sempre recebe um destino.
+
+**Dependência de ordem:** depois de L24 e L25, que mudam o movimento ao Cemitério usado pela destruição; antes de L26, que grava as decisões tomadas durante a resolução.
+
+**Pergunta ao usuário antes de implementar:** o texto da carta decide o destino da Magia (Setada se a diferença de ATK entre os alvos for de 500 ou menos; senão, Cemitério) "depois que este efeito resolve", e os dados adiam esse destino até a resolução do par. Confirmar a leitura:
+
+- (a) destino decidido logo depois da ativação, com o ATK daquele momento. Muda os dados da carta (não o texto) e a assinatura do banco;
+- (b) destino adiado até a batalha do par, como nos dados atuais; se o par não batalhar até o fim do turno, a Magia recebe o destino na expiração da entrada.
+
+O texto EN/PT da carta não muda em nenhum dos casos.
+
+**Tarefas**
+
+- [ ] Reproduzir no runtime, nos dois assentos (humano e bot): com o par registrado, o ataque entre os dois alvos não destrói o monstro do oponente no início da Damage Step, e a Magia fica virada para cima com `pendingSpellTrapFinalization`.
+- [ ] Restaurar a resolução de forma genérica no módulo de combate (`src/core/game/combat/`), no início da Damage Step e antes do cálculo, conforme o `timing` da entrada, com o contrato da função removida em `3256e50` (`resolveTemporaryBattlePairEffects`): casar o par pela identidade, conferir que o alvo afetado continua no campo do oponente, aplicar as actions com os alvos do par, tratar `needsSelection` e finalizar a fonte com `resolvePendingSpellTrapFinalization(..., { deferUntil: "battle_pair_effect" })`. Adaptar à transação atual do Damage Step e do Chain, com resolução sequencial e sem lógica nova na fachada.
+- [ ] Expiração conforme a resposta acima: `cleanupExpiredTemporaryBattlePairEffects` (`src/core/game/turn/cleanup.ts`) não pode deixar a finalização pendente sem destino.
+- [ ] Conferir contra o runtime corrigido a prévia de PV (`hasMatchingTemporaryBattlePairDamageStepEffect`), a ponte da IA (`resolveSimulatedBattlePairEffects`, `src/core/ai/TurnLineSearch.ts`) e o laço de batalha vivo do bot: mesmo timing, mesma condição de alvo e mesmo destino da Magia.
+
+**Validação**
+
+- Testes existentes do Burning West, da Damage Step e da ponte de batalha (`architectureBurningWestEffects`, `architectureBattleIdentity`, `architectureDamageCalculationSimulation`), portão de golden do pacote com justificativa por item e `npm test`.
+- Smoke: `--matchups burningwest:void,burningwest:dragon,luminarch:burningwest,burningwest:techzero --duels 2 --check-replays`.
+- Navegador (Laboratório): ativar a Quick Draw e atacar o alvo do oponente com o alvo Burning West, com diferença de ATK de até 500 e maior que 500; repetir sem batalhar até o fim do turno.
+
+**Medição:** N = 5 contra L24 (L25 só tem prova N = 2), mais controles. Uma sonda conta as Quick Draw presas na zona com finalização pendente no fim do turno.
+
+**Critério de saída:** critério de aceite geral; o caso reproduzido resolve nos dois assentos; nenhuma Magia presa com finalização pendente.
+
+**Riscos**
+
+- O preset do Burning West usa 2 cópias da Quick Draw: decisões e placar do Burning West podem mudar. O teste de sinal decide, sem compensação.
+- Um `needsSelection` no meio da Damage Step precisa retomar sem perder o passo nem duplicar a destruição.
+- Replays v27 com a Quick Draw ativada passam a ser interpretados de outro jeito; o bump de L27 cobre.
+
+**Esforço:** M.
+
 ### L26 — decision-broker:10: escolhas da IA gravadas e playback estrito
 
 **Item:** decision-broker:10 (D5), sem os gates de playback (L22) e sem a regra AST (E10).
@@ -1154,7 +1196,7 @@ Ver "Política de medição". Roda no commit de L13, com o controle de invariân
 - Smoke com playback estrito nos 9 presets (os 9 pares da sonda, seed 4242).
 - Navegador: um duelo humano contra um bot que não seja Shadow-Heart, exportado e reproduzido com `npm run replay`.
 
-**Medição:** N = 5 contra L24 (L25 só tem prova N = 2) com `--expect-identical --ignore guard.peaks.decisions,seatMetrics.*.decisions.broker`. Cada decisão do broker emite `decision_made` (`src/core/game/decisions/broker.ts:132`), que o harness conta nesses campos; o lote acrescenta cerca de 17 decisões `trigger_activation` por duelo. Por isso:
+**Medição:** N = 5 contra L25b com `--expect-identical --ignore guard.peaks.decisions,seatMetrics.*.decisions.broker`. Cada decisão do broker emite `decision_made` (`src/core/game/decisions/broker.ts:132`), que o harness conta nesses campos; o lote acrescenta cerca de 17 decisões `trigger_activation` por duelo. Por isso:
 
 - vencedores, turnos, `opening`, `mainPhase` e `measured` são comparados à parte e precisam sair idênticos;
 - a folga da guarda é registrada (na v1, pico de 131 decisões por turno contra o limite de 2000).
@@ -1267,7 +1309,8 @@ O `plan.json` da análise (`.cache/plan23-probes/plan.json`) usava L00–L24. A 
 | L23 | L20 | Marcação de bump alinhada à contingência |
 | L24 | L21 | — |
 | L25 | L19 | Movido para dentro do pacote, depois de L24 (E8) |
-| L26 | L22 | Sem gates e sem regra AST; depende de L24; `--ignore` declarado; N = 5 contra L24 |
+| L25b | — | Lote novo (D11), achado de L02 |
+| L26 | L22 | Sem gates e sem regra AST; depende de L24; `--ignore` declarado; N = 5 contra L25b (antes, L24) |
 | L27 | L23 | Projeção v28 → v27 no passo histórico |
 | L28 | L24 | — |
 
@@ -1320,7 +1363,7 @@ Antes do primeiro lote de cada caminho da 2.4, os itens abaixo passam por uma tr
 | --- | --- | --- |
 | Um gatilho obrigatório com plano exato inválido é perdido em silêncio no runtime, sem cair no AutoSelector | `src/core/effects/targeting/resolution.ts:649-651` | Exposto por L04. Não corrigido na 2.3 |
 | Em `bounce_and_summon`, a preferência `byName` sobrescreve a posição forçada e ignora `byTargetRef`/default | `src/core/actionHandlers/movement.ts` | Nenhuma carta usa a action |
-| O runtime nunca resolve os efeitos de par de batalha (`register_battle_pair_effect`). A Quick Draw in the Burning West (457) não destrói no início da Damage Step, e a finalização adiada (`deferFinalizationUntil: "battle_pair_effect"`) nunca roda, então a Magia fica virada para cima na zona. A ponte simula a destruição | `resolveTemporaryBattlePairEffects` e suas duas chamadas foram removidos em `3256e50`; o registro fica em `src/core/actionHandlers/conditional.ts` e só a prévia de PV o lê (`src/core/game/combat/resolution.ts`) | Exposto por L02. Decisão do usuário pendente (recomendação: lote de regra no pacote v28) |
+| O runtime nunca resolve os efeitos de par de batalha (`register_battle_pair_effect`). A Quick Draw in the Burning West (457) não destrói no início da Damage Step, e a finalização adiada (`deferFinalizationUntil: "battle_pair_effect"`) nunca roda, então a Magia fica virada para cima na zona. A ponte simula a destruição | `resolveTemporaryBattlePairEffects` e suas duas chamadas foram removidos em `3256e50`; o registro fica em `src/core/actionHandlers/conditional.ts` e só a prévia de PV o lê (`src/core/game/combat/resolution.ts`) | Exposto por L02. Corrigido em L25b, no pacote v28 (D11) |
 | No runtime, `protectFrom: "opponent_effects"` nunca recusa um banimento que vem de uma destruição, porque o `destroyCard` não repassa a fonte ao `moveCard`; o `destroySimulatedCard` da simulação recusa | `src/core/game/zones/destruction.ts` e `src/core/game/zones/movement.ts` | Exposto por L02. Questão de regra para o diretor criativo: se um banimento por `banishWhenLeavesField` conta como banido por efeito do oponente |
 | `lp_cost_reduction` (Pure Knight) e `lp_gain_multiplier` (Barbarias) continuam valendo com a fonte negada | `src/core/effects/costs/lpCost.ts` e `src/core/Player.ts`; a simulação espelha (`simulatedActions/shared.ts` e `resources.ts`) | Exposto por L06. A correção muda runtime e simulação juntos |
 | O `destroy_on_leave` da The Shadow Heart é aplicado por padrão de id, mesmo com a carta negada | `src/core/game/zones/movement.ts` | Exposto por L06. Questão de regra para o diretor criativo |
