@@ -734,6 +734,9 @@ export function selectSimulatedTargets({
   const exactSelection = (id: string, candidates: readonly SimulatedCardState[], count: NormalizedCount) => {
     const ids = options.activationContext?.decisions?.selections?.[id];
     if (ids === undefined) return undefined;
+    // The runtime refuses too few legal candidates before it reads the plan;
+    // only a plan that the present candidates cannot honor is a divergence.
+    if (candidates.length < count.min) return [];
     const selected = resolveExactInstanceSelection(candidates, ids, count);
     if (selected === null) (state._simUnsupportedActions ??= []).push(`exact_selection:${id}`);
     return selected || [];
