@@ -6,6 +6,7 @@ import { expireEffectNegation } from "../../effects/negation.js";
 import { expireLevelModifications } from "../../effects/actions/stats.js";
 import type { SimulatedEquipHostExitBinding } from "./zones.js";
 import { hasEquipHostExitProof, matchesEquipHostExitSourcePresence } from "../../effects/triggers/collectors/shared.js";
+import { canTriggerAfterSummonFromHand } from "../../effects/triggers/collectors/afterSummon.js";
 import { getImmediateEventEffectValidationError, isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
 import { captureProcedureTriggerConditions } from "../../effects/conditions/runtime.js";
 import { matchesCardFilter, type RuntimeCardFilter } from "../../effects/filters/cardFilters.js";
@@ -1300,6 +1301,10 @@ function matchesSimulatedEventEffect(
   }
 
   if (eventName === "after_summon") {
+    // Runtime collector rule: a card in the Hand answers only through
+    // `self_in_hand` or a nested `conditional_summon_from_hand`. Temporary
+    // registrations are collected apart, without this gate.
+    if (!isTemporaryRegistration && sourceZone === "hand" && !canTriggerAfterSummonFromHand(effect)) return false;
     if (effect.triggerPlayer === "self" && eventRole !== "self") return false;
     if (effect.triggerPlayer === "opponent" && eventRole !== "opponent") return false;
     if (effect.requireSelfAsSummoned === true && sourceCard !== eventCard) {
