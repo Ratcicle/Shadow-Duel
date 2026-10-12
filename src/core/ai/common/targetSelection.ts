@@ -1,5 +1,5 @@
 import type { AiCardInput, AiPlayerInput } from "../../contracts/aiState.js";
-import type { EffectTarget } from "../../contracts/effects.js";
+import type { EffectDefinition, EffectTarget } from "../../contracts/effects.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
 import { requiresUnnegatedTarget } from "../../effects/negation.js";
 import { getPaidCostReferenceValues } from "../../effects/targeting/references.js";
@@ -988,9 +988,15 @@ function zoneCards(player: AiPlayerInput | undefined, zone: CanonicalZone): read
   return player[zone] || [];
 }
 
-/** Ordered exact-instance candidates for policies compiling decision plans. */
+/**
+ * Ordered exact-instance candidates for policies compiling decision plans.
+ * The effect supplies the activation eligibility shared with the simulation
+ * and the runtime: a target it negates excludes already negated monsters.
+ */
 export function collectExactTargetCandidates(target: EffectTarget, source: AiCardInput, ctx: { player: AiPlayerInput; opponent?: AiPlayerInput },
-  selections: Readonly<Record<string, readonly (number | string)[]>>): AiCardInput[] {
+  selections: Readonly<Record<string, readonly (number | string)[]>>,
+  effect: Pick<EffectDefinition, "actions"> | null | undefined): AiCardInput[] {
+  const requireUnnegated = requiresUnnegatedTarget(effect, target);
   const allZones: readonly CanonicalZone[] = ["field", "hand", "deck", "graveyard", "banished", "extraDeck", "spellTrap", "fieldSpell"];
   const fromZones = (spec: { owner?: EffectOwner; zone?: EffectZone; zones?: readonly EffectZone[] }) => {
     const roles = spec.owner === "opponent" ? ["opponent"] as const :
@@ -1012,6 +1018,7 @@ export function collectExactTargetCandidates(target: EffectTarget, source: AiCar
   const result: AiCardInput[] = [];
   for (const { card, role } of fromZones(target)) {
     if (card.instanceId == null || excluded.includes(card.instanceId) || result.some(other => card.instanceId === other.instanceId)) continue;
+    if (requireUnnegated && card.cardKind === "monster" && card.effectsNegated === true) continue;
     if (excludedNames.includes(card.name) || !matchesTargetFilters(card, target, source, role)) continue;
     if (target.compareAttribute && !matchesTargetAttributeComparison(card, references(target.compareAttribute.ref)[0], target.compareAttribute)) continue;
     if (pair && !fromZones(pair).some(({ card: paired, role: pairedRole }) =>
