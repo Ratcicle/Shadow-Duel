@@ -366,6 +366,8 @@ Processo:
 
 Evitar power creep artificial apenas para elevar win rate.
 
+Pendência registrada para esta etapa (12/10/2026): revisar com o diretor criativo o texto e os dados da Quick Draw in the Burning West (457). O texto decide se a Magia é Setada ou vai ao Cemitério "depois que este efeito resolve", mas os dados adiam esse destino até a batalha dos alvos, e uma Magia Rápida esperando no campo fica estranha. Até lá, o lote L25b da fase 2.3 só restaura a resolução no runtime, mantendo os dados atuais.
+
 ---
 
 ## 5. Modo Gauntlet

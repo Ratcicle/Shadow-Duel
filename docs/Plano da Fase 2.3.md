@@ -1142,18 +1142,13 @@ Ver "Política de medição". Roda no commit de L13, com o controle de invariân
 
 **Dependência de ordem:** depois de L24 e L25, que mudam o movimento ao Cemitério usado pela destruição; antes de L26, que grava as decisões tomadas durante a resolução.
 
-**Pergunta ao usuário antes de implementar:** o texto da carta decide o destino da Magia (Setada se a diferença de ATK entre os alvos for de 500 ou menos; senão, Cemitério) "depois que este efeito resolve", e os dados adiam esse destino até a resolução do par. Confirmar a leitura:
-
-- (a) destino decidido logo depois da ativação, com o ATK daquele momento. Muda os dados da carta (não o texto) e a assinatura do banco;
-- (b) destino adiado até a batalha do par, como nos dados atuais; se o par não batalhar até o fim do turno, a Magia recebe o destino na expiração da entrada.
-
-O texto EN/PT da carta não muda em nenhum dos casos.
+**Leitura do texto (decisão do usuário, 12/10/2026):** o texto decide o destino da Magia "depois que este efeito resolve", e os dados adiam esse destino até a resolução do par. A revisão de texto e dados fica para a etapa de suporte do Burning West (seção 4 do roadmap). L25b mantém os dados atuais: o tipo da finalização (Setar ou Cemitério) continua decidido na ativação, pela diferença de ATK naquele momento, e é aplicado quando o par resolve. O texto EN/PT da carta não muda.
 
 **Tarefas**
 
 - [ ] Reproduzir no runtime, nos dois assentos (humano e bot): com o par registrado, o ataque entre os dois alvos não destrói o monstro do oponente no início da Damage Step, e a Magia fica virada para cima com `pendingSpellTrapFinalization`.
 - [ ] Restaurar a resolução de forma genérica no módulo de combate (`src/core/game/combat/`), no início da Damage Step e antes do cálculo, conforme o `timing` da entrada, com o contrato da função removida em `3256e50` (`resolveTemporaryBattlePairEffects`): casar o par pela identidade, conferir que o alvo afetado continua no campo do oponente, aplicar as actions com os alvos do par, tratar `needsSelection` e finalizar a fonte com `resolvePendingSpellTrapFinalization(..., { deferUntil: "battle_pair_effect" })`. Adaptar à transação atual do Damage Step e do Chain, com resolução sequencial e sem lógica nova na fachada.
-- [ ] Expiração conforme a resposta acima: `cleanupExpiredTemporaryBattlePairEffects` (`src/core/game/turn/cleanup.ts`) não pode deixar a finalização pendente sem destino.
+- [ ] Expiração sem batalha: `cleanupExpiredTemporaryBattlePairEffects` (`src/core/game/turn/cleanup.ts`) aplica a finalização pendente já registrada na ativação, para que nenhuma Magia fique presa na zona.
 - [ ] Conferir contra o runtime corrigido a prévia de PV (`hasMatchingTemporaryBattlePairDamageStepEffect`), a ponte da IA (`resolveSimulatedBattlePairEffects`, `src/core/ai/TurnLineSearch.ts`) e o laço de batalha vivo do bot: mesmo timing, mesma condição de alvo e mesmo destino da Magia.
 
 **Validação**
