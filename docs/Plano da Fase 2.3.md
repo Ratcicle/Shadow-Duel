@@ -44,6 +44,7 @@ Diagnósticos da v1 que os lotes perseguem (N = 20, salvo indicação):
 | L07e | `special_summon_from_zone` simulada com alvo múltiplo sem `count` | Paridade | Sim | Não | L07d |
 | L07f | Quantidade de alvos com faixa opcional pela regra do runtime em todos os presets | Paridade | Sim | Não | L07e |
 | L07g | Master of Mirrors Arcanist: quantidade de Magias devolvidas pela regra do runtime | Paridade | Sim | Não | L07f |
+| L07h | OPT da simulação do Arcanist com o uso real do turno e só com candidatos | Paridade | Sim | Não | — |
 | L08 | Contador zerado removido na simulação | Paridade | Sim | Não | — |
 | L09 | Controle de invariância a informação oculta (opt-in, gancho mínimo em `src/`) e guarda estrutural que só registra | Instrumentação | Não | Não | L03 |
 | L10 | Projeções opacas sem uso de OPT por nome | Paridade | Sim | Não | L09 |
@@ -266,7 +267,7 @@ O placar não é critério de aceite na 2.3. O N = 5 dá cerca de ±11 pp por pr
 
 | Item | Quantidade | Tempo |
 | --- | --- | --- |
-| Pontos N = 5 | 27 (R0 e 26 lotes: L01, L02, L04–L08, L07b–L07g, L10–L19, L24, L25b e L26) | ~5,4 h |
+| Pontos N = 5 | 28 (R0 e 27 lotes: L01, L02, L04–L08, L07b–L07h, L10–L19, L24, L25b e L26) | ~5,6 h |
 | Provas N = 2 | 8 (L03, L09, L20–L23, L25 e L27) | ~40 min |
 | Ponte N = 2 | 13: R0, o "depois" dos 9 lotes de ponte e o "antes" que não pode ser reaproveitado (nos commits de L08, L11 e L17) | ~1,1 h |
 | Controle de invariância | 13 (L09–L19, M1 e L28) | ~50 min |
@@ -726,6 +727,39 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 **Riscos**
 
 - A linha do Master of Mirrors do Arcanist muda. O teste de sinal decide, sem compensação.
+
+**Esforço:** P.
+
+---
+
+## L07h — OPT da simulação do Arcanist com o uso real do turno e só com candidatos
+
+**Item:** divergências expostas por L07g (decisão do usuário, 13/10/2026: lote de paridade próprio, medido depois de L07g).
+
+**Objetivo:** o OPT simulado da estratégia do Arcanist (`useSimOpt` e o balde `_simArcanistOptUsed`, `src/core/ai/arcanist/simulation.ts`) segue o runtime em dois pontos:
+
+- o balde começa vazio a cada clone e não vê o uso real do turno: com o OPT do Master of Mirrors Arcanist já gasto, o runtime não ativa o gatilho, e a simulação ainda devolve, compra e marca replanejamento;
+- o OPT é gasto antes de conferir os candidatos: com 0 Magias "Arcanist" no Cemitério, o runtime não ativa e mantém o OPT para uma segunda cópia, e a simulação o consome.
+
+**Tarefas**
+
+- [ ] Reproduzir nos dois assentos com as sondas de L07g (`scratchpad/plan23/L07g/mirrors_opt.mts` e `r2_opt_zero_candidates.mts`): 2 de 4 casos divergem em cada uma.
+- [ ] Ler o uso real do turno, pela projeção de uso que o planejamento já copia do runtime (`projectRuntimeEffectUsage` e afins), sem um balde paralelo que ignore o estado real.
+- [ ] Só consumir o OPT simulado quando houver candidatos suficientes para o mínimo do alvo declarado, como o runtime.
+- [ ] Conferir os outros OPT próprios das simulações de estratégia. Só entra divergência reproduzida.
+
+**Validação**
+
+- Testes: os de Arcanist do caminho (`architectureArcanist`, `arcanistDesignDecisions`) e os de L07g. Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Smoke: `--matchups arcanist:bloomrot,arcanist:void,luminarch:arcanist,arcanist:techzero --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07g.
+
+**Critério de saída:** critério de aceite geral; nas sondas, 0 divergências.
+
+**Riscos**
+
+- Linhas do Arcanist com segunda Invocação-Normal do Master of Mirrors no turno mudam. O teste de sinal decide, sem compensação.
 
 **Esforço:** P.
 
@@ -1504,6 +1538,7 @@ O `plan.json` da análise (`.cache/plan23-probes/plan.json`) usava L00–L24. A 
 | L07e | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07d |
 | L07f | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07e |
 | L07g | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07f |
+| L07h | — | Lote novo (decisão do usuário em 13/10/2026), achado de L07g |
 | L26 | L22 | Sem gates e sem regra AST; depende de L24; `--ignore` declarado; N = 5 contra L25b (antes, L24) |
 | L27 | L23 | Projeção v28 → v27 no passo histórico |
 | L28 | L24 | — |
@@ -1525,6 +1560,7 @@ O `plan.json` da análise (`.cache/plan23-probes/plan.json`) usava L00–L24. A 
 | Resíduo por nome: Void Mirror Dimension em `src/core/chain/botResponsePolicy.ts:240-241` | Já listado nos resíduos por nome da 2.4 |
 | Métrica `lethal` sempre zero e falhas sem código | Limitações do harness que dependem da certificação de letal sob incerteza e de códigos de falha em `src/` |
 | Políticas que supõem mais alvos do que o bot escolhe no runtime: Bloomrot (`resourcePolicy.ts`, o Ancient Husk exige 2 ou mais alvos; `targeting.ts`, `sporePreference(analysis, 2)`) e Luminarch (`defensePolicy.ts`, até 3 nomes preferidos e urgência com 2 ou mais alvos) | L07f. Política: a simulação já segue a quantidade do runtime; se a escolha do mínimo pelo AutoSelector é boa, é decisão da 2.4 |
+| Qual Magia o Master of Mirrors Arcanist devolve ao Deck: a simulação ordena pelo ranking de busca da estratégia, e o AutoSelector do runtime desempata pela ordem do Cemitério (8 de 12 casos divergem na sonda de L07g, sem divergência de quantidade) | Decisão do usuário (13/10/2026). O desempate do runtime é arbitrário; a correção é a política escolher a Magia e o runtime honrar o plano, o que muda decisões ao vivo |
 
 ### Triagem antes da 2.4
 
