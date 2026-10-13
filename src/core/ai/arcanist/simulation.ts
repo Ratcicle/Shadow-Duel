@@ -1,6 +1,8 @@
 // Arcanist simulation policy and compatibility hooks; execution delegates to shared primitives.
 import type ArcanistStrategy from "../ArcanistStrategy.js";
 import { refreshSimulatedFieldAuras } from "../common/zones.js";
+import { getPerspectivePlayers } from "../common/perspective.js";
+import { normalizeCount, selectRuntimeOptionalCount } from "../common/targetSelection.js";
 import { isPlanningActionPresenceCurrent, resolvePlanningSourceIndex } from "../common/actionIdentity.js";
 import { applySimulatedActions } from "../common/simulatedActions/index.js";
 import { storeSimulatedBlueprintAfterResolution } from "../common/simulatedActions/flow.js";
@@ -189,7 +191,10 @@ export function simulateArcanistAfterSummon(this: ArcanistStrategy, { state, act
 
 
 export function simulateMasterOfMirrorsNormalSummon(this: ArcanistStrategy, state: SimulatedRuntimeState, player: SimulatedPlayerState, source: SimulatedCardState, action: AIAction) {
-    if (!useSimOpt(state, "master_mirrors_arcanist_shuffle_draw")) return;
+    // The declared target supplies the range the runtime selects from.
+    const target = source.effects?.find(effect => effect.id === "master_mirrors_arcanist_shuffle_draw")
+      ?.targets?.find(entry => entry.id === "master_mirrors_arcanist_spell_targets");
+    if (!target || !useSimOpt(state, "master_mirrors_arcanist_shuffle_draw")) return;
     const candidates = (player.graveyard || []).filter(isArcanistSpell);
     if (candidates.length === 0) return;
     const preference =
@@ -204,14 +209,20 @@ export function simulateMasterOfMirrorsNormalSummon(this: ArcanistStrategy, stat
         },
         { game: state, player, source, action },
       ) || candidates;
-    const chosen = ordered
+    const ranked = ordered
       .slice()
       .sort((a, b) => {
         const preferredA = (preference.preferredNames || []).includes(a?.name!) ? 1 : 0;
         const preferredB = (preference.preferredNames || []).includes(b?.name!) ? 1 : 0;
         return preferredB - preferredA;
-      })
-      .slice(0, Math.min(3, ordered.length));
+      });
+    // Take as many Spells as the runtime AutoSelector takes for the bot from
+    // the declared range (they return to the owner's Deck, a benefit); the
+    // name preference above only orders them.
+    const selfId = player === state.player ? "player" : "bot";
+    const { opponent } = getPerspectivePlayers(state, selfId);
+    const chosen = ranked.slice(0, selectRuntimeOptionalCount(target, ranked,
+      normalizeCount(target.count, 1), player, opponent, "benefit"));
     for (const card of chosen) {
       removeFromZone(player, "graveyard", card);
       pushToZone(player, "deck", card);
@@ -220,7 +231,7 @@ export function simulateMasterOfMirrorsNormalSummon(this: ArcanistStrategy, stat
     // until the real effect reveals the card instead of predicting its identity.
     applySimulatedActions({
       state,
-      selfId: player === state.player ? "player" : "bot",
+      selfId,
       actions: [
         { type: "shuffle_deck", player: "self" },
         { type: "draw", player: "self", amount: 1 },

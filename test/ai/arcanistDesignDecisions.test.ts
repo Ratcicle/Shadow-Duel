@@ -749,14 +749,14 @@ function masterPlanningFixture(seed: number, deckIds = [303, 4], graveIds = [301
 
 for (const actor of ["player", "bot"] as const) for (const seed of [42, 601]) {
   test(`308 projects an unknown draw after recycling distinct copies (${actor}, seed ${seed})`, t => {
-    const { game, arcanist, state, action } = masterPlanningFixture(seed, [303, 4], [301, 301, 304], actor);
+    const { game, arcanist, state, action } = masterPlanningFixture(seed, [301, 4], [301, 301, 304], actor);
     t.after(() => game.dispose());
     const before = createCanonicalStateSnapshot(game);
     const rngBefore = game.getRandomState();
     const recycled = state.bot.graveyard.slice();
     const tribute = required(state.bot.field[0]);
     const master = required(state.bot.hand[0]);
-    const resources = [...state.bot.deck, ...recycled];
+    const deckBefore = state.bot.deck.slice();
     const opponentDeck = state.player.deck.slice();
     const opponentHand = state.player.hand.slice();
     assert.notEqual(recycled[0]?.instanceId, recycled[1]?.instanceId);
@@ -768,7 +768,10 @@ for (const actor of ["player", "bot"] as const) for (const seed of [42, 601]) {
     assert.deepEqual(state.player.deck, opponentDeck, "the opponent must not pay for the draw");
     assert.deepEqual(state.player.hand, opponentHand, "the opponent must not receive the draw");
     assert.equal(state.bot.field[0]?.instanceId, master.instanceId);
-    assert.deepEqual(state.bot.graveyard, [tribute], "only the tribute remains after all three returns");
+    const returned = recycled.filter(card => !state.bot.graveyard.includes(card));
+    assert.equal(returned.length, 1, "the bot returns as many Spells as the runtime selects");
+    assert.deepEqual(state.bot.graveyard, [...recycled.filter(card => !returned.includes(card)), tribute]);
+    const resources = [...deckBefore, ...returned];
     assert.equal(state.bot.deck.length, resources.length - 1);
     assert.equal(state.bot.hand.length, 1);
     const drawn = required(state.bot.hand[0]);

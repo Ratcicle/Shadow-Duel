@@ -686,8 +686,12 @@ export function estimateTemporaryCombatDebuffTargetValue(
   return bestScore;
 }
 
-/** Public scoring view only; optionality is decided by the real AutoSelector. */
-function selectRuntimeOptionalCount(
+/**
+ * Count the runtime AutoSelector takes for the bot from a target range, also
+ * reused by strategy simulations that keep their own candidate order.
+ * Public scoring view only; optionality is decided by the real AutoSelector.
+ */
+export function selectRuntimeOptionalCount(
   target: EffectTarget, ordered: SimulatedCardState[], count: NormalizedCount,
   self: SimulatedPlayerState, opponent: SimulatedPlayerState, intent: TargetIntent,
 ): number {
