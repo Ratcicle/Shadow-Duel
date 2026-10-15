@@ -92,6 +92,7 @@ Blocos: preparação e instrumento (L00–L01), defeito e extrações (L02–L03
 | L07e | `1047e89` | N = 5 (`canonical-f4c7e4e-21712b08`, `deterministicDigest` `51a6d494…`) contra L07d; controles | 0 erros e 0 defeitos. Registros idênticos aos de L07d (mesmo `deterministicDigest`) e controles idênticos: com a escolha de quantidade do Void pela regra do runtime, o lote não muda nenhuma decisão do benchmark. Alvo cumprido fora do benchmark: oráculo de quantidade 8 → 0 divergências em 12 e pipeline do bot com o Void Haunter 0 em 6, nos dois assentos (só a correção da quantidade dava 4 em 6). A escolha de quantidade pela regra do runtime no Void entrou por decisão do usuário; a mesma divergência nos outros presets vai para L07f |
 | L07f | `16d011f` | N = 5 (`canonical-152c116-21712b08`, `deterministicDigest` `3eda14c2…`) contra L07e; controles | 0 erros e 0 defeitos. Alvo: oráculo do pipeline do bot (Holy Shield, Spore Cloud e Glass Sovereign, nos dois assentos) 12 → 0 divergências em 18; na sonda, a simulação seleciona a quantidade do runtime nas três cartas. 1 virada (`bloomrot:miragebound:1`, Bloomrot → Miragebound); teste de sinal sem preset significativo; 7 casos com outra duração ou PV, todos com Bloomrot, Miragebound ou Void. Sem novidades. Divergência: Miragebound 0,078 → 0,072 e Bloomrot 0,105 → 0,098; ramos não suportados do TLS no Bloomrot 95 → 91. Controles: corpus idêntico; nos 4 smokes, mesmos vencedores e turnos, e só mudam estatísticas de planejamento. A flag `useRuntimeOptionalTargets` saiu (a regra é o padrão). Teste alterado com aval do usuário, sem asserção mudada: `test/ai/techZeroSimulation.test.ts` (Kaiser com o plano exato de reciclagem). Achado novo vai para L07g |
 | L07g | `d4c8304` | N = 5 (`canonical-2f77864-21712b08`, `deterministicDigest` `20b0dd91…`) contra L07f; controles | 0 erros e 0 defeitos. Alvo: na sonda, divergências de quantidade do Master of Mirrors 4 → 0 em 6, nos dois assentos. 405/405 com o mesmo resultado, nenhum caso com outra duração ou PV, sem novidades; divergência do Arcanist 0,046 → 0,041. Controles idênticos aos de L07f. Teste alterado com aval do usuário: `test/ai/arcanistDesignDecisions.test.ts` (308 devolve a quantidade do runtime; o Deck do fixture ganha uma 301). Achados: identidade da Magia devolvida vai para a 2.4; OPT simulado do Arcanist vai para L07h |
+| L07h | `1f93bc9` | N = 5 (`canonical-34cfa58-21712b08`, `deterministicDigest` `20b0dd91…`) contra L07g; controles | 0 erros e 0 defeitos. Registros idênticos aos de L07g (mesmo `deterministicDigest`): nenhum duelo do N = 5 passa pelos caminhos corrigidos. Alvo cumprido nas sondas, nos dois assentos: OPT do Master of Mirrors já gasto 2 → 0 em 4, OPT sem candidatos 2 → 0 em 4 e busca do Arcanist Apprentice 2 → 0 em 6. Controles: smokes idênticos; o corpus muda de `3d54efc8…` para `7a0ed426…` só na contabilidade do Arcanist (`_simArcanistApprenticeSearchUsed` dá lugar a `_simOncePerTurn`), sem ação ou pontuação diferente. Teste alterado com aval do usuário: `test/ai/gameTreeFidelity.test.ts` (o Apprentice lê o registro de uso). A Magic Sickle vai para a triagem; os baldes antigos, para o backlog |
 
 ## Objetivo e limites
 
@@ -745,10 +746,10 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 
 **Tarefas**
 
-- [ ] Reproduzir nos dois assentos com as sondas de L07g (`scratchpad/plan23/L07g/mirrors_opt.mts` e `r2_opt_zero_candidates.mts`): 2 de 4 casos divergem em cada uma.
-- [ ] Ler o uso real do turno, pela projeção de uso que o planejamento já copia do runtime (`projectRuntimeEffectUsage` e afins), sem um balde paralelo que ignore o estado real.
-- [ ] Só consumir o OPT simulado quando houver candidatos suficientes para o mínimo do alvo declarado, como o runtime.
-- [ ] Conferir os outros OPT próprios das simulações de estratégia. Só entra divergência reproduzida.
+- [x] Reproduzir nos dois assentos com as sondas de L07g (`scratchpad/plan23/L07g/mirrors_opt.mts` e `r2_opt_zero_candidates.mts`): 2 de 4 casos divergem em cada uma.
+- [x] Ler o uso real do turno, pela projeção de uso que o planejamento já copia do runtime (`projectRuntimeEffectUsage` e afins), sem um balde paralelo que ignore o estado real.
+- [x] Só consumir o OPT simulado quando houver candidatos suficientes para o mínimo do alvo declarado, como o runtime.
+- [x] Conferir os outros OPT próprios das simulações de estratégia. Só entra divergência reproduzida.
 
 **Validação**
 
