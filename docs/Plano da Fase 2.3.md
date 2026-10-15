@@ -45,6 +45,7 @@ Diagnósticos da v1 que os lotes perseguem (N = 20, salvo indicação):
 | L07f | Quantidade de alvos com faixa opcional pela regra do runtime em todos os presets | Paridade | Sim | Não | L07e |
 | L07g | Master of Mirrors Arcanist: quantidade de Magias devolvidas pela regra do runtime | Paridade | Sim | Não | L07f |
 | L07h | OPT da simulação do Arcanist com o uso real do turno e só com candidatos | Paridade | Sim | Não | — |
+| L07i | Passivas `conditional_status` e `position_status` negadas na simulação | Paridade | Sim | Não | L06 |
 | L08 | Contador zerado removido na simulação | Paridade | Sim | Não | — |
 | L09 | Controle de invariância a informação oculta (opt-in, gancho mínimo em `src/`) e guarda estrutural que só registra | Instrumentação | Não | Não | L03 |
 | L10 | Projeções opacas sem uso de OPT por nome | Paridade | Sim | Não | L09 |
@@ -268,7 +269,7 @@ O placar não é critério de aceite na 2.3. O N = 5 dá cerca de ±11 pp por pr
 
 | Item | Quantidade | Tempo |
 | --- | --- | --- |
-| Pontos N = 5 | 28 (R0 e 27 lotes: L01, L02, L04–L08, L07b–L07h, L10–L19, L24, L25b e L26) | ~5,6 h |
+| Pontos N = 5 | 29 (R0 e 28 lotes: L01, L02, L04–L08, L07b–L07i, L10–L19, L24, L25b e L26) | ~5,8 h |
 | Provas N = 2 | 8 (L03, L09, L20–L23, L25 e L27) | ~40 min |
 | Ponte N = 2 | 13: R0, o "depois" dos 9 lotes de ponte e o "antes" que não pode ser reaproveitado (nos commits de L08, L11 e L17) | ~1,1 h |
 | Controle de invariância | 13 (L09–L19, M1 e L28) | ~50 min |
@@ -761,6 +762,37 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 **Riscos**
 
 - Linhas do Arcanist com segunda Invocação-Normal do Master of Mirrors no turno mudam. O teste de sinal decide, sem compensação.
+
+**Esforço:** P.
+
+---
+
+## L07i — Passivas `conditional_status` e `position_status` negadas na simulação
+
+**Item:** resíduo de L06 no backlog (Void Serpent Drake). Autorizado pelo usuário em 15/10/2026, inclusive a troca do tipo no fixture do teste que fixa o marcador; lote de paridade próprio, medido depois de L07h.
+
+**Objetivo:** quando um card com passiva `conditional_status` ou `position_status` fica negado, a simulação apaga o status concedido, como o runtime (`src/core/effects/passives/passiveBuffs.ts`, bloco de `conditional_status`/`position_status`), em vez de manter o flag copiado e marcar o ramo com `add_status:passive_recalculation:*`. Hoje o Void Serpent Drake negado pelo Reactor ou pela Final Singularity continua `battleIndestructible` na simulação (18 marcadores em `void:techzero:3` no N = 5 de L06).
+
+**Tarefas**
+
+- [ ] Reproduzir nos dois assentos: Serpent Drake com Void Hollow com a face para cima, negado; o runtime apaga `battleIndestructible`, a simulação mantém.
+- [ ] Na negação simulada (`applyAddStatus`, bloco de `effectsNegated` em `src/core/ai/common/simulatedActions/stats.ts`), apagar o status concedido por `conditional_status` e `position_status` quando o card fica negado com a face para cima e na zona exigida, como o produtor do runtime. Só o status da própria passiva; um status vindo de equipamento ou de outra fonte continua.
+- [ ] Remoção da negação: se a simulação não reavaliar a condição como o runtime, o ramo continua marcado nesse sentido (como `conditional_extra_attacks` em L06).
+- [ ] Teste com aval do usuário: em `test/ai/negatedAuraSimulation.test.ts`, "negating passives without a supported contribution map reports an explicit limit", trocar no fixture o tipo `conditional_status` por um tipo que continua sem suporte (por exemplo, `battle_indestructible_if_stat_match`) e o nome esperado na asserção da linha 135. O teste continua cobrindo o limite explícito.
+- [ ] Atualizar a linha do backlog de passivas negadas.
+
+**Validação**
+
+- Testes: `negatedAuraSimulation`, os de L06 (`techZeroSimulation`, `techZeroEffectSimulation`, `techZeroLifecycleSimulation`, `techZeroPriorityTwoSimulation`, `techZeroPriorityThreeSimulation`, `test/fieldPresencePassives`) e os de Void do caminho (`architectureVoidMigration`, `architectureVoidEvents`). Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Smoke: `--matchups void:techzero,techzero:void,void:bloomrot --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07h.
+
+**Critério de saída:** critério de aceite geral; `add_status:passive_recalculation:conditional_status` em 0 no N = 5; na reprodução, simulação e runtime iguais nos dois assentos.
+
+**Riscos**
+
+- A linha do Tech-Zero que nega o Serpent Drake passa a contar com a destruição em batalha. O teste de sinal decide, sem compensação.
 
 **Esforço:** P.
 
@@ -1540,6 +1572,7 @@ O `plan.json` da análise (`.cache/plan23-probes/plan.json`) usava L00–L24. A 
 | L07f | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07e |
 | L07g | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07f |
 | L07h | — | Lote novo (decisão do usuário em 13/10/2026), achado de L07g |
+| L07i | — | Lote novo (autorização do usuário em 15/10/2026), resíduo de L06 no backlog |
 | L26 | L22 | Sem gates e sem regra AST; depende de L24; `--ignore` declarado; N = 5 contra L25b (antes, L24) |
 | L27 | L23 | Projeção v28 → v27 no passo histórico |
 | L28 | L24 | — |
@@ -1571,6 +1604,7 @@ Antes do primeiro lote de cada caminho da 2.4, os itens abaixo passam por uma tr
 - Assimetrias do fallback de alvo: bônus de arquétipo em `cardValue.ts`, offsets de dono e o custo do AutoSelector (`goodDiscard`/Extreme Dragons).
 - `clearSimulatedTemporaryControl` falta em `destroySimulatedCard`.
 - Merge raso do `actionContext` dos triggers simulados, salvo se L14 já o tiver isolado.
+- OPT próprio da Luminarch Magic Sickle na simulação de batalha (`meta.magicSickleBattleUsed`, `luminarch/simulation.ts`), que não lê o uso real do turno. Reproduzido em L07h só com o OPT marcado como gasto no clone; no fluxo real a ponte roda a partir da Main 1, antes de qualquer Damage Step do turno (decisão do usuário, 15/10/2026).
 - Famílias de marcadores sem análise: `deferred_trigger_source_presence` (Bloomrot 329 e Void 52 na v1) e `negated_field_exit_trigger` (Bloomrot 34), mantidas como diagnóstico deliberado desde a fase 1.5, e o restante de `exact_selection:tech_zero_development_lab_shuffle_choice`, se sobrar depois de L05.
 
 ### Backlog
@@ -1583,10 +1617,10 @@ Antes do primeiro lote de cada caminho da 2.4, os itens abaixo passam por uma tr
 | Identidade do deck do oponente no GameTree (`planningModelId`) | D3. Fica pública assim que as cartas aparecem |
 | `instanceId` de mão e Deck ocultos expostos nas projeções | Canal teórico, comum ao TLS e ao GameTree |
 | Regra AST contra `.strategy.*`/`autoSelector.*` fora de `resolveAI` | E10. Junto com decision-broker:12 |
-| Código morto e limpeza mecânica: `activateTrapFromZone` (mexe no manifest de 222 métodos), `sendCardsToGraveyard` e `sendSourceToGraveAfter` sem uso, as 34 ocorrências de `awaitCardMovedEvent` e os contornos de `position` que L15 torna redundantes; `EffectEngine.checkEffectCondition`, que repete a regra do `after_summon` e não tem chamadores (achado de L07b) | Refatoração equivalente, junto com decision-broker:9 |
+| Código morto e limpeza mecânica: `activateTrapFromZone` (mexe no manifest de 222 métodos), `sendCardsToGraveyard` e `sendSourceToGraveAfter` sem uso, as 34 ocorrências de `awaitCardMovedEvent` e os contornos de `position` que L15 torna redundantes; `EffectEngine.checkEffectCondition`, que repete a regra do `after_summon` e não tem chamadores (achado de L07b); os baldes de OPT do Arcanist que L07h deixou sem produtor (`_simArcanistOptUsed`, `_simArcanistApprenticeSearchUsed` e `_simOptUsed` em `contracts/aiState.ts`, `GAME_TREE_ACTOR_FIELDS`, `PLANNING_STATE_FIELDS`, e `useSimOpt`/`ensureSimOptSet`/`SimOptSetKey` em `simStateUtils.ts`), ainda usados como fixture em testes sintéticos | Refatoração equivalente, junto com decision-broker:9 |
 | Unificar as três cópias de `scheduleAiMoveAfterPaint` (`effects/actions/combat.ts`, `turn/lifecycle.ts` e `turn/transitions.ts`) | E9. Refatoração equivalente; o agendador unificado precisa emitir os mesmos estágios de progresso de hoje, provado por N = 2 sem `--ignore` |
 | Captura de replay canônico nos duelos do harness com limite de turnos (H4 da 2.2) | Exige serializar o limite no setup de replay. Só entra num bump por decisão explícita do usuário |
-| Passivas negadas ainda marcadas: `conditional_status` (Void Serpent Drake) e `position_status`; também `conditional_extra_attacks` quando a negação é removida e os tipos nunca observados (`activation_negation_protection`, `battle_indestructible_if_stat_match`, `conditional_destruction_protection_aura`, `negate_opponent_battle_destruction_prevention`) | L06. O runtime apaga o status na negação e reavalia a condição a cada atualização; a simulação lê o flag cru, que também pode vir de equipamentos. A correção muda a asserção de `test/ai/negatedAuraSimulation.test.ts:135`, que fixa o marcador, e exige o aval do usuário |
+| Passivas negadas ainda marcadas: `conditional_status` (Void Serpent Drake) e `position_status`, que vão para L07i; também `conditional_extra_attacks` quando a negação é removida e os tipos nunca observados (`activation_negation_protection`, `battle_indestructible_if_stat_match`, `conditional_destruction_protection_aura`, `negate_opponent_battle_destruction_prevention`) | L06. O runtime apaga o status na negação e reavalia a condição a cada atualização; a simulação lê o flag cru, que também pode vir de equipamentos. A correção muda a asserção de `test/ai/negatedAuraSimulation.test.ts:135`, que fixa o marcador, e exige o aval do usuário |
 | Lacunas da simulação que não dependem da negação: `destroy_on_leave` da The Shadow Heart não é modelado; a trava de Battle Phase do Arcturus não é modelada para os gatilhos do oponente; `applySetStatsToZeroAndNegate` (Sealing the Void) nega sem classificar as passivas | L06. Triagem antes da 2.4 |
 | Divergências latentes de fonte na mão, sem carta no banco que as dispare: em `card_to_grave` o runtime nunca lista cartas da mão; em `card_moved` só as que têm gatilho com `requireZone: "hand"`; em `end_phase`, `spell_activated`, `effect_activated` e `counter_removed` a simulação inclui as fontes de `position_change` na mão e o runtime não | L07. Entram quando uma carta passar a disparar |
 | Semântica de falha das actions simuladas: no runtime, um handler que falha interrompe a lista de actions (`src/core/effects/core.ts`), salvo no-op opcional; na simulação, `fail()` só interrompe com `haltOnFailure`/`stopOnFailure` | L07d. Sem efeito observável no banco atual (nos 25 efeitos com `targetRef`, as actions seguintes já têm halt, não são simuladas ou viram no-op). Paridade de outra classe, para quando uma carta a expuser |
