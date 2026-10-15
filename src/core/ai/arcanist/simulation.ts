@@ -16,8 +16,8 @@ import {
   emitSimulatedCardEquipped, emitSimulatedEffectActivated,
 } from "../common/simulation.js";
 import {
-  getCardInstanceId, getSimStateSignature, pushToZone, removeFromZone,
-  useSimOpt as useSimOptBucket,
+  canUseSimulatedEffectUsage, getCardInstanceId, getSimStateSignature,
+  markSimulatedEffectUsage, pushToZone, removeFromZone,
 } from "../common/simStateUtils.js";
 import { ARCANIST_NAMES, getInkCounters, isArcanistMonster, isArcanistSpell } from "./knowledge.js";
 import { evaluateArcanistCardValue } from "./scoring.js";
@@ -69,10 +69,6 @@ function bestPreferredCard<Card extends StrategyCard>(candidates: Card[] = [], p
       };
       return score(b, idB) - score(a, idA);
     })[0];
-}
-
-function useSimOpt(state: AiStateShape, key: string) {
-  return useSimOptBucket(state, key, "_simArcanistOptUsed");
 }
 
 export function getActivationTargetPreferences(action: PreferenceAction): TargetPreferences {
@@ -156,9 +152,13 @@ export function simulateArcanistAfterSummon(this: ArcanistStrategy, { state, act
     if (newCard.isFacedown) return;
 
     if (newCard?.name === ARCANIST_NAMES.APPRENTICE) {
-      if (state._simArcanistApprenticeSearchUsed) return;
+      const effect = newCard.effects?.find(entry => entry.id === "arcanist_apprentice_search_spell");
+      if (!effect) return;
       const candidates = (player.deck || []).filter(isArcanistSpell);
       if (candidates.length === 0) return;
+      // Like the runtime, the search reads the turn's actual usage: the runtime
+      // usage projected into the planning copy plus this line's own uses.
+      if (!canUseSimulatedEffectUsage(state, effect, newCard, player.id, true)) return;
       const ranked = this.rankSearchCandidates(
         candidates,
         {
@@ -176,9 +176,9 @@ export function simulateArcanistAfterSummon(this: ArcanistStrategy, { state, act
       );
       const chosen = ranked?.[0] || candidates[0];
       if (!chosen) return;
+      markSimulatedEffectUsage(state, effect, newCard, player.id, true);
       removeFromZone(player, "deck", chosen);
       pushToZone(player, "hand", chosen);
-      state._simArcanistApprenticeSearchUsed = true;
       return;
     }
 
@@ -191,12 +191,19 @@ export function simulateArcanistAfterSummon(this: ArcanistStrategy, { state, act
 
 
 export function simulateMasterOfMirrorsNormalSummon(this: ArcanistStrategy, state: SimulatedRuntimeState, player: SimulatedPlayerState, source: SimulatedCardState, action: AIAction) {
-    // The declared target supplies the range the runtime selects from.
-    const target = source.effects?.find(effect => effect.id === "master_mirrors_arcanist_shuffle_draw")
-      ?.targets?.find(entry => entry.id === "master_mirrors_arcanist_spell_targets");
-    if (!target || !useSimOpt(state, "master_mirrors_arcanist_shuffle_draw")) return;
+    // The declared trigger supplies its once-per-turn usage, and its target the
+    // range the runtime selects from.
+    const effect = source.effects?.find(entry => entry.id === "master_mirrors_arcanist_shuffle_draw");
+    const target = effect?.targets?.find(entry => entry.id === "master_mirrors_arcanist_spell_targets");
+    if (!effect || !target) return;
+    const count = normalizeCount(target.count, 1);
     const candidates = (player.graveyard || []).filter(isArcanistSpell);
-    if (candidates.length === 0) return;
+    // Like the runtime collector, the trigger needs the declared minimum of
+    // targets and the turn's remaining usage (the runtime usage projected into
+    // the planning copy plus this line's own uses) before it spends that usage.
+    if (candidates.length < count.min ||
+        !canUseSimulatedEffectUsage(state, effect, source, player.id, true)) return;
+    markSimulatedEffectUsage(state, effect, source, player.id, true);
     const preference =
       getActivationTargetPreferences(action).master_mirrors_arcanist_spell_targets || {};
     const ordered =
@@ -222,7 +229,7 @@ export function simulateMasterOfMirrorsNormalSummon(this: ArcanistStrategy, stat
     const selfId = player === state.player ? "player" : "bot";
     const { opponent } = getPerspectivePlayers(state, selfId);
     const chosen = ranked.slice(0, selectRuntimeOptionalCount(target, ranked,
-      normalizeCount(target.count, 1), player, opponent, "benefit"));
+      count, player, opponent, "benefit"));
     for (const card of chosen) {
       removeFromZone(player, "graveyard", card);
       pushToZone(player, "deck", card);
