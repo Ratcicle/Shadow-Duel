@@ -46,6 +46,7 @@ Diagnósticos da v1 que os lotes perseguem (N = 20, salvo indicação):
 | L07g | Master of Mirrors Arcanist: quantidade de Magias devolvidas pela regra do runtime | Paridade | Sim | Não | L07f |
 | L07h | OPT da simulação do Arcanist com o uso real do turno e só com candidatos | Paridade | Sim | Não | — |
 | L07i | Passivas `conditional_status` e `position_status` negadas na simulação | Paridade | Sim | Não | L06 |
+| L07j | Passivas de status recalculadas quando a condição muda e negação da Sealing the Void | Paridade | Sim | Não | L07i |
 | L08 | Contador zerado removido na simulação | Paridade | Sim | Não | — |
 | L09 | Controle de invariância a informação oculta (opt-in, gancho mínimo em `src/`) e guarda estrutural que só registra | Instrumentação | Não | Não | L03 |
 | L10 | Projeções opacas sem uso de OPT por nome | Paridade | Sim | Não | L09 |
@@ -66,8 +67,9 @@ Diagnósticos da v1 que os lotes perseguem (N = 20, salvo indicação):
 | L24 | `card_to_grave` aguardado e Equip na mesma SEGOC do hospedeiro | Regra | Sim (raro) | Pacote v28 | — |
 | L25 | `card_moved` sem falso destacamento | Refatoração equivalente | Não | Pacote v28 | L24 |
 | L25b | Efeitos de par de batalha resolvidos no runtime (Quick Draw in the Burning West) | Regra | Sim | Pacote v28 | L24 |
+| L25c | Proteção de batalha do equipamento preservada no runtime (D12) | Regra | Raro | Pacote v28 | L07i |
 | L26 | decision-broker:10: escolhas da IA gravadas e playback estrito | Contrato de replay | Não | Pacote v28 | L22, L24 |
-| L27 | Bump `engine-rules-v28` | Contrato de replay | Não | Bump | L23, L24, L25, L25b, L26 |
+| L27 | Bump `engine-rules-v28` | Contrato de replay | Não | Bump | L23, L24, L25, L25b, L25c, L26 |
 | L28 | Baseline v2 e fechamento | Medição e documentação | Não | Não | L27 |
 
 A coluna "Depende de" só lista dependências funcionais: o código do lote usa o que o outro lote entrega. A cadeia de medição segue a ordem dos IDs, e cada lote é medido contra o elo anterior (ver "Cadeia" em "Política de medição"). Quando a ordem também protege a atribuição de uma medida, ou quando o critério de saída usa um instrumento ou um resultado de outro lote, isso aparece em "Dependência de medição" na seção do lote. Todo lote que usa o controle de invariância (L10 a L19) tem L09 como dependência de medição.
@@ -141,6 +143,7 @@ Blocos: preparação e instrumento (L00–L01), defeito e extrações (L02–L03
 | D8 | Reações do oponente só acompanhadas na 2.3; o modelo de backrow fica para a 2.4. O rótulo residual passa a ser `opponent_state_mismatch` | L01 |
 | D9 | Os gatilhos de batalha na ponte (`grant_second_attack`, `damage_from_destroyed_atk`, `destroy_attacker_on_archetype_destruction` e `banish_destroyed_monster`) ficam fora da 2.3. Eles são o primeiro lote do caminho de batalha da 2.4, antes de qualquer ajuste ali, com medição própria | Fora do escopo |
 | D10 | O controle de invariância pode ter um gancho mínimo em `src/`, num lote de instrumentação que não muda decisões | L09 |
+| D12 | (15/10/2026) A proteção de batalha concedida por um equipamento continua valendo quando o monstro é negado ou quando a passiva própria dele deixa de valer; só negar ou remover o equipamento a encerra. A simulação segue a regra desde L07i; a correção do runtime entra como lote de regra no pacote v28 | L07i, L25c, L27 |
 | D11 | (12/10/2026) O runtime não resolve os efeitos de par de batalha desde `3256e50` (achado de L02, Quick Draw in the Burning West). A correção entra como lote de regra dentro do pacote v28, coberta pelo mesmo bump | L25b, L27 |
 
 **Fluxo de trabalho (definido pelo usuário):** branch remota `fase2/limites-conhecidos`, commit e push por lote, PR e merge só no fim da 2.3. Os commits e pushes são feitos pelo usuário ou a pedido dele.
@@ -270,7 +273,7 @@ O placar não é critério de aceite na 2.3. O N = 5 dá cerca de ±11 pp por pr
 
 | Item | Quantidade | Tempo |
 | --- | --- | --- |
-| Pontos N = 5 | 29 (R0 e 28 lotes: L01, L02, L04–L08, L07b–L07i, L10–L19, L24, L25b e L26) | ~5,8 h |
+| Pontos N = 5 | 30 (R0 e 29 lotes: L01, L02, L04–L08, L07b–L07j, L10–L19, L24, L25b e L26) | ~6 h |
 | Provas N = 2 | 8 (L03, L09, L20–L23, L25 e L27) | ~40 min |
 | Ponte N = 2 | 13: R0, o "depois" dos 9 lotes de ponte e o "antes" que não pode ser reaproveitado (nos commits de L08, L11 e L17) | ~1,1 h |
 | Controle de invariância | 13 (L09–L19, M1 e L28) | ~50 min |
@@ -777,7 +780,7 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 **Tarefas**
 
 - [ ] Reproduzir nos dois assentos: Serpent Drake com Void Hollow com a face para cima, negado; o runtime apaga `battleIndestructible`, a simulação mantém.
-- [ ] Na negação simulada (`applyAddStatus`, bloco de `effectsNegated` em `src/core/ai/common/simulatedActions/stats.ts`), apagar o status concedido por `conditional_status` e `position_status` quando o card fica negado com a face para cima e na zona exigida, como o produtor do runtime. Só o status da própria passiva; um status vindo de equipamento ou de outra fonte continua.
+- [ ] Na negação simulada (`applyAddStatus`, bloco de `effectsNegated` em `src/core/ai/common/simulatedActions/stats.ts`), apagar o status concedido por `conditional_status` e `position_status` quando o card fica negado com a face para cima e na zona exigida, como o produtor do runtime. Só o status da própria passiva. A proteção de batalha concedida por um equipamento ativo continua (regra do usuário, D12): só negar ou remover o equipamento a encerra. O runtime ainda a apaga; a correção dele é L25c.
 - [ ] Remoção da negação: se a simulação não reavaliar a condição como o runtime, o ramo continua marcado nesse sentido (como `conditional_extra_attacks` em L06).
 - [ ] Teste com aval do usuário: em `test/ai/negatedAuraSimulation.test.ts`, "negating passives without a supported contribution map reports an explicit limit", trocar no fixture o tipo `conditional_status` por um tipo que continua sem suporte (por exemplo, `battle_indestructible_if_stat_match`) e o nome esperado na asserção da linha 135. O teste continua cobrindo o limite explícito.
 - [ ] Atualizar a linha do backlog de passivas negadas.
@@ -796,6 +799,36 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 - A linha do Tech-Zero que nega o Serpent Drake passa a contar com a destruição em batalha. O teste de sinal decide, sem compensação.
 
 **Esforço:** P.
+
+---
+
+## L07j — Passivas de status recalculadas quando a condição muda e negação da Sealing the Void
+
+**Item:** lacunas irmãs expostas por L07i (decisão do usuário, 16/10/2026: um lote só, medido depois de L07i).
+
+**Objetivo:** a simulação passa a recalcular `conditional_status` e `position_status` quando a posição ou a condição mudam, como o produtor do runtime faz a cada atualização, e a negar pela Sealing the Void com a mesma classificação de passivas de L06/L07i.
+
+**Tarefas**
+
+- [ ] Reproduzir nos dois assentos com as sondas de L07i (`scratchpad/plan23/L07i/finding_producer.mts` e `finding_sealing.mts`): o Metal Armored Dragon que vai para Ataque, ou o Void Serpent Drake que perde a Void Hollow ao lado, continuam `battleIndestructible` na simulação, sem marcador (8 de 8); a Sealing the Void no Drake deixa o flag verdadeiro na simulação e falso no runtime (4 de 4).
+- [ ] Recalcular o status dessas passivas na simulação quando a posição ou a condição declarada muda, reaproveitando a avaliação de condição do runtime, sem nomes de carta; a proteção de um equipamento ativo continua (D12).
+- [ ] `applySetStatsToZeroAndNegate` (`src/core/ai/common/simulatedActions/stats.ts`) passa pela mesma classificação de passivas da negação de `add_status`.
+- [ ] Conferir outros caminhos simulados que negam ou mudam posição sem recalcular. Só entra divergência reproduzida.
+
+**Validação**
+
+- Testes: `negatedAuraSimulation`, os de L06 e L07i, os de Void e Dragon do caminho (`architectureVoidMigration`, `architectureVoidEvents`, `architectureDragon*`) e `fieldPresencePassives`. Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Smoke: `--matchups void:techzero,void:dragon,dragon:void,void:bloomrot --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07i.
+
+**Critério de saída:** critério de aceite geral; nas sondas, 0 divergências.
+
+**Riscos**
+
+- Linhas de Void e Dragon que contavam com a proteção mudam. O teste de sinal decide, sem compensação.
+
+**Esforço:** M.
 
 ---
 
@@ -1430,6 +1463,33 @@ Ver "Política de medição". Roda no commit de L13, com o controle de invariân
 
 **Esforço:** M.
 
+### L25c — Proteção de batalha do equipamento preservada no runtime
+
+**Item:** bug de regra exposto por L07i (D12).
+
+**Objetivo:** no runtime, o `battleIndestructible` concedido por um equipamento ativo continua valendo quando o monstro é negado ou quando a passiva própria dele (`conditional_status`/`position_status`) deixa de valer. Só negar ou remover o equipamento encerra a proteção. Hoje o produtor das passivas (`src/core/effects/passives/passiveBuffs.ts`) apaga o flag sem olhar a origem, e a destruição em batalha (`src/core/game/combat/availability.ts`) exige o flag antes de consultar o equipamento.
+
+**Tarefas**
+
+- [ ] Reproduzir nos dois assentos com `scratchpad/plan23/L07i/finding_equip.mts` e `repro.mts` (casos `equip_also_grants`): Metal Armored Dragon em Ataque ou Void Serpent Drake sem Void Hollow, com a Shadow-Heart Shield, perdem a proteção; negados, também.
+- [ ] Corrigir de forma genérica: o produtor só apaga o status que a própria passiva concedeu, ou a checagem de batalha consulta o equipamento ativo mesmo sem o flag. A negação ou a remoção do equipamento continuam encerrando a proteção.
+- [ ] Conferir a prévia de batalha e a simulação contra o runtime corrigido (a simulação já segue D12 desde L07i).
+
+**Validação**
+
+- Testes do caminho (Shadow-Heart Shield, passivas de status, combate), portão de golden do pacote com justificativa por item e `npm test`.
+- Navegador (Laboratório): Shield em um monstro com passiva de status negado ou fora da condição; o monstro não é destruído em batalha até a Shield ser negada ou removida.
+
+**Medição:** prova N = 2 com `--expect-identical` contra L25b se nenhum preset alcançar o caso (a Shield só equipa monstro do próprio jogador, e nenhum preset a combina com essas passivas); senão, N = 5 contra L25b.
+
+**Critério de saída:** a reprodução passa nos dois assentos; prova idêntica ou critério de aceite geral.
+
+**Riscos**
+
+- Replays v27 com esse caso passam a ser interpretados de outro jeito; o bump de L27 cobre.
+
+**Esforço:** P.
+
 ### L26 — decision-broker:10: escolhas da IA gravadas e playback estrito
 
 **Item:** decision-broker:10 (D5), sem os gates de playback (L22) e sem a regra AST (E10).
@@ -1574,6 +1634,8 @@ O `plan.json` da análise (`.cache/plan23-probes/plan.json`) usava L00–L24. A 
 | L07g | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07f |
 | L07h | — | Lote novo (decisão do usuário em 13/10/2026), achado de L07g |
 | L07i | — | Lote novo (autorização do usuário em 15/10/2026), resíduo de L06 no backlog |
+| L07j | — | Lote novo (decisão do usuário em 16/10/2026), achados de L07i |
+| L25c | — | Lote novo de regra (D12), achado de L07i |
 | L26 | L22 | Sem gates e sem regra AST; depende de L24; `--ignore` declarado; N = 5 contra L25b (antes, L24) |
 | L27 | L23 | Projeção v28 → v27 no passo histórico |
 | L28 | L24 | — |
@@ -1621,8 +1683,8 @@ Antes do primeiro lote de cada caminho da 2.4, os itens abaixo passam por uma tr
 | Código morto e limpeza mecânica: `activateTrapFromZone` (mexe no manifest de 222 métodos), `sendCardsToGraveyard` e `sendSourceToGraveAfter` sem uso, as 34 ocorrências de `awaitCardMovedEvent` e os contornos de `position` que L15 torna redundantes; `EffectEngine.checkEffectCondition`, que repete a regra do `after_summon` e não tem chamadores (achado de L07b); os baldes de OPT do Arcanist que L07h deixou sem produtor (`_simArcanistOptUsed`, `_simArcanistApprenticeSearchUsed` e `_simOptUsed` em `contracts/aiState.ts`, `GAME_TREE_ACTOR_FIELDS`, `PLANNING_STATE_FIELDS`, e `useSimOpt`/`ensureSimOptSet`/`SimOptSetKey` em `simStateUtils.ts`), ainda usados como fixture em testes sintéticos | Refatoração equivalente, junto com decision-broker:9 |
 | Unificar as três cópias de `scheduleAiMoveAfterPaint` (`effects/actions/combat.ts`, `turn/lifecycle.ts` e `turn/transitions.ts`) | E9. Refatoração equivalente; o agendador unificado precisa emitir os mesmos estágios de progresso de hoje, provado por N = 2 sem `--ignore` |
 | Captura de replay canônico nos duelos do harness com limite de turnos (H4 da 2.2) | Exige serializar o limite no setup de replay. Só entra num bump por decisão explícita do usuário |
-| Passivas negadas ainda marcadas: `conditional_status` (Void Serpent Drake) e `position_status`, que vão para L07i; também `conditional_extra_attacks` quando a negação é removida e os tipos nunca observados (`activation_negation_protection`, `battle_indestructible_if_stat_match`, `conditional_destruction_protection_aura`, `negate_opponent_battle_destruction_prevention`) | L06. O runtime apaga o status na negação e reavalia a condição a cada atualização; a simulação lê o flag cru, que também pode vir de equipamentos. A correção muda a asserção de `test/ai/negatedAuraSimulation.test.ts:135`, que fixa o marcador, e exige o aval do usuário |
-| Lacunas da simulação que não dependem da negação: `destroy_on_leave` da The Shadow Heart não é modelado; a trava de Battle Phase do Arcturus não é modelada para os gatilhos do oponente; `applySetStatsToZeroAndNegate` (Sealing the Void) nega sem classificar as passivas | L06. Triagem antes da 2.4 |
+| Passivas negadas ainda marcadas: `conditional_status` e `position_status` quando a negação é removida, ou quando a fonte negada está virada para baixo ou fora da zona da passiva (nenhum negador do banco alcança esses dois casos); `conditional_extra_attacks` quando a negação é removida; e os tipos nunca observados (`activation_negation_protection`, `battle_indestructible_if_stat_match`, `conditional_destruction_protection_aura`, `negate_opponent_battle_destruction_prevention`) | L06 e L07i. Na negação, a simulação apaga o status que a própria passiva declarou e preserva a proteção de batalha concedida por um equipamento ativo (regra do usuário, D12); o runtime ainda a apaga, e a correção é L25c. A volta exige reavaliar a condição ou a posição como o runtime faz a cada atualização; nenhuma carta do banco remove uma negação por `add_status`, e a expiração de fim de turno da simulação (`resolveSimulatedEndPhase`) não tem chamador em `src/` |
+| Lacunas da simulação que não dependem da negação: `destroy_on_leave` da The Shadow Heart não é modelado; a trava de Battle Phase do Arcturus não é modelada para os gatilhos do oponente; `applySetStatsToZeroAndNegate` (Sealing the Void) nega sem classificar as passivas, que vai para L07j | L06. Triagem antes da 2.4, salvo o que L07j cobre |
 | Divergências latentes de fonte na mão, sem carta no banco que as dispare: em `card_to_grave` o runtime nunca lista cartas da mão; em `card_moved` só as que têm gatilho com `requireZone: "hand"`; em `end_phase`, `spell_activated`, `effect_activated` e `counter_removed` a simulação inclui as fontes de `position_change` na mão e o runtime não | L07. Entram quando uma carta passar a disparar |
 | Semântica de falha das actions simuladas: no runtime, um handler que falha interrompe a lista de actions (`src/core/effects/core.ts`), salvo no-op opcional; na simulação, `fail()` só interrompe com `haltOnFailure`/`stopOnFailure` | L07d. Sem efeito observável no banco atual (nos 25 efeitos com `targetRef`, as actions seguintes já têm halt, não são simuladas ou viram no-op). Paridade de outra classe, para quando uma carta a expuser |
 | Ordem das invocações de `special_summon_from_zone` com `targetRef` quando há menos zonas livres que alvos: o runtime segue a ordem da seleção, e a simulação segue o ranking ou a preferência, que então decide quais cartas entram | L07e. Sem carta de preset com alvos diferentes nesse caminho (o Void Haunter só mira Hollows iguais; o Leviathan não está em preset) |
@@ -1637,6 +1699,7 @@ Antes do primeiro lote de cada caminho da 2.4, os itens abaixo passam por uma tr
 | No runtime, `protectFrom: "opponent_effects"` nunca recusa um banimento que vem de uma destruição, porque o `destroyCard` não repassa a fonte ao `moveCard`; o `destroySimulatedCard` da simulação recusa | `src/core/game/zones/destruction.ts` e `src/core/game/zones/movement.ts` | Exposto por L02. Questão de regra para o diretor criativo: se um banimento por `banishWhenLeavesField` conta como banido por efeito do oponente |
 | `lp_cost_reduction` (Pure Knight) e `lp_gain_multiplier` (Barbarias) continuam valendo com a fonte negada | `src/core/effects/costs/lpCost.ts` e `src/core/Player.ts`; a simulação espelha (`simulatedActions/shared.ts` e `resources.ts`) | Exposto por L06. A correção muda runtime e simulação juntos |
 | O `destroy_on_leave` da The Shadow Heart é aplicado por padrão de id, mesmo com a carta negada | `src/core/game/zones/movement.ts` | Exposto por L06. Questão de regra para o diretor criativo |
+| O produtor de `conditional_status`/`position_status` apaga o `battleIndestructible` concedido por um equipamento (Shadow-Heart Shield) quando o card é negado ou quando a regra da própria passiva deixa de valer; a destruição em batalha exige o flag antes de olhar o equipamento | `src/core/effects/passives/passiveBuffs.ts` e `src/core/game/combat/availability.ts` | Exposto por L07i. Corrigido em L25c, no pacote v28 (D12) |
 
 ## Riscos gerais e mitigação
 
