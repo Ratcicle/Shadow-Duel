@@ -27,6 +27,7 @@ import {
 import {
   attachSimulatedEquip,
   findCardOwner,
+  findCardZone,
   getZoneCards,
   moveCardToZone,
   refreshSimulatedFieldPresenceTypeSummonBuffForCard,
@@ -1090,6 +1091,23 @@ export function applyAddStatus(
           if (passiveType === "conditional_extra_attacks" && card.effectsNegated === true) {
             clearPassiveExtraAttacksForCard(card);
             return;
+          }
+          // A negated face-up source in its passive zone loses the status its own
+          // passive declared. Battle protection granted by an active Equip stays:
+          // only negating or removing that Equip ends it (user rule, 15/10/2026;
+          // the runtime still deletes it, see lot L25c). Its return depends on a
+          // condition or position that planning does not re-evaluate.
+          if ((passiveType === "conditional_status" || passiveType === "position_status") &&
+              card.effectsNegated === true && card.isFacedown !== true) {
+            const zone = findCardZone(findCardOwner(state, card), card);
+            if ((zone === "field" || zone === "spellTrap" || zone === "fieldSpell") &&
+                (!effect.requireZone || effect.requireZone === zone)) {
+              const statusName = effect.passive.status || "battleIndestructible";
+              const keptByEquip = statusName === "battleIndestructible" && (card.equips || []).some(equip =>
+                equip?.grantsBattleIndestructible === true && equip.effectsNegated !== true);
+              if (!keptByEquip && Reflect.get(card, statusName)) Reflect.deleteProperty(card, statusName);
+              return;
+            }
           }
           state._simUnsupportedActions ??= [];
           state._simUnsupportedActions.push(`add_status:passive_recalculation:${passiveType}`);

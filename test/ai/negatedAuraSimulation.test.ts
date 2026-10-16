@@ -127,12 +127,12 @@ test("removing aura negation restores the continuous contribution", () => {
 
 test("negating passives without a supported contribution map reports an explicit limit", () => {
   const aura = createPlanningCopy().cloneCardForSim(new Card({ ...cardDefinition("Darkness Valley"), effects: [{
-    id: "conditional_protection_fixture", timing: "passive", passive: { type: "conditional_status", status: "battleIndestructible" },
+    id: "conditional_protection_fixture", timing: "passive", passive: { type: "battle_indestructible_if_stat_match", status: "battleIndestructible" },
   }] }, "player"));
   const state = simulationState({ player: { fieldSpell: aura } });
   applySimulatedActions({ state, actions: [{ type: "add_status", targetRef: "aura", status: "effectsNegated" }],
     selections: { aura: [aura] } });
-  assert.deepEqual(state._simUnsupportedActions, ["add_status:passive_recalculation:conditional_status"]);
+  assert.deepEqual(state._simUnsupportedActions, ["add_status:passive_recalculation:battle_indestructible_if_stat_match"]);
 });
 
 for (const seat of ["bot", "player"] as const) {
