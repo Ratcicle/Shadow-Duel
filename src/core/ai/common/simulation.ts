@@ -25,7 +25,7 @@ import { resolveActionPlayer, resolveSimulatedLpCost } from "./simulatedActions/
 import { resolveTargetsForAction, captureSimulatedReferences, captureSimulatedSourceSnapshot, isSimulatedReferencePresenceValid, isSimulatedSourcePresenceValid, areRequiredContextualReferencesValid, recordCompletedSimulatedSummon } from "./simulatedActions/shared.js";
 import { buildEventReferenceContext } from "../../effects/targeting/references.js";
 import { appendSimulatedZoneCard } from "./zones.js";
-import { appendSimulatedFieldCard, refreshSimulatedFieldAuras, refreshSimulatedPassiveStatuses } from "./zones.js";
+import { appendSimulatedFieldCard, refreshSimulatedFieldAuras } from "./zones.js";
 import {
   applySimulatedActions,
   evaluateSimulatedConditions,
@@ -3449,8 +3449,9 @@ export function applyGenericSimulatedMainPhaseAction<
       if (!ascensionCard) break;
       if (!checkSimulatedAscension(state, material, ascensionCard).ok) break;
       if (!canSimulatedSpecialSummon(ascensionCard, player, "ascension", "extraDeck")) break;
-      player.field.splice(materialIndex, 1);
-      appendSimulatedZoneCard(player.graveyard, material);
+      // Runtime pays the material through moveCard: the field-exit cleanup
+      // retires its aura contributions and sends attached equips along.
+      if (!moveCardToZone(player, material, "graveyard", player, { state })) break;
       if (extraIndex >= 0) player.extraDeck.splice(extraIndex, 1);
       const summoned = Object.assign(ascensionCard, {
         position:
@@ -3578,8 +3579,9 @@ export function applyGenericSimulatedMainPhaseAction<
       break;
   }
 
-  // The runtime board update after a player's action reconciles status
-  // passives; position changes, flips and summons above may not reach a refresh.
-  refreshSimulatedPassiveStatuses(state);
+  // The runtime board update after a player's action reconciles every
+  // continuous producer, stat auras and then status passives; position
+  // changes, flips and summons above may not reach a refresh.
+  refreshSimulatedFieldAuras(state);
   return state;
 }
