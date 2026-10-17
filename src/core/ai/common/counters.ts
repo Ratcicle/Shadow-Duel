@@ -73,6 +73,8 @@ export function getCounterValue(
   return 0;
 }
 
+/** A counter that reaches zero is deleted, as in the runtime
+ * (Card.removeCounter), so planning state keys match the runtime card. */
 export function setCounterValue(
   card: CounterCard | null | undefined,
   counterType = "counter",
@@ -82,9 +84,14 @@ export function setCounterValue(
   const key = counterType || "counter";
   const nextValue = Math.max(0, Math.floor(value || 0));
   if (card.counters instanceof Map) {
-    card.counters.set(key, nextValue);
+    if (nextValue > 0) card.counters.set(key, nextValue);
+    else card.counters.delete(key);
     return;
   }
-  if (!card.counters || typeof card.counters !== "object") card.counters = {};
-  (card.counters as LegacyCounterMap)[key] = nextValue;
+  if (!card.counters || typeof card.counters !== "object") {
+    if (nextValue === 0) return;
+    card.counters = {};
+  }
+  if (nextValue > 0) (card.counters as LegacyCounterMap)[key] = nextValue;
+  else delete (card.counters as LegacyCounterMap)[key];
 }
