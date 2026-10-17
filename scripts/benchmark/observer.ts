@@ -32,6 +32,7 @@ import {
   type GuardPeaks,
   type GuardStage,
   type GuardTrip,
+  type InvarianceCaseRecord,
   type JsonValue,
   type LethalSeat,
   type MismatchSample,
@@ -42,6 +43,7 @@ import {
   type SeatMetrics,
   type TechZeroComboSeat,
 } from "./schema.js";
+import { InvarianceTallies, installInvarianceControl, type InvarianceHost } from "./invariance.js";
 import { increment, round, sortedCounter } from "./statistics.js";
 
 // Instance-level observation for the benchmark harness. Nothing here changes
@@ -281,6 +283,10 @@ export class DuelObserver {
   trip: GuardTrip | null = null;
   tripState: { turns: number; finalLP: { player: number; bot: number } } | null = null;
   frozen = false;
+  /** Set while the invariance control reruns a root: its activity is no part of the duel. */
+  muted = false;
+  /** Comparisons of the invariance control; null when the run does not carry it. */
+  readonly invariance: InvarianceTallies | null;
   observerErrors = 0;
   observerErrorLabels: Counter = {};
   clockStages = 0;
@@ -301,6 +307,8 @@ export class DuelObserver {
     this.limits = { decisions: guard.decisionsPerTurn, actions: guard.actionsPerTurn, progress: guard.progressPerTurn };
     this.enforceGuard = guard.mode === "enforce";
     this.plugins = new Set(spec.config.presetMetrics);
+    this.invariance = spec.config.invarianceControl === undefined ? null
+      : new InvarianceTallies({ player: spec.entry.seat1, bot: spec.entry.seat2 });
   }
 
   /** Stops every deterministic counter; later engine activity is not part of the record. */
@@ -309,7 +317,7 @@ export class DuelObserver {
   }
 
   private guarded(task: () => void): void {
-    if (this.frozen) return;
+    if (this.frozen || this.muted) return;
     try {
       task();
     } catch (error) {
@@ -633,6 +641,11 @@ export class DuelObserver {
     return [...this.seats[seat].latencies];
   }
 
+  /** Side line of the invariance control; null without the control. */
+  invarianceRecord(entry: BenchmarkCase): InvarianceCaseRecord | null {
+    return this.invariance?.record(entry) ?? null;
+  }
+
   presetMetrics(completed: ArenaDuelResult | null): PresetMetricsRecord {
     const comboSeat = (seat: Seat, combos: Record<Seat, TechZeroComboSeat>): TechZeroComboSeat | null =>
       this.seats[seat].metrics.preset === "techzero" ? combos[seat] : null;
@@ -784,6 +797,23 @@ function activeObserver(): DuelObserver | null {
   return HarnessGame.current?.observer ?? null;
 }
 
+/** The invariance control silences this duel's observer and tracker while it reruns a root. */
+const INVARIANCE_HOST: InvarianceHost = {
+  talliesFor: game => game instanceof HarnessGame && !game.observer.frozen ? game.observer.invariance : null,
+  silence: game => {
+    if (!(game instanceof HarnessGame)) return () => {};
+    const harness: HarnessGame = game;
+    const observer = harness.observer;
+    const tracker = harness._arenaTracker;
+    observer.muted = true;
+    if (tracker !== undefined) harness._arenaTracker = null;
+    return () => {
+      if (tracker !== undefined) harness._arenaTracker = tracker;
+      observer.muted = false;
+    };
+  },
+};
+
 /**
  * Wraps the strategy instance of one bot. Only the outermost simulation is
  * attributed (nested calls of the same strategy pass through), and the marker
@@ -819,6 +849,8 @@ export class HarnessBot extends Bot {
   constructor(archetype?: string) {
     super(archetype);
     instrumentStrategy(this);
+    // Opt-in (--invariance-control); without it the bot carries no observer at all.
+    if (HarnessGame.spec?.config.invarianceControl !== undefined) installInvarianceControl(this, INVARIANCE_HOST);
   }
 
   // Not async: marks the execution and returns the very promise of the base

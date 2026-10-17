@@ -23,6 +23,10 @@ export const SUMMARY_JSON_FILE = "summary.json";
 export const SUMMARY_MARKDOWN_FILE = "summary.md";
 export const RUN_END_FILE = "run-end.json";
 export const LOGS_DIRECTORY = "logs";
+/** Side file of the hidden-information invariance control; never part of the duel records. */
+export const INVARIANCE_FILE = "invariance.jsonl";
+export const INVARIANCE_SCHEMA = "shadow-duel-benchmark-invariance";
+export const INVARIANCE_SCHEMA_VERSION = 1;
 
 export const DEFAULT_SEED_BASE = 20261011;
 export const DEFAULT_MAX_TURNS = 50;
@@ -54,6 +58,24 @@ export const GUARD_COUNTERS: readonly GuardCounterName[] = ["decisions", "action
 export type PresetMetricId = "techzero-combo" | "lethal";
 export const PRESET_METRIC_IDS: readonly PresetMetricId[] = ["techzero-combo", "lethal"];
 export type RunOrder = "forward" | "reverse";
+
+/**
+ * Hidden-information invariance control (--invariance-control, phase 2.3 L09).
+ * Every live decision root runs again on the real state and with the
+ * opponent's hidden information traded; diagnostic runs only, never a baseline.
+ * The rule enters the configuration only when the control is on.
+ */
+export const INVARIANCE_SWAP_RULE = "opponent hand and deck rotated by the hand size; each face-down monster, backrow card " +
+  "or field spell traded with a deck card of the same kind and another id; every hidden position keeps its public placement fields, " +
+  "and a position on the field also its public presence state";
+export type InvarianceRoot = "p2" | "turnLineSearch" | "beam" | "greedy" | "attack";
+export const INVARIANCE_ROOTS: readonly InvarianceRoot[] = ["p2", "turnLineSearch", "beam", "greedy", "attack"];
+/** Divergent comparisons (traded or live) kept per root and seat, with their fingerprints. */
+export const INVARIANCE_SAMPLE_LIMIT = 4;
+
+export interface InvarianceControlConfig {
+  swap: typeof INVARIANCE_SWAP_RULE;
+}
 
 export type ErrorKind =
   | "stall_guard"
@@ -381,6 +403,8 @@ export interface RunConfig {
   presetMetrics: PresetMetricId[];
   strategyOverrides: Record<string, string>;
   caseFilter: string[] | null;
+  /** Present only when the run carries the invariance control; absent, the configuration is unchanged. */
+  invarianceControl?: InvarianceControlConfig;
 }
 
 export const SEED_RULE = "seed_k = (base + k) >>> 0; a:b and b:a share seed_k; mirrors play once";
@@ -433,6 +457,7 @@ export function configBaselineBlockers(config: RunConfig): string[] {
   if (config.seeds.base !== DEFAULT_SEED_BASE) blockers.push("seeds.base");
   if (config.caseFilter !== null) blockers.push("caseFilter");
   if (Object.keys(config.strategyOverrides).length) blockers.push("strategyOverrides");
+  if (config.invarianceControl !== undefined) blockers.push("invarianceControl");
   return blockers;
 }
 
@@ -868,9 +893,11 @@ function parsePlannerBudgets(value: unknown, label: string): PlannerBudgets {
 
 function parseConfig(value: unknown, label: string): RunConfig {
   const raw = object(value, label);
+  // The invariance control is the only optional key: a run without it keeps the v1 configuration exactly.
+  const invarianceControl = Object.hasOwn(raw, "invarianceControl");
   exactKeys(raw, ["profile", "speed", "beam", "planner", "delays", "environment", "maxTurns", "timeoutMs", "timeoutOutcome",
     "stallGuard", "availablePresets", "presets", "decks", "decksSha256", "banlistSha256", "seeds", "matrix", "presetMetrics",
-    "strategyOverrides", "caseFilter"], label);
+    "strategyOverrides", "caseFilter", ...(invarianceControl ? ["invarianceControl"] : [])], label);
   const beam = object(raw.beam, `${label}.beam`);
   exactKeys(beam, ["beamWidth", "maxDepth", "nodeBudget", "source"], `${label}.beam`);
   const planner = object(raw.planner, `${label}.planner`);
@@ -989,6 +1016,11 @@ function parseConfig(value: unknown, label: string): RunConfig {
     strategyOverrides,
     caseFilter,
   };
+  if (invarianceControl) {
+    const control = object(raw.invarianceControl, `${label}.invarianceControl`);
+    exactKeys(control, ["swap"], `${label}.invarianceControl`);
+    config.invarianceControl = { swap: literal(control.swap, INVARIANCE_SWAP_RULE, `${label}.invarianceControl.swap`) };
+  }
   if (!isUint32(config.seeds.base)) fail(`${label}.seeds.base`, "deve ser um uint32.");
   const expectedSeeds = Array.from({ length: config.seeds.count }, (_, k) => seedFor(config.seeds.base, k));
   if (canonicalJson(expectedSeeds) !== canonicalJson(config.seeds.values)) fail(`${label}.seeds.values`, "não seguem a regra das seeds.");
@@ -1436,6 +1468,163 @@ export function parseEnvironmentDescription(value: unknown, label = "description
         nodeBudget: nullable(planner.nodeBudget, entry => integer(entry, `${label}.instant.planner.nodeBudget`, 1)),
         candidateLimit: nullable(planner.candidateLimit, entry => integer(entry, `${label}.instant.planner.candidateLimit`, 1)),
       },
+    },
+  };
+}
+
+// ── Invariance side file ───────────────────────────────────────────────────
+// One line per case in INVARIANCE_FILE when the run carries the control. The
+// reruns may perturb the duel (caches, timing), so these runs never measure
+// strength, and nothing here enters the duel records or their digest.
+
+export interface InvarianceSample {
+  turn: number;
+  phase: string | null;
+  /** Hidden positions whose identity the trade changed: Hand and Deck, and face-down cards on the field. */
+  traded: { handDeck: number; faceDown: number };
+  /** Fingerprint of the live decision. */
+  live: string;
+  /** Fingerprint of the rerun on the real state. */
+  real: string;
+  /** Fingerprint of the rerun with the opponent's hidden information traded. */
+  swapped: string;
+  liveScore: number | null;
+  realScore: number | null;
+  swappedScore: number | null;
+}
+
+/** The control's comparisons for one root of one seat. */
+export interface InvarianceRootTally {
+  /** Live executions compared: the trade changed at least one hidden identity. */
+  checked: number;
+  /** Live executions not compared: the opponent had no hidden card to trade. */
+  vacuous: number;
+  /**
+   * Comparisons left out of the gate: the rerun on the real state did not
+   * reproduce the live decision (liveActionDiff or liveScoreDiff), so its
+   * traded comparison cannot tell hidden information from carried state.
+   */
+  nonReproducible: number;
+  /** Reproduced comparisons whose reruns on the real and on the traded state chose different actions. */
+  actionDiff: number;
+  /** Reproduced comparisons whose reruns on the real and on the traded state gave different scores. */
+  scoreDiff: number;
+  /**
+   * The rerun on the real state disagreed with the live decision: the root did
+   * not reproduce. The reruns start from an empty targeting cache, the live search from the duel's.
+   */
+  liveActionDiff: number;
+  liveScoreDiff: number;
+  /** Reruns that threw; their comparison is skipped. */
+  errors: number;
+  /** The live state after the trade and its restoration differed from the state before it. */
+  restoreFailures: number;
+  errorLabels: Counter;
+  samples: InvarianceSample[];
+}
+
+export interface InvarianceSeat {
+  preset: string;
+  roots: Record<InvarianceRoot, InvarianceRootTally>;
+  /** console.error/warn of the reruns, kept here instead of the record's diagnostics. */
+  consoleLabels: Counter;
+}
+
+export interface InvarianceCaseRecord {
+  schema: typeof INVARIANCE_SCHEMA;
+  v: number;
+  caseIndex: number;
+  caseId: string;
+  seats: Record<Seat, InvarianceSeat>;
+}
+
+export function emptyInvarianceRootTally(): InvarianceRootTally {
+  return {
+    checked: 0, vacuous: 0, nonReproducible: 0, actionDiff: 0, scoreDiff: 0, liveActionDiff: 0, liveScoreDiff: 0, errors: 0,
+    restoreFailures: 0, errorLabels: {}, samples: [],
+  };
+}
+
+function parseInvarianceSample(value: unknown, label: string): InvarianceSample {
+  const raw = object(value, label);
+  exactKeys(raw, ["turn", "phase", "traded", "live", "real", "swapped", "liveScore", "realScore", "swappedScore"], label);
+  const traded = object(raw.traded, `${label}.traded`);
+  exactKeys(traded, ["handDeck", "faceDown"], `${label}.traded`);
+  return {
+    turn: integer(raw.turn, `${label}.turn`),
+    phase: nullable(raw.phase, entry => string(entry, `${label}.phase`)),
+    traded: { handDeck: integer(traded.handDeck, `${label}.traded.handDeck`), faceDown: integer(traded.faceDown, `${label}.traded.faceDown`) },
+    live: string(raw.live, `${label}.live`),
+    real: string(raw.real, `${label}.real`),
+    swapped: string(raw.swapped, `${label}.swapped`),
+    liveScore: nullable(raw.liveScore, entry => finiteNumber(entry, `${label}.liveScore`)),
+    realScore: nullable(raw.realScore, entry => finiteNumber(entry, `${label}.realScore`)),
+    swappedScore: nullable(raw.swappedScore, entry => finiteNumber(entry, `${label}.swappedScore`)),
+  };
+}
+
+function parseInvarianceRootTally(value: unknown, label: string): InvarianceRootTally {
+  const raw = object(value, label);
+  exactKeys(raw, ["checked", "vacuous", "nonReproducible", "actionDiff", "scoreDiff", "liveActionDiff", "liveScoreDiff",
+    "errors", "restoreFailures", "errorLabels", "samples"], label);
+  const samples = array(raw.samples, `${label}.samples`).map((entry, index) => parseInvarianceSample(entry, `${label}.samples[${index}]`));
+  if (samples.length > INVARIANCE_SAMPLE_LIMIT) fail(`${label}.samples`, `comporta no máximo ${INVARIANCE_SAMPLE_LIMIT} amostras.`);
+  const tally: InvarianceRootTally = {
+    checked: integer(raw.checked, `${label}.checked`),
+    vacuous: integer(raw.vacuous, `${label}.vacuous`),
+    nonReproducible: integer(raw.nonReproducible, `${label}.nonReproducible`),
+    actionDiff: integer(raw.actionDiff, `${label}.actionDiff`),
+    scoreDiff: integer(raw.scoreDiff, `${label}.scoreDiff`),
+    liveActionDiff: integer(raw.liveActionDiff, `${label}.liveActionDiff`),
+    liveScoreDiff: integer(raw.liveScoreDiff, `${label}.liveScoreDiff`),
+    errors: integer(raw.errors, `${label}.errors`),
+    restoreFailures: integer(raw.restoreFailures, `${label}.restoreFailures`),
+    errorLabels: counter(raw.errorLabels, `${label}.errorLabels`),
+    samples,
+  };
+  for (const key of ["nonReproducible", "liveActionDiff", "liveScoreDiff"] as const) {
+    if (tally[key] > tally.checked) fail(`${label}.${key}`, "não pode passar de checked.");
+  }
+  // nonReproducible counts the comparisons with liveActionDiff or liveScoreDiff; the gate keeps the others.
+  if (tally.nonReproducible < Math.max(tally.liveActionDiff, tally.liveScoreDiff) ||
+      tally.nonReproducible > tally.liveActionDiff + tally.liveScoreDiff) {
+    fail(`${label}.nonReproducible`, "não corresponde a liveActionDiff e liveScoreDiff.");
+  }
+  for (const key of ["actionDiff", "scoreDiff"] as const) {
+    if (tally[key] > tally.checked - tally.nonReproducible) fail(`${label}.${key}`, "não pode passar das comparações reproduzidas.");
+  }
+  return tally;
+}
+
+function parseInvarianceSeat(value: unknown, label: string): InvarianceSeat {
+  const raw = object(value, label);
+  exactKeys(raw, ["preset", "roots", "consoleLabels"], label);
+  const roots = object(raw.roots, `${label}.roots`);
+  exactKeys(roots, INVARIANCE_ROOTS, `${label}.roots`);
+  const tally = (root: InvarianceRoot) => parseInvarianceRootTally(roots[root], `${label}.roots.${root}`);
+  return {
+    preset: string(raw.preset, `${label}.preset`),
+    roots: { p2: tally("p2"), turnLineSearch: tally("turnLineSearch"), beam: tally("beam"), greedy: tally("greedy"), attack: tally("attack") },
+    consoleLabels: counter(raw.consoleLabels, `${label}.consoleLabels`),
+  };
+}
+
+export function parseInvarianceRecord(value: unknown, label = "invariance"): InvarianceCaseRecord {
+  const raw = object(value, label);
+  exactKeys(raw, ["schema", "v", "caseIndex", "caseId", "seats"], label);
+  literal(raw.schema, INVARIANCE_SCHEMA, `${label}.schema`);
+  literal(raw.v, INVARIANCE_SCHEMA_VERSION, `${label}.v`);
+  const caseId = string(raw.caseId, `${label}.caseId`);
+  const seats = object(raw.seats, `${label}(${caseId}).seats`);
+  exactKeys(seats, SEATS, `${label}(${caseId}).seats`);
+  return {
+    schema: INVARIANCE_SCHEMA,
+    v: INVARIANCE_SCHEMA_VERSION,
+    caseIndex: integer(raw.caseIndex, `${label}(${caseId}).caseIndex`),
+    caseId,
+    seats: {
+      player: parseInvarianceSeat(seats.player, `${label}(${caseId}).seats.player`),
+      bot: parseInvarianceSeat(seats.bot, `${label}(${caseId}).seats.bot`),
     },
   };
 }

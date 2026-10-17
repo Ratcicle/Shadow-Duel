@@ -1,4 +1,4 @@
-import type { BotRuntimePort, BotGamePort } from "../contracts/bot.js";
+import type { BotAttackChoice, BotRootOutcome, BotRuntimePort, BotGamePort } from "../contracts/bot.js";
 import type { GameCard } from "../contracts/cards.js";
 import type { GamePlayer } from "../contracts/player.js";
 
@@ -43,6 +43,15 @@ export function getBattleProgressFingerprint(
 
 function getBattlePairKey(attacker: GameCard, target: GameCard | null): string {
   return `${attacker.instanceId}>${target ? target.instanceId : "direct"}`;
+}
+
+/** An attack selection as the optional decision-root observer compares it. */
+function attackRootOutcome(
+  attack: { attacker: GameCard; target: GameCard | null; delta: number } | null,
+): BotRootOutcome<BotAttackChoice> {
+  return attack
+    ? { choice: { attacker: attack.attacker, target: attack.target }, score: attack.delta }
+    : { choice: null, score: null };
 }
 
 function getGuardFailureCode(result: unknown): string | null {
@@ -137,6 +146,7 @@ export function playBotBattlePhase(
       attacker: GameCard;
       target: GameCard | null;
       threshold: number;
+      delta: number;
     } | null = null;
     let bestDelta = -Infinity;
     let bestAttackerAtk = 0;
@@ -286,7 +296,7 @@ export function playBotBattlePhase(
         ) {
           bestDelta = delta;
           bestAttackerAtk = attacker.atk || 0;
-          bestAttack = { attacker, target, threshold: attackThreshold };
+          bestAttack = { attacker, target, threshold: attackThreshold, delta };
         }
       }
     }
@@ -311,6 +321,9 @@ export function playBotBattlePhase(
       }
 
       const bestAttack = selectAttack();
+      // Benchmark diagnostics only: absent in play, and synchronous when present.
+      bot.decisionRootObserver?.observeAttack(game, attackRootOutcome(bestAttack),
+        () => attackRootOutcome(selectAttack()));
       if (!bestAttack) {
         await waitBattleDelay(battleDelayMs);
         endBattlePhase();

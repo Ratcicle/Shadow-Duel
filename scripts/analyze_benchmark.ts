@@ -10,6 +10,8 @@ import {
   GUARD_COUNTERS,
   GUARD_FLOOR,
   HEADER_FILE,
+  INVARIANCE_FILE,
+  INVARIANCE_ROOTS,
   JOURNAL_FILE,
   RUN_END_FILE,
   SEATS,
@@ -25,6 +27,7 @@ import {
   deterministicDigest,
   jsonValue,
   parseDuelRecord,
+  parseInvarianceRecord,
   parseRunEnd,
   parseRunHeader,
   planCases,
@@ -36,6 +39,8 @@ import {
   type DuelRecordV1,
   type GuardCounterName,
   type GuardPeaks,
+  type InvarianceCaseRecord,
+  type InvarianceRoot,
   type JsonValue,
   type RunConfig,
   type RunEnd,
@@ -259,6 +264,39 @@ export interface Defect {
   detail: string;
 }
 
+export interface InvarianceRootSummary {
+  checked: number;
+  vacuous: number;
+  /** Checked comparisons left out of the gate: the rerun on the real state did not reproduce the live decision. */
+  nonReproducible: number;
+  actionDiff: number;
+  scoreDiff: number;
+  liveActionDiff: number;
+  liveScoreDiff: number;
+  errors: number;
+  restoreFailures: number;
+  /**
+   * Over the reproduced comparisons (checked − nonReproducible). ok: actionDiff = scoreDiff = 0;
+   * diff: some comparison differed; unchecked: nothing reproduced to compare.
+   */
+  gate: "ok" | "diff" | "unchecked";
+  /** Seats of each preset whose root was checked. */
+  byPreset: Record<string, { checked: number; nonReproducible: number; actionDiff: number; scoreDiff: number }>;
+  errorLabels: Counter;
+}
+
+/** Hidden-information invariance control, read from INVARIANCE_FILE when the run carries it. */
+export interface InvarianceSummary {
+  file: string;
+  /** Records of the run with a side line. */
+  cases: number;
+  records: number;
+  /** Records of the run without a side line (a lost worker never writes one). */
+  missing: string[];
+  roots: Record<InvarianceRoot, InvarianceRootSummary>;
+  consoleLabels: Counter;
+}
+
 export interface BenchmarkSummary {
   schema: typeof SUMMARY_SCHEMA;
   version: number;
@@ -305,6 +343,8 @@ export interface BenchmarkSummary {
     duelMs: Distribution;
     decisionLatencyMs: Record<string, Distribution>;
   } | null;
+  /** Present only when the run directory has INVARIANCE_FILE. */
+  invariance?: InvarianceSummary;
 }
 
 // ── Validation ─────────────────────────────────────────────────────────────
@@ -783,6 +823,123 @@ export function computeSummary(run: LoadedRun, options: SummaryOptions = {}): Be
   return summary;
 }
 
+// ── Invariance control ─────────────────────────────────────────────────────
+
+/** Side lines by case; a resumed case keeps its last line, and a line cut by an interruption is dropped. */
+export function readInvarianceFile(file: string): Map<string, InvarianceCaseRecord> {
+  const text = fs.readFileSync(file, "utf8");
+  const complete = text.endsWith("\n") ? text : text.slice(0, text.lastIndexOf("\n") + 1);
+  const records = new Map<string, InvarianceCaseRecord>();
+  complete.split("\n").forEach((line, index) => {
+    if (!line) return;
+    let value: unknown;
+    try {
+      value = JSON.parse(line);
+    } catch {
+      throw new AnalysisInputError(`${INVARIANCE_FILE}:${index + 1} não é JSON válido.`);
+    }
+    const record = parseInvarianceRecord(value, `${INVARIANCE_FILE}:${index + 1}`);
+    records.set(record.caseId, record);
+  });
+  return records;
+}
+
+function emptyInvarianceRootSummary(): InvarianceRootSummary {
+  return {
+    checked: 0, vacuous: 0, nonReproducible: 0, actionDiff: 0, scoreDiff: 0, liveActionDiff: 0, liveScoreDiff: 0, errors: 0,
+    restoreFailures: 0, gate: "unchecked", byPreset: {}, errorLabels: {},
+  };
+}
+
+export function summarizeInvariance(file: string, sides: ReadonlyMap<string, InvarianceCaseRecord>,
+  records: readonly DuelRecordV1[]): InvarianceSummary {
+  const roots: Record<InvarianceRoot, InvarianceRootSummary> = {
+    p2: emptyInvarianceRootSummary(),
+    turnLineSearch: emptyInvarianceRootSummary(),
+    beam: emptyInvarianceRootSummary(),
+    greedy: emptyInvarianceRootSummary(),
+    attack: emptyInvarianceRootSummary(),
+  };
+  const consoleLabels: Counter = {};
+  const missing: string[] = [];
+  let cases = 0;
+  for (const record of records) {
+    const side = sides.get(record.caseId);
+    if (!side) {
+      missing.push(record.caseId);
+      continue;
+    }
+    cases += 1;
+    for (const seat of SEATS) {
+      const sideSeat = side.seats[seat];
+      mergeCounter(consoleLabels, sideSeat.consoleLabels);
+      for (const root of INVARIANCE_ROOTS) {
+        const tally = sideSeat.roots[root];
+        const target = roots[root];
+        target.checked += tally.checked;
+        target.vacuous += tally.vacuous;
+        target.nonReproducible += tally.nonReproducible;
+        target.actionDiff += tally.actionDiff;
+        target.scoreDiff += tally.scoreDiff;
+        target.liveActionDiff += tally.liveActionDiff;
+        target.liveScoreDiff += tally.liveScoreDiff;
+        target.errors += tally.errors;
+        target.restoreFailures += tally.restoreFailures;
+        mergeCounter(target.errorLabels, tally.errorLabels);
+        if (!tally.checked) continue;
+        const preset = target.byPreset[sideSeat.preset] ??= { checked: 0, nonReproducible: 0, actionDiff: 0, scoreDiff: 0 };
+        preset.checked += tally.checked;
+        preset.nonReproducible += tally.nonReproducible;
+        preset.actionDiff += tally.actionDiff;
+        preset.scoreDiff += tally.scoreDiff;
+      }
+    }
+  }
+  for (const root of INVARIANCE_ROOTS) {
+    const summary = roots[root];
+    summary.gate = summary.checked === summary.nonReproducible ? "unchecked"
+      : summary.actionDiff || summary.scoreDiff ? "diff" : "ok";
+    summary.errorLabels = sortedCounter(summary.errorLabels);
+    summary.byPreset = Object.fromEntries(Object.keys(summary.byPreset).sort(compareCodeUnits)
+      .flatMap(preset => { const entry = summary.byPreset[preset]; return entry ? [[preset, entry]] : []; }));
+  }
+  return { file, cases, records: records.length, missing, roots, consoleLabels: sortedCounter(consoleLabels) };
+}
+
+const INVARIANCE_GATE_LABELS: Record<InvarianceRootSummary["gate"], string> = {
+  ok: "ok",
+  diff: "diferenças",
+  unchecked: "sem comparações reproduzidas",
+};
+
+function invarianceMarkdown(invariance: InvarianceSummary): string[] {
+  const lines = ["", "## Controle de invariância a informação oculta", "",
+    "Execução diagnóstica (`--invariance-control`): as reexecuções podem perturbar o duelo, por isso ela nunca mede força. " +
+      "Cada raiz viva roda de novo sobre o estado real e com a informação oculta do oponente trocada: mão e Deck rotacionados " +
+      "e cada carta virada para baixo trocada por uma carta do Deck do mesmo tipo, com os campos públicos de colocação preservados " +
+      "em cada posição e, no campo, também o estado público da presença (versão, turnos e contadores). As duas reexecuções partem " +
+      "do cache de targeting vazio. Portão por raiz: actionDiff = scoreDiff = 0 nas comparações reproduzidas, em que a reexecução " +
+      "sobre o estado real repete a ação e o score da decisão viva, que usou o cache do duelo. As não reproduzidas ficam fora do " +
+      "portão: nelas a diferença da troca não separa a informação oculta do estado carregado entre chamadas.", "",
+    `- Arquivo lateral: ${invariance.cases} de ${invariance.records} registros` +
+      `${invariance.missing.length ? `; sem linha lateral: ${invariance.missing.slice(0, 10).join(", ")}${invariance.missing.length > 10 ? ` (+${invariance.missing.length - 10})` : ""}` : ""}.`, "",
+    "| Raiz | Verificadas | Sem troca | Não reproduzidas | actionDiff | scoreDiff | Portão | Reexecução ≠ viva (ação/score) | Erros | Falhas de restauração | Presets com diferença (ação/score) |",
+    "| --- | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: | ---: | --- |"];
+  for (const root of INVARIANCE_ROOTS) {
+    const summary = invariance.roots[root];
+    const presets = Object.entries(summary.byPreset).filter(([, entry]) => entry.actionDiff || entry.scoreDiff)
+      .map(([preset, entry]) => `${preset} ${entry.actionDiff}/${entry.scoreDiff} de ${entry.checked - entry.nonReproducible}`);
+    lines.push(`| ${root} | ${summary.checked} | ${summary.vacuous} | ${summary.nonReproducible} | ${summary.actionDiff} | ` +
+      `${summary.scoreDiff} | ${INVARIANCE_GATE_LABELS[summary.gate]} | ${summary.liveActionDiff}/${summary.liveScoreDiff} | ` +
+      `${summary.errors} | ${summary.restoreFailures} | ${cell(presets.join("; ") || "—")} |`);
+  }
+  const errors = INVARIANCE_ROOTS.filter(root => Object.keys(invariance.roots[root].errorLabels).length)
+    .map(root => `${root} (${counterText(invariance.roots[root].errorLabels, 3)})`);
+  lines.push("", `- Erros das reexecuções: ${errors.length ? errors.join("; ") : "nenhum"}.`,
+    `- Console das reexecuções (fora dos diagnósticos do registro): ${counterText(invariance.consoleLabels, 4)}.`);
+  return lines;
+}
+
 // ── Markdown ───────────────────────────────────────────────────────────────
 
 function cell(value: string | number | null): string {
@@ -841,6 +998,7 @@ export function renderSummaryMarkdown(summary: BenchmarkSummary): string {
     `- configDigest \`${summary.configDigest}\`; identityDigest \`${summary.identityDigest}\`; deterministicDigest \`${summary.deterministicDigest}\`.`,
     `- Elegível a baseline: ${yesNo(summary.baselineEligible)}${summary.baselineBlockers.length ? ` (${summary.baselineBlockers.join(", ")})` : ""}.` +
       `${summary.provisional ? " Resultado provisório." : ""}`,
+    ...(config.invarianceControl ? ["- Controle de invariância a informação oculta ligado: execução diagnóstica, nunca medição de força."] : []),
     `- Convenção do placar: vitória vale 1, empate (PV iguais no limite de turnos) vale ${drawPointsText("pt-BR")}; ` +
       `p = (V + ${drawPointsText("pt-BR")}·E)/n, com intervalo de Wilson de 95% sobre o placar fracionário. Erros e timeouts ficam fora de toda taxa (D4).`, "",
     "## Sanidade", "",
@@ -873,8 +1031,10 @@ export function renderSummaryMarkdown(summary: BenchmarkSummary): string {
     ...validation.mathRandomCases.map(caseId => `Math.random: ${caseId}`),
   ];
   if (violations.length) lines.push(...violations.map(entry => `- ${entry}`), "");
+  const invarianceLines = summary.invariance ? [...invarianceMarkdown(summary.invariance), ""] : [];
   if (!summary.outcomes) {
-    lines.push("A sanidade reprovou: as métricas não foram calculadas (use --allow-sanity-failures para um resumo provisório).", "");
+    lines.push("A sanidade reprovou: as métricas não foram calculadas (use --allow-sanity-failures para um resumo provisório).", "",
+      ...invarianceLines);
     return lines.join("\n");
   }
   const outcomes = summary.outcomes;
@@ -993,7 +1153,7 @@ export function renderSummaryMarkdown(summary: BenchmarkSummary): string {
       if (latency.count) lines.push(`| ${cell(preset)} | ${latency.count} | ${numberText(latency.mean)} | ${numberText(latency.p50)} | ${numberText(latency.p95)} | ${numberText(latency.max)} |`);
     }
   }
-  lines.push("");
+  lines.push(...invarianceLines, "");
   return lines.join("\n");
 }
 
@@ -1014,7 +1174,7 @@ function assertOutput(file: string, inputs: readonly string[]): string {
 }
 
 function runInputs(dir: string): string[] {
-  return [HEADER_FILE, DUELS_FILE, JOURNAL_FILE, RUN_END_FILE].map(name => path.join(path.resolve(dir), name));
+  return [HEADER_FILE, DUELS_FILE, JOURNAL_FILE, RUN_END_FILE, INVARIANCE_FILE].map(name => path.join(path.resolve(dir), name));
 }
 
 function writeOutputs(outputs: ReadonlyArray<[string, string]>): void {
@@ -1050,6 +1210,9 @@ export interface SummarizeRunResult {
 export function summarizeRun(dir: string, options: SummarizeRunOptions = {}): SummarizeRunResult {
   const run = loadRun(dir, options.allowIncomplete === true);
   const summary = computeSummary(run, options);
+  // Only a run with the invariance control has the side file; without it the summary is unchanged.
+  const invarianceFile = path.join(run.dir, INVARIANCE_FILE);
+  if (fs.existsSync(invarianceFile)) summary.invariance = summarizeInvariance(INVARIANCE_FILE, readInvarianceFile(invarianceFile), run.records);
   const markdown = renderSummaryMarkdown(summary);
   const inputs = runInputs(dir);
   const jsonFile = assertOutput(options.json ?? path.join(run.dir, SUMMARY_JSON_FILE), inputs);

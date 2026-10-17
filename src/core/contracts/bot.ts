@@ -2,6 +2,7 @@ import type {
   AIAction,
   AIActionOf,
   AIActionType,
+  AIPlannedAction,
   AIStrategyBotPort,
   BattleCandidate,
   StrategyRuntimePort,
@@ -186,6 +187,42 @@ export interface BotGamePort extends Omit<PlayerGamePort, keyof BotGameMethods>,
   };
 }
 
+/** What a decision root chose and the score it gave that choice. */
+export interface BotRootOutcome<Choice> {
+  choice: Choice | null;
+  score: number | null;
+}
+
+/** One Battle Phase attack attempt; a null target is a direct attack. */
+export interface BotAttackChoice {
+  attacker: GameCard;
+  target: GameCard | null;
+}
+
+export type BotMainPhaseSearchRoot = "turnLineSearch" | "beam" | "greedy";
+
+/**
+ * Optional diagnostic observer of the bot's live decision roots, installed
+ * only by the benchmark harness. Each call carries the live outcome and a
+ * rerun of that root with the options the controller already resolved. When
+ * it is absent the controllers neither call nor await anything.
+ */
+export interface BotDecisionRootObserver {
+  /** A Main Phase search; the controller awaits it before using the live result. */
+  observeSearch(
+    root: BotMainPhaseSearchRoot,
+    game: BotGamePort,
+    live: BotRootOutcome<AIPlannedAction>,
+    rerun: () => Promise<BotRootOutcome<AIPlannedAction>>,
+  ): Promise<void>;
+  /** A Battle Phase attack choice; synchronous, like the selection it reruns. */
+  observeAttack(
+    game: BotGamePort,
+    live: BotRootOutcome<BotAttackChoice>,
+    rerun: () => BotRootOutcome<BotAttackChoice>,
+  ): void;
+}
+
 export type BotRuntimePort = Omit<
   GamePlayer,
   "strategy" | "game" | "archetype"
@@ -195,6 +232,7 @@ export type BotRuntimePort = Omit<
     strategy: BotStrategyPort;
     game?: BotGamePort;
     debug?: boolean;
+    decisionRootObserver?: BotDecisionRootObserver | undefined;
     maxSimulationsPerPhase: number;
     resolveOpponent(game: BotGamePort): GamePlayer | null;
     evaluateBoard(

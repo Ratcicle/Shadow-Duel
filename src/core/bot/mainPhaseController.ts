@@ -16,18 +16,29 @@ import {
 import { runMainPhaseSession, type MainPhaseSession } from "./mainPhaseSession.js";
 import { selectAutomaticAscensionAction } from "./ascensionController.js";
 import { botLogger } from "../BotLogger.js";
-import type { BotRuntimePort, BotGamePort } from "../contracts/bot.js";
+import type { BotRootOutcome, BotRuntimePort, BotGamePort } from "../contracts/bot.js";
 import type {
   AIAction,
   AIPlannedAction,
   AIPlanningContext,
   AIPlanningProfile,
+  BeamSearchOptions,
   TurnLineSearchResult,
   TurnLineSearchCompletion,
 } from "../contracts/ai.js";
 
+/** The TurnLineSearch options the controller resolves; the live search adds only `onComplete`. */
+type TurnLinePlannerOptions = Omit<NonNullable<Parameters<typeof turnLineSearch>[2]>, "onComplete">;
+
 function hasValue(value: unknown) {
   return value !== undefined && value !== null;
+}
+
+/** A search result as the optional decision-root observer compares it. */
+function searchRootOutcome(
+  result: { action: AIPlannedAction; score: number } | null,
+): BotRootOutcome<AIPlannedAction> {
+  return { choice: result?.action ?? null, score: result?.score ?? null };
 }
 
 function resolvePlannerMode(
@@ -49,6 +60,8 @@ export function playBotMainPhase(bot: BotRuntimePort, game: BotGamePort): Promis
 
 async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: MainPhaseSession): Promise<void> {
   session.recordProgress("bot_main_phase_enter", game, { actor: bot.id });
+  // Benchmark diagnostics only; absent in play, so nothing below calls or awaits it.
+  const rootObserver = bot.decisionRootObserver;
   const useV2Evaluation = true;
   const useAutomaticAscension = bot.strategy?.shouldUseAutomaticAscensionShortcut?.(game, bot) !== false;
   while (await session.waitUntilReady()) {
@@ -189,7 +202,7 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
         `[Bot.playMainPhase] Running TurnLineSearch with ${actions.length} actions (width=${plannerBeamWidth}, depth=${plannerMaxDepth}, budget=${plannerNodeBudget}, battleSteps=${plannerBattleStepLimit})...`,
       );
       const searchReport: { completion?: TurnLineSearchCompletion } = {};
-      const plannerResult = await turnLineSearch(game, planningStrategy, {
+      const plannerOptions = {
         beamWidth: plannerBeamWidth,
         maxDepth: plannerMaxDepth,
         nodeBudget: plannerNodeBudget,
@@ -200,6 +213,9 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
         preGeneratedActions: actions,
         profile: planningProfile,
         planningContext,
+      } satisfies TurnLinePlannerOptions;
+      const plannerResult = await turnLineSearch(game, planningStrategy, {
+        ...plannerOptions,
         onComplete: completion => { searchReport.completion = completion; },
       });
 
@@ -227,6 +243,10 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
 
       console.log(`[Bot.playMainPhase] TurnLineSearch result:`, plannerResult);
       if (!await session.waitUntilReady()) return;
+      if (rootObserver) {
+        await rootObserver.observeSearch("turnLineSearch", game, searchRootOutcome(plannerResult),
+          async () => searchRootOutcome(await turnLineSearch(game, planningStrategy, plannerOptions)));
+      }
       if (session.capture() !== stateBeforeDecision) continue;
       if (!plannerResult && searchReport.completion?.terminationReason === "preferred_terminal") {
         session.stopReason = "planned_stop";
@@ -252,17 +272,22 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
       console.log(
         `[Bot.playMainPhase] Running beam search with ${actions.length} actions (width=${beamWidth}, depth=${maxDepth}, budget=${nodeBudget})...`,
       );
-      const searchResult = await beamSearchTurn(game, bot, {
+      const beamOptions = {
         beamWidth,
         maxDepth,
         nodeBudget,
         allowEarlyStop: planningProfile.allowEarlyStop === true,
         useV2Evaluation,
         preGeneratedActions: actions, // BUGFIX: Pass pre-generated actions as fallback
-      });
+      } satisfies BeamSearchOptions;
+      const searchResult = await beamSearchTurn(game, bot, beamOptions);
 
       console.log(`[Bot.playMainPhase] Beam search result:`, searchResult);
       if (!await session.waitUntilReady()) return;
+      if (rootObserver) {
+        await rootObserver.observeSearch("beam", game, searchRootOutcome(searchResult),
+          async () => searchRootOutcome(await beamSearchTurn(game, bot, beamOptions)));
+      }
       if (session.capture() !== stateBeforeDecision) continue;
       if (searchResult?.action && isPermitted(searchResult.action)) {
         bestAction = searchResult.action;
@@ -275,14 +300,19 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
     // Fallback: se beam search não retornou nada, ou só tem 1 opção, usa greedy
     if (!bestAction) {
       console.log(`[Bot.playMainPhase] Running greedy search...`);
-      const greedyResult = await greedySearchWithEvalV2(game, bot, {
+      const greedyOptions = {
         allowEarlyStop: planningProfile.allowEarlyStop === true,
         useV2Evaluation,
         preGeneratedActions: actions, // BUGFIX: Pass pre-generated actions as fallback
-      });
+      } satisfies BeamSearchOptions;
+      const greedyResult = await greedySearchWithEvalV2(game, bot, greedyOptions);
 
       console.log(`[Bot.playMainPhase] Greedy search result:`, greedyResult);
       if (!await session.waitUntilReady()) return;
+      if (rootObserver) {
+        await rootObserver.observeSearch("greedy", game, searchRootOutcome(greedyResult),
+          async () => searchRootOutcome(await greedySearchWithEvalV2(game, bot, greedyOptions)));
+      }
       if (session.capture() !== stateBeforeDecision) continue;
       if (greedyResult?.action && isPermitted(greedyResult.action)) {
         bestAction = greedyResult.action;
