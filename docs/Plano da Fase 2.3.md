@@ -47,6 +47,7 @@ Diagnósticos da v1 que os lotes perseguem (N = 20, salvo indicação):
 | L07h | OPT da simulação do Arcanist com o uso real do turno e só com candidatos | Paridade | Sim | Não | — |
 | L07i | Passivas `conditional_status` e `position_status` negadas na simulação | Paridade | Sim | Não | L06 |
 | L07j | Passivas de status recalculadas quando a condição muda e negação da Sealing the Void | Paridade | Sim | Não | L07i |
+| L07k | Auras recalculadas depois de cada ação da Main Phase simulada | Paridade | Sim | Não | L07j |
 | L08 | Contador zerado removido na simulação | Paridade | Sim | Não | — |
 | L09 | Controle de invariância a informação oculta (opt-in, gancho mínimo em `src/`) e guarda estrutural que só registra | Instrumentação | Não | Não | L03 |
 | L10 | Projeções opacas sem uso de OPT por nome | Paridade | Sim | Não | L09 |
@@ -96,6 +97,7 @@ Blocos: preparação e instrumento (L00–L01), defeito e extrações (L02–L03
 | L07g | `d4c8304` | N = 5 (`canonical-2f77864-21712b08`, `deterministicDigest` `20b0dd91…`) contra L07f; controles | 0 erros e 0 defeitos. Alvo: na sonda, divergências de quantidade do Master of Mirrors 4 → 0 em 6, nos dois assentos. 405/405 com o mesmo resultado, nenhum caso com outra duração ou PV, sem novidades; divergência do Arcanist 0,046 → 0,041. Controles idênticos aos de L07f. Teste alterado com aval do usuário: `test/ai/arcanistDesignDecisions.test.ts` (308 devolve a quantidade do runtime; o Deck do fixture ganha uma 301). Achados: identidade da Magia devolvida vai para a 2.4; OPT simulado do Arcanist vai para L07h |
 | L07h | `1f93bc9` | N = 5 (`canonical-34cfa58-21712b08`, `deterministicDigest` `20b0dd91…`) contra L07g; controles | 0 erros e 0 defeitos. Registros idênticos aos de L07g (mesmo `deterministicDigest`): nenhum duelo do N = 5 passa pelos caminhos corrigidos. Alvo cumprido nas sondas, nos dois assentos: OPT do Master of Mirrors já gasto 2 → 0 em 4, OPT sem candidatos 2 → 0 em 4 e busca do Arcanist Apprentice 2 → 0 em 6. Controles: smokes idênticos; o corpus muda de `3d54efc8…` para `7a0ed426…` só na contabilidade do Arcanist (`_simArcanistApprenticeSearchUsed` dá lugar a `_simOncePerTurn`), sem ação ou pontuação diferente. Teste alterado com aval do usuário: `test/ai/gameTreeFidelity.test.ts` (o Apprentice lê o registro de uso). A Magic Sickle vai para a triagem; os baldes antigos, para o backlog |
 | L07i | `ebb6486` | N = 5 (`canonical-0b153d5-21712b08`, `deterministicDigest` `3e77fbc2…`, com `--workers 4`) contra L07h; controles | 0 erros e 0 defeitos. Alvo: `add_status:passive_recalculation:conditional_status` 18 → 0; ramos não suportados do TLS no Tech-Zero 571 → 553. Na reprodução, a negação fica em paridade com o runtime nos dois assentos, salvo os casos com equipamento, em que a simulação já segue D12 e o runtime só muda em L25c. 405/405 com o mesmo resultado; só `void:techzero:3` muda de duração (Tech-Zero vence em 6 turnos em vez de 4, mesmo PV), porque o TLS deixa de podar a linha da Final Singularity. Sem novidades; controles idênticos aos de L07h. Teste alterado com aval do usuário: `test/ai/negatedAuraSimulation.test.ts` (o exemplo de passiva sem suporte passa a ser `battle_indestructible_if_stat_match`). Achados: regra do equipamento vira D12 e L25c; recálculo das passivas de status e Sealing the Void vão para L07j |
+| L07j | `29bcae8` | N = 5 (`canonical-4a26038-21712b08`, `deterministicDigest` `3e77fbc2…`, com `--workers 4`) contra L07i; controles | 0 erros e 0 defeitos. Registros idênticos aos de L07i (mesmo `deterministicDigest`). Alvo cumprido nas sondas, nos dois assentos: recálculo por posição ou condição 8 → 0 em 8, Sealing the Void 4 → 0 em 4, caminhos do despachante (mudança de posição, Flip, Ascensão) 14 → 0 em 20, caminhos de condição 20 → 0 em 20 e remoção da negação 4 → 0 em 4, sem marcador; os casos com equipamento divergem do runtime por desenho até L25c (D12). Controles: corpus idêntico; mudam só `smoke-natural-9713` e `smoke-bridge-9713`, no par `shadowheart:void`, na pontuação do planejamento (o TLS do Shadow-Heart passa a apagar o flag do Drake quando a Void Hollow é destruída), com os mesmos vencedores e turnos. Achados: equipamento negado vai para L25c; posição `choice` na Ascensão simulada, para L14; auras no Flip, para L07k |
 
 ## Objetivo e limites
 
@@ -274,7 +276,7 @@ O placar não é critério de aceite na 2.3. O N = 5 dá cerca de ±11 pp por pr
 
 | Item | Quantidade | Tempo |
 | --- | --- | --- |
-| Pontos N = 5 | 30 (R0 e 29 lotes: L01, L02, L04–L08, L07b–L07j, L10–L19, L24, L25b e L26) | ~6 h |
+| Pontos N = 5 | 31 (R0 e 30 lotes: L01, L02, L04–L08, L07b–L07k, L10–L19, L24, L25b e L26) | ~6,2 h |
 | Provas N = 2 | 8 (L03, L09, L20–L23, L25 e L27) | ~40 min |
 | Ponte N = 2 | 13: R0, o "depois" dos 9 lotes de ponte e o "antes" que não pode ser reaproveitado (nos commits de L08, L11 e L17) | ~1,1 h |
 | Controle de invariância | 13 (L09–L19, M1 e L28) | ~50 min |
@@ -811,10 +813,10 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 
 **Tarefas**
 
-- [ ] Reproduzir nos dois assentos com as sondas de L07i (`scratchpad/plan23/L07i/finding_producer.mts` e `finding_sealing.mts`): o Metal Armored Dragon que vai para Ataque, ou o Void Serpent Drake que perde a Void Hollow ao lado, continuam `battleIndestructible` na simulação, sem marcador (8 de 8); a Sealing the Void no Drake deixa o flag verdadeiro na simulação e falso no runtime (4 de 4).
-- [ ] Recalcular o status dessas passivas na simulação quando a posição ou a condição declarada muda, reaproveitando a avaliação de condição do runtime, sem nomes de carta; a proteção de um equipamento ativo continua (D12).
-- [ ] `applySetStatsToZeroAndNegate` (`src/core/ai/common/simulatedActions/stats.ts`) passa pela mesma classificação de passivas da negação de `add_status`.
-- [ ] Conferir outros caminhos simulados que negam ou mudam posição sem recalcular. Só entra divergência reproduzida.
+- [x] Reproduzir nos dois assentos com as sondas de L07i (`scratchpad/plan23/L07i/finding_producer.mts` e `finding_sealing.mts`): o Metal Armored Dragon que vai para Ataque, ou o Void Serpent Drake que perde a Void Hollow ao lado, continuam `battleIndestructible` na simulação, sem marcador (8 de 8); a Sealing the Void no Drake deixa o flag verdadeiro na simulação e falso no runtime (4 de 4).
+- [x] Recalcular o status dessas passivas na simulação quando a posição ou a condição declarada muda, reaproveitando a avaliação de condição do runtime, sem nomes de carta; a proteção de um equipamento ativo continua (D12).
+- [x] `applySetStatsToZeroAndNegate` (`src/core/ai/common/simulatedActions/stats.ts`) passa pela mesma classificação de passivas da negação de `add_status`.
+- [x] Conferir outros caminhos simulados que negam ou mudam posição sem recalcular. Só entra divergência reproduzida.
 
 **Validação**
 
@@ -830,6 +832,35 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 - Linhas de Void e Dragon que contavam com a proteção mudam. O teste de sinal decide, sem compensação.
 
 **Esforço:** M.
+
+---
+
+## L07k — Auras recalculadas depois de cada ação da Main Phase simulada
+
+**Item:** achado da revisão de L07j, anterior ao lote (decisão do usuário, 16/10/2026: lote de paridade próprio, medido depois de L07j).
+
+**Objetivo:** depois de cada ação do despachante genérico da Main Phase (`applyGenericSimulatedMainPhaseAction`, `src/core/ai/common/simulation.ts`), a simulação recalcula todas as auras e produtores contínuos, como o `updateBoard` do runtime, e não só os status passivos. Hoje a Invocação por Virar (`case "position_change"`) só recalcula `field_presence_type_summon_count_buff` e, desde L07j, os status passivos: com a Void Tenebris Horn com a face para cima e uma Void Hollow virada, depois do Flip o runtime dá ATK 1700 e a simulação 1600, nos dois assentos.
+
+**Tarefas**
+
+- [ ] Reproduzir nos dois assentos com `scratchpad/plan23/L07j/review/flip_aura.mts`.
+- [ ] No fim do despachante, trocar `refreshSimulatedPassiveStatuses(state)` por `refreshSimulatedFieldAuras(state)`, que já termina no produtor de status de L07j (variante conferida em `review/flip_aura_fixcheck.mts`). Sem nomes de carta.
+- [ ] Conferir os outros casos do despachante (mudança manual de posição, Ascensão, procedimentos de invocação) contra o runtime. Só entra divergência reproduzida.
+
+**Validação**
+
+- Testes: os de L07j, `fieldPresencePassives`, `commonSimulation` e os de Void do caminho (`architectureVoidMigration`, `architectureVoidEvents`). Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Smoke: `--matchups void:dragon,void:techzero,shadowheart:void,void:bloomrot --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07j.
+
+**Critério de saída:** critério de aceite geral; na sonda, 0 divergências.
+
+**Riscos**
+
+- Recalcular todas as auras no fim de cada ação custa mais tempo de busca; conferir que o pico da guarda de stall e os nós por busca não mudam de ordem de grandeza. O teste de sinal decide o efeito nas decisões, sem compensação.
+
+**Esforço:** P.
 
 ---
 
@@ -1639,6 +1670,7 @@ O `plan.json` da análise (`.cache/plan23-probes/plan.json`) usava L00–L24. A 
 | L07h | — | Lote novo (decisão do usuário em 13/10/2026), achado de L07g |
 | L07i | — | Lote novo (autorização do usuário em 15/10/2026), resíduo de L06 no backlog |
 | L07j | — | Lote novo (decisão do usuário em 16/10/2026), achados de L07i |
+| L07k | — | Lote novo (decisão do usuário em 16/10/2026), achado da revisão de L07j |
 | L25c | — | Lote novo de regra (D12), achado de L07i |
 | L26 | L22 | Sem gates e sem regra AST; depende de L24; `--ignore` declarado; N = 5 contra L25b (antes, L24) |
 | L27 | L23 | Projeção v28 → v27 no passo histórico |
@@ -1692,7 +1724,7 @@ Antes do primeiro lote de cada caminho da 2.4, os itens abaixo passam por uma tr
 | Divergências latentes de fonte na mão, sem carta no banco que as dispare: em `card_to_grave` o runtime nunca lista cartas da mão; em `card_moved` só as que têm gatilho com `requireZone: "hand"`; em `end_phase`, `spell_activated`, `effect_activated` e `counter_removed` a simulação inclui as fontes de `position_change` na mão e o runtime não | L07. Entram quando uma carta passar a disparar |
 | Semântica de falha das actions simuladas: no runtime, um handler que falha interrompe a lista de actions (`src/core/effects/core.ts`), salvo no-op opcional; na simulação, `fail()` só interrompe com `haltOnFailure`/`stopOnFailure` | L07d. Sem efeito observável no banco atual (nos 25 efeitos com `targetRef`, as actions seguintes já têm halt, não são simuladas ou viram no-op). Paridade de outra classe, para quando uma carta a expuser |
 | Ordem das invocações de `special_summon_from_zone` com `targetRef` quando há menos zonas livres que alvos: o runtime segue a ordem da seleção, e a simulação segue o ranking ou a preferência, que então decide quais cartas entram | L07e. Sem carta de preset com alvos diferentes nesse caminho (o Void Haunter só mira Hollows iguais; o Leviathan não está em preset) |
-| O Flip Summon pelo despachante genérico (`applyGenericSimulatedMainPhaseAction`, `case "position_change"`) não recalcula as auras de atributo (por exemplo `archetype_count_buff` com `requireFaceup`); só `field_presence_type_summon_count_buff` e, desde L07j, os status passivos | Achado da revisão de L07j, anterior ao lote. Void Tenebris Horn com a face para cima e Void Hollow virada para baixo: depois do Flip, ATK 1700 no runtime e 1600 na simulação, nos dois assentos (`scratchpad/plan23/L07j/review/flip_aura.mts`). Correção candidata: no fim do despachante, trocar `refreshSimulatedPassiveStatuses(state)` por `refreshSimulatedFieldAuras(state)`, que já termina no produtor de status |
+| (vai para L07k) O Flip Summon pelo despachante genérico (`applyGenericSimulatedMainPhaseAction`, `case "position_change"`) não recalcula as auras de atributo (por exemplo `archetype_count_buff` com `requireFaceup`); só `field_presence_type_summon_count_buff` e, desde L07j, os status passivos | Achado da revisão de L07j, anterior ao lote. Void Tenebris Horn com a face para cima e Void Hollow virada para baixo: depois do Flip, ATK 1700 no runtime e 1600 na simulação, nos dois assentos (`scratchpad/plan23/L07j/review/flip_aura.mts`). Correção candidata: no fim do despachante, trocar `refreshSimulatedPassiveStatuses(state)` por `refreshSimulatedFieldAuras(state)`, que já termina no produtor de status |
 
 ### Bugs de regra registrados à parte
 
