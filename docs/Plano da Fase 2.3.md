@@ -53,6 +53,7 @@ Diagnósticos da v1 que os lotes perseguem (N = 20, salvo indicação):
 | L10 | Projeções opacas sem uso de OPT por nome | Paridade | Sim | Não | L09 |
 | L11 | GameTree (P2) com a projeção pública do oponente | Paridade | Sim | Não | L03 |
 | L12 | Beam/Greedy e laço de batalha só com informação pública | Paridade | Sim | Não | L03 |
+| L12b | Raiz de geração no controle de invariância | Instrumentação | Não | Não | L09 |
 | L13 | Leituras ocultas pelo `_gameRef` e pelo ChainAwareness | Paridade | Sim | Não | L03 |
 | M1 | Ponto intermediário N = 20 depois do bloco de informação oculta | Medição | — | — | L13 |
 | L14 | Posição de Special Summon na simulação | Paridade | Sim | Não | L03 |
@@ -100,6 +101,7 @@ Blocos: preparação e instrumento (L00–L01), defeito e extrações (L02–L03
 | L07j | `29bcae8` | N = 5 (`canonical-4a26038-21712b08`, `deterministicDigest` `3e77fbc2…`, com `--workers 4`) contra L07i; controles | 0 erros e 0 defeitos. Registros idênticos aos de L07i (mesmo `deterministicDigest`). Alvo cumprido nas sondas, nos dois assentos: recálculo por posição ou condição 8 → 0 em 8, Sealing the Void 4 → 0 em 4, caminhos do despachante (mudança de posição, Flip, Ascensão) 14 → 0 em 20, caminhos de condição 20 → 0 em 20 e remoção da negação 4 → 0 em 4, sem marcador; os casos com equipamento divergem do runtime por desenho até L25c (D12). Controles: corpus idêntico; mudam só `smoke-natural-9713` e `smoke-bridge-9713`, no par `shadowheart:void`, na pontuação do planejamento (o TLS do Shadow-Heart passa a apagar o flag do Drake quando a Void Hollow é destruída), com os mesmos vencedores e turnos. Achados: equipamento negado vai para L25c; posição `choice` na Ascensão simulada, para L14; auras no Flip, para L07k |
 | L07k | `815f6b7` | N = 5 (`canonical-815f6b7-21712b08`, `deterministicDigest` `05356db8…`, com `--workers 4`) contra L07j; controles | 0 erros e 0 defeitos. Alvo: na sonda do despachante (80 combinações, dois assentos, modelo genérico e do preset), 40 → 0 divergências de aura (Flip de Tenebris Horn, Arcturus, Forgotten Knight, Boneflame, Darkness Valley, Apprentice, Elementalist Master e Living Colony; Ascensão), e o material da Ascensão passa a sair do campo pelo movimento completo (auras retiradas e equipamento ligado ao Cemitério, tarefa 3). 405/405 com o mesmo resultado, nenhum caso com outra duração ou PV, sem novidades; divergência do Luminarch 0,067 → 0,066; pico da guarda de stall igual (120/66/108) e nós por busca iguais. Controles: corpus idêntico; mudam só `smoke-natural-9713` e `smoke-bridge-9713`, no par `luminarch:shadowheart`, em estatísticas do planejamento do Luminarch, com os mesmos vencedores e turnos. Void e Arcanist já recalculavam as auras nas próprias estratégias; a correção alcança os demais modelos |
 | L08 | `8d44713` | N = 5 (`canonical-8d44713-21712b08`, `deterministicDigest` `df08d523…`, com `--workers 4`) contra L07k; ponte N = 2 (`canonical-8d44713-43624ae9`, `e8fb6c86…`); controles | 0 erros e 0 defeitos. Alvo: na sonda, 24 → 0 divergências em 26 casos, nos dois assentos (handlers que removem contadores, procedure da mão e ações completas de Court of the Dead, Ink River, Rot-Stag e Harvest). 405/405 com o mesmo resultado, nenhum caso com outra duração ou PV, sem novidades; o `deterministicDigest` muda só pela deduplicação de estados (hash do TLS e fingerprint do Beam/GameTree passam a ver a chave ausente). Controles idênticos aos de L07k. Ponte N = 2 no commit de L08, referência "antes" de L10: contra a ponte de L02 (efeito acumulado de L03 a L08), 1 virada (`bloomrot:techzero:1`), sem erros, defeitos ou novidades. Na prática quem zera contadores é Bloomrot (Spore) e Arcanist (Ink). Teste alterado com aval do usuário: `test/ai/arcanistActivationCosts.test.ts` (a chave `ink` deixa de existir) |
+| L09 | `e842ebc` (controle) e `f438826` (guarda) | Prova N = 2 (`canonical-f438826-4feb2064`, `deterministicDigest` `df88333b…`); controle de invariância N = 1 (`canonical-f438826-f0027e61`, `.cache/benchmark/2.3/L09-inv`); controles | Flag desligada: 162/162 registros idênticos a L08 com `--expect-identical`, sem `--ignore`; `configDigest` e `DUEL_RECORD_VERSION` iguais; controles idênticos. Flag ligada: o duelo não muda (`deterministicDigest` igual ao da execução desligada). Valores de partida por raiz (verificadas / actionDiff / scoreDiff): P2 831 / 138 / 609 (7 presets); ataque 1.126 / 80 / 71 (9 presets); Beam 75 / 0 / 14 (Void); Greedy 78 / 0 / 8 (Void, Bloomrot); TLS 2.053 / 0 / 0, com 1 comparação não reproduzida (estado carregado entre chamadas, `burningwest:dragon:0`). Guarda: 2.121 raízes e 55.514 projeções opacas, 0 disparos, 0 tolerados. Desenho: o gancho (D10) fica no controlador da Main Phase e no de batalha, para reexecutar a escolha de ataque; o portão exclui as comparações não reproduzidas. Achados: P2 lê a mão real (L11); ataque e Beam/Greedy leem cartas viradas para baixo (L12); a raiz de geração entra em L12b |
 
 ## Objetivo e limites
 
@@ -255,7 +257,7 @@ npm run benchmark -- controls --workers 10 --compare-with .cache/benchmark/2.3/<
 4. O diagnóstico-alvo do lote observado (por exemplo, o marcador X zerado).
 5. Casos pareados com outro resultado **listados automaticamente** pelo `compare`. Só são explicados caso a caso: erros, defeitos, vocabulário novo e casos ligados ao diagnóstico-alvo. Uma decisão diferente no começo do duelo muda tudo o que vem depois, então não se exige explicação causal para cada virada.
 6. Placar avaliado pelo **teste de sinal pareado** por preset: viradas a favor × contra o preset, binomial bicaudal com p = 0,5. A conta é feita fora do repositório, sobre a saída JSON do `compare`. Um preset com p < 0,05 é investigado como possível efeito inesperado e nunca compensado. Nos lotes de efeito amplo (L04, L12 e L13), se a investigação não for conclusiva, o elo anterior e o lote são estendidos para N = 10.
-7. Invariância: de L10 a L12, o lote não pode piorar o controle de L09 (`actionDiff` por raiz não aumenta, e a raiz do lote diminui quando é o alvo). A partir de L13, todas as raízes ficam com `actionDiff = scoreDiff = 0`, e isso é conferido em cada lote de L14 a L19, em M1 e em L28. L14 a L19 mudam simulação e geração e poderiam reintroduzir uma leitura oculta; o controle em cada um evita achar o problema só em L28.
+7. Invariância: de L10 a L12, o lote não pode piorar o controle de L09 (`actionDiff` por raiz não aumenta, e a raiz do lote diminui quando é o alvo). A partir de L13, todas as raízes, inclusive a de geração de L12b, ficam com `actionDiff = scoreDiff = 0`, e isso é conferido em cada lote de L14 a L19, em M1 e em L28. Desde L09, o portão exclui as comparações cuja reexecução sobre o estado real não repete a decisão viva (`nonReproducible`); a partir de L13, `nonReproducible` também precisa ser 0, ou cada caso é explicado. L14 a L19 mudam simulação e geração e poderiam reintroduzir uma leitura oculta; o controle em cada um evita achar o problema só em L28.
 
 O placar não é critério de aceite na 2.3. O N = 5 dá cerca de ±11 pp por preset, por isso o limiar fixo de 10 pp foi descartado.
 
@@ -279,7 +281,7 @@ O placar não é critério de aceite na 2.3. O N = 5 dá cerca de ±11 pp por pr
 | Item | Quantidade | Tempo |
 | --- | --- | --- |
 | Pontos N = 5 | 31 (R0 e 30 lotes: L01, L02, L04–L08, L07b–L07k, L10–L19, L24, L25b e L26) | ~6,2 h |
-| Provas N = 2 | 8 (L03, L09, L20–L23, L25 e L27) | ~40 min |
+| Provas N = 2 | 9 (L03, L09, L12b, L20–L23, L25 e L27) | ~45 min |
 | Ponte N = 2 | 13: R0, o "depois" dos 9 lotes de ponte e o "antes" que não pode ser reaproveitado (nos commits de L08, L11 e L17) | ~1,1 h |
 | Controle de invariância | 13 (L09–L19, M1 e L28) | ~50 min |
 | Controles | 1 por lote | ~1 h |
@@ -908,17 +910,17 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 
 **Tarefas**
 
-- [ ] Flag opt-in em `scripts/run_benchmark.ts` e `scripts/benchmark/observer.ts`. Em cada decisão da IA, o harness reexecuta as raízes alcançáveis: a P2 (`evaluateCriticalSituationWithGameTree`, `src/core/ai/BaseStrategy.ts:505`), o TurnLineSearch, o Beam/Greedy e a escolha de ataque.
-- [ ] Cada raiz roda duas vezes: sobre o estado real e com a informação oculta trocada:
+- [x] Flag opt-in em `scripts/run_benchmark.ts` e `scripts/benchmark/observer.ts`. Em cada decisão da IA, o harness reexecuta as raízes alcançáveis: a P2 (`evaluateCriticalSituationWithGameTree`, `src/core/ai/BaseStrategy.ts:505`), o TurnLineSearch, o Beam/Greedy e a escolha de ataque.
+- [x] Cada raiz roda duas vezes: sobre o estado real e com a informação oculta trocada:
   - mão e Deck do oponente rotacionados, com tamanhos preservados;
   - cartas viradas para baixo do oponente, no campo e no spellTrap, trocadas por cartas do mesmo tipo vindas do Deck, preservando `instanceId`, posição, `fieldSlot` e `isFacedown`.
-- [ ] Depois de cada reexecução, o estado é restaurado com ordem e identidade exatas, sem eventos.
-- [ ] O `_arenaTracker` e o observer ficam silenciados durante as reexecuções, para não inflar `planning.searches` nem quebrar o crossCheck.
-- [ ] Gancho mínimo em `src/` (D10): um callback opcional, inerte quando ausente, no controlador da Main Phase, que expõe as opções de busca já resolvidas. O harness reaproveita essas opções e não as recalcula.
-- [ ] Saída `{root, checked, actionDiff, scoreDiff}` num arquivo lateral, fora do registro determinístico. Desligada, a flag não entra na configuração: `configDigest` e `DUEL_RECORD_VERSION` ficam iguais.
-- [ ] Guarda `assertPublicPlanningProjection(root, perspectiveId)` na raiz do TurnLineSearch, com a allowlist exata dos campos que o TLS já copia para projeções opacas. **Conforme E2, a guarda só conta e registra**, sem lançar. É um commit próprio dentro deste lote, da mesma classe (instrumentação).
-- [ ] O contador da guarda fica no diagnóstico de planejamento do ArenaAnalytics, por campo e por raiz. O harness o copia para o arquivo lateral do controle quando a flag está ligada. Ele nunca entra no registro determinístico: uma chave nova em `seatMetrics` seria rejeitada pelas chaves exatas do leitor (`scripts/benchmark/schema.ts:1105-1120`), e a prova N = 2 falharia.
-- [ ] `summarize` mostra o portão `actionDiff = scoreDiff = 0` por raiz e os disparos da guarda por campo quando o arquivo existe. Protótipo da P2: `.cache/plan23-probes/gt/`.
+- [x] Depois de cada reexecução, o estado é restaurado com ordem e identidade exatas, sem eventos.
+- [x] O `_arenaTracker` e o observer ficam silenciados durante as reexecuções, para não inflar `planning.searches` nem quebrar o crossCheck.
+- [x] Gancho mínimo em `src/` (D10): um callback opcional, inerte quando ausente, no controlador da Main Phase, que expõe as opções de busca já resolvidas. O harness reaproveita essas opções e não as recalcula.
+- [x] Saída `{root, checked, actionDiff, scoreDiff}` num arquivo lateral, fora do registro determinístico. Desligada, a flag não entra na configuração: `configDigest` e `DUEL_RECORD_VERSION` ficam iguais.
+- [x] Guarda `assertPublicPlanningProjection(root, perspectiveId)` na raiz do TurnLineSearch, com a allowlist exata dos campos que o TLS já copia para projeções opacas. **Conforme E2, a guarda só conta e registra**, sem lançar. É um commit próprio dentro deste lote, da mesma classe (instrumentação).
+- [x] O contador da guarda fica no diagnóstico de planejamento do ArenaAnalytics, por campo e por raiz. O harness o copia para o arquivo lateral do controle quando a flag está ligada. Ele nunca entra no registro determinístico: uma chave nova em `seatMetrics` seria rejeitada pelas chaves exatas do leitor (`scripts/benchmark/schema.ts:1105-1120`), e a prova N = 2 falharia.
+- [x] `summarize` mostra o portão `actionDiff = scoreDiff = 0` por raiz e os disparos da guarda por campo quando o arquivo existe. Protótipo da P2: `.cache/plan23-probes/gt/`.
 
 **Validação**
 
@@ -1044,6 +1046,36 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 - A avaliação de board do laço de batalha muda com monstros opacos.
 
 **Esforço:** M.
+
+---
+
+## L12b — Raiz de geração no controle de invariância
+
+**Item:** ponto da validação de L09 (decisão do usuário, 17/10/2026: lote de instrumentação antes de L13).
+
+**Objetivo:** o controle de invariância de L09 reexecuta o TurnLineSearch, o Beam e o Greedy com a mesma lista de candidatos (`preGeneratedActions`) que a raiz viva gerou com a informação real. Por isso uma leitura oculta na geração de candidatos da raiz viva (por exemplo, o ChainAwareness lendo a backrow do oponente, alvo de L13) não aparece em nenhuma raiz. O lote acrescenta uma raiz `generation`: a geração de candidatos da Main Phase (`generateMainPhaseActions` com o estado vivo) roda sobre o estado real e com a informação oculta trocada, e o controle compara as duas listas (identidade e ordem das ações; score, quando houver).
+
+**Tarefas**
+
+- [ ] Estender o observador opcional de L09 (D10, inerte quando ausente) para expor a reexecução da geração de candidatos do controlador da Main Phase, com as mesmas opções resolvidas.
+- [ ] No harness (`scripts/benchmark/invariance.ts`), rodar a geração com e sem a troca, com a mesma restauração exata, silenciamento e preservação do cache de targeting de L09; gravar `generation` no `invariance.jsonl` (`checked`, `actionDiff` para a lista, `scoreDiff` quando houver ordem por score, `nonReproducible`), com versão nova do esquema lateral.
+- [ ] `summarize` mostra a raiz nova no portão.
+
+**Validação**
+
+- Flag desligada: N = 2 com `--expect-identical` contra o elo anterior, sem `--ignore`; controles idênticos.
+- Flag ligada (N = 1): valores de partida da raiz `generation`, por preset, com o vazamento do ChainAwareness esperado nos presets que o usam (Shadow-Heart, Dragon e Luminarch).
+- Testes do caminho do gancho (`mainPhaseIdentity`, `mainPhaseConcurrency`, `mainPhaseRecovery`), typecheck e `npm test`.
+
+**Medição:** sem medição de força. Prova N = 2 idêntica com a flag desligada.
+
+**Critério de saída:** prova idêntica; valores de partida da raiz `generation` registrados. A partir de L13, o critério "todas as raízes zeradas" inclui `generation`.
+
+**Riscos**
+
+- A geração de candidatos ao vivo pode ter efeitos de cache; a restauração e o cache de targeting seguem a disciplina de L09.
+
+**Esforço:** P.
 
 ---
 
@@ -1673,6 +1705,7 @@ O `plan.json` da análise (`.cache/plan23-probes/plan.json`) usava L00–L24. A 
 | L07i | — | Lote novo (autorização do usuário em 15/10/2026), resíduo de L06 no backlog |
 | L07j | — | Lote novo (decisão do usuário em 16/10/2026), achados de L07i |
 | L07k | — | Lote novo (decisão do usuário em 16/10/2026), achado da revisão de L07j |
+| L12b | — | Lote novo de instrumentação (decisão do usuário em 17/10/2026), ponto da validação de L09 |
 | L25c | — | Lote novo de regra (D12), achado de L07i |
 | L26 | L22 | Sem gates e sem regra AST; depende de L24; `--ignore` declarado; N = 5 contra L25b (antes, L24) |
 | L27 | L23 | Projeção v28 → v27 no passo histórico |
@@ -1706,6 +1739,7 @@ Antes do primeiro lote de cada caminho da 2.4, os itens abaixo passam por uma tr
 - `clearSimulatedTemporaryControl` falta em `destroySimulatedCard`.
 - Merge raso do `actionContext` dos triggers simulados, salvo se L14 já o tiver isolado.
 - Divergência de PV (`bot.lp`) no planejamento da Ascensão da Luminarch Fortress Aegis (`void:luminarch:3`, turno 8), anterior a L07k; provavelmente o ganho de PV da Ascensão. Não investigada.
+- O cache de targeting do EffectEngine não é transparente: em `bloomrot:burningwest:0`, turno 19, limpá-lo sem restaurar gerou 2 decisões `chain_response` a mais para o jogador do turno (possível entrada desatualizada). Achado de L09; o controle de invariância salva e restaura o cache. Sonda: `scratchpad/plan23/L09/probe_decisions.mts`.
 - OPT próprio da Luminarch Magic Sickle na simulação de batalha (`meta.magicSickleBattleUsed`, `luminarch/simulation.ts`), que não lê o uso real do turno. Reproduzido em L07h só com o OPT marcado como gasto no clone; no fluxo real a ponte roda a partir da Main 1, antes de qualquer Damage Step do turno (decisão do usuário, 15/10/2026).
 - Famílias de marcadores sem análise: `deferred_trigger_source_presence` (Bloomrot 329 e Void 52 na v1) e `negated_field_exit_trigger` (Bloomrot 34), mantidas como diagnóstico deliberado desde a fase 1.5, e o restante de `exact_selection:tech_zero_development_lab_shuffle_choice`, se sobrar depois de L05.
 
