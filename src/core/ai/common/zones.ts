@@ -9,6 +9,7 @@ import { restoreFieldExitStatuses, restoreTemporaryStatuses } from "../../Card.j
 import { cardHasArchetype, cardMatchesFilter } from "./cardFilters.js";
 import { countTurnCardActivations } from "../../game/events/activationHistory.js";
 import { getCounterValue } from "./counters.js";
+import { evaluateSimulatedConditions } from "./simulatedConditions.js";
 import type { RuntimePassive } from "../../effects/passives/passiveBuffs.js";
 import { clearLevelModifications, clearPermanentStatBuffs, expireFaceupStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
 import { clearPassiveBuffsForCard, getModeledPassiveContributions, pruneModeledPassiveContributions, registerModeledPassiveContribution, applyPassiveBuffValue, getFieldAuraBuffKey, getFieldCounterStatAuraBuffKey, getEquippedCounterBuffKey, getEquippedFieldCounterBuffKeys, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
@@ -137,7 +138,7 @@ export function refreshSimulatedFieldPresenceTypeSummonBuffs(state: SimulatedFie
   }
 }
 
-/** Continuous stat producers reconcile the same contributions as a live clone. */
+/** Continuous stat and status producers reconcile the same contributions as a live clone. */
 export function refreshSimulatedFieldAuras(state: Pick<AiStateShape, "bot" | "player"> &
   Partial<Pick<AiStateShape, "turnCounter" | "cardActivationHistory">>): void {
   const field = [...state.player.field, ...state.bot.field];
@@ -316,6 +317,49 @@ export function refreshSimulatedFieldAuras(state: Pick<AiStateShape, "bot" | "pl
   for (const card of cards) {
     for (const key of stale.get(card) || []) applyPassiveBuffValue(card, key, 0);
     pruneModeledPassiveContributions(card);
+  }
+  refreshSimulatedPassiveStatuses(state);
+}
+
+/** User rule (15/10/2026): an active Equip's battle protection outlives the host's own status passive. */
+function isStatusKeptByActiveEquip(card: SimulatedCardState, statusName: string): boolean {
+  return statusName === "battleIndestructible" && (card.equips || []).some(equip =>
+    equip?.grantsBattleIndestructible === true && equip.effectsNegated !== true);
+}
+
+/**
+ * Status passives follow the runtime producer on each update: a face-down or
+ * negated source loses its status; otherwise its position or its declared
+ * condition decides it. A rule restricted to another zone is left untouched.
+ * Unlike the runtime (lot L25c), an active Equip's battle protection stays.
+ */
+export function refreshSimulatedPassiveStatuses(state: Pick<AiStateShape, "bot" | "player">): void {
+  for (const owner of [state.player, state.bot]) {
+    const selfId = owner === state.bot ? "bot" : "player";
+    const sources = [...getZoneCards(owner, "field"), ...getZoneCards(owner, "spellTrap"), ...getZoneCards(owner, "fieldSpell")];
+    for (const source of sources) {
+      source.effects?.forEach((effect) => {
+        if (effect.timing !== "passive" || !("passive" in effect) || !effect.passive) return;
+        const passive = effect.passive;
+        if (passive.type !== "position_status" && passive.type !== "conditional_status") return;
+        let active: boolean;
+        if (source.isFacedown === true) active = false;
+        else if (effect.requireZone && findCardZone(owner, source) !== effect.requireZone) return;
+        else if (source.effectsNegated === true) active = false;
+        else if (passive.type === "position_status") {
+          active = (source.position || "attack") === (passive.activePosition || "defense");
+        } else {
+          active = evaluateSimulatedConditions(passive.conditions || passive.condition || null,
+            { state, selfId, sourceCard: source });
+        }
+        const statusName = passive.status || "battleIndestructible";
+        const present = Boolean(Reflect.get(source, statusName));
+        if (active && !present) Reflect.set(source, statusName, true);
+        else if (!active && present && !isStatusKeptByActiveEquip(source, statusName)) {
+          Reflect.deleteProperty(source, statusName);
+        }
+      });
+    }
   }
 }
 

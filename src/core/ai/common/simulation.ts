@@ -25,7 +25,7 @@ import { resolveActionPlayer, resolveSimulatedLpCost } from "./simulatedActions/
 import { resolveTargetsForAction, captureSimulatedReferences, captureSimulatedSourceSnapshot, isSimulatedReferencePresenceValid, isSimulatedSourcePresenceValid, areRequiredContextualReferencesValid, recordCompletedSimulatedSummon } from "./simulatedActions/shared.js";
 import { buildEventReferenceContext } from "../../effects/targeting/references.js";
 import { appendSimulatedZoneCard } from "./zones.js";
-import { appendSimulatedFieldCard, refreshSimulatedFieldAuras } from "./zones.js";
+import { appendSimulatedFieldCard, refreshSimulatedFieldAuras, refreshSimulatedPassiveStatuses } from "./zones.js";
 import {
   applySimulatedActions,
   evaluateSimulatedConditions,
@@ -3578,5 +3578,8 @@ export function applyGenericSimulatedMainPhaseAction<
       break;
   }
 
+  // The runtime board update after a player's action reconciles status
+  // passives; position changes, flips and summons above may not reach a refresh.
+  refreshSimulatedPassiveStatuses(state);
   return state;
 }
