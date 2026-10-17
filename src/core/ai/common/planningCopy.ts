@@ -79,7 +79,12 @@ export function hasPendingPassiveRestoration(state: Pick<AiStateInput, "bot" | "
   ));
 }
 
-/** Snapshot canonical runtime counters without keeping their Maps/WeakMap. */
+/**
+ * Snapshot canonical runtime counters without keeping their Maps/WeakMap.
+ * Per-card usage is keyed by the card's own effects, so an opaque projection
+ * of a hidden card never receives it (phase 2.3 L10). Each player's per-name
+ * usage is still copied.
+ */
 export function projectRuntimeEffectUsage(input: AiStateInput, state: AiStateShape): void {
   const runtime = input.oncePerTurnUsage;
   if (!runtime || (input.oncePerTurnTurnCounter !== undefined &&
@@ -91,7 +96,7 @@ export function projectRuntimeEffectUsage(input: AiStateInput, state: AiStateSha
     const entries = original.id === "bot" ? runtime.bot : original.id === "player" ? runtime.player : undefined;
     cloned.oncePerTurnUsageByName = { ...cloned.oncePerTurnUsageByName, ...projectOncePerTurnUsage(entries) };
     const copyCard = (card: AiCardInput | null | undefined, target: SimulatedCardState | null | undefined) => {
-      if (!card || !target) return;
+      if (!card || !target || target._simUnknownCard === true) return;
       const usage = projectRuntimeCardEffectUsage(input, card);
       if (Object.keys(usage).length > 0) target.oncePerTurnUsageByName = { ...target.oncePerTurnUsageByName, ...usage };
     };
@@ -242,14 +247,13 @@ export function registerPublicOpponentProjection(
 }
 
 /**
- * Allowlisted fields beyond the public placement that the TurnLineSearch root
- * copies onto an opaque projection today: projectRuntimeEffectUsage writes the
- * runtime OPT snapshot on any planning card. The guard tolerates and counts
- * them; taking one out of the projections is parity (phase 2.3 L10).
+ * Allowlisted fields beyond the public placement that a planning root still
+ * copies onto an opaque projection, a known channel: the guard tolerates and
+ * counts them apart, and taking one out of the projections is parity. None
+ * since phase 2.3 L10: projectRuntimeEffectUsage skips opaque projections, so
+ * oncePerTurnUsageByName on one is a guard firing.
  */
-export const PUBLIC_PROJECTION_TOLERATED_FIELDS = [
-  "oncePerTurnUsageByName",
-] as const satisfies readonly (keyof SimulatedCardShape)[];
+export const PUBLIC_PROJECTION_TOLERATED_FIELDS = [] as const satisfies readonly (keyof SimulatedCardShape)[];
 
 /**
  * Fields the TurnLineSearch root copies onto an opaque projection: the public
@@ -262,7 +266,7 @@ export const PUBLIC_PROJECTION_ALLOWED_FIELDS = [
 ] as const satisfies readonly (keyof SimulatedCardShape)[];
 
 const PUBLIC_PROJECTION_ALLOWED: ReadonlySet<string> = new Set(PUBLIC_PROJECTION_ALLOWED_FIELDS);
-const PUBLIC_PROJECTION_TOLERATED: ReadonlySet<string> = new Set(PUBLIC_PROJECTION_TOLERATED_FIELDS);
+const PUBLIC_PROJECTION_TOLERATED: ReadonlySet<string> = new Set<string>(PUBLIC_PROJECTION_TOLERATED_FIELDS);
 
 /**
  * Structural guard of a planning root's public projection (phase 2.3, E2): it
