@@ -16,6 +16,7 @@ import {
   type BenchmarkCase,
   type Counter,
   type InvarianceCaseRecord,
+  type InvarianceGuardTally,
   type InvarianceRoot,
   type InvarianceRootTally,
   type InvarianceSeat,
@@ -217,12 +218,27 @@ function copyTally(tally: InvarianceRootTally): InvarianceRootTally {
   return { ...tally, errorLabels: sortedCounter(tally.errorLabels), samples: tally.samples.map(sample => ({ ...sample })) };
 }
 
+function copyGuard(guard: Readonly<Record<string, InvarianceGuardTally>>): Record<string, InvarianceGuardTally> {
+  const result: Record<string, InvarianceGuardTally> = {};
+  for (const root of Object.keys(guard).sort()) {
+    const tally = guard[root];
+    if (tally) {
+      result[root] = { ...tally, fields: sortedCounter(tally.fields), tolerated: sortedCounter(tally.tolerated),
+        unprojected: sortedCounter(tally.unprojected) };
+    }
+  }
+  return result;
+}
+
+/** A seat's comparisons; the guard tally comes from the Arena tracker when the line is written. */
+type SeatTallies = Omit<InvarianceSeat, "guard">;
+
 /** The control's comparisons of one duel, per seat and root. */
 export class InvarianceTallies {
-  private readonly seats: Record<Seat, InvarianceSeat>;
+  private readonly seats: Record<Seat, SeatTallies>;
 
   constructor(presets: Record<Seat, string>) {
-    const seat = (preset: string): InvarianceSeat => ({ preset, roots: emptyRoots(), consoleLabels: {} });
+    const seat = (preset: string): SeatTallies => ({ preset, roots: emptyRoots(), consoleLabels: {} });
     this.seats = { player: seat(presets.player), bot: seat(presets.bot) };
   }
 
@@ -234,8 +250,9 @@ export class InvarianceTallies {
     return this.seats[seat].consoleLabels;
   }
 
-  record(entry: BenchmarkCase): InvarianceCaseRecord {
-    const seat = (value: InvarianceSeat): InvarianceSeat => ({
+  /** The side line of the case; `guard` is the Arena tracker's public-projection guard tally per seat. */
+  record(entry: BenchmarkCase, guard: Readonly<Record<Seat, Readonly<Record<string, InvarianceGuardTally>>>>): InvarianceCaseRecord {
+    const seat = (value: SeatTallies, seatGuard: Readonly<Record<string, InvarianceGuardTally>>): InvarianceSeat => ({
       preset: value.preset,
       roots: {
         p2: copyTally(value.roots.p2),
@@ -244,6 +261,7 @@ export class InvarianceTallies {
         greedy: copyTally(value.roots.greedy),
         attack: copyTally(value.roots.attack),
       },
+      guard: copyGuard(seatGuard),
       consoleLabels: sortedCounter(value.consoleLabels),
     });
     return {
@@ -251,7 +269,7 @@ export class InvarianceTallies {
       v: INVARIANCE_SCHEMA_VERSION,
       caseIndex: entry.caseIndex,
       caseId: entry.caseId,
-      seats: { player: seat(this.seats.player), bot: seat(this.seats.bot) },
+      seats: { player: seat(this.seats.player, guard.player), bot: seat(this.seats.bot, guard.bot) },
     };
   }
 }

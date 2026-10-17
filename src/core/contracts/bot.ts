@@ -5,6 +5,7 @@ import type {
   AIPlannedAction,
   AIStrategyBotPort,
   BattleCandidate,
+  PublicProjectionGuardReport,
   StrategyRuntimePort,
   AITributeRequirement,
   AITributeTradeResult,
@@ -184,6 +185,7 @@ export interface BotGamePort extends Omit<PlayerGamePort, keyof BotGameMethods>,
   _arenaTracker?: {
     recordProgress?(kind: string, game: BotGamePort, details?: object): void;
     recordPlannerDecision?(details: object): void;
+    recordPublicProjectionGuard?(seat: string, root: string, report: PublicProjectionGuardReport): void;
   };
 }
 

@@ -8,6 +8,7 @@ import type {
   SimulatedCardShape,
   SimulatedCardState,
 } from "../../contracts/aiState.js";
+import type { PublicProjectionGuardReport } from "../../contracts/ai.js";
 import {
   PLANNING_CARD_FIELDS,
   PLANNING_CARD_LINKS,
@@ -238,4 +239,68 @@ export function registerPublicOpponentProjection(
   for (const card of opponent.spellTrap || []) if (card?.isFacedown) hide(card);
   if (opponent.fieldSpell?.isFacedown) hide(opponent.fieldSpell);
   for (const card of opponent.banished || []) if (card?.isFacedown) hide(card);
+}
+
+/**
+ * Allowlisted fields beyond the public placement that the TurnLineSearch root
+ * copies onto an opaque projection today: projectRuntimeEffectUsage writes the
+ * runtime OPT snapshot on any planning card. The guard tolerates and counts
+ * them; taking one out of the projections is parity (phase 2.3 L10).
+ */
+export const PUBLIC_PROJECTION_TOLERATED_FIELDS = [
+  "oncePerTurnUsageByName",
+] as const satisfies readonly (keyof SimulatedCardShape)[];
+
+/**
+ * Fields the TurnLineSearch root copies onto an opaque projection: the public
+ * placement fields and the opaque mark of registerPublicOpponentProjection,
+ * plus the tolerated fields. copyModeledPassiveContributions keeps its proof
+ * in a WeakMap and adds no field. A face-down monster may also keep cardKind "monster".
+ */
+export const PUBLIC_PROJECTION_ALLOWED_FIELDS = [
+  ...PUBLIC_UNKNOWN_CARD_FIELDS, "_simUnknownCard", ...PUBLIC_PROJECTION_TOLERATED_FIELDS,
+] as const satisfies readonly (keyof SimulatedCardShape)[];
+
+const PUBLIC_PROJECTION_ALLOWED: ReadonlySet<string> = new Set(PUBLIC_PROJECTION_ALLOWED_FIELDS);
+const PUBLIC_PROJECTION_TOLERATED: ReadonlySet<string> = new Set(PUBLIC_PROJECTION_TOLERATED_FIELDS);
+
+/**
+ * Structural guard of a planning root's public projection (phase 2.3, E2): it
+ * counts and returns, never throws. Every hidden card of the opponent of
+ * `perspectiveId` must be an opaque projection with allowlisted fields only:
+ * Hand, Deck and Extra Deck, plus face-down cards on the field, in the
+ * backrow, in the Field Zone and banished, as registerPublicOpponentProjection hides them.
+ */
+export function assertPublicPlanningProjection(
+  root: Pick<AiStateShape, "player" | "bot">,
+  perspectiveId: string,
+): PublicProjectionGuardReport {
+  const report: PublicProjectionGuardReport = { projections: 0, fields: {}, tolerated: {}, unprojected: {} };
+  const opponent = root.bot?.id === perspectiveId ? root.player : root.player?.id === perspectiveId ? root.bot : null;
+  if (!opponent) return report;
+  const count = (counts: Record<string, number>, key: string) => {
+    counts[key] = (Object.hasOwn(counts, key) ? counts[key] ?? 0 : 0) + 1;
+  };
+  const inspect = (card: SimulatedCardState | null | undefined, zone: string, faceDownMonster = false) => {
+    if (!card) return;
+    if (card._simUnknownCard !== true) {
+      count(report.unprojected, zone);
+      return;
+    }
+    report.projections += 1;
+    for (const key of Object.keys(card)) {
+      if (PUBLIC_PROJECTION_TOLERATED.has(key)) count(report.tolerated, key);
+      if (PUBLIC_PROJECTION_ALLOWED.has(key)) continue;
+      if (key === "cardKind" && faceDownMonster && card.cardKind === "monster") continue;
+      count(report.fields, key);
+    }
+  };
+  for (const zone of ["hand", "deck", "extraDeck"] as const) {
+    for (const card of opponent[zone] || []) inspect(card, zone);
+  }
+  for (const card of opponent.field || []) if (card?.isFacedown) inspect(card, "field", true);
+  for (const card of opponent.spellTrap || []) if (card?.isFacedown) inspect(card, "spellTrap");
+  if (opponent.fieldSpell?.isFacedown) inspect(opponent.fieldSpell, "fieldSpell");
+  for (const card of opponent.banished || []) if (card?.isFacedown) inspect(card, "banished");
+  return report;
 }

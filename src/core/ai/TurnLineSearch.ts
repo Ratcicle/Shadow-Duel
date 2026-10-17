@@ -1,5 +1,6 @@
 import { moveCardToZone } from "./common/zones.js";
 import {
+  assertPublicPlanningProjection,
   createPlanningCopy,
   hasPendingPassiveRestoration,
   projectRuntimeEffectUsage,
@@ -49,6 +50,7 @@ import type {
   AIPlanningContext,
   AIPlanningProfile,
   AITributeRequirement,
+  PublicProjectionGuardSink,
   SimulatedBattleAction,
   TurnLineSearchOptions,
   TurnLineSearchResult,
@@ -138,6 +140,8 @@ type PlanningGameInput = Omit<AiStateInput, "player" | "bot" | "opponent"> & {
   temporaryEventEffects?: readonly TemporaryBattleEffectView[];
   temporaryControlEffects?: readonly SimulatedTemporaryControlEffect[];
   _simTemporaryControlCounter?: number;
+  /** The Arena's tracker on a live duel; it keeps the public-projection guard's tally. */
+  _arenaTracker?: PublicProjectionGuardSink | null;
 };
 
 interface DestroyedCardSummary {
@@ -1639,6 +1643,11 @@ export async function turnLineSearch(
   const configuredModels = strategy.bot?.getGameTreeModels?.();
   const models = configuredModels ? new Map(configuredModels.actors) : null;
   const root = clonePlanningState(game, strategy, models !== null);
+  // Phase 2.3 E2: the guard of the opaque projection only counts, into the Arena's tracker.
+  const guardSink = game._arenaTracker;
+  if (models !== null && guardSink?.recordPublicProjectionGuard) {
+    guardSink.recordPublicProjectionGuard(root.bot.id, "turnLineSearch", assertPublicPlanningProjection(root, root.bot.id));
+  }
   seenStates.add(getPlanningStateHash(root));
 
   const search = async (

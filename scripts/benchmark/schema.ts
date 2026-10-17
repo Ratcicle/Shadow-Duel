@@ -26,7 +26,8 @@ export const LOGS_DIRECTORY = "logs";
 /** Side file of the hidden-information invariance control; never part of the duel records. */
 export const INVARIANCE_FILE = "invariance.jsonl";
 export const INVARIANCE_SCHEMA = "shadow-duel-benchmark-invariance";
-export const INVARIANCE_SCHEMA_VERSION = 1;
+/** v2: each seat also carries the live roots' public-projection guard tally. */
+export const INVARIANCE_SCHEMA_VERSION = 2;
 
 export const DEFAULT_SEED_BASE = 20261011;
 export const DEFAULT_MAX_TURNS = 50;
@@ -1523,9 +1524,25 @@ export interface InvarianceRootTally {
   samples: InvarianceSample[];
 }
 
+/** Tally of the public-projection guard for one search root; the guard only counts (phase 2.3, E2). */
+export interface InvarianceGuardTally {
+  /** Planning roots inspected. */
+  roots: number;
+  /** Opaque projections inspected. */
+  projections: number;
+  /** Fields outside the guard's allowlist, by field. */
+  fields: Counter;
+  /** Allowlisted fields beyond the public placement (a known channel), by field. */
+  tolerated: Counter;
+  /** Hidden cards of the opponent without an opaque projection, by zone. */
+  unprojected: Counter;
+}
+
 export interface InvarianceSeat {
   preset: string;
   roots: Record<InvarianceRoot, InvarianceRootTally>;
+  /** The live roots' guard tallies of the Arena tracker, by search root (reruns are silenced). */
+  guard: Record<string, InvarianceGuardTally>;
   /** console.error/warn of the reruns, kept here instead of the record's diagnostics. */
   consoleLabels: Counter;
 }
@@ -1596,15 +1613,32 @@ function parseInvarianceRootTally(value: unknown, label: string): InvarianceRoot
   return tally;
 }
 
+function parseInvarianceGuardTally(value: unknown, label: string): InvarianceGuardTally {
+  const raw = object(value, label);
+  exactKeys(raw, ["roots", "projections", "fields", "tolerated", "unprojected"], label);
+  return {
+    roots: integer(raw.roots, `${label}.roots`),
+    projections: integer(raw.projections, `${label}.projections`),
+    fields: counter(raw.fields, `${label}.fields`),
+    tolerated: counter(raw.tolerated, `${label}.tolerated`),
+    unprojected: counter(raw.unprojected, `${label}.unprojected`),
+  };
+}
+
 function parseInvarianceSeat(value: unknown, label: string): InvarianceSeat {
   const raw = object(value, label);
-  exactKeys(raw, ["preset", "roots", "consoleLabels"], label);
+  exactKeys(raw, ["preset", "roots", "guard", "consoleLabels"], label);
   const roots = object(raw.roots, `${label}.roots`);
   exactKeys(roots, INVARIANCE_ROOTS, `${label}.roots`);
   const tally = (root: InvarianceRoot) => parseInvarianceRootTally(roots[root], `${label}.roots.${root}`);
+  const guard: Record<string, InvarianceGuardTally> = {};
+  for (const [root, entry] of Object.entries(object(raw.guard, `${label}.guard`))) {
+    guard[root] = parseInvarianceGuardTally(entry, `${label}.guard.${root}`);
+  }
   return {
     preset: string(raw.preset, `${label}.preset`),
     roots: { p2: tally("p2"), turnLineSearch: tally("turnLineSearch"), beam: tally("beam"), greedy: tally("greedy"), attack: tally("attack") },
+    guard,
     consoleLabels: counter(raw.consoleLabels, `${label}.consoleLabels`),
   };
 }

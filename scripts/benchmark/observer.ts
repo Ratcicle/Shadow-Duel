@@ -287,6 +287,8 @@ export class DuelObserver {
   muted = false;
   /** Comparisons of the invariance control; null when the run does not carry it. */
   readonly invariance: InvarianceTallies | null;
+  /** This duel's tracker, kept for its public-projection guard tallies. */
+  tracker: DuelTracker | null = null;
   observerErrors = 0;
   observerErrorLabels: Counter = {};
   clockStages = 0;
@@ -641,9 +643,9 @@ export class DuelObserver {
     return [...this.seats[seat].latencies];
   }
 
-  /** Side line of the invariance control; null without the control. */
+  /** Side line of the invariance control, with the tracker's guard tallies; null without the control. */
   invarianceRecord(entry: BenchmarkCase): InvarianceCaseRecord | null {
-    return this.invariance?.record(entry) ?? null;
+    return this.invariance?.record(entry, this.tracker?.getPublicProjectionGuard() ?? { player: {}, bot: {} }) ?? null;
   }
 
   presetMetrics(completed: ArenaDuelResult | null): PresetMetricsRecord {
@@ -769,6 +771,7 @@ export class HarnessGame extends Game {
   /** Synchronous wrappers on this duel's tracker only; each calls the original with the tracker as `this`. */
   private attachTracker(tracker: DuelTracker): void {
     const observer = this.observer;
+    observer.tracker = tracker;
     const recordProgress = tracker.recordProgress;
     tracker.recordProgress = (...args: ProgressArgs) => {
       observer.onProgress(args[0], args[2]);

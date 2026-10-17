@@ -40,6 +40,7 @@ import {
   type GuardCounterName,
   type GuardPeaks,
   type InvarianceCaseRecord,
+  type InvarianceGuardTally,
   type InvarianceRoot,
   type JsonValue,
   type RunConfig,
@@ -294,6 +295,8 @@ export interface InvarianceSummary {
   /** Records of the run without a side line (a lost worker never writes one). */
   missing: string[];
   roots: Record<InvarianceRoot, InvarianceRootSummary>;
+  /** Public-projection guard of the live roots, by search root; it only counts (phase 2.3, E2). */
+  guard: Record<string, InvarianceGuardTally>;
   consoleLabels: Counter;
 }
 
@@ -861,6 +864,7 @@ export function summarizeInvariance(file: string, sides: ReadonlyMap<string, Inv
     attack: emptyInvarianceRootSummary(),
   };
   const consoleLabels: Counter = {};
+  const guard: Record<string, InvarianceGuardTally> = {};
   const missing: string[] = [];
   let cases = 0;
   for (const record of records) {
@@ -873,6 +877,14 @@ export function summarizeInvariance(file: string, sides: ReadonlyMap<string, Inv
     for (const seat of SEATS) {
       const sideSeat = side.seats[seat];
       mergeCounter(consoleLabels, sideSeat.consoleLabels);
+      for (const [root, tally] of Object.entries(sideSeat.guard)) {
+        const target = guard[root] ??= { roots: 0, projections: 0, fields: {}, tolerated: {}, unprojected: {} };
+        target.roots += tally.roots;
+        target.projections += tally.projections;
+        mergeCounter(target.fields, tally.fields);
+        mergeCounter(target.tolerated, tally.tolerated);
+        mergeCounter(target.unprojected, tally.unprojected);
+      }
       for (const root of INVARIANCE_ROOTS) {
         const tally = sideSeat.roots[root];
         const target = roots[root];
@@ -903,7 +915,15 @@ export function summarizeInvariance(file: string, sides: ReadonlyMap<string, Inv
     summary.byPreset = Object.fromEntries(Object.keys(summary.byPreset).sort(compareCodeUnits)
       .flatMap(preset => { const entry = summary.byPreset[preset]; return entry ? [[preset, entry]] : []; }));
   }
-  return { file, cases, records: records.length, missing, roots, consoleLabels: sortedCounter(consoleLabels) };
+  const sortedGuard: Record<string, InvarianceGuardTally> = {};
+  for (const root of Object.keys(guard).sort(compareCodeUnits)) {
+    const tally = guard[root];
+    if (tally) {
+      sortedGuard[root] = { ...tally, fields: sortedCounter(tally.fields), tolerated: sortedCounter(tally.tolerated),
+        unprojected: sortedCounter(tally.unprojected) };
+    }
+  }
+  return { file, cases, records: records.length, missing, roots, guard: sortedGuard, consoleLabels: sortedCounter(consoleLabels) };
 }
 
 const INVARIANCE_GATE_LABELS: Record<InvarianceRootSummary["gate"], string> = {
@@ -936,7 +956,17 @@ function invarianceMarkdown(invariance: InvarianceSummary): string[] {
   const errors = INVARIANCE_ROOTS.filter(root => Object.keys(invariance.roots[root].errorLabels).length)
     .map(root => `${root} (${counterText(invariance.roots[root].errorLabels, 3)})`);
   lines.push("", `- Erros das reexecuções: ${errors.length ? errors.join("; ") : "nenhum"}.`,
-    `- Console das reexecuções (fora dos diagnósticos do registro): ${counterText(invariance.consoleLabels, 4)}.`);
+    `- Console das reexecuções (fora dos diagnósticos do registro): ${counterText(invariance.consoleLabels, 4)}.`, "",
+    "Guarda da projeção pública nas raízes vivas (só conta, E2): disparos são campos fora da allowlist nas projeções opacas; " +
+      "tolerados são campos da allowlist além da colocação pública, um canal conhecido; e cartas ocultas do oponente sem projeção.", "",
+    "| Raiz | Raízes | Projeções | Disparos por campo | Tolerados por campo | Cartas ocultas sem projeção |",
+    "| --- | ---: | ---: | --- | --- | --- |");
+  const guardRoots = Object.entries(invariance.guard);
+  if (!guardRoots.length) lines.push("| — | 0 | 0 | — | — | — |");
+  for (const [root, tally] of guardRoots) {
+    lines.push(`| ${cell(root)} | ${tally.roots} | ${tally.projections} | ${cell(counterText(tally.fields, 8))} | ` +
+      `${cell(counterText(tally.tolerated, 4))} | ${cell(counterText(tally.unprojected, 6))} |`);
+  }
   return lines;
 }
 

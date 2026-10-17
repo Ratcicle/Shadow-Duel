@@ -7,7 +7,12 @@ import type {
   ChainLinkResolutionOutcome,
   EventCard,
 } from "../contracts/events.js";
-import type { PlanningDiffSeverity, TurnLineTerminationReason } from "../contracts/ai.js";
+import type {
+  PlanningDiffSeverity,
+  PublicProjectionGuardReport,
+  PublicProjectionGuardTally,
+  TurnLineTerminationReason,
+} from "../contracts/ai.js";
 
 
 type Seat = "player" | "bot";
@@ -2467,6 +2472,8 @@ export class DuelTracker {
   declare lastProgressStage: string | null;
   declare turnOwners: Record<string, Seat>;
   declare diagnostics: DuelDiagnostics;
+  /** Public-projection guard tallies by seat and search root (phase 2.3, E2); never in the strategic report. */
+  declare publicProjectionGuard: Seats<Record<string, PublicProjectionGuardTally>>;
 
   constructor(duelNumber: number, archetype1: string, archetype2: string, options: ArenaTrackerOptions = {}) {
     this.duelNumber = duelNumber;
@@ -2509,6 +2516,34 @@ export class DuelTracker {
       zeroEventTimeoutSnapshot: null,
       stallSnapshots: [],
     };
+    this.publicProjectionGuard = {
+      player: Object.create(null) as Record<string, PublicProjectionGuardTally>,
+      bot: Object.create(null) as Record<string, PublicProjectionGuardTally>,
+    };
+  }
+
+  /** One planning root seen by the public-projection guard; diagnostic only, outside the strategic report. */
+  recordPublicProjectionGuard(seat: string, root: string, report: PublicProjectionGuardReport) {
+    const seatKey = playerSeat(seat);
+    if (!seatKey) return;
+    const tallies = this.publicProjectionGuard[seatKey];
+    const tally = tallies[root] ??= {
+      roots: 0, projections: 0, fields: createCounter(), tolerated: createCounter(), unprojected: createCounter(),
+    };
+    tally.roots += 1;
+    tally.projections += report.projections;
+    for (const [field, count] of Object.entries(report.fields)) addCount(tally.fields, field, count);
+    for (const [field, count] of Object.entries(report.tolerated)) addCount(tally.tolerated, field, count);
+    for (const [zone, count] of Object.entries(report.unprojected)) addCount(tally.unprojected, zone, count);
+  }
+
+  /** A copy of the guard tallies, read by the benchmark harness. */
+  getPublicProjectionGuard(): Seats<Record<string, PublicProjectionGuardTally>> {
+    const copy = (tallies: Record<string, PublicProjectionGuardTally>) => Object.fromEntries(Object.entries(tallies)
+      .map(([root, tally]) => [root, {
+        ...tally, fields: { ...tally.fields }, tolerated: { ...tally.tolerated }, unprojected: { ...tally.unprojected },
+      }]));
+    return { player: copy(this.publicProjectionGuard.player), bot: copy(this.publicProjectionGuard.bot) };
   }
 
   /**

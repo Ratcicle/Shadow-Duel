@@ -387,6 +387,29 @@ export interface CompactPlanningSummaryDiff {
   actual: unknown;
 }
 
+/** One planning root seen by the public-projection guard (phase 2.3, E2), which only counts. */
+export interface PublicProjectionGuardReport {
+  /** Opaque projections of the opponent's hidden cards that were inspected. */
+  projections: number;
+  /** Fields outside the guard's allowlist, counted once per projection carrying each. */
+  fields: Record<string, number>;
+  /** Allowlisted fields beyond the public placement (a known channel), counted the same way. */
+  tolerated: Record<string, number>;
+  /** Hidden cards of the opponent left without an opaque projection, by zone. */
+  unprojected: Record<string, number>;
+}
+
+/** The guard's tally of one search root of one seat. */
+export interface PublicProjectionGuardTally extends PublicProjectionGuardReport {
+  /** Planning roots inspected. */
+  roots: number;
+}
+
+/** Diagnostic sink of the guard; only the Arena's tracker provides it. */
+export interface PublicProjectionGuardSink {
+  recordPublicProjectionGuard?(seat: string, root: string, report: PublicProjectionGuardReport): void;
+}
+
 export interface PlannerResultSummary {
   score: number | null;
   baseScore: number | null;
