@@ -81,26 +81,39 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
       }
     }
     const planningStrategy = bot.strategy || bot;
-    const rawActions = bot.generateMainPhaseActions(game);
-    const sequencedActions = bot.sequenceActions(rawActions);
-    const phaseFilteredActions = filterAiActionsForCurrentPhase(
-      sequencedActions,
-      {
-        game,
-        bot,
-        player: bot,
-        strategy: planningStrategy,
-      },
-    );
+    // The candidate generation, written once so the decision-root observer
+    // reruns exactly what the live decision ran.
+    const generateCandidates = () => {
+      const rawActions = bot.generateMainPhaseActions(game);
+      const sequencedActions = bot.sequenceActions(rawActions);
+      const phaseFilteredActions = filterAiActionsForCurrentPhase(
+        sequencedActions,
+        {
+          game,
+          bot,
+          player: bot,
+          strategy: planningStrategy,
+        },
+      );
+      return { rawActions, sequencedActions, phaseFilteredActions };
+    };
+    const { rawActions, sequencedActions, phaseFilteredActions } = generateCandidates();
 
-    const isPermitted = (action: AIPlannedAction): boolean => {
+    /** The runtime checks of a candidate, without the session's repetition memory. */
+    const isAvailable = (action: AIPlannedAction): boolean => {
       if (!isSimulatedMainPhaseActionSupported(action)) return false;
-      const valid = action.type === "simulatedBattle" ? game.phase === "main1" :
+      return action.type === "simulatedBattle" ? game.phase === "main1" :
         filterAiActionsForCurrentPhase([action], { game, bot, player: bot, strategy: planningStrategy }).length > 0 &&
           bot.filterValidActionsForCurrentState([action], game).length > 0;
-      return valid && session.allowed(stateBeforeDecision, action);
     };
+    const isPermitted = (action: AIPlannedAction): boolean =>
+      isAvailable(action) && session.allowed(stateBeforeDecision, action);
     const actions = phaseFilteredActions.filter(isPermitted);
+    if (rootObserver) {
+      // The rerun reads the repetition memory without counting a suppression.
+      rootObserver.observeGeneration(game, actions, () => generateCandidates().phaseFilteredActions
+        .filter(action => isAvailable(action) && !session.attempted(stateBeforeDecision, action)));
+    }
     const fallbackActions = actions;
     session.recordProgress("ai_decision_before", game, {
       actor: bot.id, attempt: totalAttempts, rawActions: rawActions.length,

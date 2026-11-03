@@ -26,8 +26,12 @@ export const LOGS_DIRECTORY = "logs";
 /** Side file of the hidden-information invariance control; never part of the duel records. */
 export const INVARIANCE_FILE = "invariance.jsonl";
 export const INVARIANCE_SCHEMA = "shadow-duel-benchmark-invariance";
-/** v2: each seat also carries the live roots' public-projection guard tally. */
-export const INVARIANCE_SCHEMA_VERSION = 2;
+/**
+ * v2: each seat also carries the live roots' public-projection guard tally.
+ * v3: the generation root, and every swapped choice described before the
+ * trade is restored (phase 2.3 L12b).
+ */
+export const INVARIANCE_SCHEMA_VERSION = 3;
 
 export const DEFAULT_SEED_BASE = 20261011;
 export const DEFAULT_MAX_TURNS = 50;
@@ -69,8 +73,12 @@ export type RunOrder = "forward" | "reverse";
 export const INVARIANCE_SWAP_RULE = "opponent hand and deck rotated by the hand size; each face-down monster, backrow card " +
   "or field spell traded with a deck card of the same kind and another id; every hidden position keeps its public placement fields, " +
   "and a position on the field also its public presence state";
-export type InvarianceRoot = "p2" | "turnLineSearch" | "beam" | "greedy" | "attack";
-export const INVARIANCE_ROOTS: readonly InvarianceRoot[] = ["p2", "turnLineSearch", "beam", "greedy", "attack"];
+/**
+ * The live roots in decision order. generation is the Main Phase candidate
+ * list every search receives (phase 2.3 L12b); most strategies run P2 inside it.
+ */
+export type InvarianceRoot = "generation" | "p2" | "turnLineSearch" | "beam" | "greedy" | "attack";
+export const INVARIANCE_ROOTS: readonly InvarianceRoot[] = ["generation", "p2", "turnLineSearch", "beam", "greedy", "attack"];
 /** Divergent comparisons (traded or live) kept per root and seat, with their fingerprints. */
 export const INVARIANCE_SAMPLE_LIMIT = 4;
 
@@ -1478,6 +1486,14 @@ export function parseEnvironmentDescription(value: unknown, label = "description
 // reruns may perturb the duel (caches, timing), so these runs never measure
 // strength, and nothing here enters the duel records or their digest.
 
+/**
+ * A divergent comparison. Each fingerprint is taken in the state that
+ * produced it, the swapped one before the trade is restored. For the
+ * generation root a fingerprint lists the candidates in order, each with its
+ * planner fingerprint and priority (the scores that scoreDiff compares), the
+ * runtime's identity of the action (`execution`) and its activation
+ * decisions, and the score fields are null.
+ */
 export interface InvarianceSample {
   turn: number;
   phase: string | null;
@@ -1506,9 +1522,17 @@ export interface InvarianceRootTally {
    * traded comparison cannot tell hidden information from carried state.
    */
   nonReproducible: number;
-  /** Reproduced comparisons whose reruns on the real and on the traded state chose different actions. */
+  /**
+   * Reproduced comparisons whose reruns on the real and on the traded state
+   * chose different actions; for the generation root, a different candidate
+   * list or order, or a candidate the execution would consume differently
+   * (choices, target and cost preferences, activation decisions).
+   */
   actionDiff: number;
-  /** Reproduced comparisons whose reruns on the real and on the traded state gave different scores. */
+  /**
+   * Reproduced comparisons whose reruns on the real and on the traded state
+   * gave different scores; for the generation root, different candidate priorities.
+   */
   scoreDiff: number;
   /**
    * The rerun on the real state disagreed with the live decision: the root did
@@ -1637,7 +1661,10 @@ function parseInvarianceSeat(value: unknown, label: string): InvarianceSeat {
   }
   return {
     preset: string(raw.preset, `${label}.preset`),
-    roots: { p2: tally("p2"), turnLineSearch: tally("turnLineSearch"), beam: tally("beam"), greedy: tally("greedy"), attack: tally("attack") },
+    roots: {
+      generation: tally("generation"), p2: tally("p2"), turnLineSearch: tally("turnLineSearch"), beam: tally("beam"),
+      greedy: tally("greedy"), attack: tally("attack"),
+    },
     guard,
     consoleLabels: counter(raw.consoleLabels, `${label}.consoleLabels`),
   };

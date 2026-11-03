@@ -210,6 +210,16 @@ export type BotMainPhaseSearchRoot = "turnLineSearch" | "beam" | "greedy";
  * it is absent the controllers neither call nor await anything.
  */
 export interface BotDecisionRootObserver {
+  /**
+   * The Main Phase candidate generation: `live` is the list every search of
+   * the decision receives as `preGeneratedActions`. Synchronous, like the
+   * generation it reruns; the rerun only reads the session's repetition memory.
+   */
+  observeGeneration(
+    game: BotGamePort,
+    live: readonly AIAction[],
+    rerun: () => AIAction[],
+  ): void;
   /** A Main Phase search; the controller awaits it before using the live result. */
   observeSearch(
     root: BotMainPhaseSearchRoot,

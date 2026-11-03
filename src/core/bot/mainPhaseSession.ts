@@ -141,8 +141,13 @@ export class MainPhaseSession {
     catch (cause) { throw new CaptureError("identify_action", cause); }
   }
 
+  /** Whether the action was already attempted from this state; unlike allowed(), it counts nothing. */
+  attempted(state: string, action: AIPlannedAction): boolean {
+    return this.attempts.has(this.actionKey(state, action));
+  }
+
   allowed(state: string, action: AIPlannedAction): boolean {
-    if (!this.attempts.has(this.actionKey(state, action))) return true;
+    if (!this.attempted(state, action)) return true;
     this.counts.repetitionsSuppressed++;
     return false;
   }

@@ -857,6 +857,7 @@ function emptyInvarianceRootSummary(): InvarianceRootSummary {
 export function summarizeInvariance(file: string, sides: ReadonlyMap<string, InvarianceCaseRecord>,
   records: readonly DuelRecordV1[]): InvarianceSummary {
   const roots: Record<InvarianceRoot, InvarianceRootSummary> = {
+    generation: emptyInvarianceRootSummary(),
     p2: emptyInvarianceRootSummary(),
     turnLineSearch: emptyInvarianceRootSummary(),
     beam: emptyInvarianceRootSummary(),
@@ -940,7 +941,11 @@ function invarianceMarkdown(invariance: InvarianceSummary): string[] {
       "em cada posição e, no campo, também o estado público da presença (versão, turnos e contadores). As duas reexecuções partem " +
       "do cache de targeting vazio. Portão por raiz: actionDiff = scoreDiff = 0 nas comparações reproduzidas, em que a reexecução " +
       "sobre o estado real repete a ação e o score da decisão viva, que usou o cache do duelo. As não reproduzidas ficam fora do " +
-      "portão: nelas a diferença da troca não separa a informação oculta do estado carregado entre chamadas.", "",
+      "portão: nelas a diferença da troca não separa a informação oculta do estado carregado entre chamadas. A raiz generation é " +
+      "a geração de candidatos da Main Phase, a lista que todas as buscas da decisão recebem: actionDiff compara as ações e a " +
+      "ordem como a execução as consumiria (a identidade da ação no runtime, com fonte e escolhas por instância e os valores " +
+      "das preferências de alvo e de custo, e as decisões da ativação), e scoreDiff, a prioridade de cada ação. Cada escolha " +
+      "é descrita no estado que a produziu, a trocada antes da restauração.", "",
     `- Arquivo lateral: ${invariance.cases} de ${invariance.records} registros` +
       `${invariance.missing.length ? `; sem linha lateral: ${invariance.missing.slice(0, 10).join(", ")}${invariance.missing.length > 10 ? ` (+${invariance.missing.length - 10})` : ""}` : ""}.`, "",
     "| Raiz | Verificadas | Sem troca | Não reproduzidas | actionDiff | scoreDiff | Portão | Reexecução ≠ viva (ação/score) | Erros | Falhas de restauração | Presets com diferença (ação/score) |",

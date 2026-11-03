@@ -3,8 +3,8 @@ import BaseStrategy from "../../src/core/ai/BaseStrategy.js";
 import { gameTreeSearch, shouldUseGameTreeSearch } from "../../src/core/ai/GameTreeSearch.js";
 import { PUBLIC_UNKNOWN_CARD_FIELDS } from "../../src/core/ai/common/planningCopy.js";
 import { fingerprintAction } from "../../src/core/ai/common/planningDiagnostics.js";
-import { fingerprintMainPhaseState } from "../../src/core/bot/mainPhaseIdentity.js";
-import type { AIPlannedAction, GameTreeSearchResult } from "../../src/core/contracts/ai.js";
+import { fingerprintMainPhaseAction, fingerprintMainPhaseState } from "../../src/core/bot/mainPhaseIdentity.js";
+import type { AIAction, AIActionFingerprint, AIPlannedAction, GameTreeSearchResult } from "../../src/core/contracts/ai.js";
 import type { BotAttackChoice, BotGamePort, BotRootOutcome, BotRuntimePort } from "../../src/core/contracts/bot.js";
 import type { GameCard } from "../../src/core/contracts/cards.js";
 import type { GamePlayer } from "../../src/core/contracts/player.js";
@@ -206,6 +206,7 @@ export function planHiddenTrade(opponent: GamePlayer): HiddenTrade {
 
 function emptyRoots(): Record<InvarianceRoot, InvarianceRootTally> {
   return {
+    generation: emptyInvarianceRootTally(),
     p2: emptyInvarianceRootTally(),
     turnLineSearch: emptyInvarianceRootTally(),
     beam: emptyInvarianceRootTally(),
@@ -255,6 +256,7 @@ export class InvarianceTallies {
     const seat = (value: SeatTallies, seatGuard: Readonly<Record<string, InvarianceGuardTally>>): InvarianceSeat => ({
       preset: value.preset,
       roots: {
+        generation: copyTally(value.roots.generation),
         p2: copyTally(value.roots.p2),
         turnLineSearch: copyTally(value.roots.turnLineSearch),
         beam: copyTally(value.roots.beam),
@@ -320,6 +322,25 @@ function clearTargetingCache(game: BotGamePort): void {
 }
 
 /**
+ * An object's own fields as a probe found them. The generation root reruns
+ * the strategy's live generation, and a strategy keeps its last analysis of
+ * the state it saw (currentAnalysis) as a fallback for later reads; given its
+ * own fields back, the strategy goes on with the analysis of the live
+ * generation, never with that of the traded state.
+ */
+function saveOwnFields(target: object): () => void {
+  const fields = new Map<string | symbol, PropertyDescriptor>();
+  for (const key of Reflect.ownKeys(target)) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(target, key);
+    if (descriptor) fields.set(key, descriptor);
+  }
+  return () => {
+    for (const key of Reflect.ownKeys(target)) if (!fields.has(key)) Reflect.deleteProperty(target, key);
+    for (const [key, descriptor] of fields) Reflect.defineProperty(target, key, descriptor);
+  };
+}
+
+/**
  * The live targeting cache and its hit counters, as the probe found them.
  * Both reruns start from an empty cache, so they differ only by the trade;
  * the duel then finds its own entries again, never the probe's (a cleared
@@ -343,8 +364,81 @@ function sameScore(left: number | null, right: number | null): boolean {
   return Object.is(left, right) || Math.abs(left - right) <= 1e-9;
 }
 
+function sameScores(left: readonly (number | null)[], right: readonly (number | null)[]): boolean {
+  return left.length === right.length && left.every((score, index) => sameScore(score, right[index] ?? null));
+}
+
 function sampleScore(score: number | null): number | null {
   return score === null || !Number.isFinite(score) ? null : round(score, 6);
+}
+
+/**
+ * An outcome as the comparison reads it. Each outcome is described in the
+ * state that produced it: the trade lends each hidden position's instanceId
+ * to the card it places there and the restoration takes it back, so a
+ * swapped choice described afterwards would name another card.
+ */
+interface RootView {
+  /** What actionDiff compares. */
+  key: string;
+  /** What scoreDiff compares, in order. */
+  scores: readonly (number | null)[];
+  /** The sample's fingerprint, formatted only for a kept sample from data already taken. */
+  sample(): string;
+  sampleScore: number | null;
+}
+
+/** A root with one choice and one score: P2, the Main Phase searches and the attack choice. */
+function outcomeView<Choice>(outcome: BotRootOutcome<Choice>, print: (choice: Choice) => string): RootView {
+  const key = outcome.choice === null ? "none" : print(outcome.choice);
+  return { key, scores: [outcome.score], sample: () => key, sampleScore: sampleScore(outcome.score) };
+}
+
+/** JSON of plain data with every object's keys sorted, so that two values differ only by content. */
+function sortedJson(value: unknown): string {
+  return JSON.stringify(value ?? null, (_key, entry: unknown) =>
+    entry && typeof entry === "object" && !Array.isArray(entry)
+      ? Object.fromEntries(Object.keys(entry).sort().map(key => [key, Reflect.get(entry, key)]))
+      : entry);
+}
+
+function withoutPriority(fingerprint: AIActionFingerprint | null): Omit<AIActionFingerprint, "priority"> | null {
+  if (!fingerprint) return null;
+  const { priority: _priority, ...rest } = fingerprint;
+  return rest;
+}
+
+/**
+ * The generation root: actionDiff compares the candidates and their order as
+ * the live execution would consume them, without their priorities, which
+ * scoreDiff compares instead. The planner fingerprint keeps only the keys of
+ * the target preferences, so each candidate also carries the runtime's
+ * identity of the Main Phase action, the one the session tells candidates
+ * apart by: its source and choices by instance (tributes, materials, the
+ * Fusion target, positions) and its activation context, with the values of
+ * the target and cost preferences. The activation decisions, which that
+ * identity leaves out, come as data. Instance ids are the trade's positions,
+ * so only another choice differs; a hidden card's real name that changes
+ * with the trade is a leak. The sample lists every candidate with its planner
+ * fingerprint, priority included, its runtime identity and its decisions.
+ */
+function candidateListView(game: BotGamePort, bot: BotRuntimePort): (candidates: readonly AIAction[]) => RootView {
+  return candidates => {
+    const described = candidates.map(action => ({
+      fingerprint: fingerprintAction(action),
+      execution: fingerprintMainPhaseAction(action, game, bot),
+      decisions: sortedJson(action.activationContext?.decisions),
+    }));
+    return {
+      key: JSON.stringify(described.map(({ fingerprint, execution, decisions }) =>
+        [withoutPriority(fingerprint), execution, decisions])),
+      scores: described.map(({ fingerprint }) => fingerprint?.priority ?? null),
+      sample: () => JSON.stringify(described.map(({ fingerprint, execution, decisions }) => ({
+        fingerprint, execution: JSON.parse(execution), decisions: JSON.parse(decisions),
+      }))),
+      sampleScore: null,
+    };
+  };
 }
 
 interface Probe {
@@ -402,21 +496,11 @@ function restoreTrade(probe: Probe): void {
   if (!intact || (probe.stateBefore !== null && stateAfter !== probe.stateBefore)) probe.tally.restoreFailures += 1;
 }
 
-function compare<Choice>(
-  probe: Probe,
-  live: BotRootOutcome<Choice>,
-  real: BotRootOutcome<Choice>,
-  swapped: BotRootOutcome<Choice>,
-  print: (choice: Choice) => string,
-): void {
-  const describe = (outcome: BotRootOutcome<Choice>) => outcome.choice === null ? "none" : print(outcome.choice);
+function compare(probe: Probe, live: RootView, real: RootView, swapped: RootView): void {
   const tally = probe.tally;
-  const liveKey = describe(live);
-  const realKey = describe(real);
-  const swappedKey = describe(swapped);
   tally.checked += 1;
-  const liveActionDiff = liveKey !== realKey;
-  const liveScoreDiff = !sameScore(live.score, real.score);
+  const liveActionDiff = live.key !== real.key;
+  const liveScoreDiff = !sameScores(live.scores, real.scores);
   if (liveActionDiff) tally.liveActionDiff += 1;
   if (liveScoreDiff) tally.liveScoreDiff += 1;
   // A root that did not reproduce its live decision on the real state stays
@@ -424,35 +508,33 @@ function compare<Choice>(
   // from state carried between calls.
   const reproduced = !liveActionDiff && !liveScoreDiff;
   if (!reproduced) tally.nonReproducible += 1;
-  const tradedActionDiff = realKey !== swappedKey;
-  const tradedScoreDiff = !sameScore(real.score, swapped.score);
+  const tradedActionDiff = real.key !== swapped.key;
+  const tradedScoreDiff = !sameScores(real.scores, swapped.scores);
   if (reproduced && tradedActionDiff) tally.actionDiff += 1;
   if (reproduced && tradedScoreDiff) tally.scoreDiff += 1;
   if ((tradedActionDiff || tradedScoreDiff || !reproduced) && tally.samples.length < INVARIANCE_SAMPLE_LIMIT) {
     tally.samples.push({
       turn: probe.game.turnCounter, phase: typeof probe.game.phase === "string" ? probe.game.phase : null,
       traded: { ...probe.trade.traded },
-      live: liveKey, real: realKey, swapped: swappedKey,
-      liveScore: sampleScore(live.score), realScore: sampleScore(real.score), swappedScore: sampleScore(swapped.score),
+      live: live.sample(), real: real.sample(), swapped: swapped.sample(),
+      liveScore: live.sampleScore, realScore: real.sampleScore, swappedScore: swapped.sampleScore,
     });
   }
 }
 
-function attempt<Choice>(tally: InvarianceRootTally, rerun: () => BotRootOutcome<Choice>): BotRootOutcome<Choice> | null {
+/** Runs a rerun or a description; a throw is tallied as an error of the control. */
+function attempt<Value>(tally: InvarianceRootTally, run: () => Value): Value | null {
   try {
-    return rerun();
+    return run();
   } catch (error) {
     recordError(tally, error);
     return null;
   }
 }
 
-async function attemptAsync<Choice>(
-  tally: InvarianceRootTally,
-  rerun: () => Promise<BotRootOutcome<Choice>>,
-): Promise<BotRootOutcome<Choice> | null> {
+async function attemptAsync<Value>(tally: InvarianceRootTally, run: () => Promise<Value>): Promise<Value | null> {
   try {
-    return await rerun();
+    return await run();
   } catch (error) {
     recordError(tally, error);
     return null;
@@ -460,28 +542,31 @@ async function attemptAsync<Choice>(
 }
 
 /**
- * A synchronous root (P2, attack choice): nothing else runs while the trade
- * is applied. A failure of the control is tallied and never reaches the duel.
+ * A synchronous root (generation, P2, attack choice): nothing else runs while
+ * the trade is applied. A failure of the control is tallied and never
+ * reaches the duel.
  */
-function probeRoot<Choice>(
+function probeRoot<Outcome>(
   host: InvarianceHost, bot: BotRuntimePort, game: BotGamePort, root: InvarianceRoot,
-  live: BotRootOutcome<Choice>, rerun: () => BotRootOutcome<Choice>, print: (choice: Choice) => string,
+  live: Outcome, rerun: () => Outcome, view: (outcome: Outcome) => RootView,
 ): void {
   const probe = openProbe(host, bot, game, root);
   if (!probe) return;
   try {
+    const liveView = view(live);
     clearTargetingCache(game);
-    const real = attempt(probe.tally, rerun);
+    const real = attempt(probe.tally, () => view(rerun()));
     if (!real) return;
-    let swapped: BotRootOutcome<Choice> | null = null;
+    let swapped: RootView | null = null;
     try {
       probe.trade.apply();
       clearTargetingCache(game);
-      swapped = attempt(probe.tally, rerun);
+      // Described before the restoration, while the trade is applied.
+      swapped = attempt(probe.tally, () => view(rerun()));
     } finally {
       restoreTrade(probe);
     }
-    if (swapped) compare(probe, live, real, swapped, print);
+    if (swapped) compare(probe, liveView, real, swapped);
   } catch (error) {
     recordError(probe.tally, error);
   } finally {
@@ -492,7 +577,8 @@ function probeRoot<Choice>(
 /**
  * A Main Phase search: the controller awaits the probe right after its own
  * readiness check, so the trade stays applied only while the rerun's
- * microtasks run. The returned promise never rejects.
+ * microtasks run. Each description is synchronous, right after its rerun.
+ * The returned promise never rejects.
  */
 async function probeSearchRoot(
   host: InvarianceHost, bot: BotRuntimePort, game: BotGamePort, root: InvarianceRoot,
@@ -500,19 +586,24 @@ async function probeSearchRoot(
 ): Promise<void> {
   const probe = openProbe(host, bot, game, root);
   if (!probe) return;
+  const view = (outcome: BotRootOutcome<AIPlannedAction>) => outcomeView(outcome, printAction);
   try {
+    const liveView = view(live);
     clearTargetingCache(game);
-    const real = await attemptAsync(probe.tally, rerun);
+    const realOutcome = await attemptAsync(probe.tally, rerun);
+    const real = realOutcome && attempt(probe.tally, () => view(realOutcome));
     if (!real) return;
-    let swapped: BotRootOutcome<AIPlannedAction> | null = null;
+    let swapped: RootView | null = null;
     try {
       probe.trade.apply();
       clearTargetingCache(game);
-      swapped = await attemptAsync(probe.tally, rerun);
+      const swappedOutcome = await attemptAsync(probe.tally, rerun);
+      // Described before the restoration, while the trade is applied.
+      swapped = swappedOutcome && attempt(probe.tally, () => view(swappedOutcome));
     } finally {
       restoreTrade(probe);
     }
-    if (swapped) compare(probe, live, real, swapped, printAction);
+    if (swapped) compare(probe, liveView, real, swapped);
   } catch (error) {
     recordError(probe.tally, error);
   } finally {
@@ -524,7 +615,11 @@ function printAction(action: AIPlannedAction): string {
   return JSON.stringify(fingerprintAction(action));
 }
 
-/** Attacker and target by instance: the trade keeps every hidden position's instanceId. */
+/**
+ * Attacker and target by instance: during the trade, a hidden position's
+ * card carries that position's instanceId, so the swapped choice is printed
+ * before the restoration.
+ */
 function printAttack(choice: BotAttackChoice): string {
   return JSON.stringify([choice.attacker.instanceId, choice.target ? choice.target.instanceId : null]);
 }
@@ -558,17 +653,36 @@ function instrumentGameTree(bot: BotRuntimePort, host: InvarianceHost): void {
         if (result.error !== undefined) throw new Error(`gameTreeSearch: ${result.error}`);
         // As the strategy: a search without an action is no P2 decision.
         return gameTreeOutcome(result.action ? result : null);
-      }, printAction);
+      }, outcome => outcomeView(outcome, printAction));
     }
     return live;
   };
+}
+
+/**
+ * The Main Phase candidate generation, which runs P2 inside for most
+ * strategies; while it probes, P2 is not probed again. Its reruns analyze
+ * the live state, so the strategy's own fields are restored afterwards.
+ */
+function probeGeneration(
+  host: InvarianceHost, bot: BotRuntimePort, game: BotGamePort,
+  live: readonly AIAction[], rerun: () => AIAction[],
+): void {
+  const restoreStrategy = saveOwnFields(bot.strategy);
+  try {
+    probeRoot(host, bot, game, "generation", live, rerun, candidateListView(game, bot));
+  } finally {
+    restoreStrategy();
+  }
 }
 
 /** Installs the control on one harness bot: the P2 wrapper and the decision-root observer. */
 export function installInvarianceControl(bot: BotRuntimePort, host: InvarianceHost): void {
   instrumentGameTree(bot, host);
   bot.decisionRootObserver = {
+    observeGeneration: (game, live, rerun) => probeGeneration(host, bot, game, live, rerun),
     observeSearch: (root, game, live, rerun) => probeSearchRoot(host, bot, game, root, live, rerun),
-    observeAttack: (game, live, rerun) => probeRoot(host, bot, game, "attack", live, rerun, printAttack),
+    observeAttack: (game, live, rerun) => probeRoot(host, bot, game, "attack", live, rerun,
+      outcome => outcomeView(outcome, printAttack)),
   };
 }
