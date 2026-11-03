@@ -54,6 +54,7 @@ Diagnósticos da v1 que os lotes perseguem (N = 20, salvo indicação):
 | L11 | GameTree (P2) com a projeção pública do oponente | Paridade | Sim | Não | L03 |
 | L12 | Beam/Greedy e laço de batalha só com informação pública | Paridade | Sim | Não | L03 |
 | L12b | Raiz de geração no controle de invariância | Instrumentação | Não | Não | L09 |
+| L12c | Ganchos de ataque das estratégias só com informação pública | Paridade | Sim | Não | L12 |
 | L13 | Leituras ocultas pelo `_gameRef` e pelo ChainAwareness | Paridade | Sim | Não | L03 |
 | M1 | Ponto intermediário N = 20 depois do bloco de informação oculta | Medição | — | — | L13 |
 | L14 | Posição de Special Summon na simulação | Paridade | Sim | Não | L03 |
@@ -104,6 +105,7 @@ Blocos: preparação e instrumento (L00–L01), defeito e extrações (L02–L03
 | L09 | `e842ebc` (controle) e `f438826` (guarda) | Prova N = 2 (`canonical-f438826-4feb2064`, `deterministicDigest` `df88333b…`); controle de invariância N = 1 (`canonical-f438826-f0027e61`, `.cache/benchmark/2.3/L09-inv`); controles | Flag desligada: 162/162 registros idênticos a L08 com `--expect-identical`, sem `--ignore`; `configDigest` e `DUEL_RECORD_VERSION` iguais; controles idênticos. Flag ligada: o duelo não muda (`deterministicDigest` igual ao da execução desligada). Valores de partida por raiz (verificadas / actionDiff / scoreDiff): P2 831 / 138 / 609 (7 presets); ataque 1.126 / 80 / 71 (9 presets); Beam 75 / 0 / 14 (Void); Greedy 78 / 0 / 8 (Void, Bloomrot); TLS 2.053 / 0 / 0, com 1 comparação não reproduzida (estado carregado entre chamadas, `burningwest:dragon:0`). Guarda: 2.121 raízes e 55.514 projeções opacas, 0 disparos, 0 tolerados. Desenho: o gancho (D10) fica no controlador da Main Phase e no de batalha, para reexecutar a escolha de ataque; o portão exclui as comparações não reproduzidas. Achados: P2 lê a mão real (L11); ataque e Beam/Greedy leem cartas viradas para baixo (L12); a raiz de geração entra em L12b |
 | L10 | `8252b1b` | N = 5 (`canonical-8252b1b-21712b08`, `deterministicDigest` `df08d523…`, com `--workers 4`) contra L08; ponte N = 2 (`e8fb6c86…`) contra a de L08; controle de invariância N = 1 (`.cache/benchmark/2.3/L10-inv`) contra L09-inv; controles | 0 erros e 0 defeitos. Registros, ponte e controle de invariância idênticos às referências (mesmos `deterministicDigest`); controles idênticos. Alvo cumprido na sonda dirigida, nos dois assentos: as 8 posições ocultas do oponente (mão, Deck, Extra Deck, monstro virado para baixo, backrow, Magia de Campo baixada e banida virada para baixo) com uso de OPT por cópia registrado no turno deixam de carregá-lo na projeção opaca (8 → 0), e a raiz do TLS fica igual com e sem a troca; a guarda conta o campo como disparo desde este lote (0 disparos no N = 1). O canal `tolerated` da guarda fica no esquema, vazio |
 | L11 | `37c4eff` | N = 5 (`canonical-37c4eff-21712b08`, `deterministicDigest` `ad78becc…`, com `--workers 4`) contra L10; controle de invariância N = 1 (`.cache/benchmark/2.3/L11-inv`) contra L10-inv; controles | 0 erros e 0 defeitos. Alvo cumprido: no controle de invariância, a raiz P2 passa de 831 / 138 / 609 (verificadas / actionDiff / scoreDiff) para 831 / 0 / 0, nos dois assentos (player 383, bot 448), com 0 não reproduzidas; TLS, Beam, Greedy e ataque ficam iguais aos de L10-inv, e o duelo não muda (mesmo `deterministicDigest` `f4df4b5b…`). Guarda: nova linha `p2`, com 873 raízes e 20.315 projeções opacas, 0 disparos. 405/405 com o mesmo resultado, nenhum caso com outra duração ou PV, sem novidades; muda só o caminho de planejamento do Dragon em `arcanist:dragon:4` (Dragon no assento `bot`). Controles: corpus idêntico; muda só `smoke-bridge-9713`, no par `shadowheart:dragon`, com o mesmo vencedor e turnos: com a mão do Dragon e a Call of the Haunted baixada opacas, a P2 do Shadow-Heart promove a Invocação de Shadow-Heart Void Mage em vez da de Shadow-Heart Shield no turno 4. Modelo Generic: horizonte quando o ator sem ação suportada tem carta opaca em qualquer zona (revisão do lote, pelo texto de D3); como o Deck do oponente é quase sempre opaco, o erro fica praticamente restrito ao ator com tudo conhecido. Teste alterado com aval de D3: `test/ai/planningStrategies.test.ts:244` (a geração do oponente não lê a mão oculta). Achado: estado devolvido pelo simulador do GameTree, para o backlog |
+| L12 | `8fae633` | N = 5 (`canonical-8fae633-21712b08`, `deterministicDigest` `49c55f5f…`, com `--workers 4`) contra L11; ponte N = 2 (`canonical-8fae633-43624ae9`, `6e4f27f1…`) contra a do commit de L11 (`992ea3a1…`); controle de invariância N = 1 (`.cache/benchmark/2.3/L12-inv`) contra L11-inv; controles | 0 erros e 0 defeitos. Alvo cumprido no controle de invariância (verificadas / actionDiff / scoreDiff): Beam 75 / 0 / 14 → 75 / 0 / 0, Greedy 78 / 0 / 8 → 70 / 0 / 0 e ataque 1.126 / 80 / 71 → 1.103 / 74 / 21; P2 e TLS continuam em 0 / 0, e o TLS mantém a comparação não reproduzida de `burningwest:dragon:0`. Guarda: novas linhas `attack` (789 raízes, 20.588 projeções), `beam` (75, 2.187) e `greedy` (71, 2.107), todas com 0 disparos. Resíduo do ataque: com a escolha descrita antes da restauração, 1.103 / 1 / 21. Os 21 vêm dos ganchos `scoreBattleAttackCandidate`, que leem o alvo vivo virado para baixo (Burning West 8, Dragon 7, Luminarch 6), e não do `_gameRef` nem do ChainAwareness: vão para L12c. O resto do `actionDiff` é defeito do controle, corrigido em L12b (no código de L11, 80 → 20). N = 5: 400/405 com o mesmo resultado e 5 viradas (`bloomrot:shadowheart:1`, `bloomrot:void:1`, `bloomrot:void:2`, `miragebound:dragon:3` e `luminarch:shadowheart:4`); teste de sinal sem preset significativo (menor p = 0,5: Shadow-Heart 2 a favor, Void 2 contra); 14 casos com outra duração ou PV; sem novidades. Ponte: 162/162 com o mesmo resultado, 7 casos com outra duração ou PV, sem novidades. Controles: corpus idêntico; mudam `smoke-natural-4242` (`luminarch:shadowheart`, mesmo vencedor, 13 → 11 turnos), `smoke-natural-9713` e `smoke-bridge-9713` (`shadowheart:miragebound`, só no planejamento). Variante B do laço de batalha por decisão do usuário, com efeito colateral: a base do Dragon recalcula o `dragonState` na cópia em vez de usar o cache do Bot vivo. Nenhum teste alterado |
 
 ## Objetivo e limites
 
@@ -239,12 +241,12 @@ npm run benchmark -- controls --workers 10 --compare-with .cache/benchmark/2.3/<
 | Controles (corpus de 108 casos e matriz de 7 pares × 2 seeds, natural e ponte) com `--compare-with` os controles do lote anterior | Todo lote | ~2 min |
 | Ponto de controle N = 5 (405 duelos), no commit limpo do lote | Todo lote que muda decisões, L01 e L26 | ~12 min |
 | Prova N = 2 com `--expect-identical` | Lotes que não mudam decisões, exceto L01 e L26 | ~5 min |
-| Ponte N = 2 com `--planner-mode always --planner-turn-mode mainBattleMain2`, mesmos orçamentos | L02, L10, L12, L13, L14, L15, L16, L18 e L19 | ~5 min por execução |
+| Ponte N = 2 com `--planner-mode always --planner-turn-mode mainBattleMain2`, mesmos orçamentos | L02, L10, L12, L12c, L13, L14, L15, L16, L18 e L19 | ~5 min por execução |
 | Controle de invariância (N = 1, flag de L09) | L09 a L19, M1 e L28 | ~3-5 min |
 | Fatia com `--cases` | Só diagnóstico dirigido, quando o N = 5 não mostra o efeito esperado. Inelegível a baseline | Variável |
 | N = 20 intermediário (M1) | Depois de L13 | ~50 min |
 
-- **Cadeia.** O primeiro elo é o R0 (L00), idêntico aos k = 0..4 da v1. Os elos são só os pontos N = 5 e o M1. O elo anterior de um lote é o último desses pontos antes dele; uma prova N = 2 não cria elo. Por isso L04 é comparado com L02, L10 com L08, L14 com o M1, L20 a L24 com L19, L25 e L25b com L24 e L26 com L25b. Contra a v1 ou contra N diferentes, usar `--allow-config-diff seeds.count,seeds.values,matrix.plannedCases,matrix.caseListSha256`.
+- **Cadeia.** O primeiro elo é o R0 (L00), idêntico aos k = 0..4 da v1. Os elos são só os pontos N = 5 e o M1. O elo anterior de um lote é o último desses pontos antes dele; uma prova N = 2 não cria elo. Por isso L04 é comparado com L02, L10 com L08, L12c com L12 (L12b só tem prova N = 2), L13 com L12c, L14 com o M1, L20 a L24 com L19, L25 e L25b com L24 e L26 com L25b. Contra a v1 ou contra N diferentes, usar `--allow-config-diff seeds.count,seeds.values,matrix.plannedCases,matrix.caseListSha256`.
 - **Controles.** Todo lote roda controles, então eles formam uma cadeia própria: cada lote compara os seus com os do lote anterior.
 - **Ponte "antes e depois".** O "antes" é a execução da ponte no commit do elo anterior. Quando o elo anterior também rodou a ponte, a execução é reaproveitada.
 - **Lotes sem ponte.** L04–L08 mudam handlers, coletores e seleção da simulação comum, não o passo de batalha da ponte nem a projeção da raiz do TurnLineSearch; o efeito deles na ponte natural aparece no N = 5. L11 só toca o GameTree. L17 só toca o simulador do laço vivo (`Bot.simulateBattle`), que a ponte não usa.
@@ -259,7 +261,7 @@ npm run benchmark -- controls --workers 10 --compare-with .cache/benchmark/2.3/<
 4. O diagnóstico-alvo do lote observado (por exemplo, o marcador X zerado).
 5. Casos pareados com outro resultado **listados automaticamente** pelo `compare`. Só são explicados caso a caso: erros, defeitos, vocabulário novo e casos ligados ao diagnóstico-alvo. Uma decisão diferente no começo do duelo muda tudo o que vem depois, então não se exige explicação causal para cada virada.
 6. Placar avaliado pelo **teste de sinal pareado** por preset: viradas a favor × contra o preset, binomial bicaudal com p = 0,5. A conta é feita fora do repositório, sobre a saída JSON do `compare`. Um preset com p < 0,05 é investigado como possível efeito inesperado e nunca compensado. Nos lotes de efeito amplo (L04, L12 e L13), se a investigação não for conclusiva, o elo anterior e o lote são estendidos para N = 10.
-7. Invariância: de L10 a L12, o lote não pode piorar o controle de L09 (`actionDiff` por raiz não aumenta, e a raiz do lote diminui quando é o alvo). A partir de L13, todas as raízes, inclusive a de geração de L12b, ficam com `actionDiff = scoreDiff = 0`, e isso é conferido em cada lote de L14 a L19, em M1 e em L28. Desde L09, o portão exclui as comparações cuja reexecução sobre o estado real não repete a decisão viva (`nonReproducible`); a partir de L13, `nonReproducible` também precisa ser 0, ou cada caso é explicado. L14 a L19 mudam simulação e geração e poderiam reintroduzir uma leitura oculta; o controle em cada um evita achar o problema só em L28.
+7. Invariância: de L10 a L12c, o lote não pode piorar o controle de L09 (`actionDiff` por raiz não aumenta, e a raiz do lote diminui quando é o alvo). Até L12, o `actionDiff` da raiz de ataque é inflado por um defeito do controle (a escolha trocada é descrita depois da restauração), corrigido em L12b; de L12b em diante, a comparação usa o controle corrigido. A partir de L13, todas as raízes, inclusive a de geração de L12b, ficam com `actionDiff = scoreDiff = 0`, e isso é conferido em cada lote de L14 a L19, em M1 e em L28. Desde L09, o portão exclui as comparações cuja reexecução sobre o estado real não repete a decisão viva (`nonReproducible`); a partir de L13, `nonReproducible` também precisa ser 0, ou cada caso é explicado. L14 a L19 mudam simulação e geração e poderiam reintroduzir uma leitura oculta; o controle em cada um evita achar o problema só em L28.
 
 O placar não é critério de aceite na 2.3. O N = 5 dá cerca de ±11 pp por preset, por isso o limiar fixo de 10 pp foi descartado.
 
@@ -282,10 +284,10 @@ O placar não é critério de aceite na 2.3. O N = 5 dá cerca de ±11 pp por pr
 
 | Item | Quantidade | Tempo |
 | --- | --- | --- |
-| Pontos N = 5 | 31 (R0 e 30 lotes: L01, L02, L04–L08, L07b–L07k, L10–L19, L24, L25b e L26) | ~6,2 h |
+| Pontos N = 5 | 32 (R0 e 31 lotes: L01, L02, L04–L08, L07b–L07k, L10–L19, L12c, L24, L25b e L26) | ~6,4 h |
 | Provas N = 2 | 9 (L03, L09, L12b, L20–L23, L25 e L27) | ~45 min |
-| Ponte N = 2 | 13: R0, o "depois" dos 9 lotes de ponte e o "antes" que não pode ser reaproveitado (nos commits de L08, L11 e L17) | ~1,1 h |
-| Controle de invariância | 13 (L09–L19, M1 e L28) | ~50 min |
+| Ponte N = 2 | 14: R0, o "depois" dos 10 lotes de ponte e o "antes" que não pode ser reaproveitado (nos commits de L08, L11 e L17) | ~1,2 h |
+| Controle de invariância | 15 (L09–L19 com L12b e L12c, M1 e L28) | ~1 h |
 | Controles | 1 por lote | ~1 h |
 | M1 | 1 | ~50 min |
 | v2, controles e ponte N = 5 | 1 | ~1,1 h |
@@ -1025,12 +1027,12 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 
 **Tarefas**
 
-- [ ] Raiz do beam e do greedy: quando a entrada é o jogo vivo, aplicar `registerPublicOpponentProjection` e a guarda de L09. Os clones de nó herdam as projeções opacas.
-- [ ] Aplicar `withoutLiveGameReference` na simulação do Beam/Greedy, como o GameTree faz. Hoje o Beam fixa `_gameRef` no clone (`BeamSearch.ts:200` e `:462`).
-- [ ] Beam e greedy tratam `_simRequiresReplan` como folha (hoje só checam `_simUnsupportedActions`) e simulam a ação sob `runWithUnknownLocationGuard`.
-- [ ] `cloneBotGameState` mascara o oponente com o mesmo helper.
-- [ ] `battleController.ts:249-256`: **só quando `target.isFacedown`**, usar o valor público de `getBattleStatForAttackTarget(target)` (`src/core/ai/common/cardStats.ts:62-69`). Nos outros casos, manter `target.atk`. Usar o valor da função para alvos visíveis trocaria ATK por DEF em defesa, o que é política.
-- [ ] Conferir que avaliadores e geradores toleram cartas opacas.
+- [x] Raiz do beam e do greedy: quando a entrada é o jogo vivo, aplicar `registerPublicOpponentProjection` e a guarda de L09. Os clones de nó herdam as projeções opacas. A pontuação base do greedy usa a mesma raiz pública dos candidatos.
+- [x] Aplicar `withoutLiveGameReference` na simulação do Beam/Greedy, como o GameTree faz. Hoje o Beam fixa `_gameRef` no clone (`BeamSearch.ts:200` e `:462`).
+- [x] Beam e greedy tratam `_simRequiresReplan` como folha (hoje só checam `_simUnsupportedActions`) e simulam a ação sob `runWithUnknownLocationGuard`. O beam já tratava `_simRequiresReplan` como folha na recursão; faltava a guarda de localização.
+- [x] `cloneBotGameState` mascara o oponente com o mesmo helper. A máscara é opcional (`{ publicOpponent: true }`) e desligada por padrão: a cópia padrão mantém a informação completa para fixtures e simulações de estado conhecido, e todo consumidor de decisão ao vivo liga a opção (hoje, só o laço de batalha). O laço avalia a pontuação base e os candidatos na mesma cópia pública (variante B, decisão do usuário em 03/11/2026); com a base no jogo vivo, o `scoreDiff` do ataque subia de 71 para 101.
+- [x] `battleController.ts:249-256` (hoje `:259-266`): **só quando `target.isFacedown`**, usar o valor público de `getBattleStatForAttackTarget(target)` (`src/core/ai/common/cardStats.ts:62-69`). Nos outros casos, manter `target.atk`. Usar o valor da função para alvos visíveis trocaria ATK por DEF em defesa, o que é política.
+- [x] Conferir que avaliadores e geradores toleram cartas opacas. Os ganchos de ataque das estratégias ainda recebem o alvo vivo: lote L12c.
 
 **Validação**
 
@@ -1053,25 +1055,29 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 
 ## L12b — Raiz de geração no controle de invariância
 
-**Item:** ponto da validação de L09 (decisão do usuário, 17/10/2026: lote de instrumentação antes de L13).
+**Item:** ponto da validação de L09 (decisão do usuário, 17/10/2026: lote de instrumentação antes de L13). Recebe também o achado de L12 sobre a descrição da escolha trocada (decisão do usuário, 03/11/2026).
 
 **Objetivo:** o controle de invariância de L09 reexecuta o TurnLineSearch, o Beam e o Greedy com a mesma lista de candidatos (`preGeneratedActions`) que a raiz viva gerou com a informação real. Por isso uma leitura oculta na geração de candidatos da raiz viva (por exemplo, o ChainAwareness lendo a backrow do oponente, alvo de L13) não aparece em nenhuma raiz. O lote acrescenta uma raiz `generation`: a geração de candidatos da Main Phase (`generateMainPhaseActions` com o estado vivo) roda sobre o estado real e com a informação oculta trocada, e o controle compara as duas listas (identidade e ordem das ações; score, quando houver).
+
+O lote também corrige um defeito do controle achado em L12: `probeRoot` e `probeSearchRoot` (`scripts/benchmark/invariance.ts`) restauram a troca (`restoreTrade`) antes de descrever a escolha trocada. Como a troca grava o `instanceId` da posição na carta de reposição, um alvo virado para baixo escolhido nas duas execuções sai descrito com outra identidade e conta como `actionDiff`. No N = 1 de L12, descrever a escolha antes da restauração leva o `actionDiff` da raiz de ataque de 74 para 1 (de 80 para 20 no código de L11); o `scoreDiff` não muda.
 
 **Tarefas**
 
 - [ ] Estender o observador opcional de L09 (D10, inerte quando ausente) para expor a reexecução da geração de candidatos do controlador da Main Phase, com as mesmas opções resolvidas.
 - [ ] No harness (`scripts/benchmark/invariance.ts`), rodar a geração com e sem a troca, com a mesma restauração exata, silenciamento e preservação do cache de targeting de L09; gravar `generation` no `invariance.jsonl` (`checked`, `actionDiff` para a lista, `scoreDiff` quando houver ordem por score, `nonReproducible`), com versão nova do esquema lateral.
 - [ ] `summarize` mostra a raiz nova no portão.
+- [ ] Descrever (ou congelar) a escolha da execução trocada antes de `restoreTrade` em `probeRoot` e `probeSearchRoot`, sem mudar a comparação. Patch diagnóstico de L12: `.cache/plan23-work/L12/invariance-print-before-restore.diag.patch`.
 
 **Validação**
 
 - Flag desligada: N = 2 com `--expect-identical` contra o elo anterior, sem `--ignore`; controles idênticos.
 - Flag ligada (N = 1): valores de partida da raiz `generation`, por preset, com o vazamento do ChainAwareness esperado nos presets que o usam (Shadow-Heart, Dragon e Luminarch).
+- Flag ligada (N = 1): com a correção da descrição, o `actionDiff` da raiz de ataque cai para o resíduo real (1 no código de L12), o `scoreDiff` das raízes fica igual ao de L12-inv e o duelo não muda (mesmo `deterministicDigest`).
 - Testes do caminho do gancho (`mainPhaseIdentity`, `mainPhaseConcurrency`, `mainPhaseRecovery`), typecheck e `npm test`.
 
 **Medição:** sem medição de força. Prova N = 2 idêntica com a flag desligada.
 
-**Critério de saída:** prova idêntica; valores de partida da raiz `generation` registrados. A partir de L13, o critério "todas as raízes zeradas" inclui `generation`.
+**Critério de saída:** prova idêntica; valores de partida da raiz `generation` e valores corrigidos da raiz de ataque registrados. A partir de L13, o critério "todas as raízes zeradas" inclui `generation`.
 
 **Riscos**
 
@@ -1081,11 +1087,51 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 
 ---
 
+## L12c — Ganchos de ataque das estratégias só com informação pública
+
+**Item:** achado da validação de L12 (decisão do usuário, 03/11/2026: lote próprio de paridade).
+
+**Objetivo:** no laço de batalha, os ganchos `scoreBattleAttackCandidate` das estratégias recebem o alvo, o oponente e o `game` vivos (`src/core/bot/battleController.ts:284-297`) e leem atributos ocultos do monstro virado para baixo do oponente. Essas leituras não passam por `_gameRef` nem pelo ChainAwareness, então L13 não as cobre:
+
+- Dragon: `cardThreatValue` (`src/core/ai/dragon/battleDefensePolicy.ts:98-106`, via `dragon/knowledge.ts:685-687`) lê ATK, DEF, Nível, efeitos, tipo de monstro, arquétipos e nome.
+- Burning West: `targetThreat` e `isExtraDeckMonster` (`src/core/ai/burningwest/battle.ts:70` e `:499-501`) leem ATK, DEF, Nível e tipo de monstro.
+- Luminarch: `getBattleCardValue` (`src/core/ai/luminarch/simulation.ts:1134-1135`) lê ATK, DEF e Nível.
+- Miragebound, latente: `miragebound/linePlanning.ts:950` lê o ATK do alvo virado para baixo, sem diferença na amostra de L12.
+
+No controle de L12, com a escolha descrita antes da restauração, essas leituras respondem pelos 21 `scoreDiff` restantes da raiz de ataque (Burning West 8, Dragon 7, Luminarch 6) e pelo único `actionDiff` real (Luminarch). A variante diagnóstica que passa aos ganchos o alvo e o oponente da projeção pública zera a raiz (1.103 / 0 / 0) e muda decisões.
+
+**Dependência de medição:** L12 (laço de batalha mascarado) e L12b (o controle descreve a escolha antes da restauração; sem isso, o `actionDiff` do ataque fica inflado).
+
+**Tarefas**
+
+- [ ] Contrato do gancho (`src/core/contracts/bot.ts:84-97`): o laço vivo passa a entregar aos ganchos o alvo e o oponente da cópia pública (`simTarget` e `simState.player`, com o alvo virado para baixo como projeção opaca), sem acesso a atributos ocultos pelo `game` vivo. O contrato já aceita a forma do TurnLineSearch (`BattleCandidateScoreInput`, com cartas e estado do planejamento), que a ponte usa sobre a projeção pública da raiz do TLS; a forma final é decidida no lote, preservando o que cada estratégia lê de público (próprio campo, PV, turno).
+- [ ] Ajustar as leituras de Dragon, Burning West e Luminarch para tolerar a projeção opaca, com o valor público do alvo virado para baixo (como `getBattleStatForAttackTarget`), sem nomes de carta. Conferir a leitura latente da Miragebound e os ganchos dos demais presets.
+- [ ] Conferir que nenhuma outra leitura do laço lê o alvo vivo virado para baixo. `isActiveAttackPriorityTarget` (`src/core/game/combat/availability.ts:259` e `:264`) lê `effectsNegated` e `mustBeAttacked`, mas decide por `isFacedown` e não vaza.
+
+**Validação**
+
+- Controle de L09, com a correção de L12b: raiz de ataque com `actionDiff = scoreDiff = 0`; as demais raízes não pioram; a guarda sem disparos.
+- Testes: `test/ai/architectureBattleIdentity`, `architectureDamageCalculationSimulation`, `architectureDragonBattleHistory`, `architectureLuminarchBattleLp`, `architectureBurningWestEffects`, `architectureBurningWestRewards`, `techZeroBattle` e `searchBehavior`. Também typecheck e `npm test`.
+- Smoke: `--matchups dragon:luminarch,burningwest:dragon,luminarch:burningwest,miragebound:shadowheart --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L12. Ponte N = 2 antes (a de L12, reaproveitada) e depois: o TurnLineSearch chama o mesmo gancho na ponte.
+
+**Critério de saída:** critério de aceite geral; raiz de ataque invariante.
+
+**Riscos**
+
+- Dragon, Burning West e Luminarch podem perder força no ataque contra monstros virados para baixo; é o efeito esperado da paridade.
+- Mudar o contrato do gancho alcança todos os presets; um gancho que dependa de campo vivo precisa da projeção pública equivalente.
+
+**Esforço:** M.
+
+---
+
 ## L13 — Leituras ocultas pelo `_gameRef` e pelo ChainAwareness
 
 **Item novo (D2):** o ChainAwareness e os geradores leem as cartas viradas para baixo do oponente no jogo vivo, inclusive dentro da simulação (`src/core/ai/ChainAwareness.ts:180-278`).
 
-**Dependência de medição:** L09 (controle de invariância) e L12 (o critério "todas as raízes zeradas" só vale com o Beam/Greedy e o laço de batalha já mascarados).
+**Dependência de medição:** L09 (controle de invariância), L12 e L12c (o critério "todas as raízes zeradas" só vale com o Beam/Greedy, o laço de batalha e os ganchos de ataque já mascarados) e L12b (raiz de geração e controle corrigido).
 
 **Tarefas**
 
@@ -1101,7 +1147,7 @@ Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões pa
 - Testes: `test/ai/planningHeuristics`, `architectureShadowHeart*`, `architectureDragon*`, `architectureLuminarch*`, `searchBehavior` e `turnLineOwnerPolicy`. Também typecheck e `npm test`.
 - Smoke: `--matchups shadowheart:miragebound,dragon:luminarch,luminarch:shadowheart,dragon:shadowheart --duels 2 --check-replays`.
 
-**Medição:** N = 5 contra L12. Ponte N = 2 antes e depois (geração do TLS). Lote de efeito amplo. Esperado: Shadow-Heart, Dragon e Luminarch mudam decisões diante de backrow e podem perder placar; documentado sem compensação.
+**Medição:** N = 5 contra L12c. Ponte N = 2 antes (a de L12c, reaproveitada) e depois (geração do TLS). Lote de efeito amplo. Esperado: Shadow-Heart, Dragon e Luminarch mudam decisões diante de backrow e podem perder placar; documentado sem compensação.
 
 **Critério de saída:** critério de aceite geral; invariância zerada em todas as raízes.
 
@@ -1707,7 +1753,8 @@ O `plan.json` da análise (`.cache/plan23-probes/plan.json`) usava L00–L24. A 
 | L07i | — | Lote novo (autorização do usuário em 15/10/2026), resíduo de L06 no backlog |
 | L07j | — | Lote novo (decisão do usuário em 16/10/2026), achados de L07i |
 | L07k | — | Lote novo (decisão do usuário em 16/10/2026), achado da revisão de L07j |
-| L12b | — | Lote novo de instrumentação (decisão do usuário em 17/10/2026), ponto da validação de L09 |
+| L12b | — | Lote novo de instrumentação (decisão do usuário em 17/10/2026), ponto da validação de L09; recebe a correção da descrição da escolha trocada (decisão do usuário em 03/11/2026), achado de L12 |
+| L12c | — | Lote novo de paridade (decisão do usuário em 03/11/2026), achado da validação de L12 |
 | L25c | — | Lote novo de regra (D12), achado de L07i |
 | L26 | L22 | Sem gates e sem regra AST; depende de L24; `--ignore` declarado; N = 5 contra L25b (antes, L24) |
 | L27 | L23 | Projeção v28 → v27 no passo histórico |
