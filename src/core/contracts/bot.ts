@@ -35,7 +35,7 @@ import type { EffectDefinition } from "./effects.js";
 import type { AIActivationContext } from "./ai.js";
 import type { CanonicalZone } from "./zones.js";
 import type { ActivationPipelineContext } from "./activation.js";
-import type { BotCloneGamePort } from "../bot/simulationBridge.js";
+import type { BotCloneGamePort, BotCloneOptions } from "../bot/simulationBridge.js";
 import type { BattleCandidateScoreInput } from "../ai/TurnLineSearch.js";
 
 type BotGameMethodName =
@@ -264,7 +264,7 @@ export type BotRuntimePort = Omit<
       game: BotGamePort,
       action: AIAction,
     ): Promise<boolean>;
-    cloneGameState(game: BotCloneGamePort): BotPerspectiveGameState;
+    cloneGameState(game: BotCloneGamePort, options?: BotCloneOptions): BotPerspectiveGameState;
     resolveHandIndexForAction(action: BotHandActionHint, expectedKind?: ExpectedBotHandKind): number;
     canResolveSummonActionForCurrentState(action: AIAction, game: BotGamePort): boolean;
     filterValidActionsForCurrentState(actions: AIAction[], game: BotGamePort): AIAction[];

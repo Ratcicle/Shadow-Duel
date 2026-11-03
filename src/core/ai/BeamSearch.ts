@@ -1,6 +1,15 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/BeamSearch.js
-import { createPlanningCopy, hasPendingPassiveRestoration, projectRuntimeEffectUsage, projectRuntimeReplacementEffects } from "./common/planningCopy.js";
+import {
+  assertPublicPlanningProjection,
+  createPlanningCopy,
+  hasPendingPassiveRestoration,
+  projectRuntimeEffectUsage,
+  projectRuntimeReplacementEffects,
+  registerPublicOpponentProjection,
+} from "./common/planningCopy.js";
+import { withoutLiveGameReference } from "./common/gameTreeSimulation.js";
+import { runWithUnknownLocationGuard } from "./common/planningExecution.js";
 import { isSimulatedMainPhaseActionSupported } from "./common/simulation.js";
 import { resolvePerspectivePlayers } from "./StrategyUtils.js";
 import { filterAiActionsForCurrentPhase } from "./common/phaseTiming.js";
@@ -14,6 +23,7 @@ import type {
   BeamSearchResult,
   GreedySearchResult,
   AIStrategyBotPort,
+  PublicProjectionGuardSink,
   SearchStrategyPort,
 } from "../contracts/ai.js";
 import type {
@@ -40,6 +50,49 @@ type SearchPlayerInput =
   | AIStrategyBotPort
   | SimulatedPlayerState
   | SearchStrategyInput;
+
+/**
+ * Phase 2.3 L12: a search entered with the live game sees only the opponent's
+ * public information. Its root registers the opponent's public projection, and
+ * every node copied from the root keeps the hidden cards opaque. A perspective
+ * state is already a projection and is copied as it is.
+ */
+function searchesFromPublicRoot(game: AIState): boolean {
+  return game._isPerspectiveState !== true;
+}
+
+/** The Arena's tracker on a live duel keeps the public-projection guard's tally. */
+function isPublicProjectionGuardSink(value: unknown): value is Required<PublicProjectionGuardSink> {
+  return typeof value === "object" && value !== null &&
+    typeof Reflect.get(value, "recordPublicProjectionGuard") === "function";
+}
+
+/** Phase 2.3 E2: the guard of the opaque projection only counts, into the Arena's tracker. */
+function recordPublicRootGuard(
+  game: AIState,
+  root: BeamPerspectiveGameState,
+  rootName: "beam" | "greedy",
+): void {
+  const guardSink: unknown = Reflect.get(game, "_arenaTracker");
+  if (isPublicProjectionGuardSink(guardSink)) {
+    guardSink.recordPublicProjectionGuard(root.bot.id, rootName, assertPublicPlanningProjection(root, root.bot.id));
+  }
+}
+
+/**
+ * Simulate on an isolated node without the live game: strategy fallbacks never
+ * hydrate it from the duel. An opaque card that moves or changes face ends the
+ * line in _simRequiresReplan, which the search scores as a leaf.
+ */
+function simulateOnPublicNode(
+  strategy: SearchStrategyInput,
+  state: BeamPerspectiveGameState,
+  action: AIAction,
+): void {
+  if (typeof strategy.simulateMainPhaseAction !== "function") return;
+  runWithUnknownLocationGuard(state, () => withoutLiveGameReference(state, () =>
+    strategy.simulateMainPhaseAction?.(state, action)));
+}
 
 function actionRequiresHand(actionType: AIAction["type"]): boolean {
   return (
@@ -148,9 +201,11 @@ export async function beamSearchTurn(
 
   /**
    * Clona estado do jogo (shallow, mas funcional para simulação).
+   * `publicOpponent` copies the opponent through its public projection.
    */
-  function cloneGameState(gameState: AIState): BeamPerspectiveGameState {
-    const { cloneCardForSim, copyFields, registerPlayerCopy } = createPlanningCopy();
+  function cloneGameState(gameState: AIState, publicOpponent = false): BeamPerspectiveGameState {
+    const copy = createPlanningCopy();
+    const { cloneCardForSim, copyFields, registerPlayerCopy } = copy;
     const clonePlayer = (
       p: SearchPlayerInput | null | undefined,
     ): SimulatedPlayerState => {
@@ -190,6 +245,10 @@ export async function beamSearchTurn(
       ? gameState.player
       : resolveOpponent(gameState) || gameState.player || gameState.bot;
 
+    // Registered before either participant is copied, so links reuse the opaque projection.
+    if (publicOpponent && sourcePlayer && sourcePlayer !== sourceBot) {
+      registerPublicOpponentProjection(copy, sourcePlayer);
+    }
     const clone = {
       player: clonePlayer(sourcePlayer),
       bot: clonePlayer(sourceBot),
@@ -213,9 +272,7 @@ export async function beamSearchTurn(
     state: BeamPerspectiveGameState,
     action: AIAction,
   ): BeamPerspectiveGameState {
-    if (typeof strategy.simulateMainPhaseAction === "function") {
-      strategy.simulateMainPhaseAction(state, action);
-    }
+    simulateOnPublicNode(strategy, state, action);
     return state;
   }
 
@@ -359,7 +416,9 @@ export async function beamSearchTurn(
   }
 
   // Início da busca
-  const initialState = cloneGameState(game);
+  const publicRoot = searchesFromPublicRoot(game);
+  const initialState = cloneGameState(game, publicRoot);
+  if (publicRoot) recordPublicRootGuard(game, initialState, "beam");
   seenStates.add(fingerprintPlanningState(initialState));
 
   const result = await search(initialState, 0, []);
@@ -411,8 +470,10 @@ export async function greedySearchWithEvalV2(
     return strategy.evaluateBoard(state, perspectivePlayer);
   }
 
-  function cloneGameState(gameState: AIState): BeamPerspectiveGameState {
-    const { cloneCardForSim, copyFields, registerPlayerCopy } = createPlanningCopy();
+  /** `publicOpponent` copies the opponent through its public projection. */
+  function cloneGameState(gameState: AIState, publicOpponent = false): BeamPerspectiveGameState {
+    const copy = createPlanningCopy();
+    const { cloneCardForSim, copyFields, registerPlayerCopy } = copy;
     const clonePlayer = (
       p: SearchPlayerInput | null | undefined,
     ): SimulatedPlayerState => {
@@ -452,6 +513,10 @@ export async function greedySearchWithEvalV2(
       ? gameState.player
       : resolveOpponent(gameState) || gameState.player || gameState.bot;
 
+    // Registered before either participant is copied, so links reuse the opaque projection.
+    if (publicOpponent && sourcePlayer && sourcePlayer !== sourceBot) {
+      registerPublicOpponentProjection(copy, sourcePlayer);
+    }
     const clone = {
       player: clonePlayer(sourcePlayer),
       bot: clonePlayer(sourceBot),
@@ -493,15 +558,18 @@ export async function greedySearchWithEvalV2(
     return null;
   }
 
-  const baseScore = evaluateState(game, (perspectiveBot || strategy.bot) as SimulatedPlayerState);
+  // The root is the public projection the candidates are compared with: the
+  // base score and every candidate's copy see the same opponent information.
+  const publicRoot = searchesFromPublicRoot(game);
+  const root = cloneGameState(game, publicRoot);
+  if (publicRoot) recordPublicRootGuard(game, root, "greedy");
+  const baseScore = evaluateState(root, root.bot);
   let bestAction: AIAction | undefined;
   let bestScore = baseScore;
 
   for (const action of candidates) {
-    const simState = cloneGameState(game);
-    if (typeof strategy.simulateMainPhaseAction === "function") {
-      strategy.simulateMainPhaseAction(simState, action);
-    }
+    const simState = cloneGameState(game, publicRoot);
+    simulateOnPublicNode(strategy, simState, action);
     if (simState._simUnsupportedActions?.length) continue;
     const score = evaluateState(simState, simState.bot);
 

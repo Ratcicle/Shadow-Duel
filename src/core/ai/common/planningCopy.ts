@@ -256,10 +256,12 @@ export function registerPublicOpponentProjection(
 export const PUBLIC_PROJECTION_TOLERATED_FIELDS = [] as const satisfies readonly (keyof SimulatedCardShape)[];
 
 /**
- * Fields the TurnLineSearch and GameTree roots copy onto an opaque projection:
- * the public placement fields and the opaque mark of registerPublicOpponentProjection,
- * plus the tolerated fields. copyModeledPassiveContributions keeps its proof
- * in a WeakMap and adds no field. A face-down monster may also keep cardKind "monster".
+ * Fields every public planning root copies onto an opaque projection (the
+ * TurnLineSearch, GameTree, Beam and Greedy roots and the battle loop's Bot
+ * copy, each under the guard): the public placement fields and the opaque mark
+ * of registerPublicOpponentProjection, plus the tolerated fields.
+ * copyModeledPassiveContributions keeps its proof in a WeakMap and adds no
+ * field. A face-down monster may also keep cardKind "monster".
  */
 export const PUBLIC_PROJECTION_ALLOWED_FIELDS = [
   ...PUBLIC_UNKNOWN_CARD_FIELDS, "_simUnknownCard", ...PUBLIC_PROJECTION_TOLERATED_FIELDS,

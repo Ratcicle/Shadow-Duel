@@ -1,3 +1,5 @@
+import { getBattleStatForAttackTarget } from "../ai/common/cardStats.js";
+import { assertPublicPlanningProjection } from "../ai/common/planningCopy.js";
 import type { BotAttackChoice, BotRootOutcome, BotRuntimePort, BotGamePort } from "../contracts/bot.js";
 import type { GameCard } from "../contracts/cards.js";
 import type { GamePlayer } from "../contracts/player.js";
@@ -150,7 +152,17 @@ export function playBotBattlePhase(
     } | null = null;
     let bestDelta = -Infinity;
     let bestAttackerAtk = 0;
-    const baseScore = bot.evaluateBoard(game, bot);
+    // Phase 2.3 L12: the base score and every candidate are scored on the
+    // bot's perspective copy, where the opponent's hidden cards are opaque.
+    // Phase 2.3 E2: the guard of that projection only counts, into the Arena's tracker.
+    const publicCopy = { publicOpponent: true } as const;
+    const publicView = bot.cloneGameState(game, publicCopy);
+    const guardSink = game._arenaTracker;
+    if (guardSink?.recordPublicProjectionGuard) {
+      guardSink.recordPublicProjectionGuard(publicView.bot.id, "attack",
+        assertPublicPlanningProjection(publicView, publicView.bot.id));
+    }
+    const baseScore = bot.evaluateBoard(publicView, publicView.bot);
     const opponentLp = opponent.lp || 0;
     const totalAtkPotential = availableAttackers.reduce(
       (sum, m) => sum + (m.atk || 0),
@@ -200,7 +212,7 @@ export function playBotBattlePhase(
         }
         if (rejectedPairs.has(getBattlePairKey(attacker, target))) continue;
 
-        const simState = bot.cloneGameState(game);
+        const simState = bot.cloneGameState(game, publicCopy);
         const simAttacker = simState.bot.field.find((c) =>
           isSameBattleCard(c, attacker),
         );
@@ -256,11 +268,15 @@ export function playBotBattlePhase(
         if (target && !targetSurvived && attackerSurvived) {
           delta += 0.4;
         }
+        // A face-down target's ATK is hidden: only its public battle estimate counts.
+        const targetAtk = target
+          ? target.isFacedown ? getBattleStatForAttackTarget(target) : (target.atk || 0)
+          : 0;
         if (
           target &&
           simAttacker &&
           simAttacker.cardKind === "monster" &&
-          (simAttacker.atk || 0) <= (target.atk || 0)
+          (simAttacker.atk || 0) <= targetAtk
         ) {
           delta -= 0.5;
         }

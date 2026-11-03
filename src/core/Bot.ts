@@ -35,7 +35,7 @@ import {
   tributeMatchesAltRequirement as tributeMatchesAltRequirementForBot,
 } from "./bot/actionValidation.js";
 import { getPiercingDamage } from "./ai/common/cardStats.js";
-import type { BotCloneGamePort } from "./bot/simulationBridge.js";
+import type { BotCloneGamePort, BotCloneOptions } from "./bot/simulationBridge.js";
 import type {
   BotArchetypeId,
   BotGamePort,
@@ -534,8 +534,8 @@ export default class Bot extends Player {
     return executeBotMainPhaseAction(this, game, action);
   }
 
-  cloneGameState(game: BotCloneGamePort): BotPerspectiveGameState {
-    return cloneBotGameState(this, game);
+  cloneGameState(game: BotCloneGamePort, options?: BotCloneOptions): BotPerspectiveGameState {
+    return cloneBotGameState(this, game, options);
   }
 
   async tryAscensionIfAvailable(game: BotGamePort): Promise<boolean> {
