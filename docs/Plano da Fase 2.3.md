@@ -55,8 +55,10 @@ Diagnósticos da v1 que os lotes perseguem (N = 20, salvo indicação):
 | L12 | Beam/Greedy e laço de batalha só com informação pública | Paridade | Sim | Não | L03 |
 | L12b | Raiz de geração no controle de invariância | Instrumentação | Não | Não | L09 |
 | L12c | Ganchos de ataque das estratégias só com informação pública | Paridade | Sim | Não | L12 |
-| L13 | Leituras ocultas pelo `_gameRef` e pelo ChainAwareness | Paridade | Sim | Não | L03 |
-| M1 | Ponto intermediário N = 20 depois do bloco de informação oculta | Medição | — | — | L13 |
+| L13a | Raízes `ascension` e `profile` no controle de invariância | Instrumentação | Não | Não | L12b |
+| L13b | Buscas e laço de batalha sem o jogo vivo pelo `_gameRef` | Paridade | Sim | Não | L03, L12 |
+| L13c | Visão pública do oponente nas entradas de decisão | Paridade | Sim | Não | L03, L12 |
+| M1 | Ponto intermediário N = 20 depois do bloco de informação oculta | Medição | — | — | L13c |
 | L14 | Posição de Special Summon na simulação | Paridade | Sim | Não | L03 |
 | L15 | Void Lost Throne na simulação | Paridade | Sim | Não | L14 |
 | L16 | Luminarch: seleção simulada sem viés de DEF | Paridade | Sim | Não | — |
@@ -77,7 +79,7 @@ Diagnósticos da v1 que os lotes perseguem (N = 20, salvo indicação):
 
 A coluna "Depende de" só lista dependências funcionais: o código do lote usa o que o outro lote entrega. A cadeia de medição segue a ordem dos IDs, e cada lote é medido contra o elo anterior (ver "Cadeia" em "Política de medição"). Quando a ordem também protege a atribuição de uma medida, ou quando o critério de saída usa um instrumento ou um resultado de outro lote, isso aparece em "Dependência de medição" na seção do lote. Todo lote que usa o controle de invariância (L10 a L19) tem L09 como dependência de medição.
 
-Blocos: preparação e instrumento (L00–L01), defeito e extrações (L02–L03), paridade de poda (L04–L08), informação oculta (L09–L13, M1), paridade de invocação (L14–L16), batalha (L17–L19), engine e apresentação sem bump (L20–L22), pacote v28 (L23–L27) e fechamento (L28).
+Blocos: preparação e instrumento (L00–L01), defeito e extrações (L02–L03), paridade de poda (L04–L08), informação oculta (L09–L13c, M1), paridade de invocação (L14–L16), batalha (L17–L19), engine e apresentação sem bump (L20–L22), pacote v28 (L23–L27) e fechamento (L28).
 
 ## Acompanhamento
 
@@ -161,6 +163,16 @@ Blocos: preparação e instrumento (L00–L01), defeito e extrações (L02–L03
 
 **Fluxo de trabalho (definido pelo usuário):** branch remota `fase2/limites-conhecidos`, commit e push por lote, PR e merge só no fim da 2.3. Os commits e pushes são feitos pelo usuário ou a pedido dele.
 
+### Decisões provisórias (04/11/2026, com o usuário ausente)
+
+O usuário pediu para seguir sem perguntas. Estas escolhas foram tomadas pela recomendação do mapeamento de L13 e ficam para confirmação. Nenhuma altera teste, texto de carta ou golden.
+
+| # | Escolha | Alternativas descartadas | Lote |
+| --- | --- | --- | --- |
+| P1 | Desenho híbrido do L13: visão pública do oponente em `getOpponent` e nas entradas do bot, mais as buscas sem o jogo vivo, em três sublotes | Corrigir leitor a leitor; gerar a Main Phase viva sobre a cópia pública | L13a–L13c |
+| P2 | A carta virada para baixo do oponente vale o que a projeção dá, em paridade com os nós | 1500 só onde há conta de batalha; 1500 em toda leitura de ATK ou DEF | L13c |
+| P3 | O controle ganha só as raízes `ascension` e `profile`; resolução, Chain e Extra Deck ficam como limites registrados | Raiz `resolution` com wrappers no harness; nenhuma instrumentação nova | L13a |
+
 ### Escolhas fechadas pelo plano
 
 Estas escolhas foram deixadas em aberto pelas análises e fechadas aqui, com a recomendação da revisão.
@@ -243,15 +255,15 @@ npm run benchmark -- controls --workers 10 --compare-with .cache/benchmark/2.3/<
 | Controles (corpus de 108 casos e matriz de 7 pares × 2 seeds, natural e ponte) com `--compare-with` os controles do lote anterior | Todo lote | ~2 min |
 | Ponto de controle N = 5 (405 duelos), no commit limpo do lote | Todo lote que muda decisões, L01 e L26 | ~12 min |
 | Prova N = 2 com `--expect-identical` | Lotes que não mudam decisões, exceto L01 e L26 | ~5 min |
-| Ponte N = 2 com `--planner-mode always --planner-turn-mode mainBattleMain2`, mesmos orçamentos | L02, L10, L12, L12c, L13, L14, L15, L16, L18 e L19 | ~5 min por execução |
+| Ponte N = 2 com `--planner-mode always --planner-turn-mode mainBattleMain2`, mesmos orçamentos | L02, L10, L12, L12c, L13b, L14, L15, L16, L18 e L19 | ~5 min por execução |
 | Controle de invariância (N = 1, flag de L09) | L09 a L19, M1 e L28 | ~3-5 min |
 | Fatia com `--cases` | Só diagnóstico dirigido, quando o N = 5 não mostra o efeito esperado. Inelegível a baseline | Variável |
-| N = 20 intermediário (M1) | Depois de L13 | ~50 min |
+| N = 20 intermediário (M1) | Depois de L13c | ~1 h |
 
-- **Cadeia.** O primeiro elo é o R0 (L00), idêntico aos k = 0..4 da v1. Os elos são só os pontos N = 5 e o M1. O elo anterior de um lote é o último desses pontos antes dele; uma prova N = 2 não cria elo. Por isso L04 é comparado com L02, L10 com L08, L12c com L12 (L12b só tem prova N = 2), L13 com L12c, L14 com o M1, L20 a L24 com L19, L25 e L25b com L24 e L26 com L25b. Contra a v1 ou contra N diferentes, usar `--allow-config-diff seeds.count,seeds.values,matrix.plannedCases,matrix.caseListSha256`.
+- **Cadeia.** O primeiro elo é o R0 (L00), idêntico aos k = 0..4 da v1. Os elos são só os pontos N = 5 e o M1. O elo anterior de um lote é o último desses pontos antes dele; uma prova N = 2 não cria elo. Por isso L04 é comparado com L02, L10 com L08, L12c com L12 (L12b só tem prova N = 2), L13b com L12c (L13a só tem prova N = 2), L13c com L13b, L14 com o M1, L20 a L24 com L19, L25 e L25b com L24 e L26 com L25b. Contra a v1 ou contra N diferentes, usar `--allow-config-diff seeds.count,seeds.values,matrix.plannedCases,matrix.caseListSha256`.
 - **Controles.** Todo lote roda controles, então eles formam uma cadeia própria: cada lote compara os seus com os do lote anterior.
 - **Ponte "antes e depois".** O "antes" é a execução da ponte no commit do elo anterior. Quando o elo anterior também rodou a ponte, a execução é reaproveitada.
-- **Lotes sem ponte.** L04–L08 mudam handlers, coletores e seleção da simulação comum, não o passo de batalha da ponte nem a projeção da raiz do TurnLineSearch; o efeito deles na ponte natural aparece no N = 5. L11 só toca o GameTree. L17 só toca o simulador do laço vivo (`Bot.simulateBattle`), que a ponte não usa.
+- **Lotes sem ponte.** L04–L08 mudam handlers, coletores e seleção da simulação comum, não o passo de batalha da ponte nem a projeção da raiz do TurnLineSearch; o efeito deles na ponte natural aparece no N = 5. L11 só toca o GameTree. L17 só toca o simulador do laço vivo (`Bot.simulateBattle`), que a ponte não usa. L13c muda as entradas de decisão da raiz viva, não a projeção da raiz do TurnLineSearch nem o passo de batalha; a ponte roda no commit dele só como "antes" de L14.
 - **Mesma configuração.** Só se comparam execuções com a mesma configuração efetiva registrada.
 - **N diferentes.** Com N diferente, além de `seeds.count` mudam os campos derivados `seeds.values`, `matrix.plannedCases` e `matrix.caseListSha256`. Os quatro precisam estar em `--allow-config-diff`; com só `seeds.count`, o `compare` sai com código 2 (incomparável) mesmo com os registros iguais.
 
@@ -262,15 +274,15 @@ npm run benchmark -- controls --workers 10 --compare-with .cache/benchmark/2.3/<
 3. Vocabulário novo explicado.
 4. O diagnóstico-alvo do lote observado (por exemplo, o marcador X zerado).
 5. Casos pareados com outro resultado **listados automaticamente** pelo `compare`. Só são explicados caso a caso: erros, defeitos, vocabulário novo e casos ligados ao diagnóstico-alvo. Uma decisão diferente no começo do duelo muda tudo o que vem depois, então não se exige explicação causal para cada virada.
-6. Placar avaliado pelo **teste de sinal pareado** por preset: viradas a favor × contra o preset, binomial bicaudal com p = 0,5. A conta é feita fora do repositório, sobre a saída JSON do `compare`. Um preset com p < 0,05 é investigado como possível efeito inesperado e nunca compensado. Nos lotes de efeito amplo (L04, L12 e L13), se a investigação não for conclusiva, o elo anterior e o lote são estendidos para N = 10.
-7. Invariância: de L10 a L12c, o lote não pode piorar o controle de L09 (`actionDiff` por raiz não aumenta, e a raiz do lote diminui quando é o alvo). Até L12, o `actionDiff` da raiz de ataque é inflado por um defeito do controle (a escolha trocada é descrita depois da restauração), corrigido em L12b; de L12b em diante, a comparação usa o controle corrigido. A partir de L13, todas as raízes, inclusive a de geração de L12b, ficam com `actionDiff = scoreDiff = 0`, e isso é conferido em cada lote de L14 a L19, em M1 e em L28. Desde L09, o portão exclui as comparações cuja reexecução sobre o estado real não repete a decisão viva (`nonReproducible`); a partir de L13, `nonReproducible` também precisa ser 0, ou cada caso é explicado. L14 a L19 mudam simulação e geração e poderiam reintroduzir uma leitura oculta; o controle em cada um evita achar o problema só em L28.
+6. Placar avaliado pelo **teste de sinal pareado** por preset: viradas a favor × contra o preset, binomial bicaudal com p = 0,5. A conta é feita fora do repositório, sobre a saída JSON do `compare`. Um preset com p < 0,05 é investigado como possível efeito inesperado e nunca compensado. Nos lotes de efeito amplo (L04, L12, L13b e L13c), se a investigação não for conclusiva, o elo anterior e o lote são estendidos para N = 10.
+7. Invariância: de L10 a L13b, o lote não pode piorar o controle de L09 (`actionDiff` por raiz não aumenta, e a raiz do lote diminui quando é o alvo). Até L12, o `actionDiff` da raiz de ataque é inflado por um defeito do controle (a escolha trocada é descrita depois da restauração), corrigido em L12b; de L12b em diante, a comparação usa o controle corrigido. A partir de L13c, todas as raízes, inclusive a de geração de L12b e as de Ascensão e perfil de L13a, ficam com `actionDiff = scoreDiff = 0`, e isso é conferido em cada lote de L14 a L19, em M1 e em L28. Desde L09, o portão exclui as comparações cuja reexecução sobre o estado real não repete a decisão viva (`nonReproducible`); a partir de L13c, `nonReproducible` também precisa ser 0, ou cada caso é explicado. L14 a L19 mudam simulação e geração e poderiam reintroduzir uma leitura oculta; o controle em cada um evita achar o problema só em L28.
 
 O placar não é critério de aceite na 2.3. O N = 5 dá cerca de ±11 pp por preset, por isso o limiar fixo de 10 pp foi descartado.
 
 ### Ponto intermediário M1 (N = 20)
 
-- Depois de L13, no commit limpo: `npm run benchmark -- --seeds 20 --workers 10 --preset-metrics techzero-combo --out .cache/benchmark/2.3/M1`.
-- Objetivo: revelar defeitos raros (frequência abaixo de 1/400) introduzidos pelas cartas opacas em geradores e avaliadores (L10 a L13) antes de seguir. Achar esse defeito só na v2 exigiria bisseção com execuções de 50 minutos.
+- Depois de L13c, no commit limpo: `npm run benchmark -- --seeds 20 --workers 4 --preset-metrics techzero-combo --out .cache/benchmark/2.3/M1` (no máximo 4 workers, a pedido do usuário).
+- Objetivo: revelar defeitos raros (frequência abaixo de 1/400) introduzidos pelas cartas opacas em geradores e avaliadores (L10 a L13c) antes de seguir. Achar esse defeito só na v2 exigiria bisseção com execuções de 50 minutos.
 - Critério de saída: 0 erros e 0 defeitos; controle de invariância zerado.
 - `compare` contra a v1 (`engine-rules-v27` nos dois lados) resume para o usuário o efeito acumulado até aqui. Inelegível como baseline nova.
 
@@ -286,15 +298,15 @@ O placar não é critério de aceite na 2.3. O N = 5 dá cerca de ±11 pp por pr
 
 | Item | Quantidade | Tempo |
 | --- | --- | --- |
-| Pontos N = 5 | 32 (R0 e 31 lotes: L01, L02, L04–L08, L07b–L07k, L10–L19, L12c, L24, L25b e L26) | ~6,4 h |
-| Provas N = 2 | 9 (L03, L09, L12b, L20–L23, L25 e L27) | ~45 min |
-| Ponte N = 2 | 14: R0, o "depois" dos 10 lotes de ponte e o "antes" que não pode ser reaproveitado (nos commits de L08, L11 e L17) | ~1,2 h |
-| Controle de invariância | 15 (L09–L19 com L12b e L12c, M1 e L28) | ~1 h |
+| Pontos N = 5 | 33 (R0 e 32 lotes: L01, L02, L04–L08, L07b–L07k, L10–L12, L12c, L13b, L13c, L14–L19, L24, L25b e L26) | ~7,5 h |
+| Provas N = 2 | 10 (L03, L09, L12b, L13a, L20–L23, L25 e L27) | ~1 h |
+| Ponte N = 2 | 15: R0, o "depois" dos 10 lotes de ponte e o "antes" que não pode ser reaproveitado (nos commits de L08, L11, L13c e L17) | ~1,8 h |
+| Controle de invariância | 16 (L09–L19 com L12b, L12c e o L13 dividido em L13a–L13c, e L28; o do M1 é o de L13c, no mesmo commit) | ~1,8 h |
 | Controles | 1 por lote | ~1 h |
-| M1 | 1 | ~50 min |
+| M1 | 1 | ~1 h |
 | v2, controles e ponte N = 5 | 1 | ~1,1 h |
 
-Total: cerca de 9,5 a 10 h de máquina ao longo da 2.3, sem contar extensões para N = 10.
+Total: cerca de 12 h de máquina ao longo da 2.3, com `--workers 4`, sem contar extensões para N = 10.
 
 ---
 
@@ -1129,7 +1141,7 @@ No controle de L12, com a escolha descrita antes da restauração, essas leitura
 
 ---
 
-## L13 — Leituras ocultas pelo `_gameRef` e pelo ChainAwareness
+## L13 — Leituras ocultas pelo `_gameRef` e pelo ChainAwareness (L13a–L13c)
 
 **Item novo (D2):** o ChainAwareness e os geradores leem as cartas viradas para baixo do oponente no jogo vivo, inclusive dentro da simulação (`src/core/ai/ChainAwareness.ts:180-278`).
 
@@ -1143,32 +1155,143 @@ No controle de L12, com a escolha descrita antes da restauração, essas leitura
 
 O rastreio de L12b listou 110 linhas de leitura oculta na geração (`.cache/plan23-work/L12b/hidden-read-sites.txt`), ponto de partida da auditoria abaixo; reprodução com `node .cache/plan23-work/L12b/gendiff2.cjs <saída do N = 1 com a flag>`.
 
+**Mapeamento (04/11/2026).** Auditoria só de leitura sobre o código de L12c, com a crítica de cobertura em separado (`.cache/plan23-work/L13/`: `proposal.md`, `maps.json` e `critic.json`). Ela cobre 109 das 110 linhas do rastreio de L12b (a restante, `void/costPolicy.ts:108`, é pública) e os 54 usos de `_gameRef` em 26 arquivos.
+
+- As 9 estratégias obtêm o oponente por `BaseStrategy.getOpponent` (`src/core/ai/BaseStrategy.ts:474-496`, 34 chamadas), inclusive nas análises e nos ganchos de resolução. Ficam de fora só três entradas do bot: `src/core/bot/ascensionController.ts` (`:42`, `:145` e `:186`) e o `oppField` de `actionValidation.ts:203-230` e `actionExecutors/summon.ts:118-136`.
+- Há leituras ocultas também onde o controle não mede: Ascensão automática (Dragon, `dragon/extraDeckPolicy.ts:170` e `:209`), perfil de planejamento (Dragon, Luminarch, Arcanist e Bloomrot), tributos (o `oppField` acima), ganchos de resolução e a resposta de Chain da Miragebound.
+- Pelo `_gameRef`, só o Shadow-Heart lê informação oculta (o macro usa o oponente vivo nos nós); as políticas do Dragon leem só o OPT próprio.
+- As leituras de regra da engine (filtros, legalidade, prévias, `Player.ts:320`) dão ao bot o mesmo veredito que o jogador real recebe e ficam fora do L13: nenhum alvo do banco filtra carta virada do oponente por atributo oculto.
+- O ChainAwareness também é inerte por outro motivo: `BlockingCategory` não tem `spell`, e as políticas só penalizam `very_risky`.
+
+**Desenho (decisão provisória P1):** híbrido. Uma visão pública do oponente entra em `getOpponent` e nas três entradas do bot (L13c), e as buscas e o laço de batalha deixam de usar o jogo vivo pelo `_gameRef` (L13b). A raiz viva passa a ver o que os nós do TLS, do Beam, do Greedy e do GameTree já veem desde L11 e L12, sem valor novo. Ficam descartadas:
+
+- corrigir leitor a leitor: cerca de 45 sítios em mais de 20 arquivos, cada um com um valor escolhido à mão, e L14 a L19 poderiam reabrir o vazamento;
+- gerar a Main Phase viva sobre a cópia pública: quebra as prévias, a P2, os procedimentos de Invocação e a identidade das ações (`mainPhaseIdentity.ts:64`), e não cobre Ascensão, perfil nem resolução.
+
+Custo da escolha: a raiz `generation` zera por construção e passa a medir só os canais que escapam da visão. Leituras que não mudam decisão (ChainAwareness, OpponentPredictor) só aparecem na sonda de acessores de L12b.
+
+**Divisão.** L13a (instrumentação), L13b e L13c (paridade), nesta ordem, cada um com a regra de aceite do L13. L13c é o último sublote e o elo antes do M1. Se sobrar diferença depois dele, abre-se L13d por módulo, com a mesma regra, antes do M1.
+
 **Dependência de medição:** L09 (controle de invariância), L12 e L12c (o critério "todas as raízes zeradas" só vale com o Beam/Greedy, o laço de batalha e os ganchos de ataque já mascarados) e L12b (raiz de geração e controle corrigido).
+
+**Riscos:** três presets podem perder força até o prior público da 2.4.
+
+### L13a — Raízes `ascension` e `profile` no controle de invariância
+
+**Classe:** instrumentação; não muda decisões.
+
+**Objetivo:** o controle passa a reexecutar com a troca a escolha de Ascensão automática e o perfil de planejamento da Main Phase, que leem o oponente vivo e que a raiz `generation` não cobre.
+
+**Dependência de medição:** L12b (observador e esquema lateral v3).
 
 **Tarefas**
 
-- [ ] Aplicar `withoutLiveGameReference` também na geração dos nós do TurnLineSearch. Hoje só a simulação usa o helper (`src/core/ai/TurnLineSearch.ts:765`), enquanto o GameTree protege geração e simulação (`GameTreeSearch.ts:182` e `:200`). Isso reduz a auditoria abaixo.
-- [ ] Auditar os usos restantes de `_gameRef` em `src/core/ai` (54 usos em 26 arquivos na análise) e classificar cada leitura: pública, do próprio jogador ou oculta do oponente.
-- [ ] ChainAwareness (`analyzeDefensiveTrap` e `evaluateActionBlockingRisk`): uma carta do oponente virada para baixo passa a ser desconhecida, sem leitura de `effects` nem de `cardKind`. Na raiz viva o vazamento entra pelo próprio `game`, não pelo `_gameRef`, por isso esta correção é necessária mesmo com o helper. Chamadores afetados em `shadowheart/actionGeneration.ts`, `dragon/generation.ts`, `luminarch/spellActions.ts`, `luminarch/summonActions.ts` e `LuminarchStrategy.ts`.
-- [ ] As demais leituras ocultas passam a usar a projeção pública, sem nomes de carta. Leituras públicas (Cemitério, banidas) ficam.
-- [ ] Leituras ocultas da geração achadas em L12b (Arcanist, Miragebound, Dragon, Void e Luminarch, acima) passam a usar a projeção pública ou o valor público da carta virada para baixo, sem nomes de carta. Se o lote crescer, ele é dividido por módulo (ver Riscos).
-- [ ] Conferir a escolha de Ascensão automática (`selectAutomaticAscensionAction`, `src/core/bot/mainPhaseController.ts:72-82`), que recebe o `game` vivo e que o controle de invariância não reexecuta. Dragon, Burning West, Miragebound e Void implementam `selectAutomaticAscension`.
-- [ ] Nenhum prior de backrow: o desconto fixo de `BaseStrategy.ts:197-201` continua.
+- [ ] Contrato do observador (`src/core/contracts/bot.ts:219-243`): `observeAscension(game, live, rerun)` e `observeProfile(game, live, rerun)`, síncronos e inertes sem observador (D10).
+- [ ] `src/core/bot/mainPhaseController.ts`: em `:70-82`, entregar ao observador o resultado de `selectAutomaticAscensionAction` e uma reexecução com o mesmo filtro, que lê a memória de repetição sem contar supressão (`MainPhaseSession.attempted`), como a geração de L12b; em `:146-163`, o perfil resolvido (`getPlanningProfile`, `resolvePlannerMode` e `shouldUsePlanner`), com uma reexecução sobre uma cópia do `planningContext`.
+- [ ] Raiz `ascension` (`scripts/benchmark/invariance.ts`, com `probeRoot` e `saveOwnFields(bot.strategy)`, como `probeGeneration`): compara a escolha (material por índice, carta de Ascensão por instância e posição) ou a ausência dela. Cobre `selectAutomaticAscension`, `chooseAutomaticAscensionPosition` e os substitutos `selectBestAscension` e `getAscensionPositionPreference`.
+- [ ] Raiz `profile`: compara `enabled`, `mode`, `beamWidth`, `maxDepth`, `nodeBudget`, `candidateLimit`, `turnMode`, `battleStepLimit`, `allowEarlyStop` e `shouldUsePlanner`, sem os textos de motivo.
+- [ ] Restaurar os campos próprios da estratégia em volta das duas raízes (o Void regrava `currentAnalysis` em `VoidStrategy.ts:371`, e o perfil chama `analyzeGameState`) e descrever cada escolha antes de `restoreTrade`.
+- [ ] Esquema lateral de 3 para 4 (`scripts/benchmark/schema.ts`), com leitor estrito, e `summarize` com as raízes novas.
+- [ ] Registrar os limites do controle (decisão provisória P3): ganchos de resolução, resposta de Chain, e Extra Deck e banidas viradas para baixo, que `planHiddenTrade` não troca (`invariance.ts:124-205`). Eles ficam cobertos por construção pela visão de L13c e conferidos por revisão, smoke e sonda.
 
 **Validação**
 
-- Controle de L09: **todas as raízes com `actionDiff = scoreDiff = 0`**.
-- Testes: `test/ai/planningHeuristics`, `architectureShadowHeart*`, `architectureDragon*`, `architectureLuminarch*`, `searchBehavior` e `turnLineOwnerPolicy`. Também typecheck e `npm test`.
-- Smoke: `--matchups shadowheart:miragebound,dragon:luminarch,luminarch:shadowheart,dragon:shadowheart --duels 2 --check-replays`.
+- Flag desligada: prova N = 2 com `--expect-identical` contra L12c, sem `--ignore`; controles idênticos.
+- Flag ligada (N = 1): o duelo fica igual ao de L12c-inv (`deterministicDigest` `364c96b8…`); as raízes existentes ficam iguais caso a caso (generation 3.102 / 94 / 8, P2 798 / 0 / 0, TLS 2.021 / 0 / 0 com 1 não reproduzida, Beam 75 / 0 / 0, Greedy 70 / 0 / 0 e ataque 1.103 / 0 / 0); os valores de partida de `ascension` e `profile` ficam registrados por preset.
+- Testes: `test/ai/mainPhaseIdentity`, `mainPhaseConcurrency`, `mainPhaseRecovery`, `mainPhaseAscension`, `mainPhaseContinuation` e `test/ascensionSelection`. Também typecheck, auditoria de escapes e `npm test`.
+- Smoke: `--matchups dragon:void,burningwest:luminarch,arcanist:bloomrot,shadowheart:miragebound,techzero:dragon --duels 2 --check-replays`.
 
-**Medição:** N = 5 contra L12c. Ponte N = 2 antes (a de L12c, reaproveitada) e depois (geração do TLS). Lote de efeito amplo. Esperado: os presets com vazamento na raiz de geração (Arcanist, Miragebound, Dragon, Void e Luminarch) mudam decisões; o ChainAwareness (Shadow-Heart, Dragon e Luminarch) estava latente na amostra de L12b. Perdas de placar são documentadas sem compensação.
+**Medição:** prova N = 2 (não cria elo); controle de invariância N = 1 contra L12c-inv; controles contra os de L12c.
 
-**Critério de saída:** critério de aceite geral; invariância zerada em todas as raízes.
+**Critério de saída:** prova idêntica, raízes antigas iguais e valores de partida das novas registrados, mesmo que deem 0 na amostra.
+
+**Esperado:** nenhum efeito no duelo. A raiz `ascension` pode diferir no Dragon, se a amostra tiver a escolha; a `profile`, no Dragon (`dragon/linePlanning.ts:2320` em diante) e no Luminarch (leituras `"printed"` em `luminarch/finisherPlanning.ts:84` e `:244` e `luminarch/combos.ts:292`).
 
 **Riscos**
 
-- Três presets podem perder força até o prior público da 2.4.
-- A auditoria pode achar leituras ocultas fora do ChainAwareness e aumentar o lote. Nesse caso o lote é dividido por módulo, com a mesma regra de aceite.
+- A reexecução pode ter efeitos colaterais na estratégia; por isso a restauração.
+- O atalho de Ascensão roda antes da geração; a reexecução parte do mesmo `stateBeforeDecision`.
+- O leitor v4 recusa os laterais v3, como na passagem de v2 para v3; os `summary.*` antigos continuam valendo.
+
+**Esforço:** P.
+
+### L13b — Buscas e laço de batalha sem o jogo vivo pelo `_gameRef`
+
+**Classe:** paridade; muda decisões.
+
+**Objetivo:** as chamadas de estratégia nos nós das buscas e no laço de batalha passam a rodar sob `withoutLiveGameReference`, como a simulação do TLS (`TurnLineSearch.ts:744`) e o GameTree (`GameTreeSearch.ts:205` e `:223`) já fazem.
+
+**Dependência de medição:** L12 e L12c; medido depois de L13a, com as raízes novas.
+
+**Tarefas**
+
+- [ ] Aplicar `withoutLiveGameReference`, só quando `models !== null`, em `TurnLineSearch.ts` (geração em `:1595-1597`; `evaluateTributeTrade` em `filterStillLegalRootActions`, `:474`; `evaluateBoardV2`, `:764-766`; `evaluatePlanningTerminal`, `:784-818`; `selectPlanningCandidates`, `:1708-1711`; ponte de batalha em `:1404-1460`, com o gancho em `:1448`), em `BeamSearch.ts` (geração do nó em `:316` e `evaluateState` em `:191` e `:463`) e em `src/core/bot/battleController.ts` (avaliação em `:165` e `:232` e gancho em `:290-297`).
+- [ ] Shadow-Heart (`ShadowHeartStrategy.ts:405-408`): em estado de perspectiva, o macro usa `game.bot`, como `LuminarchStrategy.ts:1129-1131` e `DragonStrategy.ts:395-398`.
+- [ ] Void (`void/priorities.ts:693-711`, `canUseAscensionFinisher`): no estado sem motor, usar `checkSimulatedAscension` (`common/ascensionPlanning.ts:30`) em vez do `true` otimista. Conferir com uma sonda, nos dois assentos, que o veredito é o do motor; se não for, manter o `true` e registrar.
+- [ ] Conferir os demais leitores de `_gameRef`: as políticas do Dragon (`banishPolicy.ts`, `bossPolicy.ts`, `costPolicy.ts`, `extraDeckPolicy.ts` e `searchPolicy.ts`) passam a ler o OPT e as estatísticas do nó, que são informação própria; `phaseTiming.ts:115` e `miragebound/knowledge.ts:87` já têm alternativa no próprio estado.
+- [ ] Não tocar: `clonePlanningState`, o `cloneGameState` do Beam, `simulationBridge.ts:111`, o substituto do Greedy (`BeamSearch.ts:543`, coberto pela visão em L13c) e o caminho de fixture com `models === null`. O `_gameRef` continua nos clones (`test/ai/cloneProfiles.test.ts`).
+- [ ] Registrar a classificação dos 54 usos de `_gameRef`.
+
+**Validação**
+
+- Controle N = 1: P2, TLS, Beam, Greedy e ataque continuam em 0 / 0; em generation, ascension e profile, as diferenças restantes vêm só das origens já atribuídas; guarda sem disparos.
+- Testes: `test/ai/cloneProfiles`, `gameTreeSimulation`, `searchBehavior`, `turnLineOwnerPolicy`, `beamStateIdentity`, `unsupportedSimulationSearch`, `planningExecution`, `planningStrategies`, `planningHeuristics`, `architectureBattleIdentity`, `techZeroBattle`, `architectureDragonPolicyIsolation`, `architectureShadowHeart*`, `architectureVoidMaterialCount`, `architectureVoidMigration`, `mainPhaseConcurrency` e `mainPhaseRecovery`. Também typecheck, auditoria e `npm test`.
+- Smoke: `--matchups shadowheart:dragon,dragon:void,void:shadowheart,luminarch:shadowheart --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L12c. Ponte N = 2 antes (a de L12c, reaproveitada) e depois. Controle de invariância contra L13a-inv. Lote de efeito amplo.
+
+**Critério de saída:** critério de aceite geral; as raízes das buscas e do ataque continuam invariantes; nenhuma origem nova de diferença.
+
+**Esperado:** o Shadow-Heart deixa de ler o oponente vivo nos nós, as políticas do Dragon usam o OPT do nó e o finalizador de Ascensão do Void é avaliado nos nós. O efeito aparece mais na ponte que no N = 5. As decisões mudam por estado próprio do nó, não por informação oculta, e isso é documentado.
+
+**Riscos**
+
+- Envolver uma clonagem com o helper faz o filho apontar `_gameRef` para o pai.
+- `checkSimulatedAscension` pode divergir do motor (ver a tarefa).
+
+**Esforço:** P/M.
+
+### L13c — Visão pública do oponente nas entradas de decisão
+
+**Classe:** paridade; muda decisões. Último sublote do L13.
+
+**Objetivo:** no jogo vivo, as estratégias e as três entradas do bot leem o oponente pela mesma regra da projeção opaca dos nós.
+
+**Dependência de medição:** L13a (raízes novas) e L13b (elo).
+
+**Tarefas**
+
+- [ ] Helper `publicOpponentView(opponent)` em `src/core/ai/common/planningCopy.ts`, junto de `PUBLIC_UNKNOWN_CARD_FIELDS`. Ele aplica a regra de `registerPublicOpponentProjection` (`PUBLIC_UNKNOWN_CARD_FIELDS`, `_simUnknownCard` e `cardKind: "monster"` só no campo) sem alterar essa função; memoriza as projeções por carta viva (`WeakMap`) e recopia os campos de colocação a cada chamada; mantém como referências vivas as cartas viradas para cima e o Cemitério; usa os mesmos campos de jogador da cópia (`simulationBridge.ts:95-98`).
+- [ ] `BaseStrategy.getOpponent` (`BaseStrategy.ts:474-496`): no jogo vivo (sem `_isPerspectiveState` e com `getOpponent`, como `perspective.ts:94-95`), devolve a visão. O tipo de retorno não muda e não há cast duplo.
+- [ ] As três entradas do bot: `ascensionController.ts:42` (oponente entregue aos ganchos) e os substitutos de `:145-147` e `:186-189`; o `oppField` de `actionValidation.ts:203-213` e `:226-230` e de `actionExecutors/summon.ts:118-136`.
+- [ ] ChainAwareness (`ChainAwareness.ts:180-201`, `:225-280` e `:310`): carta com `isFacedown` ou `_simUnknownCard` passa a ser desconhecida, e a mão do oponente sai da consulta. A falta de `spell` em `BlockingCategory` não é corrigida (política; backlog).
+- [ ] Tolerâncias que preservam fatos públicos: `void/combos.ts:66-76` conta a ocupação da zona, não o `cardKind` de Magia/Armadilha; as listas de nomes deixam de receber `undefined`, sem mudar a ordem (`arcanist/priorities.ts:147` e `:646`, `dragon/generation.ts:770` e `:787`, `luminarch/defensePolicy.ts:505`), porque `arcanist/simulation.ts:51-71` casaria `undefined`.
+- [ ] Valor da carta virada para baixo onde hoje se lê o atributo real (decisão provisória P2): o que a projeção dá, como nos nós. Atributo ausente vale 0, os helpers mantêm o próprio valor público e `"printed"` vale 0 para carta do oponente.
+- [ ] Auditoria de identidade e de motor: nenhuma carta oculta da visão é comparada por referência com uma carta viva (usar `instanceId`) nem passada a um método do motor.
+- [ ] Auditoria dos caminhos que nunca viram a projeção, porque só rodam no jogo vivo: perfis de planejamento, ganchos de Ascensão e de resolução, P2 e OpponentPredictor. Uma exceção ali faz `analyzeOpponentPosition` devolver `null` e desliga a P2 (`BaseStrategy.ts:588-590`).
+- [ ] Nenhum prior de backrow: o desconto fixo de `BaseStrategy.ts:197-201` continua. Sem nomes de carta.
+
+**Validação**
+
+- Controle de L09: **todas as raízes** (generation, ascension, profile, P2, TLS, Beam, Greedy e ataque) com `actionDiff = scoreDiff = 0`; `nonReproducible = 0` ou explicado (o caso do TLS em `burningwest:dragon:0` foi explicado em L09); guarda sem disparos.
+- Sonda de acessores de L12b (`.cache/plan23-work/L12b/make-diag.cjs`), adaptada para armar as armadilhas em toda reexecução, no recorte dos 5 casos de L12b: sobram só leituras de regra e de identidade (`Player.ts:320`, prévias e `mainPhaseIdentity`). A sonda é descartável, e o harness volta ao estado do commit.
+- Testes: `test/ai/planningHeuristics`, `autoSelectorVisibility`, `architectureArcanist*`, `arcanistDesignDecisions`, `architectureDragon*`, `architectureLuminarch*`, `architectureMirageboundMigration`, `mirageboundSourcePresenceS02`, `architectureVoid*`, `architectureShadowHeart*`, `bloomrot*`, `architectureBurningWest*`, `techZero*`, `mainPhase*`, `test/ascensionSelection`, `searchBehavior`, `turnLineOwnerPolicy`, `architectureNormalSummon` e `architectureLpQuote`; replays `canonicalReplay`, `canonicalDriver`, `arcanistDesignReplay`, `arcanistPriorityOneReplay`, `plannedTargetReplay` e `fusionDecisionReplay`. Também typecheck, auditoria e `npm test`.
+- Smoke com os 9 presets: `--matchups arcanist:miragebound,dragon:luminarch,void:shadowheart,miragebound:miragebound,bloomrot:burningwest,techzero:arcanist --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L13b. Controle de invariância contra L13b-inv. Ponte N = 2 no commit, só como "antes" de L14 (L13c não muda a projeção da raiz do TurnLineSearch nem o passo de batalha). Lote de efeito amplo. O M1 roda no mesmo commit.
+
+**Critério de saída (vale para o L13 inteiro):** critério de aceite geral; todas as raízes zeradas; sonda limpa. Se sobrar diferença, abre-se L13d por módulo antes do M1.
+
+**Esperado:** generation 94 / 8 → 0 / 0, e ascension e profile em 0 / 0. Mudam decisões no Arcanist, na Miragebound, no Dragon, no Void e no Luminarch, e podem mudar no Shadow-Heart e no Bloomrot, onde o vazamento era latente. Burning West e Tech-Zero devem ficar iguais (controle negativo). Perdas de placar são documentadas sem compensação.
+
+**Riscos**
+
+- Identidade por referência e chamadas ao motor com cartas da visão.
+- Acesso a `name` sem guarda nos caminhos que só rodam no jogo vivo, e leitores que provam a ocupação da backrow pelo `cardKind`.
+- Testes de unidade com `Game` real que fixam a leitura oculta: a asserção só muda com aval do usuário; replays com bot que mudarem seguem E12. Nos dois casos, o sublote para até o aval.
+- As saídas de `buildActivationContextForEffect` e as entradas do AutoSelector mudam o playback v27, o que a premissa do merge atômico cobre.
+- Custo de `getOpponent` em laço, mitigado pela memória por carta.
+- Se a auditoria achar consumidores que comparam por referência, o sublote passa a G e é dividido em estratégias e bot.
 
 **Esforço:** M.
 
@@ -1176,7 +1299,7 @@ O rastreio de L12b listou 110 linhas de leitura oculta na geração (`.cache/pla
 
 ## M1 — Ponto intermediário N = 20
 
-Ver "Política de medição". Roda no commit de L13, com o controle de invariância. Um defeito novo bloqueia L14 até ser bisseccionado na cadeia N = 5.
+Ver "Política de medição". Roda no commit de L13c, com o controle de invariância (o de L13c, no mesmo commit). Um defeito novo bloqueia L14 até ser bisseccionado na cadeia N = 5.
 
 ---
 
@@ -1201,7 +1324,7 @@ Ver "Política de medição". Roda no commit de L13, com o controle de invariân
 - Testes: `test/ai/architectureShadowHeartMigration`, `bounceAndSummonSimulation`, `shadowHeartCosts`, `planningExecution`, `arcanistActivationCosts`, `protectorActivation`, `architectureShadowHeartRuntimePolicy`, `architectureMirageboundMigration`, `architectureArcanist*`, `architectureLuminarchMigration`, `techZeroSimulation`, `test/shadowHeartTargetingTiming`, `test/contracts/fieldPlacementActions`, `test/arcanistActivationModes` e `test/arcanistDesignDecisions`. Também typecheck e `npm test`.
 - Smoke: `--matchups shadowheart:arcanist,arcanist:miragebound,shadowheart:burningwest --duels 2 --check-replays`.
 
-**Medição:** N = 5 contra M1/L13. Ponte N = 2 antes e depois (a posição projetada muda a avaliação de batalha da ponte). Esperado: `mismatchByPath` `bot.field` cai em Shadow-Heart, Arcanist e Miragebound.
+**Medição:** N = 5 contra M1/L13c. Ponte N = 2 antes e depois (a posição projetada muda a avaliação de batalha da ponte). Esperado: `mismatchByPath` `bot.field` cai em Shadow-Heart, Arcanist e Miragebound.
 
 **Critério de saída:** critério de aceite geral.
 
@@ -1742,7 +1865,7 @@ O `plan.json` da análise (`.cache/plan23-probes/plan.json`) usava L00–L24. A 
 | L10 | Parte de L03/L08 | Novo lote: `oncePerTurnUsageByName` fora das projeções opacas, cobrindo o TurnLineSearch |
 | L11 | L08 | Só a asserção de `planningStrategies.test.ts:244` muda (D3) |
 | L12 | L09 | Valor público só para alvo virado para baixo; `withoutLiveGameReference` no Beam; ponte N = 2 |
-| L13 | L10 | `withoutLiveGameReference` na geração do TLS; ponte N = 2 |
+| L13a–L13c | L10 | Dividido pelo mapeamento de 04/11/2026 (P1–P3): raízes `ascension` e `profile` (L13a); `withoutLiveGameReference` nas buscas e no laço de batalha, com ponte N = 2 (L13b); visão pública do oponente (L13c) |
 | M1 | — | Ponto N = 20 intermediário |
 | L14 | L11 | Ponte N = 2 |
 | L15 | L12 | Ponte N = 2 |
@@ -1826,6 +1949,14 @@ Antes do primeiro lote de cada caminho da 2.4, os itens abaixo passam por uma tr
 | Semântica de falha das actions simuladas: no runtime, um handler que falha interrompe a lista de actions (`src/core/effects/core.ts`), salvo no-op opcional; na simulação, `fail()` só interrompe com `haltOnFailure`/`stopOnFailure` | L07d. Sem efeito observável no banco atual (nos 25 efeitos com `targetRef`, as actions seguintes já têm halt, não são simuladas ou viram no-op). Paridade de outra classe, para quando uma carta a expuser |
 | Actions de contador latentes: `remove_counter` com menos contadores que `amount` (o runtime pula o card; a simulação remove o que houver) e `add_counter`/`remove_counter` sem `counterType` (o runtime usa `default`, a simulação `counter`) | L08. Nenhuma carta alcança: `remove_counter` só aparece como custo (cartas 17 e 311), que `canPaySimulatedActivationCosts` protege, e todas declaram `counterType`. Reprodução: `scratchpad/plan23/L08/finding_counter_actions.mts` |
 | Ordem das invocações de `special_summon_from_zone` com `targetRef` quando há menos zonas livres que alvos: o runtime segue a ordem da seleção, e a simulação segue o ranking ou a preferência, que então decide quais cartas entram | L07e. Sem carta de preset com alvos diferentes nesse caminho (o Void Haunter só mira Hollows iguais; o Leviathan não está em preset) |
+| ChainAwareness: `BlockingCategory` não tem `spell` (`ChainAwareness.ts:34` e `:244`); `chainRisks` é calculado e não é lido; `calculateBlockingRiskPenalty` não tem chamador | Mapeamento de L13. Incluir `spell` ativaria a penalidade (política); remover o código morto é refatoração equivalente |
+| `currentAnalysis` é sobrescrito pela geração dos nós do TLS e do Beam e lido depois na resolução e em `DragonStrategy.ts:211` | Mapeamento de L13. Estado da estratégia, não informação oculta; paridade de estado |
+| Ação de profundidade 0 gerada em cópia, com carta-clone equipada no `actionContext`, dispara "Cyclic main-phase identity metadata" (`src/core/bot/mainPhaseIdentity.ts:64`) e fecha a sessão com `capture_error` | Mapeamento de L13. Latente enquanto a raiz viva gera sobre o jogo vivo |
+| Escolhas por carta no bot: `asc.id === 123` e "Metal Armored Dragon" em `src/core/bot/ascensionController.ts:158` e `:182` | Mapeamento de L13. Contrariam a regra de handlers genéricos; L13c troca só a leitura do ATK |
+| Erros de assento: `LuminarchStrategy.ts:932` supõe o oponente em `game.player` (leitura pública); `dragon/linePlanning.ts:214-216`, os substitutos de oponente das políticas do Dragon e `dragon/battleDefensePolicy.ts:323` | Mapeamento de L13 |
+| Canal `Player.game` (`void/priorities.ts:737-740` e `:922-926`, e o bot vivo nos ganchos de batalha): as leituras são públicas, mas na cópia o oponente fica `null` | Mapeamento de L13. Fechar o canal é paridade de estado e mudaria os nós do Void |
+| Engine: regra no `CardDatabaseValidator` que exija `requireFaceup` em filtros por atributo oculto do oponente; candidato decorado com nome e ATK (`src/core/effects/targeting/resolution.ts:672-692`) e `candidateKey` com o id de definição (`src/core/game/selection/contract.ts:59`), que exigem revisão de replay; logs e leituras de `effects` antes do teste de carta virada (`selection.ts:1004`, `:1010` e `:1342`, `Player.ts:320-321`, `lpCost.ts:129-138`), que poluem as sondas | Mapeamento de L13. Hoje nenhum alvo do banco filtra carta virada do oponente por atributo oculto |
+| Código morto achado no mapeamento de L13: `calculateResourceValue` e `rankByResourceValue` (`ThreatEvaluation.ts`), `isLowValueDiscard` e `hasLowValueDiscard` do Arcanist | Refatoração equivalente, junto com a linha de código morto acima |
 | A projeção opaca esconde os contadores de um monstro virado para baixo: `PUBLIC_UNKNOWN_CARD_FIELDS` não inclui `counters`, que são públicos (ex.: os Spore do Bloomrot) | Achado de L12c. O TLS já lia assim, e o controle de invariância trata contadores como públicos. Nos presets não acontece: só o `set_facedown_defense` da Magmatic Obsidian Leviathan (27), fora dos decks de preset, vira para baixo um monstro que já tem contadores, e o handler os preserva (`src/core/actionHandlers/stats.ts:2247`) |
 | A Ascensão simulada não emite `card_to_grave` nem `card_moved` do material (o runtime emite, com `contextLabel` `ascension_material`) e não grava `lastSentToGraveAsMaterial` ("ascension" no runtime); os eventos do equipamento que acompanha o material também não são emitidos, como no Sincro | Achado de L07k, anterior ao lote. Nenhuma carta lê o marcador de Ascensão hoje (só o de fusão, em `src/data/cards/generic.ts`). Reprodução: `scratchpad/plan23/L07k/R1/ascension_events.mts` |
 
