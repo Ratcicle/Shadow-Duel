@@ -187,16 +187,19 @@ export async function beamSearchTurn(
 
   /**
    * Avalia um estado usando evaluateBoardV2 ou fallback.
+   * Phase 2.3 L13b: a node is evaluated without the live game reference.
    */
   function evaluateState(
-    state: AIState,
+    state: BeamPerspectiveGameState,
     perspectivePlayer: SimulatedPlayerState,
   ): number {
-    if (useV2Evaluation && typeof strategy.evaluateBoardV2 === "function") {
-      return strategy.evaluateBoardV2(state, perspectivePlayer);
-    }
-    // Fallback para evaluateBoard antiga
-    return strategy.evaluateBoard(state, perspectivePlayer);
+    return withoutLiveGameReference(state, () => {
+      if (useV2Evaluation && typeof strategy.evaluateBoardV2 === "function") {
+        return strategy.evaluateBoardV2(state, perspectivePlayer);
+      }
+      // Fallback para evaluateBoard antiga
+      return strategy.evaluateBoard(state, perspectivePlayer);
+    });
   }
 
   /**
@@ -313,7 +316,9 @@ export async function beamSearchTurn(
       );
     }
     if (!candidates || candidates.length === 0) {
-      candidates = strategy.generateMainPhaseActions(currentState).filter(isSimulatedMainPhaseActionSupported);
+      // Phase 2.3 L13b: the node generates without the live game reference.
+      candidates = withoutLiveGameReference(currentState, () => strategy.generateMainPhaseActions(currentState))
+        .filter(isSimulatedMainPhaseActionSupported);
     }
     candidates = filterAiActionsForCurrentPhase(candidates, {
       state: currentState,
@@ -460,14 +465,17 @@ export async function greedySearchWithEvalV2(
       .opponent;
   };
 
+  /** Phase 2.3 L13b: a copy is evaluated without the live game reference. */
   function evaluateState(
-    state: AIState,
+    state: BeamPerspectiveGameState,
     perspectivePlayer: SimulatedPlayerState,
   ): number {
-    if (useV2Evaluation && typeof strategy.evaluateBoardV2 === "function") {
-      return strategy.evaluateBoardV2(state, perspectivePlayer);
-    }
-    return strategy.evaluateBoard(state, perspectivePlayer);
+    return withoutLiveGameReference(state, () => {
+      if (useV2Evaluation && typeof strategy.evaluateBoardV2 === "function") {
+        return strategy.evaluateBoardV2(state, perspectivePlayer);
+      }
+      return strategy.evaluateBoard(state, perspectivePlayer);
+    });
   }
 
   /** `publicOpponent` copies the opponent through its public projection. */

@@ -1,4 +1,5 @@
 import { getBattleStatForAttackTarget } from "../ai/common/cardStats.js";
+import { withoutLiveGameReference } from "../ai/common/gameTreeSimulation.js";
 import { assertPublicPlanningProjection } from "../ai/common/planningCopy.js";
 import type { BotAttackChoice, BotRootOutcome, BotRuntimePort, BotGamePort } from "../contracts/bot.js";
 import type { GameCard } from "../contracts/cards.js";
@@ -155,6 +156,7 @@ export function playBotBattlePhase(
     // Phase 2.3 L12: the base score and every candidate are scored on the
     // bot's perspective copy, where the opponent's hidden cards are opaque.
     // Phase 2.3 E2: the guard of that projection only counts, into the Arena's tracker.
+    // Phase 2.3 L13b: the strategy reads each copy without its live game reference.
     const publicCopy = { publicOpponent: true } as const;
     const publicView = bot.cloneGameState(game, publicCopy);
     const guardSink = game._arenaTracker;
@@ -162,7 +164,7 @@ export function playBotBattlePhase(
       guardSink.recordPublicProjectionGuard(publicView.bot.id, "attack",
         assertPublicPlanningProjection(publicView, publicView.bot.id));
     }
-    const baseScore = bot.evaluateBoard(publicView, publicView.bot);
+    const baseScore = withoutLiveGameReference(publicView, () => bot.evaluateBoard(publicView, publicView.bot));
     const opponentLp = opponent.lp || 0;
     const totalAtkPotential = availableAttackers.reduce(
       (sum, m) => sum + (m.atk || 0),
@@ -229,7 +231,7 @@ export function playBotBattlePhase(
         if (!simAttacker) continue;
 
         bot.simulateBattle(simState, simAttacker, simTarget);
-        const scoreAfter = bot.evaluateBoard(simState, simState.bot);
+        const scoreAfter = withoutLiveGameReference(simState, () => bot.evaluateBoard(simState, simState.bot));
         let delta = scoreAfter - baseScore;
         const opponentLpAfter = simState.player.lp || 0;
         const attackerSurvived = simState.bot.field.some((c) =>
@@ -287,20 +289,21 @@ export function playBotBattlePhase(
         const publicTarget = target
           ? publicView.player.field.find((c) => isSameBattleCard(c, target)) ?? null
           : null;
-        const strategyBattleDelta = bot.strategy?.scoreBattleAttackCandidate?.({
-          attacker,
-          target: publicTarget,
-          baseDelta: delta,
-          simState,
-          game: publicView,
-          bot: bot,
-          opponent: publicView.player,
-          isSecondAttack,
-          attackerSurvived,
-          targetSurvived,
-          lethalNow,
-          opponentLpAfter,
-        });
+        const strategyBattleDelta = withoutLiveGameReference(publicView, () =>
+          withoutLiveGameReference(simState, () => bot.strategy?.scoreBattleAttackCandidate?.({
+            attacker,
+            target: publicTarget,
+            baseDelta: delta,
+            simState,
+            game: publicView,
+            bot: bot,
+            opponent: publicView.player,
+            isSecondAttack,
+            attackerSurvived,
+            targetSurvived,
+            lethalNow,
+            opponentLpAfter,
+          })));
         if (Number.isFinite(strategyBattleDelta)) {
           delta += strategyBattleDelta as number;
         } else if (

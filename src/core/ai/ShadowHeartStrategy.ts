@@ -2,11 +2,9 @@ import type { AIAction, AIPlannedAction, AIPlanningContext, AIPlanningProfile, A
 import type { SimulatedCardState, SimulatedPlayerState } from "../contracts/aiState.js";
 import type { GameCard } from "../contracts/cards.js";
 import type { EffectDefinition } from "../contracts/effects.js";
-import type { PreviewGamePort } from "./common/previewGuards.js";
 import type { CardAction } from "../contracts/actions.js";
 type StrategyCard = (GameCard | SimulatedCardState) & { cannotBeDestroyedByBattle?: boolean | undefined };
 type Analysis = ReturnType<ShadowHeartStrategy["analyzeGameState"]>;
-type ShadowGamePort = PreviewGamePort & { canActivatePolymerization?(): boolean; devModeEnabled?: boolean };
 type StrategyGame = AIState & { devModeEnabled?: boolean; turnLineSearchEnabled?: boolean };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -403,9 +401,10 @@ export default class ShadowHeartStrategy extends BaseStrategy {
    * Avalia macro strategy usando MacroPlanning.
    */
   evaluateMacroStrategy(game: AIState, analysis: Analysis) {
-    const actualGame = (game._gameRef || game) as ShadowGamePort;
-    const bot = this.bot;
-    const opponent = this.getOpponent(actualGame as AIState, bot);
+    // A perspective state is read with its own players, as the analysis does.
+    const isSimulatedState = game._isPerspectiveState === true;
+    const bot = (isSimulatedState ? game.bot : this.bot || game.bot) as AIStrategyBotPort;
+    const opponent = this.getOpponent(game, bot);
 
     const lethal = detectLethalOpportunity(
       { bot, player: opponent, field: {} },

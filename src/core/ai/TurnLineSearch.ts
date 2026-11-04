@@ -751,6 +751,24 @@ function simulatePlanningAction(
   return state;
 }
 
+/**
+ * Runs a strategy call that reads search nodes. With planning models (the
+ * live decision, phase 2.3 L13b), the call never reaches the live game through
+ * a node's `_gameRef`, as the node's simulation already does; the fixture path
+ * without models keeps the reference. The reference returns when the call
+ * ends, so a node copied afterwards still points at the duel, not at a node.
+ */
+type NodeStrategyCall = <Result>(states: readonly PlanningState[], call: () => Result) => Result;
+
+function withoutLiveGameReferences<Result>(states: readonly PlanningState[], call: () => Result): Result {
+  const [state, ...others] = states;
+  return state ? withoutLiveGameReference(state, () => withoutLiveGameReferences(others, call)) : call();
+}
+
+function createNodeStrategyCall(models: ReadonlyMap<string, PlanningModel> | null): NodeStrategyCall {
+  return models ? withoutLiveGameReferences : (_states, call) => call();
+}
+
 function evaluateBasePlanningScore(
   state: PlanningState,
   strategy: TurnLineStrategy,
@@ -1404,11 +1422,12 @@ function buildPlannerBattlePlans(state: PlanningState): PlannerBattlePlan[] {
 function chooseBestSingleSimulatedBattle(
   state: PlanningState,
   strategy: TurnLineStrategy,
-  options: TurnLineRuntimeOptions = {},
+  options: TurnLineRuntimeOptions,
+  inNode: NodeStrategyCall,
 ): PlannerBattleChoice | null {
   const plans = buildPlannerBattlePlans(state);
   if (plans.length === 0) return null;
-  const baseScore = evaluateBasePlanningScore(state, strategy, options);
+  const baseScore = inNode([state], () => evaluateBasePlanningScore(state, strategy, options));
   let best: PlannerBattleChoice | null = null;
 
   plans.forEach((plan) => {
@@ -1418,12 +1437,13 @@ function chooseBestSingleSimulatedBattle(
       : null;
     const wasSecondAttack =
       Number(originalAttacker?.attacksUsedThisTurn || 0) > 0;
+    // Copied outside the node scope, so the copy's _gameRef stays the duel's.
     const candidateState = clonePlanningState(state, strategy);
     const candidateAttacker = candidateState.bot.field[plan.attackerIndex];
     const candidateTarget = Number.isInteger(plan.targetIndex)
       ? candidateState.player.field[plan.targetIndex!]
       : null;
-    const summary = applySimulatedBattle(candidateState, plan, strategy, options);
+    const summary = inNode([candidateState], () => applySimulatedBattle(candidateState, plan, strategy, options));
     if (!summary || candidateState._simUnsupportedActions?.length) return;
     const destroyedOpponent = summary.destroyedNames.filter(
       (_name, index) => summary.destroyedCards[index]?.owner === "opponent",
@@ -1431,7 +1451,7 @@ function chooseBestSingleSimulatedBattle(
     const destroyedSelf = summary.destroyedNames.filter(
       (_name, index) => summary.destroyedCards[index]?.owner === "self",
     ).length;
-    const scoreAfter = evaluateBasePlanningScore(candidateState, strategy, options);
+    const scoreAfter = inNode([candidateState], () => evaluateBasePlanningScore(candidateState, strategy, options));
     let score = scoreAfter - baseScore;
     if ((candidateState.player?.lp || 0) <= 0) score += 100;
     score += Math.max(0, summary.damage || 0) / 450;
@@ -1445,7 +1465,7 @@ function chooseBestSingleSimulatedBattle(
       const targetAfter = candidateTarget &&
         candidateState.player.field.includes(candidateTarget)
         ? candidateTarget : null;
-      const hookDelta = strategy.scoreBattleAttackCandidate({
+      const hookDelta = inNode([candidateState], () => strategy.scoreBattleAttackCandidate?.({
         attacker: attackerAfter || originalAttacker,
         target: originalTarget,
         baseDelta: scoreAfter - baseScore,
@@ -1458,7 +1478,7 @@ function chooseBestSingleSimulatedBattle(
         targetSurvived: Boolean(targetAfter),
         isSecondAttack: wasSecondAttack,
         summary,
-      });
+      }));
       if (Number.isFinite(hookDelta)) score += hookDelta as number;
     }
     if (score <= 0 && destroyedOpponent === 0 && summary.damage <= 0) return;
@@ -1513,7 +1533,8 @@ function aggregateBattleSummaries(
 function chooseBestSimulatedBattle(
   state: PlanningState,
   strategy: TurnLineStrategy,
-  options: TurnLineRuntimeOptions = {},
+  options: TurnLineRuntimeOptions,
+  inNode: NodeStrategyCall,
 ): PlannerBattleChoice | null {
   const limit = normalizeBattleStepLimit(options);
   let currentState = state;
@@ -1522,7 +1543,7 @@ function chooseBestSimulatedBattle(
   const steps: PlannerBattleSummary[] = [];
 
   for (let stepIndex = 0; stepIndex < limit; stepIndex += 1) {
-    const next = chooseBestSingleSimulatedBattle(currentState, strategy, options);
+    const next = chooseBestSingleSimulatedBattle(currentState, strategy, options, inNode);
     if (!next) break;
     if (!firstPlan) firstPlan = next.plan;
     steps.push(next.summary);
@@ -1544,7 +1565,8 @@ function tryMainBattleMain2Bridge(
   state: PlanningState,
   sequence: AIPlannedAction[],
   strategy: TurnLineStrategy,
-  options: TurnLineRuntimeOptions = {},
+  options: TurnLineRuntimeOptions,
+  inNode: NodeStrategyCall,
 ): { state: PlanningState; action: PlannerBattleSummary; score: number } | null {
   if (state._simUnsupportedActions?.length || state._simRequiresReplan) return null;
   if (!isMainBattleMain2Mode(options)) return null;
@@ -1552,7 +1574,7 @@ function tryMainBattleMain2Bridge(
   if (!isMain1Phase(state?.phase)) return null;
   if (!Array.isArray(sequence)) return null;
 
-  const battle = chooseBestSimulatedBattle(state, strategy, options);
+  const battle = chooseBestSimulatedBattle(state, strategy, options, inNode);
   if (!battle) return null;
   battle.state.phase = "main2";
   battle.state._simPlanningBattleDone = true;
@@ -1642,6 +1664,7 @@ export async function turnLineSearch(
   const seenStates = new Set<string>();
   const configuredModels = strategy.bot?.getGameTreeModels?.();
   const models = configuredModels ? new Map(configuredModels.actors) : null;
+  const inNode = createNodeStrategyCall(models);
   const root = clonePlanningState(game, strategy, models !== null);
   // Phase 2.3 E2: the guard of the opaque projection only counts, into the Arena's tracker.
   const guardSink = game._arenaTracker;
@@ -1655,8 +1678,8 @@ export async function turnLineSearch(
     depth: number,
     sequence: AIPlannedAction[] = [],
   ): Promise<SearchBranch> => {
-    const terminalEval = () =>
-      evaluatePlanningTerminal(currentState, strategy, options, sequence, root);
+    const terminalEval = () => inNode([currentState, root], () =>
+      evaluatePlanningTerminal(currentState, strategy, options, sequence, root));
 
     if (depth >= maxDepth || nodesEvaluated >= nodeBudget || currentState._simRequiresReplan) {
       const terminal = terminalEval();
@@ -1674,7 +1697,7 @@ export async function turnLineSearch(
 
     // Reserve the phase alternative before Main actions can exhaust the shared
     // budget. Its terminal score is complete even when Main2 cannot be expanded.
-    const bridge = tryMainBattleMain2Bridge(currentState, sequence, strategy, options);
+    const bridge = tryMainBattleMain2Bridge(currentState, sequence, strategy, options, inNode);
     let bridgeBranch: SearchBranch | null = null;
     let bridgeHash: string | null = null;
     if (bridge) {
@@ -1684,9 +1707,9 @@ export async function turnLineSearch(
       } else {
         nodesEvaluated += 1;
         const bridgeSequence = [...sequence, bridge.action];
-        const terminal = evaluatePlanningTerminal(
+        const terminal = inNode([bridge.state, root], () => evaluatePlanningTerminal(
           bridge.state, strategy, options, bridgeSequence, root,
-        );
+        ));
         bridgeBranch = {
           action: bridge.action,
           sequence: bridgeSequence,
@@ -1701,14 +1724,15 @@ export async function turnLineSearch(
       }
     }
 
-    let candidates = getCandidatesForDepth(currentState, strategy, depth, options);
+    let candidates = inNode([currentState], () => getCandidatesForDepth(currentState, strategy, depth, options));
     const hadCandidates = candidates.length > 0;
 
     candidates = candidates.slice().sort((a, b) => (b.priority || 0) - (a.priority || 0));
     if (candidates.length > 0 && typeof strategy.selectPlanningCandidates === "function") {
       const selectionLimit = Math.max(1, Math.min(beamWidth, candidateLimit, candidates.length));
       const legalCandidates = new Set(candidates);
-      const selected = strategy.selectPlanningCandidates(candidates, currentState, selectionLimit);
+      const selected = inNode([currentState], () =>
+        strategy.selectPlanningCandidates?.(candidates, currentState, selectionLimit));
       candidates = [...new Set(selected)].filter(action => legalCandidates.has(action)).slice(0, selectionLimit);
     } else {
       candidates = candidates.slice(0, Math.max(1, candidateLimit));
