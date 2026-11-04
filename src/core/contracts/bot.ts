@@ -3,6 +3,7 @@ import type {
   AIActionOf,
   AIActionType,
   AIPlannedAction,
+  AIPlanningProfile,
   AIStrategyBotPort,
   BattleCandidate,
   PublicProjectionGuardReport,
@@ -210,6 +211,13 @@ export interface BotAttackChoice {
 
 export type BotMainPhaseSearchRoot = "turnLineSearch" | "beam" | "greedy";
 
+/** The Main Phase planning profile the controller resolved, and its planner gate. */
+export interface BotPlanningProfileOutcome {
+  profile: Partial<AIPlanningProfile>;
+  /** Whether the decision runs the TurnLineSearch with this profile. */
+  shouldUsePlanner: boolean;
+}
+
 /**
  * Optional diagnostic observer of the bot's live decision roots, installed
  * only by the benchmark harness. Each call carries the live outcome and a
@@ -217,6 +225,17 @@ export type BotMainPhaseSearchRoot = "turnLineSearch" | "beam" | "greedy";
  * it is absent the controllers neither call nor await anything.
  */
 export interface BotDecisionRootObserver {
+  /**
+   * The automatic Ascension shortcut, which runs before the candidate
+   * generation: `live` is the Ascension the decision executes, or null when
+   * it goes on to the generation. Synchronous, like the selection it reruns;
+   * the rerun only reads the session's repetition memory.
+   */
+  observeAscension(
+    game: BotGamePort,
+    live: AIActionOf<"ascension"> | null,
+    rerun: () => AIActionOf<"ascension"> | null,
+  ): void;
   /**
    * The Main Phase candidate generation: `live` is the list every search of
    * the decision receives as `preGeneratedActions`. Synchronous, like the
@@ -226,6 +245,17 @@ export interface BotDecisionRootObserver {
     game: BotGamePort,
     live: readonly AIAction[],
     rerun: () => AIAction[],
+  ): void;
+  /**
+   * The planning profile and the planner gate, resolved after the candidate
+   * generation; they decide whether the TurnLineSearch runs and with which
+   * budget. Synchronous; the rerun resolves them again on a copy of the
+   * planning context as the live resolution received it.
+   */
+  observeProfile(
+    game: BotGamePort,
+    live: BotPlanningProfileOutcome,
+    rerun: () => BotPlanningProfileOutcome,
   ): void;
   /** A Main Phase search; the controller awaits it before using the live result. */
   observeSearch(

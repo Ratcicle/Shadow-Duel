@@ -70,9 +70,16 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
     const stateBeforeDecision = session.capture();
     const suppressedBeforeDecision = session.counts.repetitionsSuppressed;
     if (useAutomaticAscension && !isMain2Phase(game)) {
+      /** The runtime check of an automatic Ascension, without the session's repetition memory. */
+      const isAscensionAvailable = (action: AIAction): boolean =>
+        bot.filterValidActionsForCurrentState([action], game).length > 0;
       const ascension = selectAutomaticAscensionAction(bot, game,
-        action => bot.filterValidActionsForCurrentState([action], game).length > 0 &&
-          session.allowed(stateBeforeDecision, action));
+        action => isAscensionAvailable(action) && session.allowed(stateBeforeDecision, action));
+      if (rootObserver) {
+        // The rerun reads the repetition memory without counting a suppression.
+        rootObserver.observeAscension(game, ascension, () => selectAutomaticAscensionAction(bot, game,
+          action => isAscensionAvailable(action) && !session.attempted(stateBeforeDecision, action)));
+      }
       if (ascension) {
         const accepted = await session.execute(ascension, stateBeforeDecision);
         if (!session.active() || session.stopReason) return;
@@ -145,22 +152,36 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
       attempt: totalAttempts,
       useV2Evaluation,
     };
-    const planningProfile: Partial<AIPlanningProfile> =
-      typeof planningStrategy.getPlanningProfile === "function"
-        ? planningStrategy.getPlanningProfile(game, planningContext) || {}
-        : {};
-    planningContext.profile = planningProfile;
-    const plannerMode = resolvePlannerMode(game, planningProfile);
-    const plannerForced = plannerMode === "always";
-    const explicitPlannerOptIn =
-      plannerMode !== "off" &&
-      (plannerForced || planningProfile.enabled === true);
-    const shouldUsePlanner =
-      explicitPlannerOptIn &&
-      (plannerForced ||
-        (typeof planningStrategy.shouldUseDeepPlanning === "function"
-          ? planningStrategy.shouldUseDeepPlanning(game, planningContext)
-          : true));
+    // The planning profile and the planner gate, written once so the
+    // decision-root observer reruns exactly what the live decision resolved.
+    const resolvePlanningProfile = (context: typeof planningContext) => {
+      const profile: Partial<AIPlanningProfile> =
+        typeof planningStrategy.getPlanningProfile === "function"
+          ? planningStrategy.getPlanningProfile(game, context) || {}
+          : {};
+      context.profile = profile;
+      const plannerMode = resolvePlannerMode(game, profile);
+      const plannerForced = plannerMode === "always";
+      const explicitPlannerOptIn =
+        plannerMode !== "off" &&
+        (plannerForced || profile.enabled === true);
+      const shouldUsePlanner =
+        explicitPlannerOptIn &&
+        (plannerForced ||
+          (typeof planningStrategy.shouldUseDeepPlanning === "function"
+            ? planningStrategy.shouldUseDeepPlanning(game, context)
+            : true));
+      return { profile, plannerMode, shouldUsePlanner };
+    };
+    // The context as the live resolution receives it, before it gains the
+    // profile; copied only for the observer, each rerun resolves on its own copy.
+    const contextBeforeProfile = rootObserver ? { ...planningContext } : null;
+    const resolvedProfile = resolvePlanningProfile(planningContext);
+    const { profile: planningProfile, plannerMode, shouldUsePlanner } = resolvedProfile;
+    if (rootObserver && contextBeforeProfile) {
+      rootObserver.observeProfile(game, resolvedProfile,
+        () => resolvePlanningProfile({ ...contextBeforeProfile }));
+    }
 
     if (shouldUsePlanner && actions.length > 0) {
       const plannerBeamWidth =

@@ -4,8 +4,21 @@ import { gameTreeSearch, shouldUseGameTreeSearch } from "../../src/core/ai/GameT
 import { PUBLIC_UNKNOWN_CARD_FIELDS } from "../../src/core/ai/common/planningCopy.js";
 import { fingerprintAction } from "../../src/core/ai/common/planningDiagnostics.js";
 import { fingerprintMainPhaseAction, fingerprintMainPhaseState } from "../../src/core/bot/mainPhaseIdentity.js";
-import type { AIAction, AIActionFingerprint, AIPlannedAction, GameTreeSearchResult } from "../../src/core/contracts/ai.js";
-import type { BotAttackChoice, BotGamePort, BotRootOutcome, BotRuntimePort } from "../../src/core/contracts/bot.js";
+import type {
+  AIAction,
+  AIActionFingerprint,
+  AIActionOf,
+  AIPlannedAction,
+  AIPlanningProfile,
+  GameTreeSearchResult,
+} from "../../src/core/contracts/ai.js";
+import type {
+  BotAttackChoice,
+  BotGamePort,
+  BotPlanningProfileOutcome,
+  BotRootOutcome,
+  BotRuntimePort,
+} from "../../src/core/contracts/bot.js";
 import type { GameCard } from "../../src/core/contracts/cards.js";
 import type { GamePlayer } from "../../src/core/contracts/player.js";
 import {
@@ -31,6 +44,13 @@ import { increment, round, sortedCounter } from "./statistics.js";
 // nests, and restores order, identity, placement and the targeting cache
 // exactly, without events. The reruns may still perturb the duel (strategy
 // state, timing): a run with the control is a diagnostic, never a measurement.
+//
+// Limits (phase 2.3, P3): only these live roots are rerun: the automatic
+// Ascension, the candidate generation, P2, the planning profile, the Main
+// Phase searches and the attack choice. The resolution hooks, the Chain
+// responses and the choices an action makes while it executes (its tributes,
+// for one) are not, and the trade leaves the opponent's Extra Deck and
+// face-down banished cards in place, so a read of them is not measured here.
 
 // ── Trade of the hidden information ────────────────────────────────────────
 
@@ -120,6 +140,7 @@ export interface HiddenTrade {
  * public placement fields of its original card, so the public projection of
  * the traded state equals the real one; a position on the field also keeps
  * the public state of its presence. A card moved to the Deck keeps its own.
+ * The Extra Deck and the face-down banished cards are not traded.
  */
 export function planHiddenTrade(opponent: GamePlayer): HiddenTrade {
   const before = snapshotZones(opponent);
@@ -206,8 +227,10 @@ export function planHiddenTrade(opponent: GamePlayer): HiddenTrade {
 
 function emptyRoots(): Record<InvarianceRoot, InvarianceRootTally> {
   return {
+    ascension: emptyInvarianceRootTally(),
     generation: emptyInvarianceRootTally(),
     p2: emptyInvarianceRootTally(),
+    profile: emptyInvarianceRootTally(),
     turnLineSearch: emptyInvarianceRootTally(),
     beam: emptyInvarianceRootTally(),
     greedy: emptyInvarianceRootTally(),
@@ -256,8 +279,10 @@ export class InvarianceTallies {
     const seat = (value: SeatTallies, seatGuard: Readonly<Record<string, InvarianceGuardTally>>): InvarianceSeat => ({
       preset: value.preset,
       roots: {
+        ascension: copyTally(value.roots.ascension),
         generation: copyTally(value.roots.generation),
         p2: copyTally(value.roots.p2),
+        profile: copyTally(value.roots.profile),
         turnLineSearch: copyTally(value.roots.turnLineSearch),
         beam: copyTally(value.roots.beam),
         greedy: copyTally(value.roots.greedy),
@@ -322,11 +347,12 @@ function clearTargetingCache(game: BotGamePort): void {
 }
 
 /**
- * An object's own fields as a probe found them. The generation root reruns
- * the strategy's live generation, and a strategy keeps its last analysis of
- * the state it saw (currentAnalysis) as a fallback for later reads; given its
- * own fields back, the strategy goes on with the analysis of the live
- * generation, never with that of the traded state.
+ * An object's own fields as a probe found them. The roots that run through
+ * the strategy (the automatic Ascension, the candidate generation and the
+ * planning profile) rerun its live analysis, and a strategy keeps its last
+ * analysis of the state it saw (currentAnalysis) as a fallback for later
+ * reads; given its own fields back, the strategy goes on with the analysis of
+ * the live decision, never with that of the traded state.
  */
 function saveOwnFields(target: object): () => void {
   const fields = new Map<string | symbol, PropertyDescriptor>();
@@ -392,6 +418,42 @@ interface RootView {
 function outcomeView<Choice>(outcome: BotRootOutcome<Choice>, print: (choice: Choice) => string): RootView {
   const key = outcome.choice === null ? "none" : print(outcome.choice);
   return { key, scores: [outcome.score], sample: () => key, sampleScore: sampleScore(outcome.score) };
+}
+
+/** A root with one choice and no score: the automatic Ascension and the planning profile. */
+function choiceView(key: string): RootView {
+  return { key, scores: [], sample: () => key, sampleScore: null };
+}
+
+/**
+ * The automatic Ascension: the material by its field index, the Ascension
+ * card by instance and the position, or none when the decision goes on to the
+ * candidate generation. Both cards are the bot's own, which the trade never
+ * moves; the sample also names the Ascension card.
+ */
+function ascensionView(action: AIActionOf<"ascension"> | null): RootView {
+  if (action === null) return choiceView("none");
+  const card = action.ascensionCard;
+  const choice = {
+    materialIndex: action.materialIndex ?? null,
+    ascensionCard: card ? { instanceId: card.instanceId ?? null, id: card.id ?? null, name: card.name ?? null } : null,
+    position: action.position ?? null,
+  };
+  const key = JSON.stringify([choice.materialIndex, choice.ascensionCard?.instanceId ?? null, choice.position]);
+  return { ...choiceView(key), sample: () => JSON.stringify(choice) };
+}
+
+/** The profile fields the controller reads; the strategies' reason texts stay out. */
+const PROFILE_FIELDS = [
+  "enabled", "mode", "beamWidth", "maxDepth", "nodeBudget", "candidateLimit", "turnMode", "battleStepLimit",
+  "allowEarlyStop",
+] as const satisfies readonly (keyof AIPlanningProfile)[];
+
+/** The planning profile: the fields the controller reads and whether the decision runs the TurnLineSearch. */
+function profileView(outcome: BotPlanningProfileOutcome): RootView {
+  const fields: Record<string, unknown> = {};
+  for (const field of PROFILE_FIELDS) fields[field] = outcome.profile[field] ?? null;
+  return choiceView(JSON.stringify({ ...fields, shouldUsePlanner: outcome.shouldUsePlanner }));
 }
 
 /** JSON of plain data with every object's keys sorted, so that two values differ only by content. */
@@ -542,9 +604,9 @@ async function attemptAsync<Value>(tally: InvarianceRootTally, run: () => Promis
 }
 
 /**
- * A synchronous root (generation, P2, attack choice): nothing else runs while
- * the trade is applied. A failure of the control is tallied and never
- * reaches the duel.
+ * A synchronous root (automatic Ascension, generation, P2, planning profile,
+ * attack choice): nothing else runs while the trade is applied. A failure of
+ * the control is tallied and never reaches the duel.
  */
 function probeRoot<Outcome>(
   host: InvarianceHost, bot: BotRuntimePort, game: BotGamePort, root: InvarianceRoot,
@@ -660,17 +722,19 @@ function instrumentGameTree(bot: BotRuntimePort, host: InvarianceHost): void {
 }
 
 /**
- * The Main Phase candidate generation, which runs P2 inside for most
- * strategies; while it probes, P2 is not probed again. Its reruns analyze
- * the live state, so the strategy's own fields are restored afterwards.
+ * A synchronous root whose reruns analyze the live state through the
+ * strategy, so the strategy's own fields are restored afterwards: the
+ * automatic Ascension (a strategy may analyze the state again, as the Void
+ * does), the candidate generation, which runs P2 inside for most strategies
+ * (while it probes, P2 is not probed again), and the planning profile.
  */
-function probeGeneration(
-  host: InvarianceHost, bot: BotRuntimePort, game: BotGamePort,
-  live: readonly AIAction[], rerun: () => AIAction[],
+function probeStrategyRoot<Outcome>(
+  host: InvarianceHost, bot: BotRuntimePort, game: BotGamePort, root: InvarianceRoot,
+  live: Outcome, rerun: () => Outcome, view: (outcome: Outcome) => RootView,
 ): void {
   const restoreStrategy = saveOwnFields(bot.strategy);
   try {
-    probeRoot(host, bot, game, "generation", live, rerun, candidateListView(game, bot));
+    probeRoot(host, bot, game, root, live, rerun, view);
   } finally {
     restoreStrategy();
   }
@@ -680,7 +744,10 @@ function probeGeneration(
 export function installInvarianceControl(bot: BotRuntimePort, host: InvarianceHost): void {
   instrumentGameTree(bot, host);
   bot.decisionRootObserver = {
-    observeGeneration: (game, live, rerun) => probeGeneration(host, bot, game, live, rerun),
+    observeAscension: (game, live, rerun) => probeStrategyRoot(host, bot, game, "ascension", live, rerun, ascensionView),
+    observeGeneration: (game, live, rerun) => probeStrategyRoot(host, bot, game, "generation", live, rerun,
+      candidateListView(game, bot)),
+    observeProfile: (game, live, rerun) => probeStrategyRoot(host, bot, game, "profile", live, rerun, profileView),
     observeSearch: (root, game, live, rerun) => probeSearchRoot(host, bot, game, root, live, rerun),
     observeAttack: (game, live, rerun) => probeRoot(host, bot, game, "attack", live, rerun,
       outcome => outcomeView(outcome, printAttack)),

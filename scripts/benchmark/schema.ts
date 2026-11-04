@@ -30,8 +30,9 @@ export const INVARIANCE_SCHEMA = "shadow-duel-benchmark-invariance";
  * v2: each seat also carries the live roots' public-projection guard tally.
  * v3: the generation root, and every swapped choice described before the
  * trade is restored (phase 2.3 L12b).
+ * v4: the automatic Ascension and planning profile roots (phase 2.3 L13a).
  */
-export const INVARIANCE_SCHEMA_VERSION = 3;
+export const INVARIANCE_SCHEMA_VERSION = 4;
 
 export const DEFAULT_SEED_BASE = 20261011;
 export const DEFAULT_MAX_TURNS = 50;
@@ -74,11 +75,17 @@ export const INVARIANCE_SWAP_RULE = "opponent hand and deck rotated by the hand 
   "or field spell traded with a deck card of the same kind and another id; every hidden position keeps its public placement fields, " +
   "and a position on the field also its public presence state";
 /**
- * The live roots in decision order. generation is the Main Phase candidate
- * list every search receives (phase 2.3 L12b); most strategies run P2 inside it.
+ * The live roots in decision order. ascension is the automatic Ascension
+ * shortcut, which runs before the candidate generation, and profile the
+ * planning profile and planner gate resolved after it (phase 2.3 L13a).
+ * generation is the Main Phase candidate list every search receives (phase
+ * 2.3 L12b); most strategies run P2 inside it.
  */
-export type InvarianceRoot = "generation" | "p2" | "turnLineSearch" | "beam" | "greedy" | "attack";
-export const INVARIANCE_ROOTS: readonly InvarianceRoot[] = ["generation", "p2", "turnLineSearch", "beam", "greedy", "attack"];
+export type InvarianceRoot =
+  | "ascension" | "generation" | "p2" | "profile" | "turnLineSearch" | "beam" | "greedy" | "attack";
+export const INVARIANCE_ROOTS: readonly InvarianceRoot[] = [
+  "ascension", "generation", "p2", "profile", "turnLineSearch", "beam", "greedy", "attack",
+];
 /** Divergent comparisons (traded or live) kept per root and seat, with their fingerprints. */
 export const INVARIANCE_SAMPLE_LIMIT = 4;
 
@@ -1492,7 +1499,11 @@ export function parseEnvironmentDescription(value: unknown, label = "description
  * generation root a fingerprint lists the candidates in order, each with its
  * planner fingerprint and priority (the scores that scoreDiff compares), the
  * runtime's identity of the action (`execution`) and its activation
- * decisions, and the score fields are null.
+ * decisions, and the score fields are null. The ascension and profile roots
+ * have no score either: a fingerprint is the compared choice, the Ascension
+ * (material index, Ascension card instance and position, with the card's id
+ * and name) or none, and the profile fields the controller reads with the
+ * planner gate.
  */
 export interface InvarianceSample {
   turn: number;
@@ -1526,12 +1537,15 @@ export interface InvarianceRootTally {
    * Reproduced comparisons whose reruns on the real and on the traded state
    * chose different actions; for the generation root, a different candidate
    * list or order, or a candidate the execution would consume differently
-   * (choices, target and cost preferences, activation decisions).
+   * (choices, target and cost preferences, activation decisions); for the
+   * ascension root, another Ascension or its absence; for the profile root,
+   * another profile field the controller reads or another planner gate.
    */
   actionDiff: number;
   /**
    * Reproduced comparisons whose reruns on the real and on the traded state
-   * gave different scores; for the generation root, different candidate priorities.
+   * gave different scores; for the generation root, different candidate
+   * priorities. The ascension and profile roots have no score, so it stays 0.
    */
   scoreDiff: number;
   /**
@@ -1662,8 +1676,8 @@ function parseInvarianceSeat(value: unknown, label: string): InvarianceSeat {
   return {
     preset: string(raw.preset, `${label}.preset`),
     roots: {
-      generation: tally("generation"), p2: tally("p2"), turnLineSearch: tally("turnLineSearch"), beam: tally("beam"),
-      greedy: tally("greedy"), attack: tally("attack"),
+      ascension: tally("ascension"), generation: tally("generation"), p2: tally("p2"), profile: tally("profile"),
+      turnLineSearch: tally("turnLineSearch"), beam: tally("beam"), greedy: tally("greedy"), attack: tally("attack"),
     },
     guard,
     consoleLabels: counter(raw.consoleLabels, `${label}.consoleLabels`),

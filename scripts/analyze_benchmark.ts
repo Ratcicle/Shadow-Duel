@@ -857,8 +857,10 @@ function emptyInvarianceRootSummary(): InvarianceRootSummary {
 export function summarizeInvariance(file: string, sides: ReadonlyMap<string, InvarianceCaseRecord>,
   records: readonly DuelRecordV1[]): InvarianceSummary {
   const roots: Record<InvarianceRoot, InvarianceRootSummary> = {
+    ascension: emptyInvarianceRootSummary(),
     generation: emptyInvarianceRootSummary(),
     p2: emptyInvarianceRootSummary(),
+    profile: emptyInvarianceRootSummary(),
     turnLineSearch: emptyInvarianceRootSummary(),
     beam: emptyInvarianceRootSummary(),
     greedy: emptyInvarianceRootSummary(),
@@ -944,8 +946,15 @@ function invarianceMarkdown(invariance: InvarianceSummary): string[] {
       "portão: nelas a diferença da troca não separa a informação oculta do estado carregado entre chamadas. A raiz generation é " +
       "a geração de candidatos da Main Phase, a lista que todas as buscas da decisão recebem: actionDiff compara as ações e a " +
       "ordem como a execução as consumiria (a identidade da ação no runtime, com fonte e escolhas por instância e os valores " +
-      "das preferências de alvo e de custo, e as decisões da ativação), e scoreDiff, a prioridade de cada ação. Cada escolha " +
-      "é descrita no estado que a produziu, a trocada antes da restauração.", "",
+      "das preferências de alvo e de custo, e as decisões da ativação), e scoreDiff, a prioridade de cada ação. A raiz ascension " +
+      "é o atalho de Ascensão automática, que roda antes da geração: actionDiff compara o material (pelo índice no campo), a " +
+      "carta de Ascensão (pela instância) e a posição, ou a ausência da escolha. A raiz profile é o perfil de planejamento e o " +
+      "portão do planejador, resolvidos depois da geração: actionDiff compara os campos do perfil que o controlador lê " +
+      "(enabled, mode, beamWidth, maxDepth, nodeBudget, candidateLimit, turnMode, battleStepLimit e allowEarlyStop) e se a " +
+      "decisão roda o TurnLineSearch, sem os textos de motivo. Essas duas raízes não têm score. Cada escolha é descrita no " +
+      "estado que a produziu, a trocada antes da restauração. Limites do controle: os ganchos de resolução, as respostas de " +
+      "Chain e as escolhas feitas na execução de uma ação (como os tributos) não são reexecutados, e a troca não alcança o " +
+      "Extra Deck nem as cartas banidas viradas para baixo do oponente.", "",
     `- Arquivo lateral: ${invariance.cases} de ${invariance.records} registros` +
       `${invariance.missing.length ? `; sem linha lateral: ${invariance.missing.slice(0, 10).join(", ")}${invariance.missing.length > 10 ? ` (+${invariance.missing.length - 10})` : ""}` : ""}.`, "",
     "| Raiz | Verificadas | Sem troca | Não reproduzidas | actionDiff | scoreDiff | Portão | Reexecução ≠ viva (ação/score) | Erros | Falhas de restauração | Presets com diferença (ação/score) |",
