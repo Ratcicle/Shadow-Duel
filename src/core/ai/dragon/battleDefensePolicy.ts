@@ -8,7 +8,7 @@ import type {
 } from "./contracts.js";
 
 import { isExtremeDragon } from "./knowledge.js";
-import { getEffectiveAtk, getEffectiveDef } from "../common/cardStats.js";
+import { getBattleStatForAttackTarget, getEffectiveAtk, getEffectiveDef } from "../common/cardStats.js";
 import { isFieldPresenceSummonAttackRestricted } from "../../game/combat/availability.js";
 
 const SOLO_EXTREME_NAMES = new Set([
@@ -103,6 +103,15 @@ function cardThreatValue(card: DragonCard | null = {}) {
   if (card.monsterType === "fusion" || card.monsterType === "ascension") score += 5;
   if (DRAGON_BOSS_NAMES.has(card.name!) || isExtremeDragon(card)) score += 4;
   return score;
+}
+
+/**
+ * Threat of an attack target as its attacker sees it: a face-down target's
+ * stats and identity are hidden, so only its public battle estimate counts.
+ */
+function attackTargetThreatValue(card: DragonCard | null) {
+  if (card?.isFacedown) return getBattleStatForAttackTarget(card) / 500;
+  return cardThreatValue(card);
 }
 
 function cardFieldValue(card: DragonCard = {}) {
@@ -238,7 +247,7 @@ export function scoreDragonBattleAttack(context: DragonPolicyContext = {}) {
   const targetDestroyed = Boolean(target) && context.targetSurvived === false;
   const attackerSurvived = context.attackerSurvived !== false;
   const lethalNow = context.lethalNow === true;
-  const targetThreat = cardThreatValue(target);
+  const targetThreat = attackTargetThreatValue(target);
   const soloExtreme = isSoloExtreme(attacker, bot);
   let score = 0;
 

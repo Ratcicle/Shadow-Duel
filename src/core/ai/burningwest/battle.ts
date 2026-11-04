@@ -495,6 +495,8 @@ export function applyBurningWestSimulatedBattleRewards({
 
 function targetThreat(card: ReadCard | null | undefined) {
   if (!card) return 0;
+  // A face-down target's stats, Level and type are hidden: only its public battle estimate counts.
+  if (card.isFacedown) return getBattleStatForAttackTarget(card);
   return (
     Math.max(getEffectiveAtk(card), getEffectiveDef(card)) +
     Number(card.level || 0) * 120 +

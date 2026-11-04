@@ -81,14 +81,21 @@ export interface BotStrategyPort extends StrategyRuntimePort, PlayerStrategyPort
     choices: BotAutomaticAscensionChoice[];
   }): Partial<BotAutomaticAscensionChoice> | null;
   chooseAutomaticAscensionPosition?(context: BotAscensionContext): BattlePositionInput | null;
+  /**
+   * Scores one attack candidate. The live battle loop passes the target, the
+   * opponent and the game from the bot's public copy before the simulated
+   * battle, so a face-down target is an opaque projection (phase 2.3 L12c);
+   * the attacker and the bot are the bot's own, and simState is the copy
+   * after the battle. The TurnLineSearch passes its planning cards and state.
+   */
   scoreBattleAttackCandidate?(context: {
     attacker: GameCard;
-    target: GameCard | null;
+    target: SimulatedCardState | null;
     baseDelta: number;
     simState: BotPerspectiveGameState;
-    game: BotGamePort;
+    game: BotPerspectiveGameState;
     bot: BotRuntimePort;
-    opponent: GamePlayer;
+    opponent: SimulatedPlayerState;
     isSecondAttack: boolean;
     attackerSurvived: boolean;
     targetSurvived: boolean;

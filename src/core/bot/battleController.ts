@@ -281,14 +281,20 @@ export function playBotBattlePhase(
           delta -= 0.5;
         }
 
+        // Phase 2.3 L12c: the strategy hook reads the target, the opponent and
+        // the game from the public copy before the battle, where the base
+        // score is taken; a face-down target is an opaque projection there.
+        const publicTarget = target
+          ? publicView.player.field.find((c) => isSameBattleCard(c, target)) ?? null
+          : null;
         const strategyBattleDelta = bot.strategy?.scoreBattleAttackCandidate?.({
           attacker,
-          target,
+          target: publicTarget,
           baseDelta: delta,
           simState,
-          game,
+          game: publicView,
           bot: bot,
-          opponent,
+          opponent: publicView.player,
           isSecondAttack,
           attackerSurvived,
           targetSurvived,
