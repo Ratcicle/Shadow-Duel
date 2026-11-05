@@ -68,7 +68,8 @@ export interface BotAscensionContext {
   ascensionCard: GameCard;
   game: BotGamePort;
   bot: BotRuntimePort;
-  opponent: GamePlayer | null;
+  /** The opponent's public view: its hidden cards are opaque projections (phase 2.3 L13c). */
+  opponent: SimulatedPlayerState | null;
 }
 
 export interface BotStrategyPort extends StrategyRuntimePort, PlayerStrategyPort {
@@ -343,7 +344,8 @@ export interface BotHandActionHint {
 export type ExpectedBotHandKind = CardKind | readonly CardKind[];
 
 export interface BotTributeSelectionContext {
-  oppField?: readonly GameCard[];
+  /** The field of the opponent's public view: its hidden cards are opaque projections (phase 2.3 L13c). */
+  oppField?: readonly SimulatedCardState[];
   game?: BotGamePort;
 }
 

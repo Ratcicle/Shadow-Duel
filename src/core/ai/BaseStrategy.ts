@@ -1,4 +1,5 @@
 import { placeSimulatedSpellCard } from "./common/zones.js";
+import { publicPlayerForViewer } from "./common/planningCopy.js";
 import { getNormalTributeRequirement } from "../game/summon/tributeValue.js";
 import type { SimulatedActionOptions } from "./common/simulatedActions/shared.js";
 import {
@@ -493,7 +494,8 @@ export default class BaseStrategy implements StrategyRuntimePort {
       });
     }
 
-    return opponent || null;
+    // On the live game a decision reads what a planning node reads of the opponent.
+    return opponent ? publicPlayerForViewer(gameOrState, opponent, this.bot) : null;
   }
 
   // ─────────────────────────────────────────────────────────────────────────

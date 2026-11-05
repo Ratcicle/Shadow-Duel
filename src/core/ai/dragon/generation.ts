@@ -767,7 +767,7 @@ export function generateDragonMainPhaseActions(this: DragonStrategy, gameInput: 
                         priority += 2;
                     targetPreferences.abyssal_target = {
                         role: "removal",
-                        preferredNames: oppTargets.slice(0, 3).map((target) => target.name!),
+                        preferredNames: oppTargets.slice(0, 3).map((target) => target.name).filter((name) => name !== undefined),
                     };
                 }
                 else if (card.name === "Darkness Dragon") {
@@ -784,7 +784,7 @@ export function generateDragonMainPhaseActions(this: DragonStrategy, gameInput: 
                     };
                     targetPreferences.darkness_dragon_negate_target = {
                         role: "removal",
-                        preferredNames: oppTargets.slice(0, 3).map((target) => target.name!),
+                        preferredNames: oppTargets.slice(0, 3).map((target) => target.name).filter((name) => name !== undefined),
                     };
                 }
                 else if (card.name === "Majestic Silver Dragon") {

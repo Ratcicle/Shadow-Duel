@@ -7,12 +7,14 @@ import type {
   AiStateShape,
   SimulatedCardShape,
   SimulatedCardState,
+  SimulatedPlayerState,
 } from "../../contracts/aiState.js";
 import type { PublicProjectionGuardReport } from "../../contracts/ai.js";
 import {
   PLANNING_CARD_FIELDS,
   PLANNING_CARD_LINKS,
   PLANNING_LEGACY_CARD_FIELDS,
+  PLANNING_PLAYER_FIELDS,
   PLANNING_ZONES,
 } from "./stateFingerprint.js";
 import { projectOncePerTurnUsage } from "../../game/turn/oncePerTurn.js";
@@ -244,6 +246,79 @@ export function registerPublicOpponentProjection(
   for (const card of opponent.spellTrap || []) if (card?.isFacedown) hide(card);
   if (opponent.fieldSpell?.isFacedown) hide(opponent.fieldSpell);
   for (const card of opponent.banished || []) if (card?.isFacedown) hide(card);
+}
+
+/** Each hidden live card keeps one opaque projection, so identity holds across public views. */
+const PUBLIC_VIEW_PROJECTIONS = new WeakMap<object, SimulatedCardState>();
+
+/**
+ * The opaque projection of a hidden live card, by the rule of
+ * registerPublicOpponentProjection. The placement is copied on every call: the
+ * card moves and flips, while its projection stays the same object.
+ */
+function publicHiddenCard(card: AiCardInput, monster: boolean): SimulatedCardState {
+  let projection = PUBLIC_VIEW_PROJECTIONS.get(card);
+  if (!projection) {
+    projection = { _simUnknownCard: true } as SimulatedCardState;
+    PUBLIC_VIEW_PROJECTIONS.set(card, projection);
+  }
+  for (const key of PUBLIC_UNKNOWN_CARD_FIELDS) {
+    if (key in card) Reflect.set(projection, key, Reflect.get(card, key));
+    else Reflect.deleteProperty(projection, key);
+  }
+  if (monster) projection.cardKind = "monster";
+  else delete projection.cardKind;
+  return projection;
+}
+
+/**
+ * What a live decision may read of its opponent, the same as a planning node
+ * reads (phase 2.3 L13c): the hidden cards are opaque projections of
+ * registerPublicOpponentProjection, and the face-up cards and the Graveyard are
+ * the live cards themselves. A snapshot of the zones, read-only by contract: a
+ * hidden card of the view never reaches an engine method, and it compares by
+ * instanceId with a live card, by reference only with itself.
+ */
+export function publicOpponentView(opponent: AiPlayerInput): SimulatedPlayerState {
+  const live = (card: AiCardInput) => card as SimulatedCardState;
+  const hidden = (cards: readonly AiCardInput[] | undefined) =>
+    (cards || []).map(card => card ? publicHiddenCard(card, false) : live(card));
+  const hiddenIfFacedown = (card: AiCardInput, monster = false) =>
+    card?.isFacedown ? publicHiddenCard(card, monster) : live(card);
+  const view = {
+    id: opponent.id,
+    lp: opponent.lp,
+    hand: hidden(opponent.hand),
+    field: (opponent.field || []).map(card => hiddenIfFacedown(card, true)),
+    graveyard: (opponent.graveyard || []).map(live),
+    deck: hidden(opponent.deck),
+    extraDeck: hidden(opponent.extraDeck),
+    banished: (opponent.banished || []).map(card => hiddenIfFacedown(card)),
+    fieldSpell: opponent.fieldSpell ? hiddenIfFacedown(opponent.fieldSpell) : null,
+    spellTrap: (opponent.spellTrap || []).map(card => hiddenIfFacedown(card)),
+    summonCount: opponent.summonCount || 0,
+    additionalNormalSummons: opponent.additionalNormalSummons || 0,
+    controllerType: opponent.controllerType,
+  } as SimulatedPlayerState;
+  for (const key of PLANNING_PLAYER_FIELDS) {
+    if (key in opponent) Reflect.set(view, key, Reflect.get(opponent, key));
+  }
+  return view;
+}
+
+/**
+ * `player` as `viewer` may read it on `state`: a live game, as
+ * resolvePerspectivePlayers tells it (no planning state, and it resolves
+ * opponents itself), gives another player's public view. A planning state is
+ * already public, and a player knows its own cards.
+ */
+export function publicPlayerForViewer<Player extends AiPlayerInput>(
+  state: object,
+  player: Player,
+  viewer: unknown,
+): Player | SimulatedPlayerState {
+  const live = Reflect.get(state, "_isPerspectiveState") !== true && typeof Reflect.get(state, "getOpponent") === "function";
+  return live && player !== viewer ? publicOpponentView(player) : player;
 }
 
 /**

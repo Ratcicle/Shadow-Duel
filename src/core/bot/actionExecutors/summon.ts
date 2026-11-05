@@ -2,6 +2,7 @@ import type { BotRuntimePort, BotGamePort } from "../../contracts/bot.js";
 import type { AIActionOf } from "../../contracts/ai.js";
 import { canResolveHandSummonProcedureActionForCurrentState, resolveHandProcedureMaterials } from "../actionValidation.js";
 import { selectPayableTributes } from "../../ai/common/tributePolicy.js";
+import { publicOpponentView } from "../../ai/common/planningCopy.js";
 
 export async function executeHandSummonProcedureAction(
   bot: BotRuntimePort,
@@ -116,11 +117,13 @@ export async function executeSummonAction(
 
   if (tributeInfo.tributesNeeded > 0) {
     const opponent = bot === game.player ? game.bot : game.player;
+    // The tribute policies read the opponent's field as any live decision does.
+    const oppField = publicOpponentView(opponent).field;
     const selection = selectPayableTributes(bot, bot.field, game, candidates => bot.selectBestTributes(
       candidates,
       tributeInfo.tributesNeeded,
       cardToSummon,
-      { oppField: opponent.field, game },
+      { oppField, game },
     ));
     tributeIndices = selection.indices;
     const tradeCheck =
@@ -130,7 +133,7 @@ export async function executeSummonAction(
             selection.candidates,
             tributeInfo.tributesNeeded,
             {
-              oppField: opponent.field,
+              oppField,
               game,
             },
           )
