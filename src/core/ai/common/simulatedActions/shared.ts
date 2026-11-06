@@ -1171,8 +1171,11 @@ export function chooseSpecialSummonPosition(
   state: SimulatedRuntimeState,
   player: SimulatedPlayerState,
   options: SimulatedActionOptions = {},
+  preferredPosition?: BattlePosition | null,
 ): BattlePosition {
   if (action.position && action.position !== "choice") return action.position;
+  // A contextual preference outranks the strategy hook, never a forced position.
+  if (preferredPosition) return preferredPosition;
   const chooser =
     options.chooseSpecialSummonPosition ||
     options.strategy?.chooseSpecialSummonPosition?.bind(options.strategy);
@@ -1208,11 +1211,12 @@ export function applySummonState(
   state: SimulatedRuntimeState,
   player: SimulatedPlayerState,
   options: SimulatedActionOptions = {},
+  preferredPosition?: BattlePosition | null,
 ): void {
   assignSimulatedFieldPresenceId(card, state);
   card.summonedTurn = state.turnCounter ?? null;
   card.lastSummonedTurn = state.turnCounter ?? null;
-  card.position = chooseSpecialSummonPosition(card, action, state, player, options);
+  card.position = chooseSpecialSummonPosition(card, action, state, player, options, preferredPosition);
   card.isFacedown = false;
   card.hasAttacked = false;
   card.attacksUsedThisTurn = 0;

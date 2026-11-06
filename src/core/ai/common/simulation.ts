@@ -21,7 +21,7 @@ import { getGraveyardBanishBurnEntries } from "./simulatedActions/destruction.js
 import { collectProcedureCounterSources, getCounterValue, setCounterValue } from "./counters.js";
 import { prepareSimulatedFieldCounterPayment } from "./simulatedActions/counters.js";
 import { getBaseLpCost } from "../../effects/costs/lpCost.js";
-import { resolveActionPlayer, resolveSimulatedLpCost } from "./simulatedActions/shared.js";
+import { chooseSpecialSummonPosition, resolveActionPlayer, resolveSimulatedLpCost } from "./simulatedActions/shared.js";
 import { resolveTargetsForAction, captureSimulatedReferences, captureSimulatedSourceSnapshot, isSimulatedReferencePresenceValid, isSimulatedSourcePresenceValid, areRequiredContextualReferencesValid, recordCompletedSimulatedSummon } from "./simulatedActions/shared.js";
 import { buildEventReferenceContext } from "../../effects/targeting/references.js";
 import { appendSimulatedZoneCard } from "./zones.js";
@@ -1491,6 +1491,17 @@ function hasRequiredSimSelections(
   });
 }
 
+/**
+ * A trigger reads only the position preferences its owner's strategy built for
+ * it. The runtime starts its context clean, so those of the effect that caused
+ * the event do not reach it; this key overwrites any inherited value. Without a
+ * planning policy a temporary event effect gets an empty strategy context, so it
+ * reads no preference at all, unlike the runtime.
+ */
+function ownSummonPositions(strategyActionContext: SimulatedSelectionActionContext | undefined) {
+  return { specialSummonPositions: strategyActionContext?.specialSummonPositions };
+}
+
 function buildSimEventActionContext(
   eventName: string,
   payload: SimulatedEventPayloadView = {},
@@ -1929,6 +1940,7 @@ function dispatchSimulatedEvent(
         const actionContext = buildSimEventActionContext(eventName, payload, {
           ...(ownerOptions.actionContext || {}),
           ...(strategyContext.actionContext || {}),
+          ...ownSummonPositions(strategyContext.actionContext),
           player: sourceEntry.player,
           opponent: sourceEntry.opponent,
           ...(eventOwner ? { eventPlayer: eventOwner } : {}),
@@ -2111,6 +2123,7 @@ function dispatchSimulatedEvent(
     const actionContext = buildSimEventActionContext(eventName, payload, {
       ...(ownerOptions.actionContext || {}),
       ...(strategyContext.actionContext || {}),
+      ...ownSummonPositions(strategyContext.actionContext),
       player: owner,
       opponent: getOtherSimPlayer(state, owner),
     });
@@ -3449,14 +3462,17 @@ export function applyGenericSimulatedMainPhaseAction<
       if (!ascensionCard) break;
       if (!checkSimulatedAscension(state, material, ascensionCard).ok) break;
       if (!canSimulatedSpecialSummon(ascensionCard, player, "ascension", "extraDeck")) break;
+      // As in the runtime, a position left free goes through the chooser, and
+      // that happens before the material is paid.
+      const position = chooseSpecialSummonPosition(ascensionCard, {
+        position: action.position || ascensionCard.ascension?.position || "choice",
+      }, state, player, selectionOptions);
       // Runtime pays the material through moveCard: the field-exit cleanup
       // retires its aura contributions and sends attached equips along.
       if (!moveCardToZone(player, material, "graveyard", player, { state })) break;
       if (extraIndex >= 0) player.extraDeck.splice(extraIndex, 1);
       const summoned = Object.assign(ascensionCard, {
-        position:
-          (action.position || ascensionCard.ascension?.position ||
-            "attack") as NonNullable<SimulatedCardState["position"]>,
+        position,
         isFacedown: false,
         hasAttacked: false,
         attacksUsedThisTurn: 0,

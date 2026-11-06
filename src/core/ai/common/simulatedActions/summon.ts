@@ -3,6 +3,7 @@ import { applyCostSummonMarker, applyPaidCostSummonMarkers } from "../../../effe
 import { appendSimulatedZoneCard } from "../zones.js";
 import { getNormalSummonTributeOptions } from "../../../game/summon/tributeValue.js";
 import { getCounterLimitSummonOptions } from "../../../actionHandlers/summon/counterLimit.js";
+import { resolveSummonPositionPreference } from "../../../actionHandlers/summon/position.js";
 import { recordNormalSummonForTurn } from "../../../Player.js";
 import { resolveExactInstanceSelection } from "../../../AutoSelector.js";
 import { appendSimulatedFieldCard } from "../zones.js";
@@ -356,8 +357,33 @@ export function applyRestrictSpecialSummons(
   });
 }
 
+/** The resolving effect's position preference, read as the runtime handlers read it. */
+function resolveContextualPositionPreference(
+  action: { readonly targetRef?: string | undefined },
+  card: SimulatedCardState,
+  options: SimulatedActionOptions,
+) {
+  return resolveSummonPositionPreference(
+    [options.actionContext, options.activationContext?.actionContext],
+    action.targetRef,
+    card.name,
+  );
+}
+
 export function applySpecialSummonFromZone(
   ctx: SimulatedActionHandlerContext<"special_summon_from_zone">,
+): void | typeof STOP_SIMULATION {
+  return resolveSpecialSummonFromZone(ctx, { contextualPosition: true });
+}
+
+/**
+ * Zone-summon transaction. As in the runtime, the zone handler reads the position
+ * preference of the action context; a handler built on this transaction whose
+ * runtime counterpart ignores that preference passes `contextualPosition: false`.
+ */
+function resolveSpecialSummonFromZone(
+  ctx: SimulatedActionHandlerContext<"special_summon_from_zone">,
+  { contextualPosition }: { contextualPosition: boolean },
 ): void | typeof STOP_SIMULATION {
   const {
     action,
@@ -485,7 +511,8 @@ export function applySpecialSummonFromZone(
         !canSimulatedProcedureEnterField(card, targetPlayer, otherPlayer, [])) return;
     const position = chooseSpecialSummonPosition(card, {
       ...action, position: action.position === "any" ? "choice" : action.position || "choice",
-    }, state, targetPlayer, options);
+    }, state, targetPlayer, options,
+    contextualPosition ? resolveContextualPositionPreference(action, card, options) : null);
     if (findCardZone(sourceOwner, card) !== fromZone ||
         !canSimSpecialSummon(card, targetPlayer) || !canSimulatedProcedureEnterField(card, targetPlayer, otherPlayer, []) ||
         (action.requireSource && (!sourceInConfiguredZone(card) || !isSimulatedSourcePresenceValid(options, self)))) return;
@@ -576,8 +603,8 @@ export function applySpecialSummonFromDeckWithCounterLimit(
   };
   const summonOptions: SimulatedActionOptions = { ...options, chooseSpecialSummonCards: (cards, input) =>
     options.chooseSpecialSummonCards ? options.chooseSpecialSummonCards(cards, input) : [best] };
-  const result = applySpecialSummonFromZone({ ...ctx, action: summonAction,
-    options: summonOptions });
+  const result = resolveSpecialSummonFromZone({ ...ctx, action: summonAction,
+    options: summonOptions }, { contextualPosition: false });
   if (result === STOP_SIMULATION) return result;
   if (summonOptions.lastSpecialSummonedCard && action.sendSourceToGraveAfter && findCardZone(self, source)) {
     ctx.applySimulatedActions({ actions: [{ type: "move", player: "self", targetRef: "self", to: "graveyard" }],
@@ -1235,6 +1262,7 @@ export function applyConditionalSummonFromHand(
       state,
       targetPlayer,
       options,
+      resolveContextualPositionPreference(action, chosen, options),
     );
     appendSimulatedFieldCard(targetPlayer.field, chosen);
     recordCompletedSimulatedSummon(state, { card: chosen, player: targetPlayer, method: "special" });
