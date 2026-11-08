@@ -4,6 +4,7 @@ import { appendSimulatedZoneCard } from "../zones.js";
 import { getNormalSummonTributeOptions } from "../../../game/summon/tributeValue.js";
 import { getCounterLimitSummonOptions } from "../../../actionHandlers/summon/counterLimit.js";
 import { resolveSummonPositionPreference } from "../../../actionHandlers/summon/position.js";
+import { aiConfirmsFollowupSummon } from "../../../actionHandlers/shared.js";
 import { recordNormalSummonForTurn } from "../../../Player.js";
 import { resolveExactInstanceSelection } from "../../../AutoSelector.js";
 import { appendSimulatedFieldCard } from "../zones.js";
@@ -428,11 +429,9 @@ function resolveSpecialSummonFromZone(
       : null;
   if (!candidates || candidates.length === 0) {
     if (action.targetRef) return fail();
-    const candidateAction = { ...action };
-    delete candidateAction.position;
     candidates = getActionCandidates(
       targetPlayer,
-      candidateAction,
+      action,
       "deck",
       options,
     );
@@ -792,20 +791,10 @@ export function simulateSynchroSummon(
 
 export function applySearchThenOptionalSpecialSummonFromHand(
   ctx: SimulatedActionHandlerContext<"search_then_optional_special_summon_from_hand">,
-): void {
-  const {
-    action,
-    targets,
-    selections,
-    state,
-    selfId,
-    options,
-    self,
-    opponent,
-    applySimulatedActions,
-  } = ctx;
+): void | typeof STOP_SIMULATION {
+  const { action, state, selfId, options, self, opponent } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
-  const candidates = getActionCandidates(targetPlayer, action, "deck");
+  const candidates = getActionCandidates(targetPlayer, action, "deck", options);
   const searched = chooseRankedCards(
     candidates,
     "benefit",
@@ -815,50 +804,41 @@ export function applySearchThenOptionalSpecialSummonFromHand(
     options,
   )[0];
   if (!searched) return;
+  const fromZone = findCardZone(targetPlayer, searched);
+  const wasFaceupBeforeMove = searched.isFacedown !== true;
   removeCardFromZones(targetPlayer, searched);
   appendSimulatedZoneCard(targetPlayer.hand, searched);
+  options.lastAddedToHandCards = [searched];
+  options.lastAddedToHandCard = searched;
+  if (options.actionContext && typeof options.actionContext === "object") {
+    options.actionContext.lastAddedToHandCards = [searched];
+    options.actionContext.lastAddedToHandCard = searched;
+  }
+  emitSimulatedMove(searched, state, targetPlayer, targetPlayer, fromZone, wasFaceupBeforeMove, false, options);
 
+  // As in the runtime, the follow-up reads the board left by the search.
   const canSummon =
     hasOpenMonsterZone(targetPlayer) &&
-    canSimSpecialSummon(searched, targetPlayer) &&
     evaluateSimulatedConditions(action.summonCondition, {
       state,
       selfId,
       options,
-    });
+    }) &&
+    (action.optional === false || aiConfirmsFollowupSummon());
   if (!canSummon) return;
 
-  removeCardFromZones(targetPlayer, searched);
-  applySummonState(
-    searched,
-    action as SimulatedSummonStateAction,
-    state,
-    targetPlayer,
-    ({
-      ...options,
-      action,
-    } as SimulatedActionOptions),
-  );
-  appendSimulatedFieldCard(targetPlayer.field, searched);
-  recordCompletedSimulatedSummon(state, { card: searched, player: targetPlayer, method: "special" });
-  options.onAfterSpecialSummon?.({
-    state,
-    player: targetPlayer,
-    card: searched,
-    action,
-    fromZone: "hand",
-    sourceCard: options.sourceCard,
-  });
-  emitSimulatedAfterSpecialSummon({
-    options,
-    state,
-    player: targetPlayer,
-    card: searched,
-    action,
-    fromZone: "hand",
-    sourceCard: options.sourceCard,
-  });
-  return;
+  // The label is exclusive so a decision planned for another step of the
+  // effect is never consumed here; only monsters reach the runtime commit.
+  const summonAction: ActionOf<"special_summon_from_zone"> & { contextLabel: string } = {
+    type: "special_summon_from_zone", zone: "hand", count: 1,
+    contextLabel: `${options.effect?.id || action.type}:followup_summon`,
+    filters: { cardKind: "monster" },
+    ...(action.player ? { player: action.player } : {}),
+    ...(action.position ? { position: action.position } : {}),
+    ...(action.restrictAttackThisTurn || action.cannotAttackThisTurn ? { cannotAttackThisTurn: true } : {}),
+  };
+  return resolveSpecialSummonFromZone({ ...ctx, action: summonAction,
+    options: { ...options, chooseSpecialSummonCards: () => [searched] } }, { contextualPosition: false });
 }
 
 export function applySpecialSummonFromHandWithCost(

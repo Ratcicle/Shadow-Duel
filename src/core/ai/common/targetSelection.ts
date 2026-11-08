@@ -360,7 +360,6 @@ export function buildActionFilter<Action extends object>(
     "maxAtk",
     "minDef",
     "maxDef",
-    "position",
     "isTuner",
     "isToken",
     "lastSummonMethods",

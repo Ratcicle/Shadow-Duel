@@ -117,6 +117,14 @@ export async function requestOptionalConfirmation(
   return result !== null;
 }
 
+/**
+ * AI answer to an optional Special Summon that follows a search. The runtime
+ * resolver and the AI simulation read this one policy, so they cannot drift.
+ */
+export function aiConfirmsFollowupSummon(): boolean {
+  return true;
+}
+
 /** Preserve card choices made by a resolution modal in canonical replay. */
 export async function requestResolutionCards(
   game: Pick<ActionRuntimeGamePort, "requestDecision">,

@@ -433,9 +433,11 @@ export function applyDestroyTargetedCards(
   if (action.targetRef || (action.minTargets !== 0 && !action.targetCountFromContext)) return applyDestroy(ctx);
   const zones = (action.zones || ["field", "spellTrap", "fieldSpell"])
     .filter(zone => zone === "field" || zone === "spellTrap" || zone === "fieldSpell");
+  // As in the runtime, a top-level position narrows the targets of this action only.
   const candidates = getActionCandidates(opponent, {
     ...action, zones,
-  }, "field", options);
+  }, "field", options).filter(card =>
+    !action.position || action.position === "any" || card.position === action.position);
   let count = action.maxTargets ?? 1;
   if (action.targetCountFromContext) {
     const spec = action.targetCountFromContext;

@@ -40,6 +40,7 @@ import {
   getUIText,
 } from "../i18n.js";
 import {
+  aiConfirmsFollowupSummon,
   buildZoneSelectionCandidates,
   getUI,
   requestOptionalConfirmation,
@@ -1544,7 +1545,7 @@ async function shouldPerformOptionalSummon(
       },
     );
     return isPromiseLikeBoolean(result) ? !!(await result) : !!result;
-  }, () => true, context);
+  }, aiConfirmsFollowupSummon, context);
 }
 
 /**
