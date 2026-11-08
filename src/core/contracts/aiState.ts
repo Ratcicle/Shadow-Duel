@@ -285,6 +285,7 @@ export interface SimulatedPlayerState {
   debug?: boolean;
   id: PlayerId | string;
   lp: number;
+  lpGainMultiplier?: number;
   lpGainedThisTurn?: number;
   damageReceivedThisTurn?: number;
   hand: SimulatedCardState[];

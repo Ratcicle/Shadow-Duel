@@ -106,13 +106,17 @@ function isSupportedSimulatedDestructionReplacement(replacement: ActionReplaceme
     (cost.type === "remove_counters_from_field" && !cost.targetRef));
 }
 
-/** Resolve supported equipment costs after battle damage has been calculated. */
+/**
+ * Resolve supported equipment costs after battle damage has been calculated.
+ * `isPreventionNegated` rejects the replacements of an owner an active aura negates.
+ */
 export function replaceSimulatedBattleDestruction(
   state: SimulatedRuntimeState,
   target: SimulatedCardState,
   options: SimulatedActionOptions = {},
+  isPreventionNegated?: (replacementOwner: SimulatedPlayerState) => boolean,
 ): SimulatedCardState | null {
-  return replaceSimulatedDestruction(state, target, "battle", options);
+  return replaceSimulatedDestruction(state, target, "battle", options, isPreventionNegated);
 }
 
 function replaceSimulatedDestruction(
@@ -120,6 +124,7 @@ function replaceSimulatedDestruction(
   target: SimulatedCardState,
   reason: "battle" | "effect",
   options: SimulatedActionOptions = {},
+  isPreventionNegated?: (replacementOwner: SimulatedPlayerState) => boolean,
 ): SimulatedCardState | null {
   const targetOwner = findCardOwner(state, target);
   if (!targetOwner) return null;
@@ -133,7 +138,8 @@ function replaceSimulatedDestruction(
     (!replacement.targetMustBeSource || target === source) &&
     (!replacement.targetMustNotBeSource || target !== source) &&
     (!replacement.targetMustBeEquippedToSource || (source?.equippedTo || source?.equipTarget) === target) &&
-    (!replacement.targetFilters || matchesTargetFilters(target, replacement.targetFilters));
+    (!replacement.targetFilters || matchesTargetFilters(target, replacement.targetFilters)) &&
+    !isPreventionNegated?.(owner);
   const entries: Array<{ owner: SimulatedPlayerState; source: SimulatedCardState;
     effect: ReplacementEffectDefinition; firstOpportunityConsumed: boolean }> = [];
   for (const owner of [state.bot, state.player]) {

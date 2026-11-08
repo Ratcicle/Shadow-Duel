@@ -1,4 +1,4 @@
-﻿import { appendSimulatedZoneCard } from "./ai/common/zones.js";
+﻿import { moveCardToZone } from "./ai/common/zones.js";
 import Player from "./Player.js";
 import { getStrategyFor } from "./ai/StrategyRegistry.js";
 import { createGameTreeModels } from "./ai/PlanningStrategies.js";
@@ -34,7 +34,9 @@ import {
   resolveHandIndexForAction as resolveHandIndexForBotAction,
   tributeMatchesAltRequirement as tributeMatchesAltRequirementForBot,
 } from "./bot/actionValidation.js";
-import { getPiercingDamage } from "./ai/common/cardStats.js";
+import { isVisibleBattlePreventionNegated, resolveVisibleBattleStep } from "./ai/common/battleProjection.js";
+import { replaceSimulatedBattleDestruction } from "./ai/common/simulatedActions/destruction.js";
+import { getOriginalOwner } from "./ai/common/simulatedActions/movement.js";
 import type { BotCloneGamePort, BotCloneOptions } from "./bot/simulationBridge.js";
 import type {
   BotArchetypeId,
@@ -59,6 +61,38 @@ import type {
 } from "./contracts/aiState.js";
 import type { GameCard, BattlePositionInput } from "./contracts/cards.js";
 import type { GamePlayer } from "./contracts/player.js";
+
+/** One simulated battle's LP change: LP stop at 0, and a heal follows the player's gain multiplier. */
+function applySimulatedBattleDamage(player: SimulatedPlayerState, damage: number): void {
+  player.lp = damage < 0
+    ? player.lp + Math.floor(-damage * (player.lpGainMultiplier || 1))
+    : Math.max(0, player.lp - damage);
+}
+
+/** The once-per-turn battle protection absorbed this destruction, as the runtime records it. */
+function markBattleProtectionUsed(card: SimulatedCardState, turnCounter: number): void {
+  card.battleIndestructibleOncePerTurnLastUsedTurn = turnCounter;
+  card.battleIndestructibleOncePerTurnUsed = true;
+}
+
+/**
+ * Destroys a monster by simulated battle, as the bridge does (phase 2.3 L02):
+ * a modeled replacement can save it, and the generic move takes its equips to
+ * the Graveyard and resets its field-exit statuses. A negation aura is read per
+ * replacement owner and now: it may have left the field with the attacker.
+ */
+function destroySimulatedBattleMonster(
+  state: SimulationGameState | BotPerspectiveGameState,
+  controller: SimulatedPlayerState,
+  monster: SimulatedCardState,
+): void {
+  if (!controller.field.includes(monster) || replaceSimulatedBattleDestruction(state, monster, {}, replacementOwner =>
+    isVisibleBattlePreventionNegated(monster, controller, replacementOwner, [state.bot, state.player]))) return;
+  moveCardToZone(getOriginalOwner(state, monster, controller), monster, "graveyard", controller, {
+    state,
+    movedByEffect: false,
+  });
+}
 
 export default class Bot extends Player {
   declare maxSimulationsPerPhase: number;
@@ -428,71 +462,45 @@ export default class Bot extends Player {
 
     if (!isMultiAttackMode && usedAttacks >= maxAttacks) return;
     if (isMultiAttackMode && usedAttacks >= multiAttackLimit) return;
-
-    const attackerOwner = state.bot;
-    const defenderOwner = state.player;
-
-    const attackStat = attacker.atk || 0;
-    if (!target) {
-      if (
-        usedAttacks > 0 &&
-        (attacker.extraAttackTargetRestriction ||
-          attacker.passiveExtraAttackTargetRestriction) === "monster"
-      ) {
-        return;
-      }
-      defenderOwner.lp -= attackStat;
-      attacker.attacksUsedThisTurn = usedAttacks + 1;
-      // Multi-attack mode uses different limit
-      const effectiveMax = isMultiAttackMode ? multiAttackLimit : maxAttacks;
-      attacker.hasAttacked = attacker.attacksUsedThisTurn >= effectiveMax;
+    if (
+      !target &&
+      usedAttacks > 0 &&
+      (attacker.extraAttackTargetRestriction ||
+        attacker.passiveExtraAttackTargetRestriction) === "monster"
+    ) {
       return;
     }
 
-    // 🎭 REGRA: Bot não pode ver DEF de monstros facedown
-    // Estimar DEF baseado em média (1500) ao invés de usar valor real
-    const targetStat =
-      target.position === "attack"
-        ? target.atk || 0
-        : target.isFacedown
-          ? 1500 // Estimativa: DEF médio de monstros
-          : target.def || 0;
-    if (target.position === "attack") {
-      if (attackStat > targetStat) {
-        defenderOwner.lp -= attackStat - targetStat;
-        appendSimulatedZoneCard(defenderOwner.graveyard, target);
-        defenderOwner.field.splice(defenderOwner.field.indexOf(target), 1);
-      } else if (attackStat < targetStat) {
-        attackerOwner.lp -= targetStat - attackStat;
-        appendSimulatedZoneCard(attackerOwner.graveyard, attacker);
-        attackerOwner.field.splice(attackerOwner.field.indexOf(attacker), 1);
-      } else {
-        appendSimulatedZoneCard(attackerOwner.graveyard, attacker);
-        appendSimulatedZoneCard(defenderOwner.graveyard, target);
-        attackerOwner.field.splice(attackerOwner.field.indexOf(attacker), 1);
-        defenderOwner.field.splice(defenderOwner.field.indexOf(target), 1);
-      }
-    } else {
-      // BUG #12 FIX: Target in defense position - consider piercing damage
-      if (attackStat > targetStat) {
-        // Attacker wins - destroy defender
-        appendSimulatedZoneCard(defenderOwner.graveyard, target);
-        defenderOwner.field.splice(defenderOwner.field.indexOf(target), 1);
-        // Check for piercing damage (inflict excess damage to LP)
-        const piercingDamage = getPiercingDamage(
-          attacker,
-          attackStat,
-          targetStat,
-        );
-        if (piercingDamage > 0) {
-          defenderOwner.lp -= piercingDamage;
-        }
-      } else if (attackStat < targetStat) {
-        // Attacker loses - take reflect damage
-        attackerOwner.lp -= targetStat - attackStat;
-      }
-      // If attackStat === targetStat: tie, no damage, no destruction
-    }
+    const attackerOwner = state.bot;
+    const defenderOwner = state.player;
+    // Phase 2.3 L17: the step of the visible battle projection. A face-down
+    // target is the public DEF estimate and its statuses are never read.
+    const turnCounter = state.turnCounter || 0;
+    const players = [attackerOwner, defenderOwner];
+    const step = resolveVisibleBattleStep(
+      attacker,
+      target,
+      { attacking: attackerOwner, defending: defenderOwner },
+      turnCounter,
+      {
+        attacker: attacker.battleIndestructibleOncePerTurnLastUsedTurn === turnCounter,
+        target: !!target && !target.isFacedown &&
+          target.battleIndestructibleOncePerTurnLastUsedTurn === turnCounter,
+      },
+      {
+        attacker: isVisibleBattlePreventionNegated(attacker, attackerOwner, attackerOwner, players),
+        target: !!target && isVisibleBattlePreventionNegated(target, defenderOwner, defenderOwner, players),
+      },
+    );
+    if (step.attackerProtectionUsed) markBattleProtectionUsed(attacker, turnCounter);
+    if (step.targetProtectionUsed && target) markBattleProtectionUsed(target, turnCounter);
+    // Damage first, then destruction, attacker before target, as the Damage Step does.
+    applySimulatedBattleDamage(attackerOwner, step.damageToAttackingPlayer);
+    applySimulatedBattleDamage(defenderOwner, step.damageToDefendingPlayer);
+    if (step.attackerDestroyed) destroySimulatedBattleMonster(state, attackerOwner, attacker);
+    if (step.targetDestroyed && target) destroySimulatedBattleMonster(state, defenderOwner, target);
+
+    if (!attackerOwner.field.includes(attacker)) return;
     attacker.attacksUsedThisTurn = usedAttacks + 1;
     // Multi-attack mode uses different limit
     const effectiveMax = isMultiAttackMode ? multiAttackLimit : maxAttacks;

@@ -3,6 +3,7 @@ import type { GameCard } from "../../contracts/cards.js";
 import { getBattleStatForAttackTarget, getEffectiveAtk, getPiercingDamage } from "./cardStats.js";
 import { hasSimulatedProtection } from "./simulatedActions/lifecycle.js";
 import { getCounterAttackLockReason, isFieldPresenceSummonAttackRestricted } from "../../game/combat/availability.js";
+import { isPassiveSourceActive } from "../../effects/passives/passiveBuffs.js";
 import { cardMatchesFilter } from "./cardFilters.js";
 
 type BattleCard = SimulatedCardState | GameCard;
@@ -112,15 +113,46 @@ function isProtectedFromBattle(card: BattleCard, owner: Pick<VisibleBattlePlayer
       { ownerId: owner.id, sourceOwnerId: source.id }));
 }
 
+const BATTLE_PREVENTION_NEGATION_PASSIVES: ReadonlySet<string> = new Set([
+  "negate_battle_destruction_prevention", "negate_opponent_battle_destruction_prevention",
+]);
+
+/**
+ * The runtime's first check on a battle destruction, over the public board: an
+ * active aura negates the effects of `preventionOwner` that would save `card`.
+ * Only face-up sources are read, and a hidden `card` is its opaque projection.
+ */
+export function isVisibleBattlePreventionNegated(
+  card: BattleCard, protectedOwner: Pick<VisibleBattlePlayer, "id">,
+  preventionOwner: Pick<VisibleBattlePlayer, "id">,
+  players: readonly Pick<VisibleBattlePlayer, "id" | "field" | "spellTrap" | "fieldSpell">[],
+): boolean {
+  return players.some(auraOwner => {
+    const applies = (player: Pick<VisibleBattlePlayer, "id">, rule: readonly string[] = ["opponent"]) =>
+      rule.includes("any") || rule.includes(player.id === auraOwner.id ? "self" : "opponent");
+    return ([["field", auraOwner.field], ["spellTrap", auraOwner.spellTrap],
+      ["fieldSpell", auraOwner.fieldSpell ? [auraOwner.fieldSpell] : []]] as const).some(([zone, sources]) =>
+      sources.some(source => isPassiveSourceActive(source) && source.effects?.some(effect =>
+        effect.timing === "passive" && "passive" in effect && effect.passive &&
+        BATTLE_PREVENTION_NEGATION_PASSIVES.has(effect.passive.type) &&
+        (!effect.requireZone || effect.requireZone === zone) &&
+        applies(protectedOwner, effect.passive.targetOwners) &&
+        applies(preventionOwner, effect.passive.preventedEffectOwners) &&
+        cardMatchesFilter(card, effect.passive.targetFilters || { cardKind: "monster" }))));
+  });
+}
+
 /**
  * One attack over public stats: battle destruction after immunities and the
  * once-per-turn protection, then battle damage after prevention and healing.
  * A missing target is a direct attack. `protectionUsed` is the state before it.
+ * `preventionNegated` skips the immunities and leaves that protection unspent.
  */
 export function resolveVisibleBattleStep(
   attacker: BattleCard, target: BattleCard | null | undefined,
   players: { attacking: Pick<VisibleBattlePlayer, "id">; defending: Pick<VisibleBattlePlayer, "id"> },
   turnCounter: number, protectionUsed: { attacker: boolean; target: boolean },
+  preventionNegated: { attacker: boolean; target: boolean } = { attacker: false, target: false },
 ): VisibleBattleStep {
   const step: VisibleBattleStep = {
     attackerDestroyed: false, targetDestroyed: false,
@@ -129,13 +161,16 @@ export function resolveVisibleBattleStep(
   };
   const destroy = (defending: boolean) => {
     const card = defending ? target : attacker;
-    if (!card || isProtectedFromBattle(card, defending ? players.defending : players.attacking,
-      defending ? players.attacking : players.defending, turnCounter)) return;
-    if (!card.isFacedown && card.battleIndestructibleOncePerTurn &&
-        !(defending ? protectionUsed.target : protectionUsed.attacker)) {
-      if (defending) step.targetProtectionUsed = true;
-      else step.attackerProtectionUsed = true;
-      return;
+    if (!card) return;
+    if (!(defending ? preventionNegated.target : preventionNegated.attacker)) {
+      if (isProtectedFromBattle(card, defending ? players.defending : players.attacking,
+        defending ? players.attacking : players.defending, turnCounter)) return;
+      if (!card.isFacedown && card.battleIndestructibleOncePerTurn &&
+          !(defending ? protectionUsed.target : protectionUsed.attacker)) {
+        if (defending) step.targetProtectionUsed = true;
+        else step.attackerProtectionUsed = true;
+        return;
+      }
     }
     if (defending) step.targetDestroyed = true;
     else step.attackerDestroyed = true;

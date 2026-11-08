@@ -543,11 +543,12 @@ export function scoreBurningWestBattleAttackCandidate({
           entry.destroyedBy === "effect",
       ),
   );
+  // Only the opponent's LP is known here: its healing is no damage to the bot.
   const inferredDamage =
     !hasSummary &&
     Number.isFinite(Number(opponent?.lp)) &&
     Number.isFinite(Number(opponentLpAfter))
-      ? Number(opponent!.lp) - Number(opponentLpAfter)
+      ? Math.max(0, Number(opponent!.lp) - Number(opponentLpAfter))
       : 0;
   const summaryDamage = Number(summary?.damage || 0);
   const battleDamage = hasSummary ? summaryDamage : inferredDamage;

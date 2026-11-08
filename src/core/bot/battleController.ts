@@ -274,11 +274,12 @@ export function playBotBattlePhase(
         const targetAtk = target
           ? target.isFacedown ? getBattleStatForAttackTarget(target) : (target.atk || 0)
           : 0;
+        // The attacker's ATK before the battle: the copy's is already the one after it.
         if (
           target &&
           simAttacker &&
           simAttacker.cardKind === "monster" &&
-          (simAttacker.atk || 0) <= targetAtk
+          (attacker.atk || 0) <= targetAtk
         ) {
           delta -= 0.5;
         }
