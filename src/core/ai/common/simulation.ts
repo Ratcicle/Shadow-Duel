@@ -2811,13 +2811,16 @@ export function applyGenericSimulatedMainPhaseAction<
       for (const tribute of tributeCards) {
         const wasFaceupBeforeMove = tribute.isFacedown !== true;
         const effectsNegatedAtFieldExit = tribute.effectsNegated === true;
+        const receipt: { value: import("./zones.js").SimulatedMoveReceipt | null } = { value: null };
         if (!player.field.includes(tribute) ||
-            !moveCardToZone(player, tribute, "graveyard", player, { state })) {
+            !moveCardToZone(player, tribute, "graveyard", player, { state,
+              ...(tributeOptions.emitSimulatedEvent ? { emitSimulatedEvent: tributeOptions.emitSimulatedEvent } : {}),
+              onMoveCommitted: result => { receipt.value = result; } })) {
           tributeCostComplete = false;
           break;
         }
         emitSimulatedMove(tribute, state, player, player, "field", wasFaceupBeforeMove,
-          effectsNegatedAtFieldExit, tributeOptions, "tribute_summon_cost", false);
+          effectsNegatedAtFieldExit, tributeOptions, "tribute_summon_cost", false, receipt.value);
       }
       if (!tributeCostComplete) {
         resolveDeferredEvents(deferredTributeEvents);

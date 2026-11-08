@@ -30,7 +30,7 @@ export interface StrategicEffectView {
 }
 
 export type StrategicCardView = Omit<SimulatedCardShape,
-  "effects" | "equips" | "equippedTo" | "equipTarget"
+  "effects" | "equips" | "equippedTo" | "equipTarget" | "boundTrapSource" | "boundMonsterTarget"
 > & {
   effects?: readonly StrategicEffectView[];
 };

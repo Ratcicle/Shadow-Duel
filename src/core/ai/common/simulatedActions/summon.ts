@@ -569,6 +569,33 @@ function resolveSpecialSummonFromZone(
   return;
 }
 
+/**
+ * Revives the first target through the zone-summon transaction and binds it to
+ * the source. As in the runtime handler, the action context's position
+ * preference is not read and the links are written after the summon's events.
+ */
+export function applyCallOfHauntedSummonAndBind(
+  ctx: SimulatedActionHandlerContext<"call_of_haunted_summon_and_bind">,
+): boolean | typeof STOP_SIMULATION {
+  const { action, targets, options } = ctx;
+  const source = options.sourceCard;
+  const target = targets[0];
+  if (!source || source.boundMonsterTarget || target?.cardKind !== "monster") return false;
+  const summonAction: ActionOf<"special_summon_from_zone"> = {
+    type: "special_summon_from_zone", zone: "graveyard", sourceOwner: "any", count: 1, targetRef: action.targetRef,
+    ...(action.position ? { position: action.position } : {}),
+  };
+  const summonOptions: SimulatedActionOptions = { ...options };
+  const result = resolveSpecialSummonFromZone({ ...ctx, action: summonAction, targets: [target], options: summonOptions },
+    { contextualPosition: false });
+  if (result === STOP_SIMULATION) return result;
+  const summoned = summonOptions.lastSpecialSummonedCard;
+  if (!summoned) return false;
+  summoned.boundTrapSource = source;
+  source.boundMonsterTarget = summoned;
+  return true;
+}
+
 /** Activation-snapshot limits feed the existing zone-summon transaction. */
 export function applySpecialSummonFromDeckWithCounterLimit(
   ctx: SimulatedActionHandlerContext<"special_summon_from_deck_with_counter_limit">,

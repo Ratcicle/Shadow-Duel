@@ -267,6 +267,8 @@ export function destroySimulatedCard(
     ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}),
     onMoveCommitted: result => { receipt.value = result; },
   })) return false;
+  // Without a receipt the card did not move (same-zone shortcut): as in the runtime, it counts as destroyed and publishes nothing.
+  if (!receipt.value) return true;
   const toZone = receipt.value?.destinationPresence.zone ?? findCardZone(destination, card) ?? "removed";
   const toPlayer = toZone === "removed" ? null : receipt.value
     ? [state.player, state.bot].find(player => player.id === receipt.value?.destinationPresence.controllerId) ?? null
@@ -281,6 +283,7 @@ export function destroySimulatedCard(
     movedByEffect: true, actionContext: options.actionContext };
   if (toZone === "graveyard") options.emitSimulatedEvent?.("card_to_grave", payload);
   options.emitSimulatedEvent?.("card_moved", payload);
+  receipt.value?.settleBoundDestructions();
   return true;
 }
 

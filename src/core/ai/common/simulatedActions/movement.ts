@@ -157,6 +157,7 @@ export function emitSimulatedMove(
     options.emitSimulatedEvent?.("card_to_grave", payload);
   }
   options.emitSimulatedEvent?.("card_moved", payload);
+  receipt?.settleBoundDestructions();
 }
 
 export function applyBanish(
