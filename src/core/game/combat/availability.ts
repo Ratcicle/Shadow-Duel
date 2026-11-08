@@ -290,17 +290,19 @@ export function hasExplicitAttackLimitThisTurn(
 /**
  * Base attack limit from the card and its owner's Graveyard: an explicit limit
  * this turn, else the dynamic Graveyard count, else 1 plus the extra attacks.
+ * A null Graveyard means the owner is unknown: no Graveyard is read and the
+ * dynamic count is neutral, so such a card keeps 1 plus the extra attacks.
  * Second attacks and attacks on every opponent monster stay with the callers.
  */
 export function getBaseAttackLimit(
   attacker: BaseAttackLimitCard,
-  ownerGraveyard: readonly ({ readonly name?: string | null | undefined } | null | undefined)[],
+  ownerGraveyard: readonly ({ readonly name?: string | null | undefined } | null | undefined)[] | null,
 ): number {
   if (hasExplicitAttackLimitThisTurn(attacker)) {
     return Math.max(0, Math.floor(Number(attacker.attackLimitThisTurn)));
   }
   const dea = attacker.dynamicExtraAttacks;
-  if (dea?.source === "graveyard_count") {
+  if (dea?.source === "graveyard_count" && ownerGraveyard) {
     return Math.max(0, ownerGraveyard.filter((c) => c && c.name === dea.name).length);
   }
   return Math.max(1, 1 + Number(attacker.extraAttacks || 0));

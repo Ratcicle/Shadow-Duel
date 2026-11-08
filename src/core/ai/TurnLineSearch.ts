@@ -39,7 +39,12 @@ import { createPlanningOwnerPolicy } from "./common/planningOwner.js";
 import { withoutLiveGameReference } from "./common/gameTreeSimulation.js";
 import type { GameTreeModels, PlanningModel } from "../contracts/aiPlanning.js";
 
-import { getCounterAttackLockReason, isFieldPresenceSummonAttackRestricted } from "../game/combat/availability.js";
+import {
+  getBaseAttackLimit,
+  getCounterAttackLockReason,
+  hasExplicitAttackLimitThisTurn,
+  isFieldPresenceSummonAttackRestricted,
+} from "../game/combat/availability.js";
 import { cardMatchesFilter } from "./common/cardFilters.js";
 import type {
   AIAction,
@@ -223,6 +228,8 @@ export interface BattleCandidateScoreInput {
   game: PlanningState;
   bot: PlannerPlayer;
   opponent: PlannerPlayer;
+  /** The node this attack starts from; simState, game, bot and opponent are after it. */
+  preBattleState: PlanningState;
   lethalNow: boolean;
   attackerSurvived: boolean;
   targetSurvived: boolean;
@@ -880,30 +887,19 @@ function isBattleReadyPlannerAttacker(
 }
 
 function getPlannerMaxAttacks(
-  card: PlannerCard | null | undefined,
+  card: PlannerCard,
   state: PlanningState,
 ): number {
-  if (
-    card?.attackLimitThisTurn !== undefined &&
-    card?.attackLimitThisTurn !== null &&
-    Number.isFinite(Number(card.attackLimitThisTurn))
-  ) {
-    return Math.max(0, Math.floor(Number(card.attackLimitThisTurn)));
-  }
-  let extra = Number(card?.extraAttacks || 0);
-  if (card?.dynamicExtraAttacks?.source === "graveyard_count") {
-    const config = card.dynamicExtraAttacks;
-    extra = (state?.bot?.graveyard || []).filter(
-      (entry) => entry?.name === config.name,
-    ).length;
-    extra -= 1;
-  }
-  if (card?.canAttackAllOpponentMonstersThisTurn) {
+  // Phase 2.3 L18: the runtime's base limit. The second attack and the attack
+  // on every monster stay with this caller, as they do in the runtime.
+  const baseLimit = getBaseAttackLimit(card, state?.bot?.graveyard || []);
+  if (hasExplicitAttackLimitThisTurn(card)) return baseLimit;
+  if (card.canAttackAllOpponentMonstersThisTurn) {
     return Math.max(1, Number(card.multiAttackLimit || 1));
   }
   const secondAttack =
-    card?.canMakeSecondAttackThisTurn && !card?.secondAttackUsedThisTurn ? 1 : 0;
-  return Math.max(1, 1 + Math.max(0, extra) + secondAttack);
+    card.canMakeSecondAttackThisTurn && !card.secondAttackUsedThisTurn ? 1 : 0;
+  return baseLimit + secondAttack;
 }
 
 function canPlannerAttackerStillAttack(
@@ -1465,7 +1461,7 @@ function chooseBestSingleSimulatedBattle(
       const targetAfter = candidateTarget &&
         candidateState.player.field.includes(candidateTarget)
         ? candidateTarget : null;
-      const hookDelta = inNode([candidateState], () => strategy.scoreBattleAttackCandidate?.({
+      const hookDelta = inNode([candidateState, state], () => strategy.scoreBattleAttackCandidate?.({
         attacker: attackerAfter || originalAttacker,
         target: originalTarget,
         baseDelta: scoreAfter - baseScore,
@@ -1473,6 +1469,7 @@ function chooseBestSingleSimulatedBattle(
         game: candidateState,
         bot: candidateState.bot,
         opponent: candidateState.player,
+        preBattleState: state,
         lethalNow: (candidateState.player?.lp || 0) <= 0,
         attackerSurvived: Boolean(attackerAfter),
         targetSurvived: Boolean(targetAfter),

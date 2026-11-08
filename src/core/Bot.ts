@@ -35,6 +35,7 @@ import {
   tributeMatchesAltRequirement as tributeMatchesAltRequirementForBot,
 } from "./bot/actionValidation.js";
 import { isVisibleBattlePreventionNegated, resolveVisibleBattleStep } from "./ai/common/battleProjection.js";
+import { getBaseAttackLimit, hasExplicitAttackLimitThisTurn } from "./game/combat/availability.js";
 import { replaceSimulatedBattleDestruction } from "./ai/common/simulatedActions/destruction.js";
 import { getOriginalOwner } from "./ai/common/simulatedActions/movement.js";
 import type { BotCloneGamePort, BotCloneOptions } from "./bot/simulationBridge.js";
@@ -431,27 +432,9 @@ export default class Bot extends Player {
     if (attacker.cannotAttackThisTurn) return;
     if (attacker.position === "defense") return;
 
-    let maxAttacks: number;
-    const hasAttackLimit =
-      attacker.attackLimitThisTurn !== undefined &&
-      attacker.attackLimitThisTurn !== null &&
-      Number.isFinite(Number(attacker.attackLimitThisTurn));
-    if (hasAttackLimit) {
-      maxAttacks = Math.max(
-        0,
-        Math.floor(Number(attacker.attackLimitThisTurn)),
-      );
-    } else {
-      let _extra = attacker.extraAttacks || 0;
-      if (attacker.dynamicExtraAttacks?.source === "graveyard_count") {
-        const dea = attacker.dynamicExtraAttacks;
-        _extra = (state.bot?.graveyard || []).filter(
-          (c) => c && c.name === dea.name,
-        ).length;
-        _extra -= 1;
-      }
-      maxAttacks = 1 + _extra;
-    }
+    // Phase 2.3 L18: the runtime's base limit, from the attacker's own Graveyard.
+    const hasAttackLimit = hasExplicitAttackLimitThisTurn(attacker);
+    const maxAttacks = getBaseAttackLimit(attacker, state.bot?.graveyard || []);
     const usedAttacks = attacker.attacksUsedThisTurn || 0;
 
     // Multi-attack mode allows more attacks
