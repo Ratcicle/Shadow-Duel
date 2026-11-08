@@ -1387,7 +1387,6 @@ export function buildLuminarchSimulationOptions(
   return {
       finalizeLpPayments,
       archetype: "Luminarch",
-      preferDefense: true,
       selfId: "bot",
       guardLabel: "LuminarchStrategy.simulateMainPhaseAction",
       ...options,

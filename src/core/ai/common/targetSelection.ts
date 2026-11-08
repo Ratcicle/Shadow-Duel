@@ -91,7 +91,6 @@ interface TargetSelectionOptions {
     costPreferences?: TargetPreference | null;
   } | null;
   fieldSpell?: SimulatedCardState | null;
-  preferDefense?: boolean;
   archetype?: string | null;
   opponentField?: readonly SimulatedCardState[];
   opponentLp?: number;

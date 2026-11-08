@@ -391,7 +391,6 @@ export interface SimulatedActionOptions {
 /** Execution-only policy. Never stored in a simulation graph or replay. */
 export interface SimulatedOwnerPolicy extends SimulatedActionOptions {
   archetype?: string | null;
-  preferDefense?: boolean;
   buildActivationContextForEffect?(input: {
     sourceCard: SimulatedCardState;
     effect: EffectDefinition;

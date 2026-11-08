@@ -161,7 +161,6 @@ interface SimulatedSelectionOptionsInput
     | "chooseSpecialSummonPosition"
   > {
   archetype?: string | null;
-  preferDefense?: boolean;
   changedCard?: SimulatedCardState | null;
   actionContext?: SimulatedSelectionActionContext;
   activationContext?: AIActivationContext | null | undefined;
@@ -281,7 +280,6 @@ interface SimulatedEventStrategyCapabilities {
 
 interface BuiltSimulatedSelectionOptions extends SimulatedActionOptions {
   archetype?: string | null;
-  preferDefense?: boolean;
   specialSummonPositions?: object;
 }
 
@@ -296,7 +294,6 @@ interface SimulatedEventDispatchOptions
   > {
   activationContext?: AIActivationContext | null | undefined;
   archetype?: string | null;
-  preferDefense?: boolean;
   maxSimulatedEventDepth?: number;
   strategy?: unknown;
   rankSearchCandidates?: unknown;
@@ -532,7 +529,6 @@ function buildSelectionOptions(
   return {
     ...options,
     archetype: options.archetype,
-    preferDefense: options.preferDefense,
     actionContext,
     activationContext: activationContext as SimulatedActionOptions["activationContext"],
     targetPreferences:
@@ -3315,7 +3311,6 @@ export function applyGenericSimulatedMainPhaseAction<
         selfId: options.selfId || "bot",
         options: {
           ...selectionOptions,
-          preferDefense: !targetPreference,
           targetPreference,
           opponentField: state.player?.field || [],
           opponentLp: state.player?.lp || 0,
