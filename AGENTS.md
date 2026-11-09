@@ -81,7 +81,7 @@ src/data/cards/               # 11 coleções declarativas + governança de IDs
 **Apresentação e contrato da UI:**
 
 - [GameUI](src/core/contracts/ui.ts) define a superfície pública de apresentação. `Renderer`, o adapter normal e o adapter descartado satisfazem o mesmo contrato fechado.
-- [src/ui/renderer/attachments.ts](src/ui/renderer/attachments.ts) instala os 114 métodos anexados, preservando referências e ordem. A fachada usa declaration merging sem emitir class fields para esses métodos.
+- [src/ui/renderer/attachments.ts](src/ui/renderer/attachments.ts) instala os 115 métodos anexados, preservando referências e ordem. A fachada usa declaration merging sem emitir class fields para esses métodos.
 - [src/ui/renderer/types.ts](src/ui/renderer/types.ts) concentra projeções de cartas, estado de LP e elementos DOM; tipos internos do Pixi ficam em [PixiVfxLayer.ts](src/ui/pixi/PixiVfxLayer.ts).
 - Os módulos de `src/ui/main/`, `src/ui/renderer/`, ícones, Pixi e i18n são TypeScript físico. Consumidores continuam usando specifiers `.js`.
 - Fallbacks do adapter retornam valores inertes compatíveis e não executam escolhas humanas. Substituições como as do Bot Arena pertencem à instância do adapter.

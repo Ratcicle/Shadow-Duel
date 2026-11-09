@@ -152,6 +152,7 @@ interface CombatUiPort {
       holdFinalUntilReal: true;
     },
   ): boolean;
+  releaseHeldLpLoss?(player: GamePlayer): boolean;
   playBattleImpactImmediate?(options: {
     sourceCard: CombatCard;
     targetCard: CombatCard | null;
@@ -822,6 +823,11 @@ async function resolveGuardedCombat(
     battleLpLossFeedback = null;
     return true;
   };
+  const releaseBattleLpLossFeedback = (): void => {
+    const held = battleLpLossFeedback;
+    battleLpLossFeedback = null;
+    if (held) this.ui?.releaseHeldLpLoss?.(held.player);
+  };
   const playBattleImpactOnContact = (contact: AttackContact = {}): void => {
     if (!attackContinuationActive || this.lastAttackNegated || !validateAttackParticipants().ok) return;
     if (!battleImpactVisualPlayed) {
@@ -896,104 +902,111 @@ async function resolveGuardedCombat(
     if (!continueDeclaredAttack(applyAttackRedirect(battleStepOpenContext))) return { ok: true };
   }
 
-  if (!target) {
-    if (
-      (attacker.attacksUsedThisTurn || 0) > 0 &&
-      (attacker.extraAttackTargetRestriction ||
-        attacker.passiveExtraAttackTargetRestriction) === "monster"
-    ) {
-      this.ui?.log?.(`${attacker.name}'s extra attack can only target monsters.`);
-      this.clearAttackResolutionIndicators();
-      this.updateBoard();
-      return { ok: false, reason: "extra_attack_requires_monster_target" };
-    }
-    if (attacker.cannotAttackDirectly) {
-      this.ui?.log?.(`${attacker.name} cannot attack directly.`);
-      this.clearAttackResolutionIndicators();
-      this.updateBoard();
-      return { ok: false, reason: "cannot_attack_directly" };
-    }
-    if (attackerOwner?.forbidDirectAttacksThisTurn) {
-      this.ui?.log?.(`You cannot attack directly this turn.`);
-      this.clearAttackResolutionIndicators();
-      this.updateBoard();
-      return { ok: false, reason: "direct_attack_forbidden" };
-    }
-    const defender = attacker.owner === "player" ? this.bot : this.player;
-    setBattleLpLossPreview(resolveBattleLpLossPreview(this, attacker, null));
-    const attackPresentation = startAttackPresentation();
-    await waitForAttackPresentation(this, attackPresentation);
-    if (!continueDeclaredAttack()) return { ok: true };
-    if (!battleImpactVisualPlayed) {
-      this.queueVisualFeedback?.({
-        kind: "impact",
-        cause: "battle",
-        directAttack: true,
-        intensity: "normal",
-        sourceCard: attacker,
-        targetOwnerId: defender.id,
-        tone: "red",
+  // Whatever ends the battle, an unconsumed preview stops holding the counter.
+  // This must follow the Damage Step: releasing a preview that is still about
+  // to be consumed would snap the counter back above the real damage.
+  try {
+    if (!target) {
+      if (
+        (attacker.attacksUsedThisTurn || 0) > 0 &&
+        (attacker.extraAttackTargetRestriction ||
+          attacker.passiveExtraAttackTargetRestriction) === "monster"
+      ) {
+        this.ui?.log?.(`${attacker.name}'s extra attack can only target monsters.`);
+        this.clearAttackResolutionIndicators();
+        this.updateBoard();
+        return { ok: false, reason: "extra_attack_requires_monster_target" };
+      }
+      if (attacker.cannotAttackDirectly) {
+        this.ui?.log?.(`${attacker.name} cannot attack directly.`);
+        this.clearAttackResolutionIndicators();
+        this.updateBoard();
+        return { ok: false, reason: "cannot_attack_directly" };
+      }
+      if (attackerOwner?.forbidDirectAttacksThisTurn) {
+        this.ui?.log?.(`You cannot attack directly this turn.`);
+        this.clearAttackResolutionIndicators();
+        this.updateBoard();
+        return { ok: false, reason: "direct_attack_forbidden" };
+      }
+      const defender = attacker.owner === "player" ? this.bot : this.player;
+      setBattleLpLossPreview(resolveBattleLpLossPreview(this, attacker, null));
+      const attackPresentation = startAttackPresentation();
+      await waitForAttackPresentation(this, attackPresentation);
+      if (!continueDeclaredAttack()) return { ok: true };
+      if (!battleImpactVisualPlayed) {
+        this.queueVisualFeedback?.({
+          kind: "impact",
+          cause: "battle",
+          directAttack: true,
+          intensity: "normal",
+          sourceCard: attacker,
+          targetOwnerId: defender.id,
+          tone: "red",
+        });
+      }
+      const damageStep = this.createDamageStepTransaction({
+        attacker,
+        defender: null,
+        attackerOwner,
+        defenderOwner: defender,
+        consumeBattleLpLossFeedback,
       });
+      const combatResult = await this.executeDamageStepTransaction(damageStep);
+      this.checkWinCondition();
+      this.clearAttackResolutionIndicators();
+      this.updateBoard();
+      return combatResult;
     }
+
+    setBattleLpLossPreview(resolveBattleLpLossPreview(this, attacker, target));
+    const attackPresentation = startAttackPresentation();
+    const resolveDamageOnContact = hasPotentialBattleDamageTimingEffect(
+      this,
+      attacker,
+      target,
+    );
+    // Damage Step effects can change stats, so calculate real damage at impact.
+    if (resolveDamageOnContact) {
+      await waitForAttackContact(this, attackPresentation);
+    } else {
+      await waitForAttackPresentation(this, attackPresentation);
+    }
+    if (!continueDeclaredAttack()) return { ok: true };
+
     const damageStep = this.createDamageStepTransaction({
       attacker,
-      defender: null,
+      defender: target,
       attackerOwner,
-      defenderOwner: defender,
+      defenderOwner,
       consumeBattleLpLossFeedback,
     });
     const combatResult = await this.executeDamageStepTransaction(damageStep);
-    this.checkWinCondition();
-    this.clearAttackResolutionIndicators();
-    this.updateBoard();
-    return combatResult;
-  }
 
-  setBattleLpLossPreview(resolveBattleLpLossPreview(this, attacker, target));
-  const attackPresentation = startAttackPresentation();
-  const resolveDamageOnContact = hasPotentialBattleDamageTimingEffect(
-    this,
-    attacker,
-    target,
-  );
-  // Damage Step effects can change stats, so calculate real damage at impact.
-  if (resolveDamageOnContact) {
-    await waitForAttackContact(this, attackPresentation);
-  } else {
-    await waitForAttackPresentation(this, attackPresentation);
-  }
-  if (!continueDeclaredAttack()) return { ok: true };
+    if (resolveDamageOnContact) {
+      await waitForAttackPresentation(this, attackPresentation);
+    }
 
-  const damageStep = this.createDamageStepTransaction({
-    attacker,
-    defender: target,
-    attackerOwner,
-    defenderOwner,
-    consumeBattleLpLossFeedback,
-  });
-  const combatResult = await this.executeDamageStepTransaction(damageStep);
+    // Emit combat resolution event for replay capture
+    await this.emit("combat_resolved", {
+      attacker,
+      target,
+      attackerOwner,
+      defenderOwner,
+      damageDealt: combatResult?.damageDealt || 0,
+      targetDestroyed: combatResult?.targetDestroyed || false,
+      attackerDestroyed: combatResult?.attackerDestroyed || false,
+    });
 
-  if (resolveDamageOnContact) {
-    await waitForAttackPresentation(this, attackPresentation);
+    // Propagate needsSelection from battle_destroy effects
+    if (combatResult?.needsSelection && combatResult?.selectionContract) {
+      return combatResult;
+    }
+    if (combatResult?.ok === false || combatResult?.success === false) {
+      return combatResult;
+    }
+    return { ok: true };
+  } finally {
+    releaseBattleLpLossFeedback();
   }
-
-  // Emit combat resolution event for replay capture
-  await this.emit("combat_resolved", {
-    attacker,
-    target,
-    attackerOwner,
-    defenderOwner,
-    damageDealt: combatResult?.damageDealt || 0,
-    targetDestroyed: combatResult?.targetDestroyed || false,
-    attackerDestroyed: combatResult?.attackerDestroyed || false,
-  });
-
-  // Propagate needsSelection from battle_destroy effects
-  if (combatResult?.needsSelection && combatResult?.selectionContract) {
-    return combatResult;
-  }
-  if (combatResult?.ok === false || combatResult?.success === false) {
-    return combatResult;
-  }
-  return { ok: true };
 }

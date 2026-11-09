@@ -67,6 +67,7 @@ export const RENDERER_METHODS = {
   setDisplayedLp: animations.setDisplayedLp,
   hasActiveLpPresentation: animations.hasActiveLpPresentation,
   waitForLpPresentation: animations.waitForLpPresentation,
+  releaseHeldLpLoss: animations.releaseHeldLpLoss,
   showFieldDamageHit: animations.showFieldDamageHit,
   showLpDamageSequence: animations.showLpDamageSequence,
   animateLpOdometer: animations.animateLpOdometer,

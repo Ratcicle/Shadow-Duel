@@ -43,6 +43,7 @@ const UI_FALLBACKS: GameUI = {
   showLpDamageSequence: () => false,
   showLpChange: () => false,
   waitForLpPresentation: () => Promise.resolve(false),
+  releaseHeldLpLoss: () => false,
   captureCardAnimationSource: () => null,
   playQueuedCardAnimations: () => Promise.resolve(false),
   playAttackLunge: () => {

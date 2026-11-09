@@ -811,6 +811,29 @@ export function waitForLpPresentation(
 }
 
 /**
+ * Ends the hold of an anticipated LP loss that no real damage consumed.
+ * @this {import('../Renderer.js').default}
+ */
+export function releaseHeldLpLoss(
+  this: Renderer,
+  player: LpPlayer | null | undefined,
+): boolean {
+  if (this.destroyed || !player) return false;
+  const state = this.ensureLpDisplayState?.(player);
+  if (!state) return false;
+
+  state.holdFinalUntilReal = false;
+  // The queue raises the hold again from any entry it has not reached yet.
+  for (const entry of state.queue) entry.holdFinalUntilReal = false;
+
+  // A running queue resynchronizes with the real LP when it settles.
+  if (state.animating || state.queue.length > 0 || state.presentationPromise) {
+    return true;
+  }
+  return this.setDisplayedLp(player, player.lp);
+}
+
+/**
  * @this {import('../Renderer.js').default}
  */
 export function showLpDamageSequence(
