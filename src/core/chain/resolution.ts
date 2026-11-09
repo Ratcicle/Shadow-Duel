@@ -1212,7 +1212,7 @@ async function applyChainEffect(
     const decisionCards = decisions ? captureChainResponseDecisionCards(decisions, cards) : [];
     for (const card of decisionCards) cs.game?.ensureDuelCardId?.(card);
     link.afterResolution = { context: afterContext, targets: afterContext._actionTargets || resolvedSelections,
-      actionIndex: 0, primaryResult: result, completed: false,
+      actionIndex: 0, primaryResult: result, executed, completed: false,
       ...(decisionCards.length ? { decisionCards } : {}) };
   }
   return result;

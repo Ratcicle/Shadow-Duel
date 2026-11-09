@@ -1087,6 +1087,8 @@ export interface ChainAfterResolutionState {
   targets: ChainSelectionMap;
   actionIndex: number;
   primaryResult: ChainOperationResult;
+  /** Whether the primary or a settled post-effect action executed. Live state, never projected to the canonical hash. */
+  executed: boolean;
   completed: boolean;
 }
 

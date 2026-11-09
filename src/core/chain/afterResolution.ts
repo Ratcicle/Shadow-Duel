@@ -23,14 +23,15 @@ export async function resolveAfterResolutionActions(chain: FullChainHost, link: 
     const result = await engine.applyActions([action], state.context, { ...state.targets, ...state.context._actionTargets });
     if ((chain.game?.selectionAbortGeneration ?? 0) !== generation) return { success: false, code: "SELECTION_ABORTED" };
     if (result.needsSelection) return { ...result, selectionSource: "after_resolution" };
+    state.executed ||= result.executed === true;
     state.actionIndex++;
     if (result.success === false) {
       state.completed = true;
-      return { ...state.primaryResult, ...result };
+      return { ...state.primaryResult, ...result, executed: state.executed };
     }
   }
   state.completed = true;
-  return state.primaryResult;
+  return { ...state.primaryResult, executed: state.executed };
 }
 
 export function isPostEffectTriggerBarrierActive(this: FullChainHost): boolean {
