@@ -84,10 +84,11 @@ export function cancelPendingPhaseRetry(game: object): void {
 }
 
 function schedulePhaseRetry(game: TransitionHost, actor: GamePlayer): void {
-  if (phaseRetries.get(game)?.isCurrent()) return;
+  if (game.replayMode === "playback" || phaseRetries.get(game)?.isCurrent()) return;
   cancelPendingPhaseRetry(game);
   const turn = game.turn, phase = game.phase, counter = game.turnCounter;
-  const isCurrent = () => !game.isDisposed?.() && !game.gameOver && isAI(actor) &&
+  const isCurrent = () => !game.isDisposed?.() && game.replayMode !== "playback" &&
+    !game.gameOver && isAI(actor) &&
     game.turn === turn && game.phase === phase && game.turnCounter === counter &&
     (game.turn === "player" ? game.player : game.bot) === actor;
   const delay = typeof game.aiActionDelayMs === "number" && Number.isFinite(game.aiActionDelayMs)
