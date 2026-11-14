@@ -652,7 +652,11 @@ export type ChainLinkResolutionOutcome =
   | "effect_negated";
 
 export interface ChainLinkResolutionEventPayload {
-  stage: "resolving" | "completed" | "failed";
+  /**
+   * `completed` closes the primary effect. `after_resolution` follows it only
+   * when the link's post-effect actions ran, carrying their combined outcome.
+   */
+  stage: "resolving" | "completed" | "after_resolution" | "failed";
   chainId: EventEntityId | null;
   linkId: EventEntityId | null;
   chainLevel: number;

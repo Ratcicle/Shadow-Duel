@@ -1,10 +1,13 @@
 import type { ChainCard, ChainEffect, ChainLink, ChainOperationResult, ChainSelectionMap, FastEffectTimingInput, FullChainHost, SuspendedChainFrame } from "../contracts/chainRuntime.js";
 import { FAST_EFFECT_ORIGINS } from "../contracts/chain.js";
-import { copyCostPayment, projectAfterResolutionReferences, projectAfterResolutionSource } from "./link.js";
+import { copyCostPayment, notifyChainLinkOutcome, projectAfterResolutionReferences, projectAfterResolutionSource } from "./link.js";
 import { serializeTriggerOpportunityState } from "./segoc.js";
 import { serializeChainResponseDecisions } from "../game/decisions/chainResponse.js";
 
-/** Continue the completed link's static action list, never its primary actions. */
+/**
+ * Continue the completed link's static action list, never its primary actions.
+ * Only the two exits that ran post-effect actions publish `after_resolution`.
+ */
 export async function resolveAfterResolutionActions(chain: FullChainHost, link: ChainLink): Promise<ChainOperationResult> {
   const state = link.afterResolution;
   const actions = link.effect.afterResolutionActions || [];
@@ -27,11 +30,15 @@ export async function resolveAfterResolutionActions(chain: FullChainHost, link: 
     state.actionIndex++;
     if (result.success === false) {
       state.completed = true;
-      return { ...state.primaryResult, ...result, executed: state.executed };
+      const failure = { ...state.primaryResult, ...result, executed: state.executed };
+      notifyChainLinkOutcome(chain, link, failure, "after_resolution");
+      return failure;
     }
   }
   state.completed = true;
-  return { ...state.primaryResult, executed: state.executed };
+  const completion = { ...state.primaryResult, executed: state.executed };
+  notifyChainLinkOutcome(chain, link, completion, "after_resolution");
+  return completion;
 }
 
 export function isPostEffectTriggerBarrierActive(this: FullChainHost): boolean {

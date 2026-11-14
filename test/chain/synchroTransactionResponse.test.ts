@@ -57,7 +57,7 @@ for (const seat of ["player", "bot"] as const) {
 
     assert.equal(result.success, true);
     assert.deepEqual(activeSummonsAtResponse, [null], "the completed Slasher summon must release its transaction before a response can Synchro Summon");
-    assert.deepEqual(outcomes, ["success"]);
+    assert.deepEqual(outcomes, ["success", "success"], "completed reports the primary revive and after_resolution reports the post-effect Synchro");
     assert.deepEqual(concurrentAttempts, [{ ok: false, reason: "summon_transaction_busy" }]);
     assert.deepEqual(sequence, [
       "grave:501", "grave:504", "summon:510", "complete:510", "response:520",

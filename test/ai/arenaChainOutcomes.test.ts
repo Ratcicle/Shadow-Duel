@@ -61,19 +61,20 @@ for (const seat of ["player", "bot"] as const) {
     assert.equal(stats.planning.failedExecutions, 0);
     assert.ok(stats.chainLinks, "each completed Chain link must have its own diagnostic");
     assert.equal(stats.chainLinks.total, 3, "Core's post-Chain summon trigger is a separate successful link");
-    // CURRENT BEHAVIOR, not the intended contract: chain_link_resolution "completed" carries only the
-    // primary result and is notified before afterResolutionActions run (src/core/chain/resolution.ts),
-    // so the Arena cannot see post-effect failures yet. Restoring that visibility is a phase-2 item
-    // (benchmark harness) and may touch the replay event contract. Update these counts when it lands.
-    assert.equal(stats.chainLinks.succeeded, 3);
-    assert.equal(stats.chainLinks.partialFailures, 0);
+    // "completed" carries the primary result; the post-effect stage reclassifies the same link.
+    assert.equal(stats.chainLinks.succeeded, 2);
+    assert.equal(stats.chainLinks.partialFailures, 1);
     assert.equal(stats.chainLinks.failed, 0);
     const scrapyardEvent = required(final.strategic.events.find(entry => entry.type === "chain_link_resolution"
       && entry.stage === "completed" && entry.effectId === "tech_zero_scrapyard_activation"));
     assert.equal(scrapyardEvent.chainLevel, 2);
     assert.equal(scrapyardEvent.seat, seat);
-    assert.equal(scrapyardEvent.outcome, "success", "current behavior: the post-effect failure is not notified");
+    assert.equal(scrapyardEvent.outcome, "success", "completed reports only the primary effect");
     assert.equal(scrapyardEvent.failedAction ?? null, null);
+    const postEffectEvent = required(final.strategic.events.find(entry => entry.type === "chain_link_resolution"
+      && entry.stage === "after_resolution" && entry.effectId === "tech_zero_scrapyard_activation"));
+    assert.equal(postEffectEvent.outcome, "partial_failure", "the post-effect failure is notified after the revival");
+    assert.equal(postEffectEvent.failedAction, "conditional_actions");
     const rootEvent = required(final.strategic.events.find(entry => entry.effectId === "tech_zero_assembly_line_activation" && entry.stage === "completed"));
     assert.equal(rootEvent.executed, true);
     const mismatch = required(stats.planning.mismatchSamples[0]);
@@ -81,16 +82,15 @@ for (const seat of ["player", "bot"] as const) {
     assert.equal(mismatch.chainLinks.length, 3);
     assert.equal(mismatch.chainLinks[0]?.controllerId, seat);
     assert.equal(mismatch.chainLinks[0]?.effectId, "tech_zero_scrapyard_activation");
-    assert.equal(mismatch.chainLinks[0]?.failedAction, null);
+    assert.equal(mismatch.chainLinks[0]?.failedAction, "conditional_actions");
     tracker.recordPlanningProgress({ stage: "ai_turn_line_search", actor: seat, plannerUsed: true });
     tracker.recordPlanningProgress({ stage: "ai_plan_execution_compare", actor: seat, matched: false });
     assert.deepEqual(tracker.finalize(seat, "max_turns", { player: 8000, bot: 8000 }).strategic.seats[seat].planning.mismatchSamples[1]?.chainLinks, []);
     const analytics = new ArenaAnalytics(); analytics.recordDuel(final); analytics.recordDuel(final);
     const merged = required(analytics.exportStrategicReport().bots[`${seat}:techzero`]);
     assert.equal(merged.chainLinks.total, 6);
-    // Current behavior; see the post-effect visibility note above (phase 2).
-    assert.equal(merged.chainLinks.succeeded, 6);
-    assert.equal(merged.chainLinks.partialFailures, 0);
+    assert.equal(merged.chainLinks.succeeded, 4);
+    assert.equal(merged.chainLinks.partialFailures, 2);
     assert.equal(merged.failedActions, 0);
     assert.equal(game.gameOver, false);
   });

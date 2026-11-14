@@ -16,11 +16,11 @@
 import { isAI } from "../Player.js";
 import { recordMaterialEffectIdentity } from "../game/summon/materialStats.js";
 import { resolveAfterResolutionActions } from "./afterResolution.js";
+import { notifyChainLinkOutcome } from "./link.js";
 import { captureChainResponseDecisionCards } from "../game/decisions/chainResponse.js";
 import { CHAIN_ACTIVATION_KINDS } from "../contracts/chain.js";
 import { isStrictEngineFaultMode, reportEngineFault } from "../game/devTools/faults.js";
 import type { CanonicalZone } from "../contracts/zones.js";
-import type { ChainLinkResolutionOutcome } from "../contracts/events.js";
 import type {
   ChainActivationZone,
   ChainActionContext,
@@ -101,43 +101,6 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
     (typeof value === "object" && value !== null) ||
     typeof value === "function"
   ) && typeof Reflect.get(value, "then") === "function";
-}
-
-function notifyChainLinkOutcome(
-  chain: FullChainHost,
-  link: ChainLink,
-  result: ChainOperationResult | undefined,
-  stage: "completed" | "failed" = "completed",
-): void {
-  const success = result?.success !== false;
-  const outcome: ChainLinkResolutionOutcome = result?.activationNegated === true
-    ? "activation_negated"
-    : result?.effectNegated === true
-      ? "effect_negated"
-      : !success
-        ? result?.executed === true ? "partial_failure" : "failed"
-        : "success";
-  chain.game?.notify?.("chain_link_resolution", {
-    stage,
-    chainId: link.chainId,
-    linkId: link.linkId,
-    chainLevel: link.chainLevel,
-    controllerId: link.controller?.id || null,
-    cardId: link.card.id ?? null,
-    cardInstanceId: link.card.instanceId ?? null,
-    cardName: link.card.name || null,
-    effectId: link.effectId || link.effect?.id || null,
-    activationKind: link.activationKind,
-    effectKind: link.effectKind,
-    success,
-    outcome,
-    executed: result?.executed === true,
-    failedAction: result?.failedAction || null,
-    reason: result?.reason || (result?.fizzled ? link.sourceValidity?.reason || "source_unavailable" : null),
-    activationNegated: result?.activationNegated === true,
-    effectNegated: result?.effectNegated === true,
-    resolvedWithoutEffect: result?.resolvedWithoutEffect === true,
-  });
 }
 
 export async function resolveChain(

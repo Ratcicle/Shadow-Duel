@@ -857,6 +857,18 @@ function createChainLinkStats(): ArenaChainLinkStats {
   };
 }
 
+/** Adds or removes one link in the bucket of its outcome. */
+function countChainLinkOutcome(stats: ArenaChainLinkStats, outcome: ChainLinkResolutionOutcome, delta: 1 | -1) {
+  switch (outcome) {
+    case "success": stats.succeeded += delta; break;
+    case "partial_failure": stats.partialFailures += delta; break;
+    case "failed": stats.failed += delta; break;
+    case "activation_negated": stats.activationNegated += delta; break;
+    case "effect_negated": stats.effectNegated += delta; break;
+    default: outcome satisfies never;
+  }
+}
+
 function createSeatStats(archetype = "unknown") {
   return {
     archetype,
@@ -2457,7 +2469,8 @@ export class DuelTracker {
   declare decisionTimes: number[];
   declare nodesVisited: number[];
   private readonly pendingDecisionStarts = new Map<Seat, number>();
-  private readonly completedChainLinks = new Set<string>();
+  /** Terminal links by Chain and link id: the counted sample, or null when no outcome was countable. */
+  private readonly terminalChainLinks = new Map<string, ArenaChainLinkSample | null>();
   private readonly planningChainLinks = new Map<Seat, ArenaChainLinkSample[]>();
   declare openingSequence: PlanningAction[];
   declare openingTurnLimit: number;
@@ -2899,25 +2912,39 @@ export class DuelTracker {
       this.recordCanonicalLifecycleEvent("chain_link_resolution", payload, meta);
       return;
     }
-    if (payload.stage !== "completed" && payload.stage !== "failed") return;
-    if (payload.chainId != null && payload.linkId != null) {
-      const key = JSON.stringify([payload.chainId, payload.linkId]);
-      if (this.completedChainLinks.has(key)) return;
-      this.completedChainLinks.add(key);
+    if (payload.stage !== "completed" && payload.stage !== "after_resolution" && payload.stage !== "failed") return;
+    const key = payload.chainId != null && payload.linkId != null
+      ? JSON.stringify([payload.chainId, payload.linkId])
+      : null;
+    if (key !== null && this.terminalChainLinks.has(key)) {
+      // A later terminal stage moves the link's single sample to its new outcome.
+      // An identical classification, such as a repeated notification, is a no-op.
+      const previous = this.terminalChainLinks.get(key) ?? null;
+      const outcome = payload.outcome;
+      const failedAction = payload.failedAction || null;
+      const reason = payload.reason || null;
+      if (!previous || !outcome || (previous.outcome === outcome &&
+        previous.failedAction === failedAction && previous.reason === reason)) return;
+      this.recordCanonicalLifecycleEvent("chain_link_resolution", payload, meta);
+      if (previous.outcome !== outcome) {
+        const previousStats = this.seats[previous.controllerId].chainLinks;
+        countChainLinkOutcome(previousStats, previous.outcome, -1);
+        countChainLinkOutcome(previousStats, outcome, 1);
+      }
+      previous.outcome = outcome;
+      previous.failedAction = failedAction;
+      previous.reason = reason;
+      return;
     }
     this.recordCanonicalLifecycleEvent("chain_link_resolution", payload, meta);
     // Older traces without a terminal outcome remain visible without guessing success.
-    if (!seat || !payload.outcome || payload.chainId == null || payload.linkId == null) return;
+    if (!seat || !payload.outcome || key === null || payload.chainId == null || payload.linkId == null) {
+      if (key !== null) this.terminalChainLinks.set(key, null);
+      return;
+    }
     const stats = this.seats[seat].chainLinks;
     stats.total++;
-    switch (payload.outcome) {
-      case "success": stats.succeeded++; break;
-      case "partial_failure": stats.partialFailures++; break;
-      case "failed": stats.failed++; break;
-      case "activation_negated": stats.activationNegated++; break;
-      case "effect_negated": stats.effectNegated++; break;
-      default: payload.outcome satisfies never;
-    }
+    countChainLinkOutcome(stats, payload.outcome, 1);
     const sample: ArenaChainLinkSample = {
       turn: meta.turn ?? this.currentTurn,
       chainId: payload.chainId,
@@ -2932,6 +2959,7 @@ export class DuelTracker {
       failedAction: payload.failedAction || null,
       reason: payload.reason || null,
     };
+    this.terminalChainLinks.set(key, sample);
     if (stats.samples.length < 5) stats.samples.push(sample);
     for (const links of this.planningChainLinks.values()) {
       links.push(sample);
