@@ -1004,7 +1004,7 @@ function reconcileSimulatedNegationPassives(
     // Their status producer re-evaluates face, negation, position and condition
     // after each action, as the runtime does on each update. Battle protection
     // granted by an active Equip stays: only negating or removing that Equip
-    // ends it (user rule, 15/10/2026; the runtime still deletes it, see lot L25c).
+    // ends it (user rule D12, 15/10/2026), which the same producer reads.
     if (passiveType === "conditional_status" || passiveType === "position_status") return;
     state._simUnsupportedActions ??= [];
     state._simUnsupportedActions.push(`${actionType}:passive_recalculation:${passiveType}`);

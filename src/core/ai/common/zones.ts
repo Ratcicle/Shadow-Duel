@@ -13,7 +13,7 @@ import { getCounterValue } from "./counters.js";
 import { evaluateSimulatedConditions } from "./simulatedConditions.js";
 import type { RuntimePassive } from "../../effects/passives/passiveBuffs.js";
 import { clearLevelModifications, clearPermanentStatBuffs, expireFaceupStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
-import { clearPassiveBuffsForCard, getModeledPassiveContributions, pruneModeledPassiveContributions, registerModeledPassiveContribution, applyPassiveBuffValue, getFieldAuraBuffKey, getFieldCounterStatAuraBuffKey, getEquippedCounterBuffKey, getEquippedFieldCounterBuffKeys, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
+import { clearPassiveBuffsForCard, getModeledPassiveContributions, pruneModeledPassiveContributions, registerModeledPassiveContribution, applyPassiveBuffValue, getFieldAuraBuffKey, getFieldCounterStatAuraBuffKey, getEquippedCounterBuffKey, getEquippedFieldCounterBuffKeys, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, isActiveEquipInZone, isBattleIndestructibleGrantedByEquip, refreshEquipBattleIndestructible } from "../../effects/passives/passiveBuffs.js";
 import {
   assignAutomaticFieldSlot,
   clearFieldSlot,
@@ -322,19 +322,25 @@ export function refreshSimulatedFieldAuras(state: Pick<AiStateShape, "bot" | "pl
   refreshSimulatedPassiveStatuses(state);
 }
 
-/** User rule (15/10/2026): an active Equip's battle protection outlives the host's own status passive. */
-function isStatusKeptByActiveEquip(card: SimulatedCardState, statusName: string): boolean {
-  return statusName === "battleIndestructible" && (card.equips || []).some(equip =>
-    equip?.grantsBattleIndestructible === true && equip.effectsNegated !== true);
+/** An Equip that protects `card` is attached to it from a Spell & Trap Zone, as in the runtime. */
+function isSimulatedEquipAttached(
+  state: Pick<AiStateShape, "bot" | "player">,
+  equip: SimulatedCardState,
+  card: SimulatedCardState,
+): boolean {
+  return [state.player, state.bot].some(owner => isActiveEquipInZone(equip, card, getZoneCards(owner, "spellTrap")));
 }
 
 /**
  * Status passives follow the runtime producer on each update: a face-down or
  * negated source loses its status; otherwise its position or its declared
  * condition decides it. A rule restricted to another zone is left untouched.
- * Unlike the runtime (lot L25c), an active Equip's battle protection stays.
+ * As in the runtime, battle protection from an active Equip stays (user rule
+ * D12, 15/10/2026), and a monster without its own rule takes it only from its
+ * Equips.
  */
 export function refreshSimulatedPassiveStatuses(state: Pick<AiStateShape, "bot" | "player">): void {
+  const ownBattleProtectionRules = new Set<SimulatedCardState>();
   for (const owner of [state.player, state.bot]) {
     const selfId = owner === state.bot ? "bot" : "player";
     const sources = [...getZoneCards(owner, "field"), ...getZoneCards(owner, "spellTrap"), ...getZoneCards(owner, "fieldSpell")];
@@ -354,12 +360,19 @@ export function refreshSimulatedPassiveStatuses(state: Pick<AiStateShape, "bot" 
             { state, selfId, sourceCard: source });
         }
         const statusName = passive.status || "battleIndestructible";
+        if (statusName === "battleIndestructible") ownBattleProtectionRules.add(source);
+        const shouldHave = active || (statusName === "battleIndestructible" &&
+          isBattleIndestructibleGrantedByEquip(source, equip => isSimulatedEquipAttached(state, equip, source)));
         const present = Boolean(Reflect.get(source, statusName));
-        if (active && !present) Reflect.set(source, statusName, true);
-        else if (!active && present && !isStatusKeptByActiveEquip(source, statusName)) {
-          Reflect.deleteProperty(source, statusName);
-        }
+        if (shouldHave && !present) Reflect.set(source, statusName, true);
+        else if (!shouldHave && present) Reflect.deleteProperty(source, statusName);
       });
+    }
+  }
+  for (const owner of [state.player, state.bot]) {
+    for (const card of getZoneCards(owner, "field")) {
+      if (ownBattleProtectionRules.has(card)) continue;
+      refreshEquipBattleIndestructible(card, equip => isSimulatedEquipAttached(state, equip, card));
     }
   }
 }

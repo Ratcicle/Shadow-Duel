@@ -1,5 +1,5 @@
 import { cardMatchesKind } from "../../Card.js";
-import { isPassiveSourceActive } from "../../effects/passives/passiveBuffs.js";
+import { isBattleIndestructibleGrantedByEquip, isPassiveSourceActive } from "../../effects/passives/passiveBuffs.js";
 import type {
   BattlePosition,
   CardSubtype,
@@ -739,16 +739,11 @@ function equipBattleIndestructibleApplies(
   game: AttackAvailabilityHost | null | undefined,
   card: GameCard | null | undefined,
 ): boolean {
-  const equips = Array.isArray(card?.equips) ? card.equips : [];
-  for (const equip of equips) {
-    if (!equip?.grantsBattleIndestructible) continue;
-    if (!equipIsActiveForCard(game, equip, card)) continue;
-    const equipOwner = getOwnerByCard(game, equip);
-    if (battleProtectionSourceAffectsCard(game, card, equip, equipOwner)) {
-      return true;
-    }
-  }
-  return false;
+  if (!card) return false;
+  // D12: only an attached Equip that is face-up and not negated protects.
+  return isBattleIndestructibleGrantedByEquip(card, (equip) =>
+    equipIsActiveForCard(game, equip, card) &&
+    battleProtectionSourceAffectsCard(game, card, equip, getOwnerByCard(game, equip)));
 }
 
 function hasKnownBattleIndestructibleSource(
@@ -781,7 +776,6 @@ function battleIndestructibleFlagApplies(
   if (ownConditionalBattleIndestructibleApplies(game, card, context)) {
     return true;
   }
-  if (equipBattleIndestructibleApplies(game, card)) return true;
   return !hasKnownBattleIndestructibleSource(card);
 }
 
@@ -1029,6 +1023,8 @@ export function canDestroyByBattle(
   if (ownConditionalBattleIndestructibleApplies(this, card, context)) {
     return false;
   }
+  // D12: an active Equip protects with or without the status flag.
+  if (equipBattleIndestructibleApplies(this, card)) return false;
   if (battleIndestructibleFlagApplies(this, card, context)) return false;
   if (card.tempBattleIndestructible) return false;
   if (card.battleIndestructibleOncePerTurn) {

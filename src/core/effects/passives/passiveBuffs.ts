@@ -394,6 +394,46 @@ export function isPassiveSourceActive(card: {
   return !!card && card.isFacedown !== true && card.effectsNegated !== true;
 }
 
+interface BattleProtectionEquipView {
+  readonly grantsBattleIndestructible?: boolean | null | undefined;
+  readonly isFacedown?: boolean | undefined;
+  readonly effectsNegated?: boolean | undefined;
+}
+
+interface BattleProtectionHostView<Equip> {
+  readonly equips?: readonly (Equip | null | undefined)[] | null | undefined;
+}
+
+/**
+ * User rule D12 (15/10/2026): an attached Equip that grants battle protection
+ * keeps it while that Equip is face-up and not negated. Negating the host, or
+ * the host's own status rule lapsing, does not end it; negating or removing
+ * the Equip does. The runtime producer, the battle check and planning share it.
+ */
+export function isBattleIndestructibleGrantedByEquip<Equip extends BattleProtectionEquipView>(
+  card: BattleProtectionHostView<Equip>,
+  isAttached: (equip: Equip) => boolean,
+): boolean {
+  return (card.equips || []).some(equip => !!equip &&
+    equip.grantsBattleIndestructible === true && isPassiveSourceActive(equip) && isAttached(equip));
+}
+
+/**
+ * D12 on a monster that no status rule of its own reconciled in this pass:
+ * its Equips are the only declared source of the flag, which follows them.
+ * The status producers reconcile a monster with such a rule, Equips included.
+ */
+export function refreshEquipBattleIndestructible<Equip extends BattleProtectionEquipView>(
+  card: BattleProtectionHostView<Equip> & { battleIndestructible?: boolean | undefined },
+  isAttached: (equip: Equip) => boolean,
+): boolean {
+  if (!(card.equips || []).some(equip => equip?.grantsBattleIndestructible === true)) return false;
+  const granted = isBattleIndestructibleGrantedByEquip(card, isAttached);
+  if (granted === (card.battleIndestructible === true)) return false;
+  card.battleIndestructible = granted;
+  return true;
+}
+
 interface GraveReplacementSource {
   readonly isFacedown?: boolean | undefined;
   readonly effectsNegated?: boolean | undefined;
@@ -934,6 +974,22 @@ export function updatePassiveBuffs(this: PassiveHost) {
     if (card) staleBuffs.get(card)?.delete(key);
     return this.applyPassiveBuffValue(card, key, amount, stats);
   };
+  // A status rule only removes what it grants: battle protection from an
+  // active Equip outlives the host's own rule (user rule D12, 15/10/2026).
+  const ownBattleProtectionRules = new Set<PassiveCard>();
+  const reconcileStatus = (card: PassiveCard, statusName: string, ruleActive: boolean): void => {
+    if (statusName === "battleIndestructible") ownBattleProtectionRules.add(card);
+    const statuses = card as PassiveCard & Record<string, unknown>;
+    const shouldHave = ruleActive || (statusName === "battleIndestructible" &&
+      isBattleIndestructibleGrantedByEquip(card, equip => this.isActiveEquipForCard(equip, card)));
+    if (shouldHave && !statuses[statusName]) {
+      statuses[statusName] = true;
+      updated = true;
+    } else if (!shouldHave && statuses[statusName]) {
+      delete statuses[statusName];
+      updated = true;
+    }
+  };
   for (const card of fieldCards) {
     if (clearPassiveExtraAttacksForCard(card)) updated = true;
   }
@@ -962,11 +1018,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
         (sourceZone === "field" || sourceZone === "fieldSpell" || sourceZone === "spellTrap")
       ) {
         if (passive?.type === "position_status" || passive?.type === "conditional_status") {
-          const statusName = passive.status || "battleIndestructible";
-          if ((card as PassiveCard & Record<string, unknown>)[statusName]) {
-            delete (card as PassiveCard & Record<string, unknown>)[statusName];
-            updated = true;
-          }
+          reconcileStatus(card, passive.status || "battleIndestructible", false);
         }
         return;
       }
@@ -979,11 +1031,7 @@ export function updatePassiveBuffs(this: PassiveHost) {
           passive.type === "position_status" ||
           passive.type === "conditional_status"
         ) {
-          const statusName = passive.status || "battleIndestructible";
-          if ((card as PassiveCard & Record<string, unknown>)[statusName]) {
-            delete (card as PassiveCard & Record<string, unknown>)[statusName];
-            updated = true;
-          }
+          reconcileStatus(card, passive.status || "battleIndestructible", false);
         }
         return;
       }
@@ -1041,40 +1089,15 @@ export function updatePassiveBuffs(this: PassiveHost) {
       // Passive: position-based status (e.g., battle indestructible in defense)
       if (passive.type === "position_status") {
         const activePos = passive.activePosition || "defense";
-        const statusName = passive.status || "battleIndestructible";
-        const shouldHave = (card.position || "attack") === activePos;
-        const hasNow = !!(card as PassiveCard & Record<string, unknown>)[
-          statusName
-        ];
-        if (shouldHave && !hasNow) {
-          (card as PassiveCard & Record<string, unknown>)[statusName] = true;
-          updated = true;
-        } else if (!shouldHave && hasNow) {
-          delete (card as PassiveCard & Record<string, unknown>)[statusName];
-          updated = true;
-        }
+        reconcileStatus(card, passive.status || "battleIndestructible",
+          (card.position || "attack") === activePos);
         return;
       }
 
       // Passive: applies a status while a declarative condition is true.
       if (passive.type === "conditional_status") {
-        const statusName = passive.status || "battleIndestructible";
-        const shouldHave = passiveConditionsAreMet(
-          this,
-          card,
-          sourceOwner,
-          passive,
-        );
-        const hasNow = !!(card as PassiveCard & Record<string, unknown>)[
-          statusName
-        ];
-        if (shouldHave && !hasNow) {
-          (card as PassiveCard & Record<string, unknown>)[statusName] = true;
-          updated = true;
-        } else if (!shouldHave && hasNow) {
-          delete (card as PassiveCard & Record<string, unknown>)[statusName];
-          updated = true;
-        }
+        reconcileStatus(card, passive.status || "battleIndestructible",
+          passiveConditionsAreMet(this, card, sourceOwner, passive));
         return;
       }
 
@@ -1570,6 +1593,15 @@ export function updatePassiveBuffs(this: PassiveHost) {
     // Clean up empty dynamicBuffs object
     if (card.dynamicBuffs && Object.keys(card.dynamicBuffs).length === 0) {
       card.dynamicBuffs = null;
+    }
+  }
+
+  // D12: without a status rule of its own, a monster's battle protection
+  // status follows the Equips that grant it, ending when they are negated.
+  for (const card of fieldCards) {
+    if (ownBattleProtectionRules.has(card)) continue;
+    if (refreshEquipBattleIndestructible(card, equip => this.isActiveEquipForCard(equip, card))) {
+      updated = true;
     }
   }
 
