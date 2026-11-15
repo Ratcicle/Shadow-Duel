@@ -312,9 +312,10 @@ Para Equipamentos, declare `requireFaceup: true` no alvo. A Chain revalida a
 mesma carta e sua permanência durante a resolução; o handler não deve escolher
 outro alvo. Equipamentos sem vínculo válido recebem cleanup na finalização da
 ativação, respeitando a permanência da fonte. Se o movimento usar
-`deferCardToGraveTriggerResolution`, encaminhe a `occurrence` retornada em
-`deferredCardToGraveTriggerPackage` à fila de triggers: coletar o pacote não o
-enfileira automaticamente.
+`deferCardToGraveTriggerResolution`, encaminhe à fila de triggers a `occurrence`
+de cada pacote de `deferredCardToGraveTriggerPackages`: o da carta movida e os
+dos Equipamentos que a saída dela do campo mandou ao Cemitério. Coletar os
+pacotes não os enfileira automaticamente.
 
 ## Custos e falhas
 

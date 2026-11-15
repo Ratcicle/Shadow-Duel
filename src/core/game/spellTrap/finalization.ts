@@ -205,8 +205,9 @@ async function applyDefaultSpellTrapFinalization(
     awaitEvents: true,
     deferCardToGraveTriggerResolution: activationContext.chainId != null,
   });
-  const occurrence = moveResult.deferredCardToGraveTriggerPackage?.occurrence;
-  if (occurrence) game.queueTriggerOccurrence?.(occurrence);
+  for (const triggerPackage of moveResult.deferredCardToGraveTriggerPackages || []) {
+    if (triggerPackage.occurrence) game.queueTriggerOccurrence?.(triggerPackage.occurrence);
+  }
   game.updateBoard?.();
   return true;
 }

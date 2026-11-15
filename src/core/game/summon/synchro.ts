@@ -645,17 +645,19 @@ function takeSynchroMaterialFollowups(
 }
 
 interface SynchroMoveResult extends MoveCardResult {
-  deferredCardToGraveTriggerPackage?: SynchroDeferredTriggerPackage;
+  deferredCardToGraveTriggerPackages?: readonly SynchroDeferredTriggerPackage[];
 }
 
-function appendDeferredSynchroMaterialTriggerPackage(
+/** The material's own package, then those of the Equip Spells its exit sent to the GY. */
+function appendDeferredSynchroMaterialTriggerPackages(
   packages: SynchroDeferredTriggerPackage[],
   moveResult: SynchroMoveResult | null | undefined,
 ): void {
-  const triggerPackage = moveResult?.deferredCardToGraveTriggerPackage || null;
-  if (!triggerPackage || triggerPackage.collectedOnly !== true) return;
-  if (!Array.isArray(triggerPackage.entries)) return;
-  packages.push(triggerPackage);
+  for (const triggerPackage of moveResult?.deferredCardToGraveTriggerPackages || []) {
+    if (triggerPackage.collectedOnly !== true) continue;
+    if (!Array.isArray(triggerPackage.entries)) continue;
+    packages.push(triggerPackage);
+  }
 }
 
 function getPlayerById(
@@ -1163,7 +1165,7 @@ export async function performSynchroSummon(
           wasDestroyed: false,
           actionContext: synchroActionContext,
         });
-        appendDeferredSynchroMaterialTriggerPackage(
+        appendDeferredSynchroMaterialTriggerPackages(
           deferredMaterialTriggerPackages,
           moveResult,
         );

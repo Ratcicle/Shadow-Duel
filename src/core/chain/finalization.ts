@@ -155,8 +155,9 @@ async function moveToGraveyard(
     return false;
   }
   if (typeof result === "object" && result !== null) {
-    const occurrence = result.deferredCardToGraveTriggerPackage?.occurrence;
-    if (occurrence) chainSystem.game?.queueTriggerOccurrence?.(occurrence);
+    for (const triggerPackage of result.deferredCardToGraveTriggerPackages || []) {
+      if (triggerPackage.occurrence) chainSystem.game?.queueTriggerOccurrence?.(triggerPackage.occurrence);
+    }
   }
   entry.status = "completed";
   entry.disposition = "graveyard";

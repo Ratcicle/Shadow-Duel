@@ -688,7 +688,7 @@ export interface ChainTargetValidation {
 }
 
 export interface ChainOperationResult {
-  deferredCardToGraveTriggerPackage?: DeferredCardToGraveTriggerPackage;
+  deferredCardToGraveTriggerPackages?: readonly DeferredCardToGraveTriggerPackage[];
   ok?: boolean;
   success?: boolean;
   executed?: boolean;

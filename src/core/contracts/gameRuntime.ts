@@ -105,8 +105,20 @@ export interface MoveCardResult {
   summonOrigin?: SummonOrigin | null;
   needsSelection?: boolean;
   selectionContract?: unknown;
+  /**
+   * Only the moved card's own deferred package, without those of its Equip
+   * cleanup. A deferring caller consumes `deferredCardToGraveTriggerPackages`.
+   */
   deferredCardToGraveTriggerPackage?: DeferredCardToGraveTriggerPackage;
+  /** Entries of the moved card's own deferred package only. */
   deferredCardToGraveEntries?: readonly unknown[];
+  /**
+   * Every card_to_grave package collected under
+   * `deferCardToGraveTriggerResolution`, in event order: the moved card's own
+   * package, then those of the Equip Spells its field exit sent to the GY.
+   * A deferring caller owns every package in this list.
+   */
+  deferredCardToGraveTriggerPackages?: readonly DeferredCardToGraveTriggerPackage[];
   destinationPresence?: EventCardPresenceSnapshot;
 }
 
@@ -195,6 +207,7 @@ export interface MoveCardOptions {
   allowExtraDeckMonsterToHand?: boolean;
   awaitEvents?: boolean;
   awaitCardMovedEvent?: boolean;
+  /** card_to_grave is awaited unless this is `false`; deferral and `awaitEvents` always await. */
   awaitCardToGraveEvent?: boolean;
   deferCardToGraveTriggerResolution?: boolean;
   presentBeforeAfterSummon?: boolean;
