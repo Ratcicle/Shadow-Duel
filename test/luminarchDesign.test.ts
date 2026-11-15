@@ -415,7 +415,7 @@ for (const seat of ["player", "bot"] as const) {
     assert.deepEqual(owner.graveyard.map(card => card.id), [156]);
     const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: "sickle-ai-context" }))));
     assert.equal(replay.commands.length, 1);
-    assert.deepEqual(replay.decisions.map(decision => decision.kind), ["segoc_order", "cost", "target"]);
+    assert.deepEqual(replay.decisions.map(decision => decision.kind), ["trigger_activation", "segoc_order", "cost", "target"]);
     playback.autoSelector.select = () => assert.fail("Replay must consume recorded choices without recalculating AI policy");
     const result = await replayCanonicalDuel(replay, {
       game: unsafeFixture<ReplayDriverGamePort>(playback, "Concrete Game supplies the canonical playback methods."),

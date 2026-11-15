@@ -112,11 +112,15 @@ export async function chooseSpecialSummonPosition(
   // otherwise default to "attack". Each archetype owns its own positioning
   // policy; this method must not impose a global heuristic.
   if (isAI(player)) {
-    const strategy = player?.strategy;
+    // The strategy is read only by the AI resolver: playback consumes the
+    // recorded position and never consults a policy.
+    let viaStrategy = false;
     const resolveAI = (): BattlePosition => {
       if (options.preferredPosition === "attack" || options.preferredPosition === "defense") {
         return options.preferredPosition;
       }
+      const strategy = player?.strategy;
+      viaStrategy = typeof strategy?.chooseSpecialSummonPosition === "function";
       if (typeof strategy?.chooseSpecialSummonPosition === "function") {
         const fromStrategy = strategy.chooseSpecialSummonPosition(card, {
           game: this.game,
@@ -155,7 +159,7 @@ export async function chooseSpecialSummonPosition(
       card: card?.name,
       actionPosition,
       allowsChoice: true,
-      viaStrategy: !!strategy?.chooseSpecialSummonPosition,
+      viaStrategy,
     });
     this.game?.notify?.("position_chosen", {
       card,

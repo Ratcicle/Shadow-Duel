@@ -8,6 +8,8 @@ import type {
   DecisionReplayValue,
   RecordedDecision,
   SegocOrderDecisionContext,
+  SerializedChainResponseDecisions,
+  TriggerActivationDecisionContext,
 } from "./decisions.js";
 import type { EventPhase, RuntimeEventName, TurnCardActivationHistory } from "./events.js";
 import type {
@@ -51,6 +53,20 @@ export interface ReplayDeckEntry {
   duelCardId: DuelCardId | number;
 }
 
+export type ReplayControllerType = "human" | "ai";
+
+/** Who decides for each seat. Playback rebuilds the seats with these types. */
+export interface ReplaySeatControllers {
+  player: ReplayControllerType;
+  bot: ReplayControllerType;
+}
+
+/** The seats of a normal duel, implied when `setup.controllers` is absent. */
+export const DEFAULT_REPLAY_SEAT_CONTROLLERS: Readonly<ReplaySeatControllers> = Object.freeze({
+  player: "human",
+  bot: "ai",
+});
+
 export interface CanonicalReplaySetup {
   seed: ReplaySeed;
   randomState: ReplayRandomState | null;
@@ -59,6 +75,11 @@ export interface CanonicalReplaySetup {
   playerExtraDeck: ReplayDeckEntry[];
   botDeck: ReplayDeckEntry[];
   botExtraDeck: ReplayDeckEntry[];
+  /**
+   * Controller of each seat when the duel started. Recorded only when it
+   * differs from DEFAULT_REPLAY_SEAT_CONTROLLERS (a human against the AI).
+   */
+  controllers?: ReplaySeatControllers;
   /**
    * The duel started its opening turn by itself after the opening draw (a
    * normal duel). No command records that start, so playback starts the turn
@@ -131,6 +152,8 @@ export interface HandSummonProcedureReplayCommandPayload extends ReplayCardLocat
 export interface ActivateReplayCommandPayload extends ReplayCardLocator {
   sourceZone?: ReplayCardZone;
   effectId?: string | null;
+  /** The activating AI's exact plan, by duel identity; absent without one. */
+  decisions?: SerializedChainResponseDecisions;
 }
 
 export interface ChangePositionReplayCommandPayload extends ReplayCardLocator {
@@ -215,7 +238,9 @@ export type CanonicalReplayDecisionContextByKind = {
     ? (ChainResponseDecisionContext & SerializableObject) | null
     : Kind extends "segoc_order"
       ? (SegocOrderDecisionContext & SerializableObject) | null
-      : SerializableObject | null;
+      : Kind extends "trigger_activation"
+        ? TriggerActivationDecisionContext & SerializableObject
+        : SerializableObject | null;
 };
 
 export interface CanonicalReplayDecisionBase<Kind extends DecisionKind> {
@@ -627,6 +652,7 @@ export interface ReplayRuntimeCard {
   faceupStatuses?: import("./cards.js").CardStatusRegistry;
   id?: (RawCardDefinitionId | null) | undefined;
   duelCardId?: DuelCardId | number | null;
+  instanceId?: number | string | null;
   owner?: string | null;
   controller?: string | null;
   originalOwner?: string | null;
@@ -677,6 +703,7 @@ export interface ReplayRuntimeCard {
 
 export interface ReplayRuntimePlayer {
   id: PlayerId | string;
+  controllerType?: string | null | undefined;
   lp: number;
   lpGainedThisTurn?: number;
   deck: ReplayRuntimeCard[];
@@ -875,7 +902,7 @@ export interface ReplayDecisionBrokerPort {
 }
 
 export interface ReplayDriverGamePort extends CanonicalReplayGamePort {
-  activateFieldSpellEffect(card: ReplayRuntimeCard): unknown;
+  activateFieldSpellEffect(card: ReplayRuntimeCard, options?: object): unknown;
   player: ReplayRuntimePlayer;
   bot: ReplayRuntimePlayer;
   phase: EventPhase | string | null;

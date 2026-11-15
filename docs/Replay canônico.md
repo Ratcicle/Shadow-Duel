@@ -50,7 +50,7 @@ O documento contém estes campos:
 | --- | --- |
 | `format`, `schemaVersion`, `engineVersion` | Identificação do contrato. |
 | `cardDatabaseSignature` | Assinatura das definições usadas para interpretar o duelo. |
-| `setup` | Seed, estado inicial do RNG, primeiro jogador e as quatro listas de Deck. |
+| `setup` | Seed, estado inicial do RNG, primeiro jogador, as quatro listas de Deck e, quando necessário, os controladores dos assentos. |
 | `commands` | Comandos externos, com sequência, ator, payload e hash de estado quando presente. |
 | `decisions` | Escolhas internas, com kind, identidade, ator, candidatos, valor e contexto. |
 | `events` | Eventos canônicos observados, com sequência, turno, fase e payload. |
@@ -68,11 +68,20 @@ durante um comando, por exemplo com LP zerado no Damage Step, o gravador
 registra `finalStateHash` e `finalState` quando esse comando termina, e não
 no momento da vitória.
 
-Os campos de `setup` são obrigatórios. `seed` identifica a aleatoriedade inicial.
+Os campos de `setup` são obrigatórios, salvo `openingTurnStarted` e
+`controllers`. `seed` identifica a aleatoriedade inicial.
 `randomState` guarda `seed`, `state` e `calls`, ou recebe `null`.
 `startingPlayer` identifica o assento inicial como `player` ou `bot`, ou recebe
 `null`. As listas `playerDeck`, `playerExtraDeck`, `botDeck` e `botExtraDeck`
 preservam a ordem e registram cada entrada como `{ id, duelCardId }`.
+
+`controllers` informa quem decide em cada assento, como
+`{ player, bot }` com os valores `human` ou `ai`. A ausência do campo equivale
+aos assentos de um duelo normal, `{ player: "human", bot: "ai" }`
+(`DEFAULT_REPLAY_SEAT_CONTROLLERS`), e o gravador só registra o campo quando
+os assentos diferem desse padrão. O valor registrado é o dos assentos quando a
+gravação é finalizada. O playback reconstrói os assentos com esses
+controladores, pois as decisões gravadas dependem de quem decide.
 
 O setup é capturado na inicialização dos Decks, antes das compras de abertura.
 O driver reconstrói esses Decks e a abertura antes de executar os comandos.
@@ -101,6 +110,17 @@ Os tipos e payloads são definidos pelo mapa discriminado
 ausente, o driver usa `toPhase` para escolher entre pular até a fase e avançar.
 As transições são executadas pelo lifecycle normal de fases e turnos.
 
+`activate_effect` e `activate_card` podem levar `decisions`: o plano exato com
+que uma IA pediu a ativação (seleções, casos, Invocações-Especiais e Sincros
+planejados), com cartas pela identidade do duelo, no mesmo formato do plano de
+uma resposta de Chain. O driver devolve esse plano à mesma rota de ativação,
+com as identidades runtime do `Game` de playback. As demais preferências da
+IA não fazem parte do comando, porque só são lidas pelos resolvers de IA.
+Durante a gravação, um plano que não pode ser representado, por exemplo por
+citar uma carta fora das zonas do duelo, lança erro antes de a ativação
+começar, em vez de gravar o comando sem ele. Os planos de uma resposta de
+Chain e de um gatilho seguem a mesma regra quando a decisão é registrada.
+
 [capture.ts](../src/core/game/replay/capture.ts) envolve os métodos públicos
 de ações externas e registra o comando após sua resolução. Uma seleção
 pendente pode adiar esse registro até concluir o fluxo. As guardas da captura
@@ -124,6 +144,26 @@ Ele usa o valor gravado e os candidatos do fluxo atual, sem chamar o resolver
 humano ou recalcular a política da IA. Uma decisão ausente, de kind diferente
 ou que deixou de ser legal interrompe a reprodução.
 
+Toda escolha de uma IA que muda o fluxo da engine passa pelo broker ou pelo
+payload do comando: a estratégia, o AutoSelector, as regras fixas de bot e
+`Game.aiRandom()` só são consultados dentro do resolver de IA de uma decisão.
+O broker tem uma variante síncrona, restrita a resolvers síncronos de IA, para
+os pontos que não podem aguardar, como a coleta de gatilhos e a resolução de
+alvos; no playback, ela consome a decisão como a variante assíncrona.
+
+`trigger_activation` registra a resposta de um controlador de IA a uma
+oportunidade real de gatilho, no ponto em que a entrada é coletada (ou
+materializada, quando a checagem foi adiada), nunca em uma prévia. O valor é
+`{ pass: true }` quando a IA recusa um gatilho opcional; senão,
+`{ pass: false, candidateKey: null, effectId, decisions? }`, com o plano exato
+da IA pela identidade do duelo. O contexto
+`{ type: "trigger_activation", sourceDuelCardId, effectId }` vincula a decisão
+à fonte e ao efeito, e o broker confere esse vínculo e o ator no playback.
+Só um gatilho opcional pode ser recusado: no playback, um `pass` gravado para
+um gatilho obrigatório interrompe a reprodução. Gatilhos de um controlador
+humano não têm essa decisão: a escolha humana acontece na ordenação da SEGOC e
+nas confirmações.
+
 `field_placement` registra quem decide, o jogador de destino, a linha,
 a carta, os slots candidatos e o resultado. O resultado é `chosen` com slot
 de 0 a 4, ou `cancelled` quando permitido. A reprodução confere esse contexto
@@ -133,6 +173,8 @@ Confirmações opcionais e posições de Invocação-Especial escolhidas usam
 decisões `choice`; posições forçadas não exigem escolha. Seleções de custos,
 alvos e escolhas feitas durante a resolução usam seus kinds próprios.
 Recusas e seleções vazias são registradas quando o fluxo as permite.
+A escolha de uma IA sobre um contrato de seleção usa o formato de valor da
+sessão humana: cartas pela identidade do duelo e demais opções pela chave.
 
 Respostas de Chain e escolhas de referência conservam o vínculo à janela e
 ao elo respondido. O broker aplica os checks específicos de ator, contexto
@@ -242,11 +284,11 @@ As APIs anexadas a `Game` são implementadas em
 | API | Comportamento |
 | --- | --- |
 | `startReplayRecording(options)` | Cria um buffer novo e controla a captura por `enabled`. |
-| `captureReplaySetup()` | Registra o RNG, o primeiro jogador e os Decks iniciais. |
+| `captureReplaySetup()` | Registra o RNG, o primeiro jogador, os Decks iniciais e os controladores fora do padrão. |
 | `recordReplayCommand(command)` | Registra o comando e o hash do estado naquele momento. |
 | `recordReplayDecision(decision)` | Registra a decisão serializada. |
 | `recordReplayEvent(name, payload)` | Registra eventos aceitos pelo catálogo canônico. |
-| `finalizeReplay(result)` | Registra resultado, snapshot e hash final; marca `finalized`. |
+| `finalizeReplay(result)` | Atualiza os controladores dos assentos; registra resultado, snapshot e hash final; marca `finalized`. |
 | `exportReplay(options)` | Finaliza se necessário, retorna a gravação e pode baixar o JSON. |
 | `hasCanonicalReplay()` | Informa se existe um buffer de gravação. |
 
@@ -275,9 +317,10 @@ Os checks acontecem nesta ordem, antes de inicializar o `Game` de playback:
 5. versão de interpretação;
 6. validação profunda e serialização de toda a árvore.
 
-A validação profunda confere RNG, Decks, identidades, sequências positivas
-e crescentes, tipos e payloads de comandos, decisões compatíveis com seus
-kinds, eventos e snapshots. Campos opcionais são validados quando presentes.
+A validação profunda confere RNG, Decks, controladores dos assentos,
+identidades, sequências positivas e crescentes, tipos e payloads de comandos,
+inclusive planos de ativação, decisões compatíveis com seus kinds e
+contextos, eventos e snapshots. Campos opcionais são validados quando presentes.
 Os hashes devem ter oito caracteres hexadecimais lowercase.
 Propriedades extras também precisam ser serializáveis.
 
@@ -307,7 +350,28 @@ execução.
 `Game` sem renderer ou usa `options.game`. Nesse segundo caso, inicializa a
 instância fornecida com os Decks do replay. A instância deve estar configurada
 com `replayMode: "playback"` e `captureReplay: false`, como o `Game` criado
-pelo próprio driver.
+pelo próprio driver, e com assentos dos mesmos controladores do replay.
+
+O `Game` do próprio driver (`createHeadlessPlaybackGame`) reproduz de forma
+estrita. Seus assentos são reconstruídos a partir de `setup.controllers` por
+`createReplaySeat` e guardam só o tipo de controlador: um assento de IA não
+tem estratégia e não joga sozinho. Esse `Game` recusa consultar a estratégia
+de um assento, pedir uma jogada de IA, chamar o AutoSelector e
+`Game.aiRandom()`. Uma consulta de política no playback indica uma escolha que
+a gravação não capturou.
+
+Cada recusa lança erro e fica registrada no `Game`. O broker também registra
+cada decisão gravada que rejeita no playback (`replayRejections`). Como a
+engine contém erros em alguns pontos, como a coleta de gatilhos e a SEGOC,
+esses erros podem não chegar ao driver. Por isso, depois da inicialização, da
+abertura e de cada comando, o driver confere as recusas, as decisões
+rejeitadas e as falhas contidas pela engine (`engineFaults`) desde o início do
+playback, e a primeira que encontrar interrompe a reprodução. Num comando, a
+recusa é conferida antes do hash, e a decisão rejeitada e a falha contida
+depois dele: quando o fallback diverge do estado gravado, o erro informado é a
+divergência; quando mantém o mesmo estado, a reprodução também é
+interrompida. Um `Game` fornecido em `options.game` não tem essas recusas nem
+essas conferências.
 
 A execução carrega as decisões no broker, restaura o estado inicial do RNG,
 reconstrói os Decks e executa os comandos em sequência pelas rotas públicas.
@@ -334,16 +398,19 @@ Para reprodução headless, use o script
 npm run replay -- caminho\duelo.json
 ```
 
-O CLI lê o JSON, executa o driver, informa o hash final e descarta o `Game`
-ao terminar com sucesso. Uma falha de validação ou execução encerra o processo
-com erro.
+O CLI lê o JSON, executa o driver com o playback estrito, informa os
+controladores dos assentos e o hash final e descarta o `Game` ao terminar com
+sucesso. Uma falha de validação ou execução encerra o processo com erro,
+inclusive uma consulta de política recusada, uma decisão gravada rejeitada ou
+uma falha contida pela engine durante o playback.
 
 ## Aleatoriedade e limites do registro
 
 Toda aleatoriedade que altera regras deve passar por `Game.random()` ou
 `Game.shuffle()`. Aleatoriedade exclusivamente visual fica fora do replay.
 Decisões da IA usam `Game.aiRandom()`, um fluxo derivado do `seed` que fica
-fora do replay e do hash de estado, e nunca consomem `Game.random()`.
+fora do replay e do hash de estado, e nunca consomem `Game.random()`. Como o
+playback consome as decisões gravadas, ele não usa esse fluxo.
 Identidades de gameplay e ordem de resolução precisam ser reproduzíveis.
 
 O replay representa o setup inicial e as ações capturadas. Um cenário montado

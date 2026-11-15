@@ -1,15 +1,22 @@
 import Game from "../../Game.js";
+import Player from "../../Player.js";
+import type { AIDecisionPlan } from "../../contracts/ai.js";
+import type { EngineFault } from "../../contracts/gameRuntime.js";
+import type { PlayerId } from "../../contracts/primitives.js";
 import type {
   CanonicalReplay,
   CanonicalReplayCommand,
   CanonicalReplayResultSummary,
   ReplayCardLocator,
+  ReplayControllerType,
   ReplayDriverGamePort,
   ReplayDriverOptions,
   ReplayRuntimeCard,
   ReplayRuntimePlayer,
-  ReplaySeed,
+  ReplaySeatControllers,
 } from "../../contracts/replay.js";
+import { DEFAULT_REPLAY_SEAT_CONTROLLERS } from "../../contracts/replay.js";
+import { createDecisionPlanIdentities } from "../decisions/chainResponse.js";
 import {
   hashCanonicalGameState,
   validateCanonicalReplay,
@@ -79,6 +86,21 @@ function isReplayRuntimeCard(
   card: ReplayRuntimeCard | null,
 ): card is ReplayRuntimeCard {
   return Boolean(card);
+}
+
+/**
+ * The recorded plan of an activation command, by runtime identity, as the
+ * activating entrypoint received it live. Its other preferences are not part
+ * of the command: they only ever reach AI resolvers, which playback skips.
+ */
+function activationPlanOptions(
+  game: ReplayDriverGamePort,
+  command: Extract<CanonicalReplayCommand, { type: "activate_effect" | "activate_card" }>,
+): { activationContext?: { decisions: AIDecisionPlan } } {
+  if (command.payload.decisions === undefined) return {};
+  const decisions = createDecisionPlanIdentities(game).deserialize(command.payload.decisions);
+  if (!decisions) throw new Error("Replay activation choices name cards that are no longer available.");
+  return { activationContext: { decisions } };
 }
 
 async function executeCommand(
@@ -193,25 +215,28 @@ async function executeCommand(
     case "activate_card": {
       const source = findCard(game, actor, command.payload);
       if (!source) throw new Error("Replay activation source is missing.");
+      const plan = activationPlanOptions(game, command);
       if (source.card.cardKind === "monster") {
         return game.tryActivateMonsterEffect(
           source.card,
           null,
           source.zone,
           actor,
-          { effectId: command.payload.effectId || null },
+          { effectId: command.payload.effectId || null, ...plan },
         );
       }
       if (source.zone === "hand") {
         return game.tryActivateSpell(source.card, source.index, null, {
           owner: actor,
+          ...plan,
         });
       }
-      if (source.zone === "fieldSpell") return game.activateFieldSpellEffect(source.card);
+      if (source.zone === "fieldSpell") return game.activateFieldSpellEffect(source.card, plan);
       return game.tryActivateSpellTrapEffect(source.card, null, {
         owner: actor,
         activationZone: source.zone,
         effectId: command.payload.effectId || null,
+        ...plan,
       });
     }
     case "change_position": {
@@ -256,21 +281,147 @@ async function drainReplayDecisions(game: ReplayDriverGamePort): Promise<void> {
   }
 }
 
+/** The controller of each seat, as recorded or implied by its absence. */
+export function getReplaySeatControllers(
+  replay: Pick<CanonicalReplay, "setup">,
+): ReplaySeatControllers {
+  return { ...DEFAULT_REPLAY_SEAT_CONTROLLERS, ...replay.setup.controllers };
+}
+
 /**
- * Builds the driver's own headless playback Game. Presentation delays are
- * timing only (hashes come from canonical state), so they are skipped here; a
- * caller-supplied Game keeps its own configuration.
+ * What a strict playback Game refused or contained. A refusal throws to stop
+ * the computation, but the engine contains errors at some boundaries (trigger
+ * collection, SEGOC, event resolution), where the error may never reach the
+ * driver; so the driver also reads this state after each step and fails on it.
  */
-function createHeadlessPlaybackGame(seed: ReplaySeed): ReplayDriverGamePort {
+interface StrictPlaybackState {
+  /** Policy consultations refused so far, in order. */
+  readonly violations: string[];
+  /** Recorded decisions the broker rejected since they were loaded. */
+  readonly replayRejections: () => readonly string[];
+  /** The engine faults the Game has contained so far. */
+  readonly engineFaults: () => readonly EngineFault[];
+}
+
+const strictPlaybackStates = new WeakMap<object, StrictPlaybackState>();
+
+/** Records a refused policy consultation, then stops the computation. */
+function refusePolicyConsultation(violations: string[], message: string): never {
+  violations.push(message);
+  throw new Error(message);
+}
+
+/**
+ * A playback seat: the recorded controller type and nothing else. An AI seat
+ * has no strategy and cannot move by itself; any attempt to consult it is a
+ * choice the replay did not capture, so it is recorded in `violations` and
+ * throws instead of recomputing.
+ */
+export function createReplaySeat(
+  id: PlayerId,
+  controllerType: ReplayControllerType,
+  violations: string[] = [],
+): Player {
+  const seat = new Player(id, id === "player" ? "You" : "Opponent", controllerType);
+  if (controllerType === "ai") {
+    const refuse = (what: string): never => refusePolicyConsultation(
+      violations,
+      `Replay ${id} seat consulted its ${what}; playback only consumes recorded decisions.`,
+    );
+    Object.defineProperty(seat, "strategy", {
+      configurable: true,
+      enumerable: false,
+      get: () => refuse("strategy"),
+    });
+    Object.defineProperty(seat, "makeMove", {
+      configurable: true,
+      enumerable: false,
+      value: () => refuse("AI move"),
+    });
+  }
+  return seat;
+}
+
+/**
+ * Builds the strict headless playback Game of a replay: seats rebuilt from
+ * its controllers, without strategies, and no AutoSelector or AI randomness
+ * (both serve only AI resolvers, which playback never runs). Every refusal is
+ * recorded on the Game, and the driver fails the replay on it even when the
+ * engine contained the error. Presentation delays are timing only (hashes
+ * come from canonical state), so they are skipped here; a caller-supplied Game
+ * keeps its own seats and configuration.
+ */
+export function createHeadlessPlaybackGame(
+  replay: Pick<CanonicalReplay, "setup">,
+): ReplayDriverGamePort {
+  const controllers = getReplaySeatControllers(replay);
+  const violations: string[] = [];
   const game = new Game({
     renderer: null,
-    randomSeed: seed,
+    randomSeed: replay.setup.seed,
     replayMode: "playback",
     captureReplay: false,
     chainResponseTimeoutMs: 0,
+    opponentOverride: createReplaySeat("bot", controllers.bot, violations),
   });
+  if (controllers.player === "ai") {
+    game.player = createReplaySeat("player", "ai", violations);
+    game.player.game = game;
+  }
+  const refuse = (what: string): never => refusePolicyConsultation(
+    violations,
+    `Replay playback consulted the ${what}; playback only consumes recorded decisions.`,
+  );
+  game.autoSelector = {
+    select: () => refuse("AutoSelector"),
+    orderTriggerCandidates: () => refuse("AutoSelector"),
+  };
+  game.aiRandom = () => refuse("AI randomness");
   game.disablePresentationDelays = true;
+  strictPlaybackStates.set(game, {
+    violations,
+    replayRejections: () => game.decisionBroker.replayRejections,
+    engineFaults: () => game.engineFaults,
+  });
   return game as ReplayDriverGamePort;
+}
+
+interface StrictPlaybackChecks {
+  /** Fails at the first refused policy consultation. */
+  consultations(step: string): void;
+  /**
+   * Fails at the first recorded decision the broker rejected, then at the
+   * first engine fault contained since playback started.
+   */
+  containedErrors(step: string): void;
+}
+
+/** The checks of a strict playback Game; other Games always pass them. */
+function createStrictPlaybackChecks(game: ReplayDriverGamePort): StrictPlaybackChecks {
+  const state = strictPlaybackStates.get(game);
+  if (!state) return { consultations: () => {}, containedErrors: () => {} };
+  const violationsBefore = state.violations.length;
+  const faultsBefore = new Set(state.engineFaults());
+  return {
+    consultations: step => {
+      const violation = state.violations[violationsBefore];
+      if (violation !== undefined) {
+        throw new Error(`Strict replay playback failed ${step}: ${violation}`);
+      }
+    },
+    containedErrors: step => {
+      const [rejection] = state.replayRejections();
+      if (rejection !== undefined) {
+        throw new Error(`Strict replay playback failed ${step}: a recorded decision was rejected (${rejection})`);
+      }
+      const fault = state.engineFaults().find(entry => !faultsBefore.has(entry));
+      if (fault) {
+        throw new Error(
+          `Strict replay playback failed ${step}: the engine contained a fault (${fault.scope}: ${fault.message}).`,
+        );
+      }
+    },
+  };
 }
 
 export async function replayCanonicalDuel(
@@ -279,7 +430,8 @@ export async function replayCanonicalDuel(
 ): Promise<CanonicalReplayResultSummary> {
   const canonicalReplay = validateCanonicalReplay(replay);
   const game =
-    options.game || createHeadlessPlaybackGame(canonicalReplay.setup.seed);
+    options.game || createHeadlessPlaybackGame(canonicalReplay);
+  const strict = createStrictPlaybackChecks(game);
   game.decisionBroker.loadReplayDecisions(canonicalReplay.decisions);
   await game.startWithDecks({
     exactDecks: true,
@@ -294,14 +446,23 @@ export async function replayCanonicalDuel(
     botDeck: canonicalReplay.setup.botDeck,
     botExtraDeck: canonicalReplay.setup.botExtraDeck,
   });
+  strict.consultations("during setup");
+  strict.containedErrors("during setup");
   if (canonicalReplay.setup.openingTurnStarted === true) {
     await game.startTurn();
     await drainReplayDecisions(game);
+    strict.consultations("in the opening turn");
+    strict.containedErrors("in the opening turn");
   }
 
   for (const command of canonicalReplay.commands) {
+    const step = `at command ${command.sequence} (${command.type})`;
     await executeCommand(game, command);
     await drainReplayDecisions(game);
+    // A refused consultation explains a divergence, so it comes first; a
+    // rejected decision or contained fault that left the recorded state
+    // unchanged still fails the command after the hash matches.
+    strict.consultations(step);
     const observedHash = hashCanonicalGameState(game);
     if (command.stateHash && observedHash !== command.stateHash) {
       const error: Error & Partial<ReplayDivergenceMetadata> = new Error(
@@ -313,6 +474,7 @@ export async function replayCanonicalDuel(
       error.observedHash = observedHash;
       throw error;
     }
+    strict.containedErrors(step);
   }
 
   if (game.decisionBroker.replayCursor !== canonicalReplay.decisions.length) {

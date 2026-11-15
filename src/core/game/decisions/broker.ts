@@ -12,6 +12,7 @@ import type {
   RecordedDecision,
   ReplayDecisionInput,
   SelectionDecisionKind,
+  SyncDecisionRequest,
 } from "../../contracts/decisions.js";
 import type { SelectionResult } from "../../contracts/selection.js";
 
@@ -154,12 +155,114 @@ function normalizeCandidateResult(
     : canonical;
 }
 
+function decisionActorId(input: RuntimeDecisionInput): string | null {
+  return input.actor?.id || input.actorId || null;
+}
+
+/**
+ * Consume and revalidate the next recorded decision; no resolver is consulted.
+ * A rejection is also kept on the broker: the engine contains errors at some
+ * boundaries (trigger collection, SEGOC), and a strict playback fails on the
+ * record even when the error never reaches it.
+ */
+function consumeReplayDecision(
+  broker: DecisionBroker,
+  runtimeInput: RuntimeDecisionInput,
+  candidates: unknown[],
+): unknown {
+  try {
+    return readNextReplayDecision(broker, runtimeInput, candidates);
+  } catch (error) {
+    broker.replayRejections.push(error instanceof Error ? error.message : String(error));
+    throw error;
+  }
+}
+
+function readNextReplayDecision(
+  broker: DecisionBroker,
+  runtimeInput: RuntimeDecisionInput,
+  candidates: unknown[],
+): unknown {
+  const recorded = broker.replayDecisions[broker.replayCursor++];
+  if (!recorded || recorded.kind !== runtimeInput.kind) {
+    throw new Error(
+      `Replay decision mismatch at ${broker.replayCursor}: expected ${runtimeInput.kind}.`,
+    );
+  }
+  if (runtimeInput.kind === "chain_response" && runtimeInput.contextSnapshot) {
+    const expected = runtimeInput.contextSnapshot;
+    const received = recorded.context;
+    if (!received || recorded.actorId !== decisionActorId(runtimeInput) ||
+        ["type", "chainId", "respondingToLinkId"].some(key => Reflect.get(expected, key) !== Reflect.get(received, key))) {
+      throw new Error("Replay Chain response context does not match the current responder or window.");
+    }
+  }
+  if (runtimeInput.kind === "field_placement") {
+    const expectedContext = runtimeInput.contextSnapshot;
+    const receivedContext = recorded.context;
+    const keys = ["procedureId", "decidingPlayerId", "destinationPlayerId", "row", "duelCardId", "allowCancel"];
+    if (!expectedContext || !receivedContext ||
+        recorded.actorId !== decisionActorId(runtimeInput) ||
+        keys.some(key => Reflect.get(expectedContext, key) !== Reflect.get(receivedContext, key)) ||
+        JSON.stringify(recorded.candidateKeys) !== JSON.stringify(candidates.map(candidateKey))) {
+      throw new Error("Replay field placement context or candidates do not match the current procedure.");
+    }
+  }
+  if (runtimeInput.kind === "choice" && runtimeInput.contextSnapshot &&
+      Reflect.get(runtimeInput.contextSnapshot, "type") === "resolution_choice") {
+    const expected = runtimeInput.contextSnapshot;
+    const received = recorded.context;
+    if (!received || recorded.actorId !== decisionActorId(runtimeInput) ||
+        ["type", "sourceDuelCardId", "effectId"].some(key => Reflect.get(expected, key) !== Reflect.get(received, key))) {
+      throw new Error("Replay resolution choice does not match the current actor, source or effect.");
+    }
+  }
+  if (runtimeInput.kind === "trigger_activation") {
+    const expected = runtimeInput.contextSnapshot;
+    const received = recorded.context;
+    if (!expected || !received || recorded.actorId !== decisionActorId(runtimeInput) ||
+        ["type", "sourceDuelCardId", "effectId"].some(key => Reflect.get(expected, key) !== Reflect.get(received, key))) {
+      throw new Error("Replay trigger activation does not match the current controller, source or effect.");
+    }
+  }
+  if (runtimeInput.kind === "choice" && runtimeInput.contextSnapshot &&
+      Reflect.get(runtimeInput.contextSnapshot, "type") === "chain_response_reference") {
+    const expected = runtimeInput.contextSnapshot;
+    const received = recorded.context;
+    if (!received || recorded.actorId !== decisionActorId(runtimeInput) ||
+        ["type", "chainId", "respondingToLinkId", "sourceDuelCardId", "effectId"]
+          .some(key => Reflect.get(expected, key) !== Reflect.get(received, key)) ||
+        JSON.stringify(recorded.candidateKeys) !== JSON.stringify(candidates.map(candidateKey))) {
+      throw new Error("Replay Chain reference choice does not match the current link or candidates.");
+    }
+  }
+  const decoded = typeof runtimeInput.deserializeReplayValue === "function"
+    ? runtimeInput.deserializeReplayValue(recorded.value, candidates)
+    : matchReplayValue(recorded.value, candidates);
+  const result = runtimeInput.kind === "chain_response"
+    ? normalizeCandidateResult(runtimeInput, decoded, candidates)
+    : decoded;
+  if (!replayValueIsPass(recorded.value) && result == null) {
+    throw new Error(
+      `Replay decision ${recorded.decisionId || broker.replayCursor} is no longer legal.`,
+    );
+  }
+  return result;
+}
+
+function isPromiseLike(value: unknown): boolean {
+  return (typeof value === "object" || typeof value === "function") && value !== null &&
+    typeof Reflect.get(value, "then") === "function";
+}
+
 export class DecisionBroker {
   game: DecisionBrokerGamePort;
   mode: DecisionBrokerMode;
   nextDecisionId: number;
   replayDecisions: ReplayDecisionInput[];
   replayCursor: number;
+  /** Why playback rejected recorded decisions since they were loaded. */
+  replayRejections: string[];
 
   constructor(
     game: DecisionBrokerGamePort,
@@ -170,6 +273,7 @@ export class DecisionBroker {
     this.nextDecisionId = 1;
     this.replayDecisions = [];
     this.replayCursor = 0;
+    this.replayRejections = [];
   }
 
   loadReplayDecisions(decisions?: ReplayDecisionInput[]): void;
@@ -179,6 +283,7 @@ export class DecisionBroker {
       ? (decisions as ReplayDecisionInput[])
       : [];
     this.replayCursor = 0;
+    this.replayRejections = [];
   }
 
   /** Inspect only the next decision; requestDecision still owns its consumption. */
@@ -212,69 +317,47 @@ export class DecisionBroker {
       ? runtimeInput.candidates
       : [];
     if (this.mode === "replay") {
-      const recorded = this.replayDecisions[this.replayCursor++];
-      if (!recorded || recorded.kind !== runtimeInput.kind) {
-        throw new Error(
-          `Replay decision mismatch at ${this.replayCursor}: expected ${runtimeInput.kind}.`,
-        );
-      }
-      if (runtimeInput.kind === "chain_response" && runtimeInput.contextSnapshot) {
-        const expected = runtimeInput.contextSnapshot;
-        const received = recorded.context;
-        if (!received || recorded.actorId !== (runtimeInput.actor?.id || runtimeInput.actorId || null) ||
-            ["type", "chainId", "respondingToLinkId"].some(key => Reflect.get(expected, key) !== Reflect.get(received, key))) {
-          throw new Error("Replay Chain response context does not match the current responder or window.");
-        }
-      }
-      if (runtimeInput.kind === "field_placement") {
-        const expectedContext = runtimeInput.contextSnapshot;
-        const receivedContext = recorded.context;
-        const keys = ["procedureId", "decidingPlayerId", "destinationPlayerId", "row", "duelCardId", "allowCancel"];
-        if (!expectedContext || !receivedContext ||
-            recorded.actorId !== (runtimeInput.actor?.id || runtimeInput.actorId || null) ||
-            keys.some(key => Reflect.get(expectedContext, key) !== Reflect.get(receivedContext, key)) ||
-            JSON.stringify(recorded.candidateKeys) !== JSON.stringify(candidates.map(candidateKey))) {
-          throw new Error("Replay field placement context or candidates do not match the current procedure.");
-        }
-      }
-      if (runtimeInput.kind === "choice" && runtimeInput.contextSnapshot &&
-          Reflect.get(runtimeInput.contextSnapshot, "type") === "resolution_choice") {
-        const expected = runtimeInput.contextSnapshot;
-        const received = recorded.context;
-        if (!received || recorded.actorId !== (runtimeInput.actor?.id || runtimeInput.actorId || null) ||
-            ["type", "sourceDuelCardId", "effectId"].some(key => Reflect.get(expected, key) !== Reflect.get(received, key))) {
-          throw new Error("Replay resolution choice does not match the current actor, source or effect.");
-        }
-      }
-      if (runtimeInput.kind === "choice" && runtimeInput.contextSnapshot &&
-          Reflect.get(runtimeInput.contextSnapshot, "type") === "chain_response_reference") {
-        const expected = runtimeInput.contextSnapshot;
-        const received = recorded.context;
-        if (!received || recorded.actorId !== (runtimeInput.actor?.id || runtimeInput.actorId || null) ||
-            ["type", "chainId", "respondingToLinkId", "sourceDuelCardId", "effectId"]
-              .some(key => Reflect.get(expected, key) !== Reflect.get(received, key)) ||
-            JSON.stringify(recorded.candidateKeys) !== JSON.stringify(candidates.map(candidateKey))) {
-          throw new Error("Replay Chain reference choice does not match the current link or candidates.");
-        }
-      }
-      const decoded = typeof runtimeInput.deserializeReplayValue === "function"
-        ? runtimeInput.deserializeReplayValue(recorded.value, candidates)
-        : matchReplayValue(recorded.value, candidates);
-      const result = runtimeInput.kind === "chain_response"
-        ? normalizeCandidateResult(runtimeInput, decoded, candidates)
-        : decoded;
-      if (!replayValueIsPass(recorded.value) && result == null) {
-        throw new Error(
-          `Replay decision ${recorded.decisionId || this.replayCursor} is no longer legal.`,
-        );
-      }
-      return result;
+      return consumeReplayDecision(this, runtimeInput, candidates);
     }
 
     const resolver = runtimeInput.actor?.controllerType === "ai"
       ? runtimeInput.resolveAI
       : runtimeInput.resolveHuman;
     const proposed = typeof resolver === "function" ? await resolver() : null;
+    return this.recordProposedDecision(runtimeInput, proposed, candidates);
+  }
+
+  /**
+   * Same contract as requestDecision for a resolver that cannot be awaited.
+   * Live, only an AI actor may answer, and synchronously; playback consumes
+   * the recorded value exactly as requestDecision does.
+   */
+  requestDecisionSync<Kind extends DecisionKind>(
+    input: SyncDecisionRequest<Kind>,
+  ): DecisionResult<Kind>;
+  requestDecisionSync(input: unknown): unknown {
+    const runtimeInput = input as RuntimeDecisionInput;
+    const candidates = Array.isArray(runtimeInput.candidates)
+      ? runtimeInput.candidates
+      : [];
+    if (this.mode === "replay") {
+      return consumeReplayDecision(this, runtimeInput, candidates);
+    }
+    if (runtimeInput.actor?.controllerType !== "ai") {
+      throw new Error("Synchronous decisions are answered only by an AI controller.");
+    }
+    const proposed = typeof runtimeInput.resolveAI === "function" ? runtimeInput.resolveAI() : null;
+    if (isPromiseLike(proposed)) {
+      throw new Error("A synchronous decision resolver cannot return a promise.");
+    }
+    return this.recordProposedDecision(runtimeInput, proposed, candidates);
+  }
+
+  private recordProposedDecision(
+    runtimeInput: RuntimeDecisionInput,
+    proposed: unknown,
+    candidates: unknown[],
+  ): unknown {
     const result = normalizeCandidateResult(runtimeInput, proposed, candidates);
     if (proposed != null && result == null) {
       this.game?.notify?.("decision_rejected", {

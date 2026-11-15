@@ -1,7 +1,9 @@
 import { isAI } from "../../Player.js";
+import { aiSelectionDecisionRequest, isSelectionKey } from "../../actionHandlers/shared.js";
 import { SUMMON_MODES } from "./transaction.js";
 import { SUMMON_ORIGINS } from "../../contracts/summon.js";
 import { checkSpecialSummonEligibility } from "./eligibility.js";
+import type { DecisionBrokerPort } from "../../contracts/decisions.js";
 import type {
   BattlePosition,
   BattlePositionInput,
@@ -297,6 +299,7 @@ interface SynchroHost {
   ): unknown;
   closeExtraDeckModal?(): void;
   updateBoard?(): MaybePromise<unknown>;
+  requestDecision?: DecisionBrokerPort["requestDecision"];
 }
 
 function runtimeSynchroDefinition(
@@ -1312,7 +1315,28 @@ export async function performSynchroSummonFromExtraDeck(
   let materials = Array.isArray(options.materials) ? options.materials : null;
   if (!materials) {
     if (isAI(player)) {
-      materials = check.materialCombos[0] || [];
+      // The bot takes the first legal combination, as a recorded decision.
+      const selectionContract = buildSynchroMaterialSelectionContract(
+        this,
+        card,
+        player,
+        check.candidates,
+      );
+      const candidates = selectionContract.requirements[0].candidates;
+      const resolveAI = (): SelectionResult => ({
+        synchro_materials: (check.materialCombos[0] || [])
+          .map((material) => candidates.find((candidate) => candidate.cardRef === material)?.key)
+          .filter(isSelectionKey),
+      });
+      const decided = this.requestDecision
+        ? await this.requestDecision({
+            ...aiSelectionDecisionRequest(player, "synchro", selectionContract.requirements),
+            resolveAI,
+          })
+        : resolveAI();
+      materials = (decided?.synchro_materials || [])
+        .map((key) => candidates.find((candidate) => candidate.key === key)?.cardRef)
+        .filter((material): material is GameCard => Boolean(material));
     } else {
       const selectionContract = buildSynchroMaterialSelectionContract(
         this,

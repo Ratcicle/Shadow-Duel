@@ -7,6 +7,7 @@ import type {
 } from "../../contracts/chainRuntime.js";
 import type {
   ChainResponseDecisionValue,
+  DecisionRequest,
   SerializedChainResponseDecisions,
 } from "../../contracts/decisions.js";
 
@@ -115,12 +116,94 @@ export function captureChainResponseDecisionCards<Card extends { instanceId?: nu
   return [...bound];
 }
 
-function gameCards(game: ChainGamePort | null): ChainCard[] {
+/** A physical card a decision plan can name: runtime and duel identities. */
+interface DecisionPlanCard {
+  instanceId?: number | string | null;
+  duelCardId?: number | null;
+}
+
+interface DecisionPlanSeat<Card extends DecisionPlanCard> {
+  deck?: readonly Card[];
+  extraDeck?: readonly Card[];
+  hand?: readonly Card[];
+  field?: readonly Card[];
+  spellTrap?: readonly Card[];
+  graveyard?: readonly Card[];
+  banished?: readonly Card[];
+  fieldSpell?: Card | null;
+}
+
+/** The seats whose cards a plan can name, and the duel identity of each card. */
+export interface DecisionPlanGamePort<Card extends DecisionPlanCard> {
+  player: DecisionPlanSeat<Card>;
+  bot: DecisionPlanSeat<Card>;
+  ensureDuelCardId?(card: Card): number | null;
+}
+
+function gameCards<Card extends DecisionPlanCard>(game: DecisionPlanGamePort<Card> | null): Card[] {
   return game ? [game.player, game.bot].flatMap(player => [
-    ...player.deck, ...player.extraDeck, ...player.hand, ...player.field,
-    ...player.spellTrap, ...player.graveyard, ...player.banished,
+    ...(player.deck || []), ...(player.extraDeck || []), ...(player.hand || []), ...(player.field || []),
+    ...(player.spellTrap || []), ...(player.graveyard || []), ...(player.banished || []),
     ...(player.fieldSpell ? [player.fieldSpell] : []),
   ]) : [];
+}
+
+/**
+ * Crosses a plan over a replay boundary: runtime instance identities become
+ * duel identities when recorded, and the reverse on playback. Every recorded
+ * plan (Chain response, trigger activation, activation command) uses it.
+ */
+export function createDecisionPlanIdentities<Card extends DecisionPlanCard>(
+  game: DecisionPlanGamePort<Card> | null,
+): {
+  serialize(plan: AIDecisionPlan): SerializedChainResponseDecisions | null;
+  deserialize(value: unknown): AIDecisionPlan | null;
+} {
+  const mapIdentity = (id: number | string, replay: boolean) => {
+    const card = gameCards(game).find(entry => String(replay ? entry.duelCardId : entry.instanceId) === String(id));
+    return card ? (replay ? card.instanceId : game?.ensureDuelCardId?.(card) ?? card.duelCardId) ?? null : null;
+  };
+  return {
+    serialize: plan => serializeChainResponseDecisions(plan, id => mapIdentity(id, false)),
+    deserialize: value => readChainResponseDecisions(value, id => mapIdentity(id, true), true),
+  };
+}
+
+/**
+ * Records an AI controller's answer to one trigger opportunity: a declined
+ * optional trigger is a pass; an activation keeps only its exact plan. Only
+ * an optional trigger can be declined, so playback rejects a pass recorded
+ * for a mandatory one instead of skipping it.
+ */
+export function createTriggerActivationDecisionAdapter<Card extends DecisionPlanCard>(
+  game: DecisionPlanGamePort<Card> | null,
+  effectId: string | null,
+  options: { optional: boolean },
+): Pick<DecisionRequest<"trigger_activation">, "serializeResult" | "deserializeReplayValue"> {
+  const identities = createDecisionPlanIdentities(game);
+  return {
+    serializeResult: result => {
+      if (result == null) return { pass: true };
+      const value: ChainResponseDecisionValue = { pass: false, candidateKey: null, effectId };
+      if (result.decisions) {
+        const serialized = identities.serialize(result.decisions);
+        if (!serialized) throw new Error("Cannot record unavailable trigger activation choices.");
+        value.decisions = serialized;
+      }
+      return value;
+    },
+    deserializeReplayValue: value => {
+      if (object(value) && value.pass === true && !options.optional) {
+        throw new Error("Replay trigger activation declines a mandatory trigger; only an optional one can be declined.");
+      }
+      if (!object(value) || value.pass === true) return null;
+      if (value.pass !== false || value.effectId !== effectId ||
+          Object.keys(value).some(key => !["pass", "candidateKey", "effectId", "decisions"].includes(key))) return null;
+      if (!("decisions" in value)) return { decisions: null };
+      const decisions = identities.deserialize(value.decisions);
+      return decisions ? { decisions } : null;
+    },
+  };
 }
 
 const strategyActivationMetadata = new Set([
@@ -170,10 +253,7 @@ export function createChainResponseDecisionAdapter(
   const find = (value: unknown) => object(value)
     ? candidates.find(candidate => candidate.candidateKey === value.candidateKey)
     : undefined;
-  const mapIdentity = (id: number | string, replay: boolean) => {
-    const card = gameCards(game).find(entry => String(replay ? entry.duelCardId : entry.instanceId) === String(id));
-    return card ? (replay ? card.instanceId : game?.ensureDuelCardId?.(card) ?? card.duelCardId) ?? null : null;
-  };
+  const identities = createDecisionPlanIdentities(game);
   return {
     normalizeCandidateResult: (canonical, result) => {
       const candidate = find(canonical);
@@ -197,7 +277,7 @@ export function createChainResponseDecisionAdapter(
       };
       const decisions = candidate.context.activationContext?.decisions;
       if (decisions) {
-        const serialized = serializeChainResponseDecisions(decisions, id => mapIdentity(id, false));
+        const serialized = identities.serialize(decisions);
         if (!serialized) throw new Error("Cannot record unavailable Chain response choices.");
         value.decisions = serialized;
       }
@@ -209,7 +289,7 @@ export function createChainResponseDecisionAdapter(
       const candidate = find(value);
       if (!candidate || value.effectId !== candidate.effectId) return null;
       if (!("decisions" in value)) return candidate;
-      const decisions = readChainResponseDecisions(value.decisions, id => mapIdentity(id, true), true);
+      const decisions = identities.deserialize(value.decisions);
       return decisions ? {
         ...candidate,
         context: {

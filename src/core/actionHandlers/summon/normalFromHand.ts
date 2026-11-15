@@ -2,7 +2,7 @@ import { isAI } from "../../Player.js";
 import type { ActionHandler, ActionHandlerEnginePort, ActionRuntimePlayer, ActionRuntimeCard } from "../../contracts/actionRuntime.js";
 import type { CardFilter } from "../../contracts/effects.js";
 import { getNormalSummonTributeOptions } from "../../game/summon/tributeValue.js";
-import { selectCards } from "../shared.js";
+import { selectCards, selectResolutionCards } from "../shared.js";
 import { getCardDisplayName, getUIText as t } from "../../i18n.js";
 
 export function getNormalSummonEntries(
@@ -40,13 +40,30 @@ async function chooseCards(
   return keys === null ? null : candidates.filter(c => keys.includes(c.key)).map(c => c.cardRef);
 }
 
+/** The bot's fixed rule for a choice, recorded as its decision. */
+async function chooseCardsForAI(
+  engine: ActionHandlerEnginePort, player: ActionRuntimePlayer,
+  cards: ActionRuntimeCard[], zone: "hand" | "field", min: number, max: number,
+  resolveAI: () => readonly ActionRuntimeCard[] | null,
+): Promise<ActionRuntimeCard[] | null> {
+  const chosen = await selectResolutionCards({ game: engine.game, player, cards,
+    requirementId: "normal_summon_choice", min, max,
+    locate: card => ({ player, zone, index: player[zone].indexOf(card) }),
+    resolveAI,
+  });
+  return chosen ? [...chosen] : null;
+}
+
 export const handleNormalSummonFromHand: ActionHandler<"normal_summon_from_hand"> = async (action, ctx, _targets, engine) => {
   const player = action.player === "opponent" ? ctx.opponent : ctx.player;
   if (!player?.summon) return false;
   const entries = getNormalSummonEntries(engine, player, action.filters);
   if (!entries.length) return false;
   const card = isAI(player)
-    ? [...entries].sort((a, b) => (b.card.atk || 0) - (a.card.atk || 0))[0]?.card
+    ? (await chooseCardsForAI(engine, player, entries.map(e => e.card), "hand", 1, 1, () => {
+        const best = [...entries].sort((a, b) => (b.card.atk || 0) - (a.card.atk || 0))[0]?.card;
+        return best ? [best] : null;
+      }))?.[0]
     : (await chooseCards(engine, player, entries.map(e => e.card), "hand", 1, 1, t("ui.normalSummonEffect.chooseMonster")))?.[0];
   if (!card) return false;
   let tributes: ActionRuntimeCard[] | undefined;
@@ -55,8 +72,13 @@ export const handleNormalSummonFromHand: ActionHandler<"normal_summon_from_hand"
     if (!entry) return false;
     if (entry.options.some(option => option.length === 0)) { tributes = []; break; }
     if (isAI(player)) {
-      tributes = [...entry.options].sort((a, b) =>
-        a.reduce((sum, c) => sum + (c.atk || 0), 0) - b.reduce((sum, c) => sum + (c.atk || 0), 0) || a.length - b.length)[0];
+      const candidates = player.field.filter(c => entry.options.some(option => option.includes(c)));
+      const chosen = await chooseCardsForAI(engine, player, candidates, "field",
+        Math.min(...entry.options.map(o => o.length)), Math.max(...entry.options.map(o => o.length)),
+        () => [...entry.options].sort((a, b) =>
+          a.reduce((sum, c) => sum + (c.atk || 0), 0) - b.reduce((sum, c) => sum + (c.atk || 0), 0) || a.length - b.length)[0] ?? null);
+      if (!chosen) return false;
+      tributes = chosen;
     } else {
       const candidates = player.field.filter(c => entry.options.some(option => option.includes(c)));
       const chosen = await chooseCards(engine, player, candidates, "field",

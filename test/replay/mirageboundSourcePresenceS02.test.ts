@@ -219,7 +219,7 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
 
 for (const seat of ["player", "bot"] as const) for (const scenario of ["jackal", "rebel"] as const) {
   test(`Miragebound S02 ${scenario} human source position replays under AI control in PT (${seat})`, async t => {
-    const { live, owner, source, scout, dancer, step, replay } = await setup(t, seat, "human", scenario, false, "ai");
+    const { live, owner, source, scout, dancer, step, replay } = await setup(t, seat, "human", scenario, false);
     await step(live.tryActivateMonsterEffect(scenario === "jackal" ? required(dancer) : scout, null, "field", owner, {
       effectId: scenario === "jackal" ? "miragebound_dancer_bounce_buff" : "miragebound_scout_switch_position",
     }));

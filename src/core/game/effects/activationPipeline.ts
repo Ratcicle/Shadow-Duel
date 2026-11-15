@@ -18,6 +18,7 @@
  */
 
 import { isAI } from "../../Player.js";
+import { aiSelectionDecisionRequest } from "../../actionHandlers/shared.js";
 import { isActivationSourcePresent, selectActivationCase } from "./activationModes.js";
 import { recordMaterialEffectIdentity } from "../summon/materialStats.js";
 import {
@@ -143,7 +144,7 @@ interface ActivationAutoSelectorPort {
     },
   ): {
     ok: boolean;
-    selections?: CanonicalSelectionMap;
+    selections?: SelectionResult;
     reason?: string | null;
   };
 }
@@ -781,22 +782,35 @@ export async function runActivationPipeline(
       const shouldAutoSelect = config.useAutoSelector === true || isAI(owner);
 
       if (shouldAutoSelect) {
-        const autoResult = this.autoSelector?.select(contract, {
-          owner,
-          activationContext,
-          selectionKind,
-        });
-        if (!autoResult?.ok) {
+        const autoFailure: { reason: string | null } = { reason: null };
+        const selectAutomatically = (): SelectionResult | null => {
+          const autoResult = this.autoSelector?.select(contract, {
+            owner,
+            activationContext,
+            selectionKind,
+          });
+          if (autoResult?.ok) return autoResult.selections || {};
+          autoFailure.reason = autoResult?.reason || null;
+          return null;
+        };
+        // An AI's selection is its recorded decision; a failed one is a pass.
+        const selections = isAI(owner)
+          ? await this.requestDecision({
+              ...aiSelectionDecisionRequest(owner, selectionKind, contract.requirements),
+              resolveAI: selectAutomatically,
+            })
+          : selectAutomatically();
+        if (!selections) {
           const selectionFailure = {
             success: false,
             ok: false,
             needsSelection: false,
-            reason: autoResult?.reason || "Auto selection failed.",
+            reason: autoFailure.reason || "Auto selection failed.",
             code: "AUTO_SELECTION_FAILED",
           };
           return handleResult(selectionFailure, true);
         }
-        const nextResult = await safeActivate(autoResult.selections || {});
+        const nextResult = await safeActivate(selections);
         const normalizedNext = this.normalizeActivationResult(nextResult);
         if (normalizedNext.needsSelection) {
           const selectionFailure = {

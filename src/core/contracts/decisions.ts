@@ -52,6 +52,22 @@ export interface ChainResponseDecisionValue extends CandidateDecisionValue {
   decisions?: SerializedChainResponseDecisions;
 }
 
+/** The trigger opportunity an AI controller's activation choice belongs to. */
+export interface TriggerActivationDecisionContext {
+  type: "trigger_activation";
+  sourceDuelCardId: number | null;
+  effectId: string | null;
+}
+
+/**
+ * An AI controller's answer to one materialized trigger opportunity. `null`
+ * declines an optional trigger; otherwise the exact choices its policy
+ * planned, with runtime instance identities.
+ */
+export interface TriggerActivationDecisionResult {
+  decisions: AIDecisionPlan | null;
+}
+
 export interface SegocOrderDecisionCandidate extends DecisionCandidateBase {
   candidateId: number;
   controller: DecisionActor;
@@ -154,6 +170,12 @@ export type DecisionByKind = SelectionDecisionByKind & {
     OrderedDecisionValue | PassDecisionValue,
     SegocOrderDecisionContext | null
   >;
+  trigger_activation: DecisionSpec<
+    never,
+    TriggerActivationDecisionResult | null,
+    PassDecisionValue | ChainResponseDecisionValue,
+    TriggerActivationDecisionContext
+  >;
 };
 
 export type DecisionKind = keyof DecisionByKind;
@@ -188,6 +210,15 @@ export interface DecisionRequest<Kind extends DecisionKind> {
   ) => DecisionResult<Kind>;
 }
 
+/**
+ * A decision answered where the engine cannot await (trigger collection).
+ * Only an AI controller decides synchronously; playback consumes the record.
+ */
+export interface SyncDecisionRequest<Kind extends DecisionKind>
+  extends Omit<DecisionRequest<Kind>, "resolveAI" | "resolveHuman"> {
+  resolveAI: () => DecisionResult<Kind>;
+}
+
 export interface RecordedDecision<Kind extends DecisionKind = DecisionKind> {
   decisionId: DecisionId;
   kind: Kind;
@@ -219,6 +250,8 @@ export interface DecisionBrokerGamePort {
 export interface DecisionBrokerPort {
   mode: DecisionBrokerMode;
   replayCursor: number;
+  /** Why playback rejected recorded decisions since they were loaded. */
+  readonly replayRejections: readonly string[];
   loadReplayDecisions(decisions?: ReplayDecisionInput[]): void;
   hasReplaySelection(kind: SelectionDecisionKind, actorId: string, requirementId: string): boolean;
   recordDecision(): RecordedDecision<"choice">;
@@ -230,6 +263,9 @@ export interface DecisionBrokerPort {
   requestDecision<Kind extends DecisionKind>(
     input: DecisionRequest<Kind>,
   ): Promise<DecisionResult<Kind>>;
+  requestDecisionSync<Kind extends DecisionKind>(
+    input: SyncDecisionRequest<Kind>,
+  ): DecisionResult<Kind>;
 }
 
 export interface TriggerOrderPromptContract {

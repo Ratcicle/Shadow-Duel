@@ -314,11 +314,12 @@ async function confirmOptionalRevive(
   action: ActionOf<"de_synchro">,
   source: ActionRuntimeCard,
 ) {
-  if (isAI(player)) return true;
   const ui = getUI(game);
   const showConfirmPrompt = ui?.showConfirmPrompt?.bind(ui);
-  if (!showConfirmPrompt) return true;
+  if (!isAI(player) && !showConfirmPrompt) return true;
+  // An AI always revives, as its recorded confirmation.
   return requestOptionalConfirmation(game, player, async () => {
+    if (!showConfirmPrompt) return true;
     const sourceCardName = getCardDisplayName(source) || "that monster";
     const result = await showConfirmPrompt(
       getUIText(action.promptMessageKey, { sourceCardName },
@@ -330,7 +331,7 @@ async function confirmOptionalRevive(
       },
     );
     return Boolean(result);
-  }, undefined, resolutionChoiceContext(game, source, null));
+  }, () => true, resolutionChoiceContext(game, source, null));
 }
 
 function canSpecialSummonMaterial(

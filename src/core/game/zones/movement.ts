@@ -1,4 +1,5 @@
 import { expireFaceupDeclaredValues, restoreFaceupStatuses } from "../../Card.js";
+import { isAI } from "../../Player.js";
 import { clearEffectNegation, expireEffectNegation } from "../../effects/negation.js";
 import { clearLevelModifications, expireLevelModifications, expireFaceupStatBuffs, clearPermanentStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
 import {
@@ -1779,11 +1780,12 @@ async function trySendToGraveActionReplacement(
       });
       const targetName = getCardDisplayName(card) || card.name;
       const sourceName = getCardDisplayName(sourceCard) || sourceCard.name;
-      // Automatic replacements keep their semantics (no prompt; the AI strategy
-      // may still decline). Optional ones are a recorded broker decision.
-      const confirmed = replacement.auto === true
-        ? await aiAllowsReplacement()
-        : await requestOptionalConfirmation(
+      // Automatic replacements keep their semantics: no prompt, and the AI
+      // strategy may still decline. Optional ones, and an AI controller's
+      // answer to an automatic one, are a recorded broker decision, so
+      // playback never consults the strategy.
+      const confirmed = replacement.auto !== true
+        ? await requestOptionalConfirmation(
           game,
           sourceOwner,
           async () => (await game.ui?.showConfirmPrompt?.(
@@ -1793,7 +1795,16 @@ async function trySendToGraveActionReplacement(
           )) ?? false,
           aiAllowsReplacement,
           resolutionChoiceContext(game, sourceCard, effect.id),
-        );
+        )
+        : isAI(sourceOwner)
+          ? await requestOptionalConfirmation(
+            game,
+            sourceOwner,
+            () => true,
+            aiAllowsReplacement,
+            resolutionChoiceContext(game, sourceCard, effect.id),
+          )
+          : await aiAllowsReplacement();
       if (!confirmed) continue;
 
       // The decision may yield while the board changes: the moving card and

@@ -4,7 +4,6 @@
  * Handlers for banishment and destruction effects.
  */
 
-import { isAI } from "../Player.js";
 import { resolveExactInstanceSelection } from "../AutoSelector.js";
 import { getCardLocationVersion } from "../Card.js";
 import type {
@@ -1247,24 +1246,22 @@ async function destroySelectiveField(
     if (playerHighest.length <= keepPerSide) {
       playerToKeep = playerHighest;
     } else if (allowTieBreak) {
-      if (isAI(player)) {
-        playerToKeep = playerHighest.slice(0, keepPerSide);
-      } else {
-        const tieBreakerResult = await promptTieBreaker(
-          game,
-          player,
-          player,
-          playerHighest,
-          keepPerSide,
-          "your",
-          modalConfig,
-        );
-        if (!tieBreakerResult) {
-          getUI(game)?.log("Tie-breaker selection was aborted.");
-          return false;
-        }
-        playerToKeep = tieBreakerResult;
+      // The controller chooses; an AI keeps the first tied monsters, as a
+      // recorded decision.
+      const tieBreakerResult = await promptTieBreaker(
+        game,
+        player,
+        player,
+        playerHighest,
+        keepPerSide,
+        "your",
+        modalConfig,
+      );
+      if (!tieBreakerResult) {
+        getUI(game)?.log("Tie-breaker selection was aborted.");
+        return false;
       }
+      playerToKeep = tieBreakerResult;
     } else {
       playerToKeep = playerHighest.slice(0, keepPerSide);
     }
@@ -1274,24 +1271,20 @@ async function destroySelectiveField(
     if (opponentHighest.length <= keepPerSide) {
       opponentToKeep = opponentHighest;
     } else if (allowTieBreak) {
-      if (isAI(player)) {
-        opponentToKeep = opponentHighest.slice(0, keepPerSide);
-      } else {
-        const opponentTieBreakerResult = await promptTieBreaker(
-          game,
-          player,
-          opponent,
-          opponentHighest,
-          keepPerSide,
-          "opponent's",
-          modalConfig,
-        );
-        if (!opponentTieBreakerResult) {
-          getUI(game)?.log("Tie-breaker selection was aborted.");
-          return false;
-        }
-        opponentToKeep = opponentTieBreakerResult;
+      const opponentTieBreakerResult = await promptTieBreaker(
+        game,
+        player,
+        opponent,
+        opponentHighest,
+        keepPerSide,
+        "opponent's",
+        modalConfig,
+      );
+      if (!opponentTieBreakerResult) {
+        getUI(game)?.log("Tie-breaker selection was aborted.");
+        return false;
       }
+      opponentToKeep = opponentTieBreakerResult;
     } else {
       opponentToKeep = opponentHighest.slice(0, keepPerSide);
     }
@@ -1384,8 +1377,9 @@ async function destroySelectiveField(
 }
 
 /**
- * Mandatory tie-breaker: the human controller picks which tied monsters on
- * one side survive through a canonical selection session (no cancel).
+ * Mandatory tie-breaker: the controller picks which tied monsters on one side
+ * survive, a human through a canonical selection session (no cancel) and an
+ * AI by keeping the first ones, recorded as its decision.
  * Returns null only if the session is aborted (for example on dispose).
  */
 async function promptTieBreaker(
