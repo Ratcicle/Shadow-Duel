@@ -968,25 +968,8 @@ async function emitCardMovedEvent(
     return collected;
   }
 
-  if (
-    eventResult &&
-    typeof eventResult.then === "function" &&
-    (options.awaitEvents === true || options.awaitCardMovedEvent === true)
-  ) {
-    return await eventResult;
-  }
-
-  if (eventResult && typeof eventResult.then === "function") {
-    // Side branch only: callers that await the returned promise still see a
-    // strict-mode rejection, but a detached one is never unhandled.
-    eventResult.then(undefined, (error: unknown) =>
-      reportEngineFault(game, "detached_event_emit", error, {
-        details: { eventName: "card_moved", card: card.name },
-        rethrow: false,
-      }),
-    );
-  }
-  return eventResult || null;
+  // card_moved is always awaited; a rejection propagates to the caller.
+  return await eventResult;
 }
 
 function buildZoneMoveAnimationIntent(

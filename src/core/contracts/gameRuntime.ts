@@ -206,6 +206,7 @@ export interface MoveCardOptions {
   silent?: boolean;
   allowExtraDeckMonsterToHand?: boolean;
   awaitEvents?: boolean;
+  /** No effect: moveCard always awaits card_moved. Kept until its call sites are removed. */
   awaitCardMovedEvent?: boolean;
   /** card_to_grave is awaited unless this is `false`; deferral and `awaitEvents` always await. */
   awaitCardToGraveEvent?: boolean;
