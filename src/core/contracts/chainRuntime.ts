@@ -432,6 +432,14 @@ export interface PreparedActivationContext {
   isPreview?: boolean;
   context?: ChainContextInput | null;
   actionContext?: ChainActionContext | ChainContextInput | null;
+  /** The destination a resolved effect chose for its own Spell/Trap source. */
+  spellTrapFinalization?: ChainSpellTrapFinalization;
+}
+
+/** The finalization of a Spell/Trap source chosen by its own resolution. */
+export interface ChainSpellTrapFinalization {
+  type: "set_source" | "default";
+  deferUntil?: string | null;
 }
 
 export interface ChainContextPayload {
@@ -1635,6 +1643,20 @@ export interface ChainGamePort {
     options?: ChainMoveCardOptions,
   ): ChainMaybePromise<ChainOperationResult | boolean | null | undefined>;
   queueTriggerOccurrence?(occurrence: EventTriggerOccurrence): unknown;
+  /** Applies a Spell/Trap source's own finalization, or the default one. */
+  finalizeSpellTrapActivation?(
+    card: ChainCard,
+    owner: ChainPlayer,
+    activationZone: ChainActivationZone,
+    options: {
+      activationContext: {
+        spellTrapFinalization: ChainSpellTrapFinalization;
+        chainId: ChainId;
+        linkId: ChainLinkId;
+        effectId: string | null;
+      };
+    },
+  ): ChainMaybePromise<void>;
 }
 
 export interface ChainActivationPipelineInput {

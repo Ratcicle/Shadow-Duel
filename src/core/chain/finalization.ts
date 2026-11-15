@@ -11,6 +11,7 @@ import type {
   ChainFinalizationState,
   ChainOperationResult,
   ChainSourceZone,
+  ChainSpellTrapFinalization,
   FullChainHost,
 } from "../contracts/chainRuntime.js";
 
@@ -164,6 +165,49 @@ async function moveToGraveyard(
   return true;
 }
 
+/**
+ * Phase 2.3 L25b: a resolved effect that chose its own source's destination
+ * (`set_source_after_resolution_if`) recorded it in the link's activation
+ * context; the game's Spell/Trap finalization applies it, deferred or not.
+ */
+function getResolvedSourceFinalization(
+  chainSystem: FullChainHost,
+  entry: ChainFinalizationEntry,
+): ChainSpellTrapFinalization | null {
+  const spellTrapFinalization = entry.link?.activationContext?.spellTrapFinalization;
+  if (
+    !spellTrapFinalization ||
+    typeof chainSystem.game?.finalizeSpellTrapActivation !== "function" ||
+    !currentSourceState(chainSystem, entry).samePermanence
+  ) {
+    return null;
+  }
+  return spellTrapFinalization;
+}
+
+async function applyResolvedSourceFinalization(
+  chainSystem: FullChainHost,
+  entry: ChainFinalizationEntry,
+  spellTrapFinalization: ChainSpellTrapFinalization,
+): Promise<void> {
+  await chainSystem.game?.finalizeSpellTrapActivation?.(
+    entry.card,
+    entry.controller,
+    entry.activationZone,
+    {
+      activationContext: {
+        spellTrapFinalization,
+        chainId: entry.chainId,
+        linkId: entry.linkId,
+        effectId: entry.link?.effectId || entry.link?.effect?.id || null,
+      },
+    },
+  );
+  const state = currentSourceState(chainSystem, entry);
+  entry.status = state.samePermanence ? "retained" : "completed";
+  entry.disposition = state.zone || "unknown";
+}
+
 export function queueChainFinalization(
   this: FullChainHost,
   link: ChainFinalizationEntry["link"],
@@ -264,7 +308,17 @@ async function finalizeEntry(
 
   chainSystem.currentFinalizingLink = link;
   try {
-    if (shouldUseDefault) {
+    const resolvedSourceFinalization =
+      shouldUseDefault && !activationNegated && !invalidEquip
+        ? getResolvedSourceFinalization(chainSystem, entry)
+        : null;
+    if (resolvedSourceFinalization) {
+      await applyResolvedSourceFinalization(
+        chainSystem,
+        entry,
+        resolvedSourceFinalization,
+      );
+    } else if (shouldUseDefault) {
       await moveToGraveyard(
         chainSystem,
         entry,

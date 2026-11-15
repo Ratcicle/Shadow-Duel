@@ -13,7 +13,11 @@ import {
 import type { GameCard } from "../../contracts/cards.js";
 import { getCardLocationVersion } from "../../Card.js";
 import type { GamePlayer } from "../../contracts/player.js";
-import { DAMAGE_STEP_TIMINGS, type EffectDefinition } from "../../contracts/effects.js";
+import {
+  DAMAGE_STEP_TIMINGS,
+  type DamageStepTiming,
+  type EffectDefinition,
+} from "../../contracts/effects.js";
 
 type CombatCardId = string | number | null;
 type BattleCardMatch = boolean | string | number | null | undefined;
@@ -22,7 +26,8 @@ interface CombatCard extends GameCard {
   simInstanceId?: string | number | null;
 }
 
-interface BattlePairEffect {
+/** The pair a `register_battle_pair_effect` registration applies to. */
+export interface BattlePairEffect {
   firstTarget?: CombatCard | null;
   secondTarget?: CombatCard | null;
   firstInstanceId?: CombatCardId;
@@ -375,6 +380,34 @@ function hasBattleDamageTimingEffect(
     : false;
 }
 
+/** The Spell/Trap finalization a battle pair effect's source defers until its pair resolves. */
+export const BATTLE_PAIR_EFFECT_FINALIZATION = "battle_pair_effect";
+
+/**
+ * Whether a registered battle pair effect applies to the battle between these
+ * monsters at this Damage Step timing. Phase 2.3 L25b: the Damage Step's
+ * resolution and the LP preview read this one rule.
+ */
+export function battlePairEffectApplies(
+  entry: BattlePairEffect | null | undefined,
+  turnCounter: number,
+  attacker: CombatCard | null | undefined,
+  defender: CombatCard | null | undefined,
+  timing: DamageStepTiming,
+): boolean {
+  if (!entry || !attacker || !defender) return false;
+  if (
+    Number.isFinite(entry.expiresOnTurn) &&
+    turnCounter > (entry.expiresOnTurn as number)
+  ) {
+    return false;
+  }
+  if ((entry.timing || DAMAGE_STEP_TIMINGS.BEFORE_CALCULATION) !== timing) {
+    return false;
+  }
+  return Boolean(battlePairMatches(entry, attacker, defender));
+}
+
 function hasMatchingTemporaryBattlePairDamageStepEffect(
   game: CombatHost | null | undefined,
   attacker: CombatCard | null | undefined,
@@ -384,25 +417,9 @@ function hasMatchingTemporaryBattlePairDamageStepEffect(
     return false;
   }
 
-  return game.temporaryBattlePairEffects.some((entry) => {
-    if (!entry) return false;
-    if (
-      Number.isFinite(entry.expiresOnTurn) &&
-      game.turnCounter > (entry.expiresOnTurn as number)
-    ) {
-      return false;
-    }
-
-    const timing = entry.timing || "before_damage_calculation";
-    if (
-      timing !== "start_of_damage_step" &&
-      timing !== "before_damage_calculation"
-    ) {
-      return false;
-    }
-
-    return battlePairMatches(entry, attacker, target);
-  });
+  return game.temporaryBattlePairEffects.some((entry) =>
+    battlePairEffectApplies(entry, game.turnCounter, attacker, target, DAMAGE_STEP_TIMINGS.START) ||
+    battlePairEffectApplies(entry, game.turnCounter, attacker, target, DAMAGE_STEP_TIMINGS.BEFORE_CALCULATION));
 }
 
 function hasPotentialBattleDamageTimingEffect(

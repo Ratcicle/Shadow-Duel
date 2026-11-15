@@ -51,7 +51,7 @@ type LifecycleHost = PhaseTransitionHost &
   cleanupExpiredBuffs(): void;
   cleanupExpiredDeclaredValues?(): void;
   cleanupExpiredEffectMarkers?(): void;
-  cleanupExpiredTemporaryBattlePairEffects?(): void;
+  cleanupExpiredTemporaryBattlePairEffects?(): Promise<void> | void;
   cleanupExpiredTemporaryEventEffects?(): void;
   cleanupExpiredSpecialSummonRestrictions?(): void;
   cleanupExpiredEffectActivationRestrictions?(): void;
@@ -194,10 +194,16 @@ export async function startTurn(this: LifecycleHost) {
   this.cleanupExpiredBuffs();
   this.cleanupExpiredDeclaredValues?.();
   this.cleanupExpiredEffectMarkers?.();
-  this.cleanupExpiredTemporaryBattlePairEffects?.();
   this.cleanupExpiredTemporaryEventEffects?.();
   this.cleanupExpiredSpecialSummonRestrictions?.();
   this.cleanupExpiredEffectActivationRestrictions?.();
+  // Phase 2.3 L25b: last, because a source whose battle pair effect expired
+  // receives its deferred finalization here, which can move it.
+  const battlePairExpiry = this.cleanupExpiredTemporaryBattlePairEffects?.();
+  if (battlePairExpiry) {
+    await battlePairExpiry;
+    if (this.gameOver || this.isDisposed?.()) return;
+  }
 
   // Limpar cache de targeting para novo turno
   if (this.effectEngine?.clearTargetingCache) {
