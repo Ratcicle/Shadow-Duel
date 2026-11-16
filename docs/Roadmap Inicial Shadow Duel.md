@@ -2,13 +2,13 @@
 
 Este documento registra a direção geral de desenvolvimento do **Shadow Duel** para evitar dispersão entre múltiplas frentes e preservar uma ordem de prioridades clara.
 
-## Estado de referência — 11/10/2026
+## Estado de referência — 16/11/2026
 
 | Frente | Estado conferido no repositório |
 | --- | --- |
 | Estabilização pós-TypeScript | Concluída em 06/10/2026. |
 | Saneamento (fase 1.5) | Concluído em 10/10/2026: CI `Verify` verde como portão de `main` e do deploy, replay `engine-rules-v27`, determinismo de IA e Arena, bugs de engine e correções de UI/i18n. |
-| IAs atuais | Arquitetura e paridade (2.1) e harness de benchmark (2.2) concluídos. A baseline v1 mede a força relativa dos nove bots. Limites conhecidos (2.3) em andamento, com plano próprio. |
+| IAs atuais | Arquitetura e paridade (2.1), harness de benchmark (2.2) e limites conhecidos (2.3) concluídos. A 2.3 levou o replay a `engine-rules-v28` e fechou com a baseline v2, a referência da 2.4. Ajuste guiado por dados (2.4) ainda não iniciado. |
 | Carmim Real | Catálogo proposto, com decisões de regra em aberto; cartas e IA ainda não implementadas. |
 | Suporte adicional de Burning West e Bloomrot | Planejado; escopo e necessidade dependem do diagnóstico dos decks e das IAs. |
 | Gauntlet | Planejado, ainda não implementado. |
@@ -66,7 +66,7 @@ Os itens adiados estão na seção "Fora do escopo da fase 1.5" do plano. Os que
 
 ## 2. Aprimoramento das IAs atuais
 
-**Status:** 2.1 concluída em **07/10/2026**. 2.2 concluída em **11/10/2026**, com a baseline v1 registrada abaixo. 2.3 em andamento desde **11/10/2026**.
+**Status:** 2.1 concluída em **07/10/2026**. 2.2 concluída em **11/10/2026**, com a baseline v1 registrada abaixo. 2.3 concluída em **16/11/2026**, com a baseline v2 registrada na sua seção. 2.4 ainda não iniciada.
 
 **Objetivo:** aproximar a qualidade dos bots antes de usar a Bot Arena como referência séria de balanceamento. Resultados de bot vs bot podem refletir a qualidade da IA, e não só a força real do deck. Por isso, a força relativa dos nove bots precisa ser medida com benchmarks reproduzíveis e intervalos de confiança.
 
@@ -265,7 +265,7 @@ Melhorar esses três pontos exige mudanças em `src/`, fora deste lote.
 
 ### 2.3 Limites conhecidos de simulação, engine e replay
 
-**Status:** em andamento desde 11/10/2026, na branch `fase2/limites-conhecidos`. Lotes, decisões D1–D10, política de medição e critérios de saída: [Plano da Fase 2.3](Plano%20da%20Fase%202.3.md).
+**Status:** concluída em 16/11/2026, na branch `fase2/limites-conhecidos`, que entra na `main` num merge único. Lotes, decisões D1–D12, política de medição, acompanhamento por lote e critérios de saída: [Plano da Fase 2.3](Plano%20da%20Fase%202.3.md).
 
 Cada correção é uma correção de paridade, de regra, de instrumentação ou de apresentação, medida em cadeia contra a baseline v1. Nenhum ajuste de política entra na 2.3. Itens reconferidos no código em 11/10/2026 (HEAD `79c3868`):
 
@@ -291,6 +291,42 @@ Cada correção é uma correção de paridade, de regra, de instrumentação ou 
 | `decision-broker:10` | No playback, escolhas de IA fora do broker são recalculadas, não lidas do replay. Um dos agendadores da IA (`src/core/effects/actions/combat.ts`) nem checa `replayMode` | Gates de playback antes do pacote. Depois, todos os sítios gravados, inclusive as regras fixas de bot no engine, com `setup.controllers` e playback estrito (D5) | L22, L26 |
 
 O pacote de replay (L23–L26) termina num único bump `engine-rules-v28` (L27, D4). Os replays v27 salvos deixam de carregar depois do merge. A 2.3 fecha com a baseline v2 (N = 20), medida no commit final (L28).
+
+**Baseline v2** (16/11/2026):
+
+- **Execução:** `canonical-b72194e-0e7dbbda`, com `--workers 4`. A execução foi interrompida no caso 453 e retomada com `--resume` pelo diário.
+- **Identidade:** commit `b72194e`, árvore limpa, `engine-rules-v28`, banco de cartas `a11dc8c4` (o mesmo da v1).
+- **Digests:** `configDigest` `0e7dbbda…`, a mesma configuração efetiva da v1; `deterministicDigest` `fbcbf5204a822406cf8181bd7e2bd5e0dec85d0f3bf9c4772c6c20c1b5b11864`.
+- **Duelos:** 1.620 válidos (N = 20), 0 erros. 1.619 foram decididos por PV zerado. Um chegou ao limite de turnos e foi decidido por PV: `luminarch:luminarch:1`, com 100 × 800 PV, explicado no lote L17 do plano. A fração no limite foi 0,1% [0,0%; 0,3%].
+- **Sanidade:** todos os portões passaram.
+- **Quem começa:** vence 53,2% [50,6%; 55,8%].
+- **Defeitos:** 0 (a v1 tinha 4).
+- **Guarda de stall:** picos de 147/66/108 e nenhum disparo.
+- **Controles no mesmo commit:**
+  - corpus `d4c2a4a9…`, 108 casos sem falhas;
+  - `controlsDigest` `645b2409…`.
+- **Controle de invariância** (N = 1): `deterministicDigest` `336fd44e…`. Todas as raízes têm ação 0 e score 0.
+- **Ponte N = 5 de referência para a 2.4:** `canonical-b72194e-45173ff3`, com `deterministicDigest` `27199d66…`. Teve 405 válidos, 0 erros e 0 defeitos; um duelo chegou ao limite de turnos. Não é elegível a baseline, por causa do override do planner.
+- **Contra a v1:** `compare` com `--allow-identity-change engineVersion`, sem diferenças de configuração.
+  - Nenhum preset tem diferença significativa.
+  - Dos 1.620 casos, 1.537 têm o mesmo resultado e 83 viradas.
+  - O teste do sinal pareado não acusa nenhum preset. O menor p é o do Arcanist: 0,30, com 5 viradas a favor e 10 contra.
+  - As novidades apontadas são os rótulos de diagnóstico criados no lote L01: `opponent_backrow_reaction`, `failed:opponent_backrow_reaction` e `opponent_state_mismatch`.
+  - A divergência simulação × runtime cai em oito presets e sobe 0,004 no Burning West. Os branches não suportados do Tech-Zero caem de 36.668 para 955.
+
+| Preset | v1 (n = 320) [IC 95%] | v2 (n = 320) [IC 95%] | Δ |
+| --- | --- | --- | ---: |
+| Dragon | 82,2% [77,6%; 86,0%] | 82,5% [78,0%; 86,3%] | +0,3 |
+| Tech-Zero | 78,1% [73,3%; 82,3%] | 78,1% [73,3%; 82,3%] | 0,0 |
+| Miragebound | 67,2% [61,9%; 72,1%] | 66,9% [61,5%; 71,8%] | −0,3 |
+| Void | 39,1% [33,9%; 44,5%] | 40,3% [35,1%; 45,8%] | +1,3 |
+| Shadow-Heart | 39,1% [33,9%; 44,5%] | 40,0% [34,8%; 45,5%] | +0,9 |
+| Luminarch | 40,0% [34,8%; 45,5%] | 39,7% [34,5%; 45,1%] | −0,3 |
+| Arcanist | 41,3% [36,0%; 46,7%] | 39,7% [34,5%; 45,1%] | −1,6 |
+| Bloomrot | 37,5% [32,4%; 42,9%] | 37,8% [32,7%; 43,2%] | +0,3 |
+| Burning West | 25,6% [21,2%; 30,7%] | 25,0% [20,6%; 30,0%] | −0,6 |
+
+As mudanças são o efeito acumulado das correções. A atribuição por lote está na cadeia N = 5 do plano.
 
 ### 2.4 Ajuste de qualidade guiado por dados
 
@@ -322,6 +358,33 @@ Restrições conhecidas:
 - **Modelo de backrow.** Na 2.3 as reações do oponente só são acompanhadas (D8). O modelo conservador, com um prior público por quantidade, zona e turno no lugar do desconto fixo de `src/core/ai/BaseStrategy.ts:197-201`, é ajuste de política e só entra depois do bloco de informação oculta da 2.3.
 - **Ranking de busca Bloomrot.** O recálculo da análise é redundante para a ordenação, mas atualiza o contexto que a resposta de Chain usa sem `game` (`src/core/ai/BloomrotStrategy.ts:535-541` e `:270-273`). Só pode sair se essa responsabilidade for realocada.
 - **Ciclos de camada (`engine-bugs:14`).** Só depois da baseline v1, como refatoração equivalente, com corpus e harness inalterados.
+
+Resíduos da 2.3 (detalhes, sondas e condições na seção "Fora do escopo da 2.3" do [plano da 2.3](Plano%20da%20Fase%202.3.md)):
+
+- **Ajustes de política herdados:**
+  - preferência explícita por efeito (`statBasis`), se o diretor quiser que o Luminarch prefira DEF;
+  - recusa de invocações opcionais (Lost Throne, `conditional_summon_from_hand` e `draw_and_summon`) por um hook comum ao `resolveAI` e à simulação;
+  - ranking do alvo de negação do Reactor (`techzero/priorities.ts`);
+  - políticas Bloomrot e Luminarch que supõem mais alvos do que o bot escolhe no runtime;
+  - escolha da Magia que o Master of Mirrors Arcanist devolve ao Deck. A política escolhe, e o runtime honra o plano.
+- **Harness:** a métrica `lethal` sempre zero e as falhas sem código dependem da certificação de letal sob incerteza e de códigos de falha em `src/`.
+- **Triagem antes de cada caminho:**
+  - O plano lista divergências latentes ou raras entre simulação e runtime.
+  - Antes do primeiro lote de cada caminho, uma sonda conta as ocorrências nos matchups desse caminho, com N = 5 e a configuração da v2.
+  - Uma única divergência reabre o item como lote de paridade, antes do ajuste.
+  - Entre os itens pesados estão a posição de Fusão da IA (pesa na divergência do Void), as `costPreferences` que vazam nos triggers simulados e as proteções de batalha passivas que a ponte não lê.
+- **Replay:** `replayCanonicalDuel` com `options.game` ainda não confere os assentos contra `setup.controllers`. Impor a checagem é decisão pendente e não exige bump.
+- **Decisões de regra para o diretor criativo:**
+  - a Shadow-Heart Shield negada mantém o bônus de +500 ATK/DEF;
+  - se o banimento por `banishWhenLeavesField` conta como banido por efeito do oponente;
+  - o `destroy_on_leave` da The Shadow Heart vale com a carta negada;
+  - contadores permanecem quando o monstro sai do campo;
+  - o OPT por cópia continua gasto depois de virar a carta para baixo e para cima.
+- **Bugs de regra sem correção na 2.3:**
+  - um gatilho obrigatório com plano exato inválido é perdido em silêncio;
+  - `lp_cost_reduction` e `lp_gain_multiplier` valem com a fonte negada. A correção muda runtime e simulação juntos.
+
+O backlog técnico da 2.3 (código morto, handlers simulados sem exposição, latentes sem carta, captura de replay no harness) fica no plano e entra como refatoração equivalente, sem prioridade sobre a 2.4.
 
 ---
 
@@ -509,7 +572,7 @@ A implementação deve ser feita **depois do Renderer Three.js**, para que esse 
 | --- | --- | --- |
 | 1 | Estabilização pós-TypeScript | Concluída |
 | 1.5 | Saneamento | Concluído |
-| 2 | IAs atuais | 2.1 e 2.2 concluídas, baseline v1 registrada; 2.3 em andamento |
+| 2 | IAs atuais | 2.1, 2.2 e 2.3 concluídas, baselines v1 e v2 registradas; 2.4 a iniciar |
 | 3 | Carmim Real | — |
 | 4 | Burning West + Bloomrot | — |
 | 5 | Modo Gauntlet | — |
@@ -529,7 +592,7 @@ Exemplo de organização da etapa concluída:
 
 Organização prevista para a próxima etapa:
 
-**Projeto principal:** aprimoramento das IAs (2.3 medida contra a baseline v1; 2.4 contra a v2)  
+**Projeto principal:** aprimoramento das IAs (2.4, medida contra a baseline v2)  
 **Projeto paralelo:** preparação final do Carmim Real
 
 A meta é sempre terminar cada fase com um **Shadow Duel mais estável, completo e jogável**, evitando vários sistemas grandes incompletos ao mesmo tempo.
