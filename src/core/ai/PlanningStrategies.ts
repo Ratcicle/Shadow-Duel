@@ -3,6 +3,7 @@ import { resolveRegisteredStrategy } from "./StrategyRegistry.js";
 import { getGenericNormalSummonActions } from "./common/actionGeneration.js";
 import { getGenericSetBackrowActions } from "./common/backrowPlanning.js";
 import { applyGenericSimulatedMainPhaseAction } from "./common/simulation.js";
+import { PLANNING_ZONES } from "./common/stateFingerprint.js";
 import { getTributeRequirementFor, selectBestTributes } from "./common/tributePolicy.js";
 import { canUseNormalSummonForCard } from "../Player.js";
 import { fieldHasTributeValue } from "../game/summon/tributeValue.js";
@@ -63,6 +64,12 @@ class GenericPlanningStrategy implements PlanningStrategy {
         return matches.length === 1 && matches[0]?.battlePositionLocked !== true;
       }));
     if (actions.length === 0) {
+      // Phase 2.3 L11 (D3): an actor that still holds hidden resources (an
+      // opaque card in any zone, the Field Zone included) is a horizon. Only
+      // with every resource known is the missing action unavailable modeling.
+      const hidden = PLANNING_ZONES.some(zone => player[zone].some(card => card._simUnknownCard === true)) ||
+        player.fieldSpell?._simUnknownCard === true;
+      if (hidden) return [];
       throw new Error(`Planning model unavailable for ${player.id}: generic policy has no supported legal action`);
     }
     return actions.sort((left, right) => (right.priority || 0) - (left.priority || 0));

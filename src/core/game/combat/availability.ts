@@ -1,5 +1,5 @@
 import { cardMatchesKind } from "../../Card.js";
-import { isPassiveSourceActive } from "../../effects/passives/passiveBuffs.js";
+import { isBattleIndestructibleGrantedByEquip, isPassiveSourceActive } from "../../effects/passives/passiveBuffs.js";
 import type {
   BattlePosition,
   CardSubtype,
@@ -267,8 +267,18 @@ export function isActiveAttackPriorityTarget(
   );
 }
 
+/** Card fields read by the base attack limit, shared by runtime and planning cards. */
+export interface BaseAttackLimitCard {
+  readonly attackLimitThisTurn?: number | null | undefined;
+  readonly extraAttacks?: number | null | undefined;
+  readonly dynamicExtraAttacks?: {
+    readonly source?: string;
+    readonly name?: string | null | undefined;
+  } | null | undefined;
+}
+
 export function hasExplicitAttackLimitThisTurn(
-  card: GameCard | null | undefined,
+  card: Pick<BaseAttackLimitCard, "attackLimitThisTurn"> | null | undefined,
 ): boolean {
   return (
     card?.attackLimitThisTurn !== undefined &&
@@ -277,17 +287,25 @@ export function hasExplicitAttackLimitThisTurn(
   );
 }
 
-function getDynamicAttackLimit(
-  game: AttackAvailabilityHost,
-  attacker: GameCard | null | undefined,
-): number | null {
-  if (attacker?.dynamicExtraAttacks?.source !== "graveyard_count") {
-    return null;
+/**
+ * Base attack limit from the card and its owner's Graveyard: an explicit limit
+ * this turn, else the dynamic Graveyard count, else 1 plus the extra attacks.
+ * A null Graveyard means the owner is unknown: no Graveyard is read and the
+ * dynamic count is neutral, so such a card keeps 1 plus the extra attacks.
+ * Second attacks and attacks on every opponent monster stay with the callers.
+ */
+export function getBaseAttackLimit(
+  attacker: BaseAttackLimitCard,
+  ownerGraveyard: readonly ({ readonly name?: string | null | undefined } | null | undefined)[] | null,
+): number {
+  if (hasExplicitAttackLimitThisTurn(attacker)) {
+    return Math.max(0, Math.floor(Number(attacker.attackLimitThisTurn)));
   }
   const dea = attacker.dynamicExtraAttacks;
-  const owner = attacker.owner === "player" ? game.player : game.bot;
-  return (owner?.graveyard || []).filter((c) => c && c.name === dea.name)
-    .length;
+  if (dea?.source === "graveyard_count" && ownerGraveyard) {
+    return Math.max(0, ownerGraveyard.filter((c) => c && c.name === dea.name).length);
+  }
+  return Math.max(1, 1 + Number(attacker.extraAttacks || 0));
 }
 
 export function getMonsterAttackLimit(
@@ -295,14 +313,8 @@ export function getMonsterAttackLimit(
   attacker: GameCard | null | undefined,
 ): number {
   if (!attacker) return 0;
-  if (hasExplicitAttackLimitThisTurn(attacker)) {
-    return Math.max(0, Math.floor(Number(attacker.attackLimitThisTurn)));
-  }
-  const dynamicAttackLimit = getDynamicAttackLimit(this, attacker);
-  if (dynamicAttackLimit !== null) {
-    return Math.max(0, dynamicAttackLimit);
-  }
-  return Math.max(1, 1 + Number(attacker.extraAttacks || 0));
+  const owner = attacker.owner === "player" ? this.player : this.bot;
+  return getBaseAttackLimit(attacker, owner?.graveyard || []);
 }
 
 function findAttackPassiveSourceZone(
@@ -727,16 +739,11 @@ function equipBattleIndestructibleApplies(
   game: AttackAvailabilityHost | null | undefined,
   card: GameCard | null | undefined,
 ): boolean {
-  const equips = Array.isArray(card?.equips) ? card.equips : [];
-  for (const equip of equips) {
-    if (!equip?.grantsBattleIndestructible) continue;
-    if (!equipIsActiveForCard(game, equip, card)) continue;
-    const equipOwner = getOwnerByCard(game, equip);
-    if (battleProtectionSourceAffectsCard(game, card, equip, equipOwner)) {
-      return true;
-    }
-  }
-  return false;
+  if (!card) return false;
+  // D12: only an attached Equip that is face-up and not negated protects.
+  return isBattleIndestructibleGrantedByEquip(card, (equip) =>
+    equipIsActiveForCard(game, equip, card) &&
+    battleProtectionSourceAffectsCard(game, card, equip, getOwnerByCard(game, equip)));
 }
 
 function hasKnownBattleIndestructibleSource(
@@ -769,7 +776,6 @@ function battleIndestructibleFlagApplies(
   if (ownConditionalBattleIndestructibleApplies(game, card, context)) {
     return true;
   }
-  if (equipBattleIndestructibleApplies(game, card)) return true;
   return !hasKnownBattleIndestructibleSource(card);
 }
 
@@ -1017,6 +1023,8 @@ export function canDestroyByBattle(
   if (ownConditionalBattleIndestructibleApplies(this, card, context)) {
     return false;
   }
+  // D12: an active Equip protects with or without the status flag.
+  if (equipBattleIndestructibleApplies(this, card)) return false;
   if (battleIndestructibleFlagApplies(this, card, context)) return false;
   if (card.tempBattleIndestructible) return false;
   if (card.battleIndestructibleOncePerTurn) {

@@ -1131,6 +1131,8 @@ function getBattleCardValue(
 ): number {
   if (!card || card.cardKind !== "monster") return 0;
   const battleStat = getBattleStatForAttackTarget(card, { facedownValue: 1500 });
+  // A face-down card's printed stats and Level are hidden: only its public battle estimate counts.
+  if (card.isFacedown) return battleStat;
   const printedBest = Math.max(Number(card.atk || 0), Number(card.def || 0));
   const levelValue = Number(card.level || 0) * 180;
   return Math.max(battleStat, printedBest, levelValue);
@@ -1385,7 +1387,6 @@ export function buildLuminarchSimulationOptions(
   return {
       finalizeLpPayments,
       archetype: "Luminarch",
-      preferDefense: true,
       selfId: "bot",
       guardLabel: "LuminarchStrategy.simulateMainPhaseAction",
       ...options,

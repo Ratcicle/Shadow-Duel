@@ -17,7 +17,7 @@ import type {
   PlayerId,
   SelectionCandidateKey,
 } from "../../src/core/contracts/primitives.js";
-import type { CanonicalReplayDecisionOf, ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
+import type { CanonicalReplay, CanonicalReplayDecisionOf, ReplayDriverGamePort } from "../../src/core/contracts/replay.js";
 import type { FieldPlacementResult } from "../../src/core/contracts/placement.js";
 import type { ReplayDecisionInput } from "../../src/core/contracts/decisions.js";
 
@@ -68,6 +68,19 @@ function stripV27SnapshotFields(replay: object): void {
       }
     }
   }
+}
+
+/**
+ * Project a current replay onto the engine-rules-v27 envelope shape: seat
+ * controllers, AI activation plans and AI trigger choices are recorded since
+ * engine-rules-v28.
+ */
+function stripV28ReplayFields(replay: CanonicalReplay): void {
+  delete replay.setup.controllers;
+  for (const command of replay.commands) {
+    if (command.type === "activate_effect" || command.type === "activate_card") delete command.payload.decisions;
+  }
+  replay.decisions = replay.decisions.filter(decision => decision.kind !== "trigger_activation");
 }
 
 async function initialize(
@@ -299,8 +312,19 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   const replayResult = required(replay.result);
   assert.equal(replayResult.finalStateHash, "a196a87e");
   // Historical envelopes retain their exact version and declaration signature.
+  // engine-rules-v27: the envelope before seat controllers, AI activation
+  // plans and AI trigger choices were recorded.
+  const beforeRecordedAiChoices = structuredClone(replay);
+  stripV28ReplayFields(beforeRecordedAiChoices);
+  beforeRecordedAiChoices.cardDatabaseSignature = "a11dc8c4";
+  required(beforeRecordedAiChoices.commands[0]).stateHash = "0a69cfa6";
+  required(beforeRecordedAiChoices.commands[1]).stateHash = "a196a87e";
+  required(beforeRecordedAiChoices.result).finalStateHash = "a196a87e";
+  assert.equal(hashCanonicalValue({ ...beforeRecordedAiChoices, engineVersion: "engine-rules-v27" }), "711ca428");
+  assert.equal(JSON.stringify({ ...beforeRecordedAiChoices, engineVersion: "engine-rules-v27" }).length, 33776);
+  assert.equal(hashCanonicalValue({ ...beforeRecordedAiChoices, cardDatabaseSignature: "efa7767a", engineVersion: "engine-rules-v27" }), "43ba430d");
   // engine-rules-v26: the snapshot before the v27 hash completion.
-  const beforeHashCompletion = structuredClone(replay);
+  const beforeHashCompletion = structuredClone(beforeRecordedAiChoices);
   stripV27SnapshotFields(beforeHashCompletion);
   beforeHashCompletion.cardDatabaseSignature = "efa7767a";
   required(beforeHashCompletion.commands[0]).stateHash = "387cada4";
@@ -365,8 +389,7 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "f60cba87", engineVersion: "engine-rules-v22" }), "b1bbca51");
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "7e5d54cb", engineVersion: "engine-rules-v23" }), "7bfe1e4a");
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "feeb687b", engineVersion: "engine-rules-v23" }), "6b0653a2");
-  assert.equal(hashCanonicalValue({ ...replay, cardDatabaseSignature: "efa7767a" }), "43ba430d");
-  assert.equal(hashCanonicalValue(replay), "711ca428");
+  assert.equal(hashCanonicalValue(replay), "2f912d05");
   assert.equal(JSON.stringify(replay).length, 33776);
 
   const result = await replayCanonicalDuel(replay);

@@ -8,6 +8,7 @@
  */
 
 import { isAI } from "../../Player.js";
+import { aiSelectionDecisionRequest, isSelectionKey } from "../../actionHandlers/shared.js";
 import { SUMMON_MODES } from "../summon/transaction.js";
 import { SUMMON_ORIGINS } from "../../contracts/summon.js";
 import { checkSpecialSummonEligibility } from "../summon/eligibility.js";
@@ -168,6 +169,7 @@ interface ExtraDeckUiPort {
 
 interface ExtraDeckHost {
   decisionBroker: Pick<DecisionBrokerPort, "mode" | "hasReplaySelection">;
+  requestDecision?: DecisionBrokerPort["requestDecision"];
   turn: string;
   ui: ExtraDeckUiPort;
   autoSelector?: {
@@ -843,24 +845,37 @@ export async function performExtraDeckSummonProcedure(
     );
 
     if (isAI(player)) {
-      const auto = this.autoSelector?.select?.(contract, {
-        owner: player,
-        selectionKind: "extra_deck_materials",
-      });
-      const keys = auto?.selections?.extra_deck_materials || [];
-      materials = keys
-        .map(
-          (key) =>
-            contract.requirements[0].candidates.find((cand) => cand.key === key)
-              ?.cardRef,
-        )
+      const candidates = contract.requirements[0].candidates;
+      const cardsFor = (keys: readonly string[]) => keys
+        .map((key) => candidates.find((cand) => cand.key === key)?.cardRef)
         .filter((material): material is GameCard => Boolean(material));
-      if (
-        check.materialCombos &&
-        !materialSelectionMatchesCombo(materials, check.materialCombos)
-      ) {
-        materials = check.materialCombos[0] || [];
-      }
+      // The bot's materials (AutoSelector, else the first legal combination)
+      // are a recorded decision; playback never selects them again.
+      const resolveAI = (): SelectionResult => {
+        const auto = this.autoSelector?.select?.(contract, {
+          owner: player,
+          selectionKind: "extra_deck_materials",
+        });
+        let chosen = cardsFor(auto?.selections?.extra_deck_materials || []);
+        if (
+          check.materialCombos &&
+          !materialSelectionMatchesCombo(chosen, check.materialCombos)
+        ) {
+          chosen = check.materialCombos[0] || [];
+        }
+        return {
+          extra_deck_materials: chosen
+            .map((material) => candidates.find((cand) => cand.cardRef === material)?.key)
+            .filter(isSelectionKey),
+        };
+      };
+      const decided = this.requestDecision
+        ? await this.requestDecision({
+            ...aiSelectionDecisionRequest(player, "extra_deck_summon", contract.requirements),
+            resolveAI,
+          })
+        : resolveAI();
+      materials = cardsFor(decided?.extra_deck_materials || []);
     } else {
       this.startTargetSelectionSession({
         kind: "extra_deck_summon",

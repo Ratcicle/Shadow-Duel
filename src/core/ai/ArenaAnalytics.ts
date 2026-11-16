@@ -7,7 +7,12 @@ import type {
   ChainLinkResolutionOutcome,
   EventCard,
 } from "../contracts/events.js";
-import type { TurnLineTerminationReason } from "../contracts/ai.js";
+import type {
+  PlanningDiffSeverity,
+  PublicProjectionGuardReport,
+  PublicProjectionGuardTally,
+  TurnLineTerminationReason,
+} from "../contracts/ai.js";
 
 
 type Seat = "player" | "bot";
@@ -130,6 +135,7 @@ export interface ArenaProgressEntry {
   plannerReason?: string | null;
   mismatchReason?: string;
   diffSeverity?: string;
+  opponentBackrowReacted?: boolean;
   matched?: boolean;
   diffs?: unknown[];
 }
@@ -586,6 +592,14 @@ function planningActionLabel(action: PlanningAction | string | null = null) {
   return card != null ? `${type}:${card}` : type;
 }
 
+/**
+ * A failed plan execution keeps its reason, action_failed. This extra reason
+ * marks the failures in which the opponent responded from its face-down
+ * backrow; the benchmark harness records the same key.
+ */
+const BACKROW_REACTION_FAILURE_REASON =
+  "failed:opponent_backrow_reaction" satisfies `failed:${PlanningDiffSeverity}`;
+
 function createPlanningStats() {
   return {
     attempts: 0,
@@ -841,6 +855,18 @@ function createChainLinkStats(): ArenaChainLinkStats {
     effectNegated: 0,
     samples: [],
   };
+}
+
+/** Adds or removes one link in the bucket of its outcome. */
+function countChainLinkOutcome(stats: ArenaChainLinkStats, outcome: ChainLinkResolutionOutcome, delta: 1 | -1) {
+  switch (outcome) {
+    case "success": stats.succeeded += delta; break;
+    case "partial_failure": stats.partialFailures += delta; break;
+    case "failed": stats.failed += delta; break;
+    case "activation_negated": stats.activationNegated += delta; break;
+    case "effect_negated": stats.effectNegated += delta; break;
+    default: outcome satisfies never;
+  }
 }
 
 function createSeatStats(archetype = "unknown") {
@@ -2443,7 +2469,8 @@ export class DuelTracker {
   declare decisionTimes: number[];
   declare nodesVisited: number[];
   private readonly pendingDecisionStarts = new Map<Seat, number>();
-  private readonly completedChainLinks = new Set<string>();
+  /** Terminal links by Chain and link id: the counted sample, or null when no outcome was countable. */
+  private readonly terminalChainLinks = new Map<string, ArenaChainLinkSample | null>();
   private readonly planningChainLinks = new Map<Seat, ArenaChainLinkSample[]>();
   declare openingSequence: PlanningAction[];
   declare openingTurnLimit: number;
@@ -2458,6 +2485,8 @@ export class DuelTracker {
   declare lastProgressStage: string | null;
   declare turnOwners: Record<string, Seat>;
   declare diagnostics: DuelDiagnostics;
+  /** Public-projection guard tallies by seat and search root (phase 2.3, E2); never in the strategic report. */
+  declare publicProjectionGuard: Seats<Record<string, PublicProjectionGuardTally>>;
 
   constructor(duelNumber: number, archetype1: string, archetype2: string, options: ArenaTrackerOptions = {}) {
     this.duelNumber = duelNumber;
@@ -2500,6 +2529,34 @@ export class DuelTracker {
       zeroEventTimeoutSnapshot: null,
       stallSnapshots: [],
     };
+    this.publicProjectionGuard = {
+      player: Object.create(null) as Record<string, PublicProjectionGuardTally>,
+      bot: Object.create(null) as Record<string, PublicProjectionGuardTally>,
+    };
+  }
+
+  /** One planning root seen by the public-projection guard; diagnostic only, outside the strategic report. */
+  recordPublicProjectionGuard(seat: string, root: string, report: PublicProjectionGuardReport) {
+    const seatKey = playerSeat(seat);
+    if (!seatKey) return;
+    const tallies = this.publicProjectionGuard[seatKey];
+    const tally = tallies[root] ??= {
+      roots: 0, projections: 0, fields: createCounter(), tolerated: createCounter(), unprojected: createCounter(),
+    };
+    tally.roots += 1;
+    tally.projections += report.projections;
+    for (const [field, count] of Object.entries(report.fields)) addCount(tally.fields, field, count);
+    for (const [field, count] of Object.entries(report.tolerated)) addCount(tally.tolerated, field, count);
+    for (const [zone, count] of Object.entries(report.unprojected)) addCount(tally.unprojected, zone, count);
+  }
+
+  /** A copy of the guard tallies, read by the benchmark harness. */
+  getPublicProjectionGuard(): Seats<Record<string, PublicProjectionGuardTally>> {
+    const copy = (tallies: Record<string, PublicProjectionGuardTally>) => Object.fromEntries(Object.entries(tallies)
+      .map(([root, tally]) => [root, {
+        ...tally, fields: { ...tally.fields }, tolerated: { ...tally.tolerated }, unprojected: { ...tally.unprojected },
+      }]));
+    return { player: copy(this.publicProjectionGuard.player), bot: copy(this.publicProjectionGuard.bot) };
   }
 
   /**
@@ -2731,6 +2788,9 @@ export class DuelTracker {
       if (entry.stage === "ai_plan_execution_failed") {
         planning.failedExecutions += 1;
         addCount(planning.mismatchReasons, entry.mismatchReason || "action_failed");
+        if (entry.opponentBackrowReacted === true) {
+          addCount(planning.mismatchReasons, BACKROW_REACTION_FAILURE_REASON);
+        }
       } else if (entry.matched) {
         planning.executionMatches += 1;
       } else {
@@ -2852,25 +2912,39 @@ export class DuelTracker {
       this.recordCanonicalLifecycleEvent("chain_link_resolution", payload, meta);
       return;
     }
-    if (payload.stage !== "completed" && payload.stage !== "failed") return;
-    if (payload.chainId != null && payload.linkId != null) {
-      const key = JSON.stringify([payload.chainId, payload.linkId]);
-      if (this.completedChainLinks.has(key)) return;
-      this.completedChainLinks.add(key);
+    if (payload.stage !== "completed" && payload.stage !== "after_resolution" && payload.stage !== "failed") return;
+    const key = payload.chainId != null && payload.linkId != null
+      ? JSON.stringify([payload.chainId, payload.linkId])
+      : null;
+    if (key !== null && this.terminalChainLinks.has(key)) {
+      // A later terminal stage moves the link's single sample to its new outcome.
+      // An identical classification, such as a repeated notification, is a no-op.
+      const previous = this.terminalChainLinks.get(key) ?? null;
+      const outcome = payload.outcome;
+      const failedAction = payload.failedAction || null;
+      const reason = payload.reason || null;
+      if (!previous || !outcome || (previous.outcome === outcome &&
+        previous.failedAction === failedAction && previous.reason === reason)) return;
+      this.recordCanonicalLifecycleEvent("chain_link_resolution", payload, meta);
+      if (previous.outcome !== outcome) {
+        const previousStats = this.seats[previous.controllerId].chainLinks;
+        countChainLinkOutcome(previousStats, previous.outcome, -1);
+        countChainLinkOutcome(previousStats, outcome, 1);
+      }
+      previous.outcome = outcome;
+      previous.failedAction = failedAction;
+      previous.reason = reason;
+      return;
     }
     this.recordCanonicalLifecycleEvent("chain_link_resolution", payload, meta);
     // Older traces without a terminal outcome remain visible without guessing success.
-    if (!seat || !payload.outcome || payload.chainId == null || payload.linkId == null) return;
+    if (!seat || !payload.outcome || key === null || payload.chainId == null || payload.linkId == null) {
+      if (key !== null) this.terminalChainLinks.set(key, null);
+      return;
+    }
     const stats = this.seats[seat].chainLinks;
     stats.total++;
-    switch (payload.outcome) {
-      case "success": stats.succeeded++; break;
-      case "partial_failure": stats.partialFailures++; break;
-      case "failed": stats.failed++; break;
-      case "activation_negated": stats.activationNegated++; break;
-      case "effect_negated": stats.effectNegated++; break;
-      default: payload.outcome satisfies never;
-    }
+    countChainLinkOutcome(stats, payload.outcome, 1);
     const sample: ArenaChainLinkSample = {
       turn: meta.turn ?? this.currentTurn,
       chainId: payload.chainId,
@@ -2885,6 +2959,7 @@ export class DuelTracker {
       failedAction: payload.failedAction || null,
       reason: payload.reason || null,
     };
+    this.terminalChainLinks.set(key, sample);
     if (stats.samples.length < 5) stats.samples.push(sample);
     for (const links of this.planningChainLinks.values()) {
       links.push(sample);

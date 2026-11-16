@@ -31,6 +31,7 @@ import {
 import {
   applyNormalSummonFromHand,
   applySpecialSummonFromZone,
+  applyCallOfHauntedSummonAndBind,
   applySpecialSummonFromDeckWithCounterLimit,
   applySearchThenOptionalSpecialSummonFromHand,
   applySpecialSummonFromHandWithCost,
@@ -146,6 +147,7 @@ export const SIMULATED_ACTION_HANDLERS = {
   "restrict_effect_activations_by_names": applyRestrictEffectActivationsByNames,
   "restrict_special_summons": applyRestrictSpecialSummons,
   "special_summon_from_zone": applySpecialSummonFromZone,
+  "call_of_haunted_summon_and_bind": applyCallOfHauntedSummonAndBind,
   "special_summon_from_deck_with_counter_limit": applySpecialSummonFromDeckWithCounterLimit,
   "search_then_optional_special_summon_from_hand": applySearchThenOptionalSpecialSummonFromHand,
   "special_summon_from_hand_with_cost": applySpecialSummonFromHandWithCost,

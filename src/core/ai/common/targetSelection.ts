@@ -1,5 +1,5 @@
 import type { AiCardInput, AiPlayerInput } from "../../contracts/aiState.js";
-import type { EffectTarget } from "../../contracts/effects.js";
+import type { EffectDefinition, EffectTarget } from "../../contracts/effects.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
 import { requiresUnnegatedTarget } from "../../effects/negation.js";
 import { getPaidCostReferenceValues } from "../../effects/targeting/references.js";
@@ -79,8 +79,6 @@ interface ActionPreferenceContext {
 }
 
 interface TargetSelectionOptions {
-  /** Opt-in runtime optional-selection policy; absence preserves legacy planning refusal. */
-  useRuntimeOptionalTargets?: boolean;
   costPayment?: ChainCostPayment;
   referenceSnapshots?: Record<string, SimulatedReferenceSnapshot[]>;
   targetPreferences?: TargetPreferenceMap | null;
@@ -93,7 +91,6 @@ interface TargetSelectionOptions {
     costPreferences?: TargetPreference | null;
   } | null;
   fieldSpell?: SimulatedCardState | null;
-  preferDefense?: boolean;
   archetype?: string | null;
   opponentField?: readonly SimulatedCardState[];
   opponentLp?: number;
@@ -362,7 +359,6 @@ export function buildActionFilter<Action extends object>(
     "maxAtk",
     "minDef",
     "maxDef",
-    "position",
     "isTuner",
     "isToken",
     "lastSummonMethods",
@@ -688,8 +684,12 @@ export function estimateTemporaryCombatDebuffTargetValue(
   return bestScore;
 }
 
-/** Public scoring view only; optionality is decided by the real AutoSelector. */
-function selectRuntimeOptionalCount(
+/**
+ * Count the runtime AutoSelector takes for the bot from a target range, also
+ * reused by strategy simulations that keep their own candidate order.
+ * Public scoring view only; optionality is decided by the real AutoSelector.
+ */
+export function selectRuntimeOptionalCount(
   target: EffectTarget, ordered: SimulatedCardState[], count: NormalizedCount,
   self: SimulatedPlayerState, opponent: SimulatedPlayerState, intent: TargetIntent,
 ): number {
@@ -734,6 +734,9 @@ export function selectSimulatedTargets({
   const exactSelection = (id: string, candidates: readonly SimulatedCardState[], count: NormalizedCount) => {
     const ids = options.activationContext?.decisions?.selections?.[id];
     if (ids === undefined) return undefined;
+    // The runtime refuses too few legal candidates before it reads the plan;
+    // only a plan that the present candidates cannot honor is a divergence.
+    if (candidates.length < count.min) return [];
     const selected = resolveExactInstanceSelection(candidates, ids, count);
     if (selected === null) (state._simUnsupportedActions ??= []).push(`exact_selection:${id}`);
     return selected || [];
@@ -954,13 +957,13 @@ export function selectSimulatedTargets({
       : normalizeCount(target.count, 1);
     const min = count.min;
     const max = count.max;
-    let pickCount = intent === "cost" ? min : max;
-    if (options.useRuntimeOptionalTargets && intent !== "cost") {
-      pickCount = selectRuntimeOptionalCount(target, ordered, count, self, opponent, intent);
-    } else if (min === 0 && intent !== "cost") {
-      pickCount = 0;
-    }
     const exact = exactSelection(target.id, filtered, count);
+    // Outside costs, take as many targets as the runtime AutoSelector does
+    // for the bot: the minimum of a range, or one optional target only when
+    // it would choose it. An exact plan keeps its own count.
+    let pickCount = intent === "cost" || exact !== undefined
+      ? min
+      : selectRuntimeOptionalCount(target, ordered, count, self, opponent, intent);
     const pooledCost = intent === "cost" ? effect?.activationCosts?.find(action =>
       action.type === "remove_counters_from_field" && action.targetRef === target.id) : undefined;
     if (exact === undefined && pooledCost?.type === "remove_counters_from_field") {
@@ -985,9 +988,15 @@ function zoneCards(player: AiPlayerInput | undefined, zone: CanonicalZone): read
   return player[zone] || [];
 }
 
-/** Ordered exact-instance candidates for policies compiling decision plans. */
+/**
+ * Ordered exact-instance candidates for policies compiling decision plans.
+ * The effect supplies the activation eligibility shared with the simulation
+ * and the runtime: a target it negates excludes already negated monsters.
+ */
 export function collectExactTargetCandidates(target: EffectTarget, source: AiCardInput, ctx: { player: AiPlayerInput; opponent?: AiPlayerInput },
-  selections: Readonly<Record<string, readonly (number | string)[]>>): AiCardInput[] {
+  selections: Readonly<Record<string, readonly (number | string)[]>>,
+  effect: Pick<EffectDefinition, "actions"> | null | undefined): AiCardInput[] {
+  const requireUnnegated = requiresUnnegatedTarget(effect, target);
   const allZones: readonly CanonicalZone[] = ["field", "hand", "deck", "graveyard", "banished", "extraDeck", "spellTrap", "fieldSpell"];
   const fromZones = (spec: { owner?: EffectOwner; zone?: EffectZone; zones?: readonly EffectZone[] }) => {
     const roles = spec.owner === "opponent" ? ["opponent"] as const :
@@ -1009,6 +1018,7 @@ export function collectExactTargetCandidates(target: EffectTarget, source: AiCar
   const result: AiCardInput[] = [];
   for (const { card, role } of fromZones(target)) {
     if (card.instanceId == null || excluded.includes(card.instanceId) || result.some(other => card.instanceId === other.instanceId)) continue;
+    if (requireUnnegated && card.cardKind === "monster" && card.effectsNegated === true) continue;
     if (excludedNames.includes(card.name) || !matchesTargetFilters(card, target, source, role)) continue;
     if (target.compareAttribute && !matchesTargetAttributeComparison(card, references(target.compareAttribute.ref)[0], target.compareAttribute)) continue;
     if (pair && !fromZones(pair).some(({ card: paired, role: pairedRole }) =>

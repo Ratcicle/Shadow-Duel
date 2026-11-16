@@ -26,6 +26,7 @@ import { canUseNormalSummonForCard } from "../Player.js";
 import { canSetReactiveBackrowNow } from "../ai/common/phaseTiming.js";
 import { getCanonicalEffectActivationZones } from "../chain/legality.js";
 import { canMoveCardToZone } from "../ai/common/zones.js";
+import { publicOpponentView } from "../ai/common/planningCopy.js";
 import { hasActionZoneCandidates } from "../ai/common/actionValidation.js";
 import { bindPlanningActionPresence, getPlanningActionPresence, isPlanningActionPresenceCurrent, resolvePlanningCard, resolvePlanningMaterialIds, resolvePlanningSourceIndex } from "../ai/common/actionIdentity.js";
 import { selectPayableTributes } from "../ai/common/tributePolicy.js";
@@ -205,10 +206,12 @@ export function canResolveSummonActionForCurrentState(
         ? game.bot
         : game.player
       : null;
+    // The tribute policies read the opponent's field as any live decision does.
+    const oppField = opponent ? publicOpponentView(opponent).field : [];
     const selection = selectPayableTributes(bot, field, game, candidates =>
       typeof bot.selectBestTributes === "function"
         ? bot.selectBestTributes(candidates, tributesNeeded, card, {
-            oppField: opponent?.field || [],
+            oppField,
             game,
           })
         : candidates.map((_entry, index) => index).slice(0, tributesNeeded));
@@ -225,7 +228,7 @@ export function canResolveSummonActionForCurrentState(
     const tradeCheck =
       typeof bot.evaluateTributeTrade === "function"
         ? bot.evaluateTributeTrade(card, selection.candidates, tributesNeeded, {
-            oppField: opponent?.field || [],
+            oppField,
             game,
           })
         : { ok: true };

@@ -24,11 +24,17 @@ import type { BattlePositionInput } from "../contracts/cards.js";
 import type {
   RawSelectionCandidate,
   RawSelectionContract,
+  RawSelectionRequirement,
   SelectionKind,
+  SelectionResult,
   SelectionZone,
 } from "../contracts/selection.js";
 import type { ZoneInput } from "../contracts/zones.js";
-import type { DecisionActor } from "../contracts/decisions.js";
+import type {
+  DecisionActor,
+  DecisionRequest,
+  SelectionDecisionKind,
+} from "../contracts/decisions.js";
 import type { SelectionCandidateKey } from "../contracts/primitives.js";
 
 type RuntimeCardId = number | string | null;
@@ -115,6 +121,14 @@ export async function requestOptionalConfirmation(
       ? {} : null,
   });
   return result !== null;
+}
+
+/**
+ * AI answer to an optional Special Summon that follows a search. The runtime
+ * resolver and the AI simulation read this one policy, so they cannot drift.
+ */
+export function aiConfirmsFollowupSummon(): boolean {
+  return true;
 }
 
 /** Preserve card choices made by a resolution modal in canonical replay. */
@@ -1282,6 +1296,68 @@ export async function payCostAndThen<Result>(
   return true;
 }
 
+/** A selection key produced by a contract builder (non-empty string). */
+export function isSelectionKey(value: unknown): value is SelectionCandidateKey {
+  return typeof value === "string" && value.length > 0;
+}
+
+function contractRequirements(contract: RawSelectionContract): RawSelectionRequirement[] {
+  const requirements = contract.requirements;
+  if (Array.isArray(requirements)) return requirements;
+  return requirements ? [requirements] : [];
+}
+
+/**
+ * Records an AI controller's answer to a selection contract in the value
+ * shape of a human session: cards by duel identity, other options by key.
+ * Playback maps the record back onto the current candidates, so the resolver
+ * (AutoSelector or a fixed bot rule) runs only live.
+ */
+export function aiSelectionDecisionRequest(
+  player: DecisionActor,
+  kind: SelectionDecisionKind,
+  requirements: readonly RawSelectionRequirement[],
+): Omit<DecisionRequest<SelectionDecisionKind>, "resolveAI" | "resolveHuman"> {
+  const cardOf = (candidate: RawSelectionCandidate) =>
+    candidate.zone === "choice" ? null : candidate.cardRef ?? null;
+  return {
+    kind,
+    actor: player,
+    candidates: [],
+    requireCandidate: false,
+    serializeResult: value => value ? {
+      selections: Object.fromEntries(requirements.flatMap(requirement => requirement.id ? [[requirement.id,
+        (value[requirement.id] || []).map(key => {
+          const candidate = requirement.candidates?.find(entry => entry.key === key);
+          const card = candidate ? cardOf(candidate) : null;
+          const duelCardId = typeof card?.duelCardId === "number" ? card.duelCardId : null;
+          return { duelCardId, cardId: card?.id ?? null, effectId: null, candidateKey: null,
+            key: duelCardId === null ? key : null };
+        })]] : [])),
+    } : { pass: true },
+    deserializeReplayValue: value => {
+      if (!("selections" in value)) return null;
+      const selections: SelectionResult = {};
+      for (const requirement of requirements) {
+        if (!requirement.id) continue;
+        const recorded = value.selections[requirement.id];
+        if (!Array.isArray(recorded)) return null;
+        const keys: SelectionCandidateKey[] = [];
+        for (const identity of recorded) {
+          const candidate = requirement.candidates?.find(entry => "duelCardId" in identity && identity.duelCardId != null
+            ? cardOf(entry)?.duelCardId === identity.duelCardId
+            : identity.key != null && entry.key === String(identity.key));
+          const key = candidate?.key;
+          if (!isSelectionKey(key) || keys.includes(key)) return null;
+          keys.push(key);
+        }
+        selections[requirement.id] = keys;
+      }
+      return selections;
+    },
+  };
+}
+
 export async function selectCards({
   game,
   player,
@@ -1299,20 +1375,30 @@ export async function selectCards({
   const isAIPlayer = isAI(player);
 
   if (isAIPlayer) {
-    const autoResult =
-      typeof game.autoSelector?.select === "function"
-        ? game.autoSelector.select(selectionContract, autoSelectorOptions)
-        : null;
+    const resolveAI = (): readonly string[] => {
+      const autoResult =
+        typeof game.autoSelector?.select === "function"
+          ? game.autoSelector.select(selectionContract, autoSelectorOptions)
+          : null;
 
-    if (autoResult?.ok) {
-      return autoResult.selections[requirementId] || [];
-    }
+      if (autoResult?.ok) {
+        return autoResult.selections[requirementId] || [];
+      }
 
-    if (typeof autoSelectKeys === "function") {
-      return autoSelectKeys();
-    }
+      if (typeof autoSelectKeys === "function") {
+        return autoSelectKeys();
+      }
 
-    return [];
+      return [];
+    };
+    if (!game.requestDecision) return resolveAI();
+    // The bot's pick is a recorded decision; playback never selects again.
+    const decided = await game.requestDecision({
+      ...aiSelectionDecisionRequest(player, kind || selectionContract.kind || "choice",
+        contractRequirements(selectionContract)),
+      resolveAI: () => ({ [requirementId]: resolveAI().filter(isSelectionKey) }),
+    });
+    return decided?.[requirementId] || [];
   }
 
   // Use client-side target selection

@@ -1,4 +1,5 @@
 import type { CollectedTriggerEventMap } from "../../../contracts/events.js";
+import type { EffectCondition } from "../../../contracts/effects.js";
 import type {
   TriggerCollectorHost,
   TriggerContext,
@@ -9,6 +10,29 @@ import type {
 } from "../runtime.js";
 import { debugTriggerLog, matchesAfterSummonTrigger } from "./shared.js";
 import { walkActionList } from "../../../actionHandlers/actionWalker.js";
+
+/**
+ * A source in the Hand answers after_summon only through a `self_in_hand`
+ * condition or a nested `conditional_summon_from_hand` action.
+ */
+export function canTriggerAfterSummonFromHand(effect: {
+  readonly condition?: EffectCondition | undefined;
+  readonly actions?: unknown;
+}): boolean {
+  const requiresSelfInHand =
+    effect.condition != null &&
+    "requires" in effect.condition &&
+    effect.condition.requires === "self_in_hand";
+  const isConditionalSummonFromHand = walkActionList(
+    effect.actions,
+  ).visits.some(
+    ({ action }) =>
+      action != null &&
+      typeof action === "object" &&
+      Reflect.get(action, "type") === "conditional_summon_from_hand",
+  );
+  return requiresSelfInHand || isConditionalSummonFromHand;
+}
 
 /**
  * Collects trigger entries for after_summon event.
@@ -126,22 +150,8 @@ export async function collectAfterSummonTriggers(
           continue;
         }
 
-        if (sourceZone === "hand") {
-          const requiresSelfInHand =
-            effect.condition != null &&
-            "requires" in effect.condition &&
-            effect.condition.requires === "self_in_hand";
-          const isConditionalSummonFromHand = walkActionList(
-            effect.actions,
-          ).visits.some(
-            ({ action }) =>
-              action != null &&
-              typeof action === "object" &&
-              Reflect.get(action, "type") === "conditional_summon_from_hand",
-          );
-          if (!requiresSelfInHand && !isConditionalSummonFromHand) {
-            continue;
-          }
+        if (sourceZone === "hand" && !canTriggerAfterSummonFromHand(effect)) {
+          continue;
         }
 
         if (!matchesAfterSummonTrigger(effect, {

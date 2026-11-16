@@ -1,8 +1,9 @@
 import { getCounterCount } from "../common/counters.js";
+import { publicPlayerForViewer } from "../common/planningCopy.js";
 import { emitSimulatedAttackDeclaration, emitSimulatedBattleDestroy } from "../common/simulation.js";
 import { matchesTargetFilters } from "../common/targetSelection.js";
 import { checkAscensionRequirements, getMaterialFieldAgeTurnCounter, type AscensionReadHost, type AscensionReadPlayer } from "../../game/summon/ascension.js";
-import type { SimulatedCardState, SimulatedPlayerState } from "../../contracts/aiState.js";
+import type { AiPlayerInput, SimulatedCardState, SimulatedPlayerState } from "../../contracts/aiState.js";
 import type { SimulatedRuntimeState, SimulatedActionOptions } from "../common/simulatedActions/shared.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
 import type {
@@ -212,7 +213,13 @@ function getPlayer(analysis: DragonAnalysis = {}, context: DragonLineContext = {
 }
 
 function getOpponent(analysis: DragonAnalysis = {}, context: DragonLineContext = {}) {
-  return analysis.opponent || context.opponent || context.game?.player || {};
+  const opponent = analysis.opponent || context.opponent;
+  if (opponent) return opponent;
+  const game = context.game;
+  if (!game?.player) return {};
+  // The planning profile falls back to this seat on the live game: another
+  // player's seat is read through its public view.
+  return publicPlayerForViewer(game, game.player as AiPlayerInput, getPlayer(analysis, context)) as DragonPlayer;
 }
 
 function getCards(player: DragonPlayer | null | undefined, zone: DragonZone) {

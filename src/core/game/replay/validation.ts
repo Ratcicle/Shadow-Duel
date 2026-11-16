@@ -26,7 +26,9 @@ const DECISION_KINDS: ReadonlySet<string> = new Set([
   "chain_response",
   "segoc_order",
   "field_placement",
+  "trigger_activation",
 ]);
+const CONTROLLER_TYPES: ReadonlySet<string> = new Set(["human", "ai"]);
 const PHASES: ReadonlySet<string> = new Set([
   "draw",
   "standby",
@@ -253,6 +255,18 @@ function validateSetup(value: unknown): void {
   if (hasOwn(setup, "openingTurnStarted") && read(setup, "openingTurnStarted") !== true) {
     invalid("setup.openingTurnStarted", "true when present");
   }
+  if (hasOwn(setup, "controllers")) {
+    const controllers = requireObject(read(setup, "controllers"), "setup.controllers");
+    if (Object.keys(controllers).some(key => key !== "player" && key !== "bot")) {
+      invalid("setup.controllers", "only the player and bot seats");
+    }
+    for (const seat of ["player", "bot"]) {
+      const controller = read(controllers, seat);
+      if (typeof controller !== "string" || !CONTROLLER_TYPES.has(controller)) {
+        invalid(`setup.controllers.${seat}`, '"human" or "ai"');
+      }
+    }
+  }
 }
 
 function validateCardLocator(payload: object, path: string): void {
@@ -371,6 +385,10 @@ function validateCommandPayload(
       }
       if (hasOwn(payload, "effectId")) {
         requireNullableString(read(payload, "effectId"), `${path}.effectId`);
+      }
+      if (hasOwn(payload, "decisions") &&
+          !readChainResponseDecisions(read(payload, "decisions"), id => id, true)) {
+        invalid(`${path}.decisions`, "valid duel-local activation choices");
       }
       return;
     case "change_position":
@@ -517,8 +535,16 @@ function validateDecisionContext(
   value: unknown,
   path: string,
 ): void {
-  if (value === null && kind !== "field_placement") return;
+  if (value === null && kind !== "field_placement" && kind !== "trigger_activation") return;
   const context = requireObject(value, path);
+  if (kind === "trigger_activation" || read(context, "type") === "trigger_activation") {
+    if (kind !== "trigger_activation" || read(context, "type") !== "trigger_activation") {
+      invalid(path, "a trigger activation context for a trigger activation");
+    }
+    requireIdentity(read(context, "sourceDuelCardId"), `${path}.sourceDuelCardId`, true);
+    requireNullableString(read(context, "effectId"), `${path}.effectId`);
+    return;
+  }
   if (read(context, "type") === "resolution_choice") {
     if (kind !== "choice") invalid(path, "a choice context for a resolution choice");
     requireIdentity(read(context, "sourceDuelCardId"), `${path}.sourceDuelCardId`, true);
@@ -573,17 +599,26 @@ function validateDecisionValue(
     if (slot > 4) invalid(`${path}.slot`, "an integer between 0 and 4");
     return;
   }
-  if (kind === "chain_response") {
+  if (kind === "chain_response" || kind === "trigger_activation") {
     validateCandidateDecisionValue(decisionValue, path);
     const allowedKeys = read(decisionValue, "pass") === true
       ? ["pass"]
       : ["pass", "candidateKey", "effectId", "decisions"];
     if (Object.keys(decisionValue).some(key => !allowedKeys.includes(key))) {
-      invalid(path, "a Chain response identity and typed choices only");
+      invalid(path, kind === "chain_response"
+        ? "a Chain response identity and typed choices only"
+        : "a trigger activation and typed choices only");
+    }
+    // A trigger opportunity has a single source; it names no candidate.
+    if (kind === "trigger_activation" && read(decisionValue, "pass") === false &&
+        read(decisionValue, "candidateKey") !== null) {
+      invalid(`${path}.candidateKey`, "null for a trigger activation");
     }
     if (hasOwn(decisionValue, "decisions") &&
         !readChainResponseDecisions(read(decisionValue, "decisions"), id => id, true)) {
-      invalid(`${path}.decisions`, "valid duel-local Chain response choices");
+      invalid(`${path}.decisions`, kind === "chain_response"
+        ? "valid duel-local Chain response choices"
+        : "valid duel-local trigger activation choices");
     }
     return;
   }

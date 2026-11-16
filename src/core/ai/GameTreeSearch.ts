@@ -1,15 +1,16 @@
 import { resolvePerspectivePlayers } from "./StrategyUtils.js";
 import { isSimulatedMainPhaseActionSupported } from "./common/simulation.js";
 import { createGameTreeCopy, withoutLiveGameReference } from "./common/gameTreeSimulation.js";
-import { hasPendingPassiveRestoration } from "./common/planningCopy.js";
+import { assertPublicPlanningProjection, hasPendingPassiveRestoration } from "./common/planningCopy.js";
 import { resolvePerspectiveSlotForPlayer } from "./common/perspective.js";
 import type { GameTreeModels, PlanningModel } from "../contracts/aiPlanning.js";
-import { withPlanningExecutionContext } from "./common/planningExecution.js";
+import { runWithUnknownLocationGuard, withPlanningExecutionContext } from "./common/planningExecution.js";
 import { createPlanningOwnerPolicy } from "./common/planningOwner.js";
 import { fingerprintPlanningState } from "./common/stateFingerprint.js";
 import type {
   AIAction,
   GameTreeSearchResult,
+  PublicProjectionGuardSink,
 } from "../contracts/ai.js";
 import type {
   AiPlayerInput,
@@ -45,6 +46,8 @@ type GameTreePlayerInput = (AiPlayerInput | SimulatedPlayerState) & { debug?: bo
 interface GameTreeStateInput extends AiStateInput {
   currentPlayer?: GameTreePlayerInput | null;
   opponent?: GameTreePlayerInput | null;
+  /** The Arena's tracker on a live duel; it keeps the public-projection guard's tally. */
+  _arenaTracker?: PublicProjectionGuardSink | null;
 }
 type GameTreeState = GameTreeSimulationGameState;
 
@@ -106,6 +109,21 @@ function cloneGameStateDeep(gameState: GameTreeStateInput | GameTreeState, persp
 }
 
 /**
+ * Phase 2.3 L11 (D3): the search sees only the opponent's public information.
+ * Its hidden cards are opaque projections at the root and in every node copied
+ * from it, so the opponent's node with only hidden resources is a horizon.
+ * Null when the input cannot be copied: the root then keeps the failure path
+ * of an unrepresentable node (no actions, then the leaf).
+ */
+function createPublicRoot(gameState: GameTreeStateInput, perspective: GameTreePlayerInput): GameTreeState | null {
+  try {
+    return createGameTreeCopy(gameState, perspective, { publicOpponent: true }).state;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Avalia um estado de jogo (folha do minimax)
  * Retorna score numérico (higher = melhor para maximizer)
  */
@@ -144,6 +162,8 @@ function evaluateLeafState(
       (sum, m) => sum + ((m?.atk || 0) / 500),
       0
     );
+    // From the public root on (phase 2.3 L11), the opponent's hidden face-down
+    // monsters are opaque projections without ATK: they add nothing here.
     const oppFieldValue = (opp.field || []).reduce(
       (sum, m) => sum + ((m?.atk || 0) / 500),
       0
@@ -172,17 +192,20 @@ function evaluateLeafState(
   }
 }
 
-/** Execute exactly once on an isolated graph; unchanged actions are legal no-ops. */
+/**
+ * Execute exactly once on an isolated graph; unchanged actions are legal no-ops.
+ * An opaque card that moves or changes face ends the branch in _simRequiresReplan.
+ */
 function simulateAction<Action extends AIAction>(
   gameState: GameTreeState, action: Action, model: PlanningModel<Action>, models: ReadonlyMap<string, PlanningModel>,
 ): GameTreeState {
   const copy = createGameTreeCopy(gameState, gameState.bot);
   // The same graph memo rebinds card references inside action preferences.
   const branchAction = copy.copyAction(action) as Action;
-  const returned = withoutLiveGameReference(copy.state, () =>
+  const returned = runWithUnknownLocationGuard(copy.state, () => withoutLiveGameReference(copy.state, () =>
     withPlanningExecutionContext(copy.state,
       (_state, owner) => createPlanningOwnerPolicy(copy.state, owner, models),
-      () => model.create(copy.state).simulateMainPhaseAction(copy.state, branchAction)));
+      () => model.create(copy.state).simulateMainPhaseAction(copy.state, branchAction))));
   const result = returned || copy.state;
   result._isPerspectiveState = true;
   return result as GameTreeState;
@@ -361,8 +384,14 @@ export function gameTreeSearch<
     const models = new Map(Array.from(configured?.actors || [], ([id, model]) => [id, captureModel(model)] as const));
     const rootModel = configured ? captureModel(configured.root) : undefined;
     if (rootModel) models.set(persp.id, rootModel);
-    const { value: score, action } = minimax<Action>(
-      gameState,
+    const root = createPublicRoot(gameState, persp);
+    // Phase 2.3 E2: the guard of the opaque projection only counts, into the Arena's tracker.
+    const guardSink = gameState._arenaTracker;
+    if (root && guardSink?.recordPublicProjectionGuard) {
+      guardSink.recordPublicProjectionGuard(root.bot.id, "p2", assertPublicPlanningProjection(root, root.bot.id));
+    }
+    const { value: score, action } = root ? minimax<Action>(
+      root,
       maxPly,
       true, // Sempre começa com maximizing (turno do bot)
       ALPHA_INIT,
@@ -370,9 +399,9 @@ export function gameTreeSearch<
       rootModel,
       persp.id,
       models,
-      persp,
+      root.bot,
       transpositions
-    );
+    ) : { value: evaluateForRoot(gameState, persp.id), action: null };
 
     return {
       action,

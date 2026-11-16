@@ -11,7 +11,7 @@ import { moveCardToZone, refreshSimulatedFieldAuras } from "../src/core/ai/commo
 import { simulationState } from "./helpers/simulation.js";
 import type { AIStrategyBotPort } from "../src/core/contracts/ai.js";
 import { cardDefinition, required } from "./helpers/fixtures.js";
-import { createRuntimeGame, placeFieldCards } from "./helpers/game.js";
+import { completeTestSelections, createRuntimeGame, placeFieldCards } from "./helpers/game.js";
 
 function armor(owner: string, statsOnly = false) {
   const definition = cardDefinition(413);
@@ -40,7 +40,10 @@ test("continuous Equip tracks each fixed DEF contribution and excludes a face-do
     { player: owner, source: target }, { equip: [second] });
   game.effectEngine.updatePassiveBuffs();
   assert.equal(target.def, 2000);
-  await game.moveCard(target, owner, "hand", { fromZone: "field" });
+  // Both Armors' mandatory card_to_grave triggers share the host exit's SEGOC: the
+  // owner orders them, and both resolve before the move returns.
+  game.ui.showTriggerOrderModal = async options => (options?.candidates || []).map(candidate => candidate.candidateId);
+  await completeTestSelections(game, Promise.resolve(game.moveCard(target, owner, "hand", { fromZone: "field" })));
   game.effectEngine.updatePassiveBuffs();
   assert.deepEqual([target.atk, target.def], [1200, 1500]);
   assert.equal(target.equips.length, 0);
@@ -89,7 +92,8 @@ for (const ownerId of ["player", "bot"] as const) {
     game.cleanupTempBoosts(owner);
     game.effectEngine.updatePassiveBuffs();
     assert.deepEqual([target.atk, target.def], [1400, 2000]);
-    await game.moveCard(equip, owner, "graveyard", { fromZone: "spellTrap" });
+    // The Armor's mandatory card_to_grave trigger resolves before the move returns.
+    await completeTestSelections(game, Promise.resolve(game.moveCard(equip, owner, "graveyard", { fromZone: "spellTrap" })));
     game.effectEngine.updatePassiveBuffs();
     assert.deepEqual([target.atk, target.def], [1200, 1500]);
   });

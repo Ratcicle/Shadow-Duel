@@ -2,8 +2,11 @@ import type {
   AIAction,
   AIActionOf,
   AIActionType,
+  AIPlannedAction,
+  AIPlanningProfile,
   AIStrategyBotPort,
   BattleCandidate,
+  PublicProjectionGuardReport,
   StrategyRuntimePort,
   AITributeRequirement,
   AITributeTradeResult,
@@ -33,7 +36,7 @@ import type { EffectDefinition } from "./effects.js";
 import type { AIActivationContext } from "./ai.js";
 import type { CanonicalZone } from "./zones.js";
 import type { ActivationPipelineContext } from "./activation.js";
-import type { BotCloneGamePort } from "../bot/simulationBridge.js";
+import type { BotCloneGamePort, BotCloneOptions } from "../bot/simulationBridge.js";
 import type { BattleCandidateScoreInput } from "../ai/TurnLineSearch.js";
 
 type BotGameMethodName =
@@ -65,7 +68,8 @@ export interface BotAscensionContext {
   ascensionCard: GameCard;
   game: BotGamePort;
   bot: BotRuntimePort;
-  opponent: GamePlayer | null;
+  /** The opponent's public view: its hidden cards are opaque projections (phase 2.3 L13c). */
+  opponent: SimulatedPlayerState | null;
 }
 
 export interface BotStrategyPort extends StrategyRuntimePort, PlayerStrategyPort {
@@ -79,14 +83,22 @@ export interface BotStrategyPort extends StrategyRuntimePort, PlayerStrategyPort
     choices: BotAutomaticAscensionChoice[];
   }): Partial<BotAutomaticAscensionChoice> | null;
   chooseAutomaticAscensionPosition?(context: BotAscensionContext): BattlePositionInput | null;
+  /**
+   * Scores one attack candidate. The live battle loop passes the target, the
+   * opponent and the game from the bot's public copy before the simulated
+   * battle, so a face-down target is an opaque projection (phase 2.3 L12c);
+   * the attacker and the bot are the bot's own, and simState is the copy
+   * after the battle. The TurnLineSearch passes its planning cards and the
+   * state after the attack, with preBattleState as the node before it (phase 2.3 L18).
+   */
   scoreBattleAttackCandidate?(context: {
     attacker: GameCard;
-    target: GameCard | null;
+    target: SimulatedCardState | null;
     baseDelta: number;
     simState: BotPerspectiveGameState;
-    game: BotGamePort;
+    game: BotPerspectiveGameState;
     bot: BotRuntimePort;
-    opponent: GamePlayer;
+    opponent: SimulatedPlayerState;
     isSecondAttack: boolean;
     attackerSurvived: boolean;
     targetSurvived: boolean;
@@ -183,7 +195,83 @@ export interface BotGamePort extends Omit<PlayerGamePort, keyof BotGameMethods>,
   _arenaTracker?: {
     recordProgress?(kind: string, game: BotGamePort, details?: object): void;
     recordPlannerDecision?(details: object): void;
+    recordPublicProjectionGuard?(seat: string, root: string, report: PublicProjectionGuardReport): void;
   };
+}
+
+/** What a decision root chose and the score it gave that choice. */
+export interface BotRootOutcome<Choice> {
+  choice: Choice | null;
+  score: number | null;
+}
+
+/** One Battle Phase attack attempt; a null target is a direct attack. */
+export interface BotAttackChoice {
+  attacker: GameCard;
+  target: GameCard | null;
+}
+
+export type BotMainPhaseSearchRoot = "turnLineSearch" | "beam" | "greedy";
+
+/** The Main Phase planning profile the controller resolved, and its planner gate. */
+export interface BotPlanningProfileOutcome {
+  profile: Partial<AIPlanningProfile>;
+  /** Whether the decision runs the TurnLineSearch with this profile. */
+  shouldUsePlanner: boolean;
+}
+
+/**
+ * Optional diagnostic observer of the bot's live decision roots, installed
+ * only by the benchmark harness. Each call carries the live outcome and a
+ * rerun of that root with the options the controller already resolved. When
+ * it is absent the controllers neither call nor await anything.
+ */
+export interface BotDecisionRootObserver {
+  /**
+   * The automatic Ascension shortcut, which runs before the candidate
+   * generation: `live` is the Ascension the decision executes, or null when
+   * it goes on to the generation. Synchronous, like the selection it reruns;
+   * the rerun only reads the session's repetition memory.
+   */
+  observeAscension(
+    game: BotGamePort,
+    live: AIActionOf<"ascension"> | null,
+    rerun: () => AIActionOf<"ascension"> | null,
+  ): void;
+  /**
+   * The Main Phase candidate generation: `live` is the list every search of
+   * the decision receives as `preGeneratedActions`. Synchronous, like the
+   * generation it reruns; the rerun only reads the session's repetition memory.
+   */
+  observeGeneration(
+    game: BotGamePort,
+    live: readonly AIAction[],
+    rerun: () => AIAction[],
+  ): void;
+  /**
+   * The planning profile and the planner gate, resolved after the candidate
+   * generation; they decide whether the TurnLineSearch runs and with which
+   * budget. Synchronous; the rerun resolves them again on a copy of the
+   * planning context as the live resolution received it.
+   */
+  observeProfile(
+    game: BotGamePort,
+    live: BotPlanningProfileOutcome,
+    rerun: () => BotPlanningProfileOutcome,
+  ): void;
+  /** A Main Phase search; the controller awaits it before using the live result. */
+  observeSearch(
+    root: BotMainPhaseSearchRoot,
+    game: BotGamePort,
+    live: BotRootOutcome<AIPlannedAction>,
+    rerun: () => Promise<BotRootOutcome<AIPlannedAction>>,
+  ): Promise<void>;
+  /** A Battle Phase attack choice; synchronous, like the selection it reruns. */
+  observeAttack(
+    game: BotGamePort,
+    live: BotRootOutcome<BotAttackChoice>,
+    rerun: () => BotRootOutcome<BotAttackChoice>,
+  ): void;
 }
 
 export type BotRuntimePort = Omit<
@@ -195,6 +283,7 @@ export type BotRuntimePort = Omit<
     strategy: BotStrategyPort;
     game?: BotGamePort;
     debug?: boolean;
+    decisionRootObserver?: BotDecisionRootObserver | undefined;
     maxSimulationsPerPhase: number;
     resolveOpponent(game: BotGamePort): GamePlayer | null;
     evaluateBoard(
@@ -224,7 +313,7 @@ export type BotRuntimePort = Omit<
       game: BotGamePort,
       action: AIAction,
     ): Promise<boolean>;
-    cloneGameState(game: BotCloneGamePort): BotPerspectiveGameState;
+    cloneGameState(game: BotCloneGamePort, options?: BotCloneOptions): BotPerspectiveGameState;
     resolveHandIndexForAction(action: BotHandActionHint, expectedKind?: ExpectedBotHandKind): number;
     canResolveSummonActionForCurrentState(action: AIAction, game: BotGamePort): boolean;
     filterValidActionsForCurrentState(actions: AIAction[], game: BotGamePort): AIAction[];
@@ -256,7 +345,8 @@ export interface BotHandActionHint {
 export type ExpectedBotHandKind = CardKind | readonly CardKind[];
 
 export interface BotTributeSelectionContext {
-  oppField?: readonly GameCard[];
+  /** The field of the opponent's public view: its hidden cards are opaque projections (phase 2.3 L13c). */
+  oppField?: readonly SimulatedCardState[];
   game?: BotGamePort;
 }
 

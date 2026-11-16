@@ -1,5 +1,10 @@
 import { resolvePerspectivePlayers } from "./perspective.js";
-import { createPlanningCopy, projectRuntimeEffectUsage, projectRuntimeReplacementEffects } from "./planningCopy.js";
+import {
+  createPlanningCopy,
+  projectRuntimeEffectUsage,
+  projectRuntimeReplacementEffects,
+  registerPublicOpponentProjection,
+} from "./planningCopy.js";
 import {
   PLANNING_PLAYER_FIELDS,
   PLANNING_STATE_FIELDS,
@@ -22,10 +27,19 @@ export const GAME_TREE_ACTOR_FIELDS = [
   "_simArcanistSpellActivations",
 ] as const satisfies readonly (keyof GameTreeActorState)[];
 
+export interface GameTreeCopyOptions {
+  /**
+   * Copy the opponent of `perspective` through its public projection: hidden
+   * cards become opaque projections (the search root, phase 2.3 L11).
+   */
+  publicOpponent?: boolean;
+}
+
 /** GameTree's own profile; shared graph copying does not select Beam's fields. */
 export function createGameTreeCopy(
   input: AiStateInput & { currentPlayer?: AiPlayerInput | null },
   perspective = input.bot || input.currentPlayer,
+  options: GameTreeCopyOptions = {},
 ) {
   const copy = createPlanningCopy(true);
   const clonePlayer = (
@@ -55,9 +69,13 @@ export function createGameTreeCopy(
     return result;
   };
   const resolved = resolvePerspectivePlayers(input, perspective);
+  const self = resolved.self || input.bot || input.currentPlayer || input.player;
+  const opponent = resolved.opponent || input.player || input.opponent || input.bot;
+  // Registered before either participant is copied, so links reuse the opaque projection.
+  if (options.publicOpponent && opponent && opponent !== self) registerPublicOpponentProjection(copy, opponent);
   const state = {
-    bot: clonePlayer(resolved.self || input.bot || input.currentPlayer || input.player),
-    player: clonePlayer(resolved.opponent || input.player || input.opponent || input.bot),
+    bot: clonePlayer(self),
+    player: clonePlayer(opponent),
     turn: input.turn,
     phase: input.phase,
     turnCounter: input.turnCounter || 0,

@@ -2,14 +2,19 @@ import { copyPlanningActionPresence } from "./actionIdentity.js";
 import { copyModeledPassiveContributions, hasUnmodeledTemporaryPassiveSuppression } from "../../effects/passives/passiveBuffs.js";
 import type {
   AiCardInput,
+  AiPlayerInput,
   AiStateInput,
   AiStateShape,
+  SimulatedCardShape,
   SimulatedCardState,
+  SimulatedPlayerState,
 } from "../../contracts/aiState.js";
+import type { PublicProjectionGuardReport } from "../../contracts/ai.js";
 import {
   PLANNING_CARD_FIELDS,
   PLANNING_CARD_LINKS,
   PLANNING_LEGACY_CARD_FIELDS,
+  PLANNING_PLAYER_FIELDS,
   PLANNING_ZONES,
 } from "./stateFingerprint.js";
 import { projectOncePerTurnUsage } from "../../game/turn/oncePerTurn.js";
@@ -76,7 +81,12 @@ export function hasPendingPassiveRestoration(state: Pick<AiStateInput, "bot" | "
   ));
 }
 
-/** Snapshot canonical runtime counters without keeping their Maps/WeakMap. */
+/**
+ * Snapshot canonical runtime counters without keeping their Maps/WeakMap.
+ * Per-card usage is keyed by the card's own effects, so an opaque projection
+ * of a hidden card never receives it (phase 2.3 L10). Each player's per-name
+ * usage is still copied.
+ */
 export function projectRuntimeEffectUsage(input: AiStateInput, state: AiStateShape): void {
   const runtime = input.oncePerTurnUsage;
   if (!runtime || (input.oncePerTurnTurnCounter !== undefined &&
@@ -88,7 +98,7 @@ export function projectRuntimeEffectUsage(input: AiStateInput, state: AiStateSha
     const entries = original.id === "bot" ? runtime.bot : original.id === "player" ? runtime.player : undefined;
     cloned.oncePerTurnUsageByName = { ...cloned.oncePerTurnUsageByName, ...projectOncePerTurnUsage(entries) };
     const copyCard = (card: AiCardInput | null | undefined, target: SimulatedCardState | null | undefined) => {
-      if (!card || !target) return;
+      if (!card || !target || target._simUnknownCard === true) return;
       const usage = projectRuntimeCardEffectUsage(input, card);
       if (Object.keys(usage).length > 0) target.oncePerTurnUsageByName = { ...target.oncePerTurnUsageByName, ...usage };
     };
@@ -205,4 +215,173 @@ export function createPlanningCopy(planningCardsOnly = false) {
   }
 
   return { cloneCardForSim, copyFields, copyValue, registerPlayerCopy, registerCardProjection };
+}
+
+/** Public placement fields kept by an opaque projection of a hidden card. */
+export const PUBLIC_UNKNOWN_CARD_FIELDS = [
+  "instanceId", "fieldPresenceId", "fieldSlot", "isFacedown", "position", "controller", "originalOwner",
+] as const satisfies readonly (keyof SimulatedCardShape)[];
+
+/**
+ * Replace the opponent's hidden cards with opaque projections: Hand, Deck and
+ * Extra Deck, plus face-down cards on the field, in the backrow and banished.
+ * Register before copying either participant: links to the same hidden card
+ * must resolve to the same opaque projection, never to a second full copy.
+ */
+export function registerPublicOpponentProjection(
+  copy: Pick<ReturnType<typeof createPlanningCopy>, "copyFields" | "registerCardProjection">,
+  opponent: AiPlayerInput,
+): void {
+  const hide = (card: AiCardInput | null | undefined, monster = false) => {
+    if (!card) return;
+    const projection: AiCardInput & { _simUnknownCard: true } = { _simUnknownCard: true };
+    copy.copyFields(card, projection, PUBLIC_UNKNOWN_CARD_FIELDS);
+    if (monster) projection.cardKind = "monster";
+    copy.registerCardProjection(card, projection);
+  };
+  for (const zone of ["hand", "deck", "extraDeck"] as const) {
+    for (const card of opponent[zone] || []) hide(card);
+  }
+  for (const card of opponent.field || []) if (card?.isFacedown) hide(card, true);
+  for (const card of opponent.spellTrap || []) if (card?.isFacedown) hide(card);
+  if (opponent.fieldSpell?.isFacedown) hide(opponent.fieldSpell);
+  for (const card of opponent.banished || []) if (card?.isFacedown) hide(card);
+}
+
+/** Each hidden live card keeps one opaque projection, so identity holds across public views. */
+const PUBLIC_VIEW_PROJECTIONS = new WeakMap<object, SimulatedCardState>();
+
+/**
+ * The opaque projection of a hidden live card, by the rule of
+ * registerPublicOpponentProjection. The placement is copied on every call: the
+ * card moves and flips, while its projection stays the same object.
+ */
+function publicHiddenCard(card: AiCardInput, monster: boolean): SimulatedCardState {
+  let projection = PUBLIC_VIEW_PROJECTIONS.get(card);
+  if (!projection) {
+    projection = { _simUnknownCard: true } as SimulatedCardState;
+    PUBLIC_VIEW_PROJECTIONS.set(card, projection);
+  }
+  for (const key of PUBLIC_UNKNOWN_CARD_FIELDS) {
+    if (key in card) Reflect.set(projection, key, Reflect.get(card, key));
+    else Reflect.deleteProperty(projection, key);
+  }
+  if (monster) projection.cardKind = "monster";
+  else delete projection.cardKind;
+  return projection;
+}
+
+/**
+ * What a live decision may read of its opponent, the same as a planning node
+ * reads (phase 2.3 L13c): the hidden cards are opaque projections of
+ * registerPublicOpponentProjection, and the face-up cards and the Graveyard are
+ * the live cards themselves. A snapshot of the zones, read-only by contract: a
+ * hidden card of the view never reaches an engine method, and it compares by
+ * instanceId with a live card, by reference only with itself.
+ */
+export function publicOpponentView(opponent: AiPlayerInput): SimulatedPlayerState {
+  const live = (card: AiCardInput) => card as SimulatedCardState;
+  const hidden = (cards: readonly AiCardInput[] | undefined) =>
+    (cards || []).map(card => card ? publicHiddenCard(card, false) : live(card));
+  const hiddenIfFacedown = (card: AiCardInput, monster = false) =>
+    card?.isFacedown ? publicHiddenCard(card, monster) : live(card);
+  const view = {
+    id: opponent.id,
+    lp: opponent.lp,
+    hand: hidden(opponent.hand),
+    field: (opponent.field || []).map(card => hiddenIfFacedown(card, true)),
+    graveyard: (opponent.graveyard || []).map(live),
+    deck: hidden(opponent.deck),
+    extraDeck: hidden(opponent.extraDeck),
+    banished: (opponent.banished || []).map(card => hiddenIfFacedown(card)),
+    fieldSpell: opponent.fieldSpell ? hiddenIfFacedown(opponent.fieldSpell) : null,
+    spellTrap: (opponent.spellTrap || []).map(card => hiddenIfFacedown(card)),
+    summonCount: opponent.summonCount || 0,
+    additionalNormalSummons: opponent.additionalNormalSummons || 0,
+    controllerType: opponent.controllerType,
+  } as SimulatedPlayerState;
+  for (const key of PLANNING_PLAYER_FIELDS) {
+    if (key in opponent) Reflect.set(view, key, Reflect.get(opponent, key));
+  }
+  return view;
+}
+
+/**
+ * `player` as `viewer` may read it on `state`: a live game, as
+ * resolvePerspectivePlayers tells it (no planning state, and it resolves
+ * opponents itself), gives another player's public view. A planning state is
+ * already public, and a player knows its own cards.
+ */
+export function publicPlayerForViewer<Player extends AiPlayerInput>(
+  state: object,
+  player: Player,
+  viewer: unknown,
+): Player | SimulatedPlayerState {
+  const live = Reflect.get(state, "_isPerspectiveState") !== true && typeof Reflect.get(state, "getOpponent") === "function";
+  return live && player !== viewer ? publicOpponentView(player) : player;
+}
+
+/**
+ * Allowlisted fields beyond the public placement that a planning root still
+ * copies onto an opaque projection, a known channel: the guard tolerates and
+ * counts them apart, and taking one out of the projections is parity. None
+ * since phase 2.3 L10: projectRuntimeEffectUsage skips opaque projections, so
+ * oncePerTurnUsageByName on one is a guard firing.
+ */
+export const PUBLIC_PROJECTION_TOLERATED_FIELDS = [] as const satisfies readonly (keyof SimulatedCardShape)[];
+
+/**
+ * Fields every public planning root copies onto an opaque projection (the
+ * TurnLineSearch, GameTree, Beam and Greedy roots and the battle loop's Bot
+ * copy, each under the guard): the public placement fields and the opaque mark
+ * of registerPublicOpponentProjection, plus the tolerated fields.
+ * copyModeledPassiveContributions keeps its proof in a WeakMap and adds no
+ * field. A face-down monster may also keep cardKind "monster".
+ */
+export const PUBLIC_PROJECTION_ALLOWED_FIELDS = [
+  ...PUBLIC_UNKNOWN_CARD_FIELDS, "_simUnknownCard", ...PUBLIC_PROJECTION_TOLERATED_FIELDS,
+] as const satisfies readonly (keyof SimulatedCardShape)[];
+
+const PUBLIC_PROJECTION_ALLOWED: ReadonlySet<string> = new Set(PUBLIC_PROJECTION_ALLOWED_FIELDS);
+const PUBLIC_PROJECTION_TOLERATED: ReadonlySet<string> = new Set<string>(PUBLIC_PROJECTION_TOLERATED_FIELDS);
+
+/**
+ * Structural guard of a planning root's public projection (phase 2.3, E2): it
+ * counts and returns, never throws. Every hidden card of the opponent of
+ * `perspectiveId` must be an opaque projection with allowlisted fields only:
+ * Hand, Deck and Extra Deck, plus face-down cards on the field, in the
+ * backrow, in the Field Zone and banished, as registerPublicOpponentProjection hides them.
+ */
+export function assertPublicPlanningProjection(
+  root: Pick<AiStateShape, "player" | "bot">,
+  perspectiveId: string,
+): PublicProjectionGuardReport {
+  const report: PublicProjectionGuardReport = { projections: 0, fields: {}, tolerated: {}, unprojected: {} };
+  const opponent = root.bot?.id === perspectiveId ? root.player : root.player?.id === perspectiveId ? root.bot : null;
+  if (!opponent) return report;
+  const count = (counts: Record<string, number>, key: string) => {
+    counts[key] = (Object.hasOwn(counts, key) ? counts[key] ?? 0 : 0) + 1;
+  };
+  const inspect = (card: SimulatedCardState | null | undefined, zone: string, faceDownMonster = false) => {
+    if (!card) return;
+    if (card._simUnknownCard !== true) {
+      count(report.unprojected, zone);
+      return;
+    }
+    report.projections += 1;
+    for (const key of Object.keys(card)) {
+      if (PUBLIC_PROJECTION_TOLERATED.has(key)) count(report.tolerated, key);
+      if (PUBLIC_PROJECTION_ALLOWED.has(key)) continue;
+      if (key === "cardKind" && faceDownMonster && card.cardKind === "monster") continue;
+      count(report.fields, key);
+    }
+  };
+  for (const zone of ["hand", "deck", "extraDeck"] as const) {
+    for (const card of opponent[zone] || []) inspect(card, zone);
+  }
+  for (const card of opponent.field || []) if (card?.isFacedown) inspect(card, "field", true);
+  for (const card of opponent.spellTrap || []) if (card?.isFacedown) inspect(card, "spellTrap");
+  if (opponent.fieldSpell?.isFacedown) inspect(opponent.fieldSpell, "fieldSpell");
+  for (const card of opponent.banished || []) if (card?.isFacedown) inspect(card, "banished");
+  return report;
 }

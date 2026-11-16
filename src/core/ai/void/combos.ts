@@ -63,16 +63,10 @@ export const VOID_IDS = {
   POLYMERIZATION: 12,
 };
 
+/** Occupied zones, a public fact: the kind of a face-down card is hidden, and these zones hold only Spells and Traps. */
 export function countControlledSpellTrapCards(player: Partial<import("../../contracts/ai.js").AIStrategyBotPort> | null = {}) {
-  const backrowCount = (player?.spellTrap || []).filter(
-    (card) => card && (card.cardKind === "spell" || card.cardKind === "trap"),
-  ).length;
-  const fieldSpell = player?.fieldSpell || null;
-  const fieldSpellCount =
-    fieldSpell &&
-    (fieldSpell.cardKind === "spell" || fieldSpell.cardKind === "trap")
-      ? 1
-      : 0;
+  const backrowCount = (player?.spellTrap || []).filter(Boolean).length;
+  const fieldSpellCount = player?.fieldSpell ? 1 : 0;
   return backrowCount + fieldSpellCount;
 }
 

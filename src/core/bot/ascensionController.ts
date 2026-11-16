@@ -1,16 +1,24 @@
 import { bindPlanningActionPresence } from "../ai/common/actionIdentity.js";
+import { publicOpponentView } from "../ai/common/planningCopy.js";
 import type {
   BotRuntimePort,
   BotGamePort,
   BotAutomaticAscensionChoice,
 } from "../contracts/bot.js";
 import type { AIActionOf } from "../contracts/ai.js";
+import type { SimulatedPlayerState } from "../contracts/aiState.js";
 import type { GameCard, BattlePositionInput } from "../contracts/cards.js";
 
 type AutomaticAscensionAction = AIActionOf<"ascension"> & {
   materialIndex: number;
   ascensionCard: GameCard;
 };
+
+/** The opponent as an Ascension decision of the bot may read it. */
+function resolvePublicOpponent(bot: BotRuntimePort, game: BotGamePort): SimulatedPlayerState | null {
+  const opponent = bot.resolveOpponent(game);
+  return opponent ? publicOpponentView(opponent) : null;
+}
 
 /** Select without executing so the Main Phase session owns accounting/guards. */
 export function selectAutomaticAscensionAction(
@@ -39,7 +47,7 @@ export function selectAutomaticAscensionAction(
   }
 
   while (choices.length) {
-    const opponent = bot.resolveOpponent(game);
+    const opponent = resolvePublicOpponent(bot, game);
     const strategicChoice = bot.strategy?.selectAutomaticAscension?.({
       choices,
       game,
@@ -142,7 +150,7 @@ export function selectBestAscension(
 ): GameCard {
   if (eligible.length === 1) return eligible[0];
 
-  const opponent = bot.resolveOpponent(game);
+  const opponent = resolvePublicOpponent(bot, game);
   const oppField = opponent?.field || [];
   const oppHasThreats = oppField.some((m) => (m?.atk || 0) >= 2000);
   const oppFieldSize = oppField.length;
@@ -183,7 +191,7 @@ export function getAscensionPositionPreference(
     return ascensionCard?.ascension?.position || "choice";
   }
 
-  const opponent = bot.resolveOpponent(game);
+  const opponent = resolvePublicOpponent(bot, game);
   const oppStrongestATK = (opponent?.field || []).reduce(
     (max, monster) => Math.max(max, monster?.atk || 0),
     0,

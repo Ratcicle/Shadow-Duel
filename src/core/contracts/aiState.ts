@@ -58,6 +58,8 @@ type SimulatedCardCore = Partial<
     | "equippedTo"
     | "equips"
     | "equipTarget"
+    | "boundTrapSource"
+    | "boundMonsterTarget"
     | "hasAttacked"
     | "dynamicBuffs"
     | "suppressedDynamicBuffStatsByKey"
@@ -153,6 +155,8 @@ export interface SimulatedCardShape extends SimulatedCardCore {
   equippedTo?: SimulatedCardState | null;
   equips?: SimulatedCardState[];
   equipTarget?: SimulatedCardState | number | string | null;
+  boundTrapSource?: SimulatedCardState | null;
+  boundMonsterTarget?: SimulatedCardState | null;
   uid?: string | number | null;
   simInstanceId?: string | number | null;
   sourceCard?: string | SimulatedCardState | null;
@@ -285,6 +289,7 @@ export interface SimulatedPlayerState {
   debug?: boolean;
   id: PlayerId | string;
   lp: number;
+  lpGainMultiplier?: number;
   lpGainedThisTurn?: number;
   damageReceivedThisTurn?: number;
   hand: SimulatedCardState[];

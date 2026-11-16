@@ -6,6 +6,7 @@ import {
   diffPlanningSummaries,
   fingerprintAction,
   isMeaningfulPlanningDiff,
+  opponentBackrowReacted,
   summarizePlanningState,
 } from "../ai/common/planningDiagnostics.js";
 import {
@@ -15,18 +16,29 @@ import {
 import { runMainPhaseSession, type MainPhaseSession } from "./mainPhaseSession.js";
 import { selectAutomaticAscensionAction } from "./ascensionController.js";
 import { botLogger } from "../BotLogger.js";
-import type { BotRuntimePort, BotGamePort } from "../contracts/bot.js";
+import type { BotRootOutcome, BotRuntimePort, BotGamePort } from "../contracts/bot.js";
 import type {
   AIAction,
   AIPlannedAction,
   AIPlanningContext,
   AIPlanningProfile,
+  BeamSearchOptions,
   TurnLineSearchResult,
   TurnLineSearchCompletion,
 } from "../contracts/ai.js";
 
+/** The TurnLineSearch options the controller resolves; the live search adds only `onComplete`. */
+type TurnLinePlannerOptions = Omit<NonNullable<Parameters<typeof turnLineSearch>[2]>, "onComplete">;
+
 function hasValue(value: unknown) {
   return value !== undefined && value !== null;
+}
+
+/** A search result as the optional decision-root observer compares it. */
+function searchRootOutcome(
+  result: { action: AIPlannedAction; score: number } | null,
+): BotRootOutcome<AIPlannedAction> {
+  return { choice: result?.action ?? null, score: result?.score ?? null };
 }
 
 function resolvePlannerMode(
@@ -48,6 +60,8 @@ export function playBotMainPhase(bot: BotRuntimePort, game: BotGamePort): Promis
 
 async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: MainPhaseSession): Promise<void> {
   session.recordProgress("bot_main_phase_enter", game, { actor: bot.id });
+  // Benchmark diagnostics only; absent in play, so nothing below calls or awaits it.
+  const rootObserver = bot.decisionRootObserver;
   const useV2Evaluation = true;
   const useAutomaticAscension = bot.strategy?.shouldUseAutomaticAscensionShortcut?.(game, bot) !== false;
   while (await session.waitUntilReady()) {
@@ -56,9 +70,16 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
     const stateBeforeDecision = session.capture();
     const suppressedBeforeDecision = session.counts.repetitionsSuppressed;
     if (useAutomaticAscension && !isMain2Phase(game)) {
+      /** The runtime check of an automatic Ascension, without the session's repetition memory. */
+      const isAscensionAvailable = (action: AIAction): boolean =>
+        bot.filterValidActionsForCurrentState([action], game).length > 0;
       const ascension = selectAutomaticAscensionAction(bot, game,
-        action => bot.filterValidActionsForCurrentState([action], game).length > 0 &&
-          session.allowed(stateBeforeDecision, action));
+        action => isAscensionAvailable(action) && session.allowed(stateBeforeDecision, action));
+      if (rootObserver) {
+        // The rerun reads the repetition memory without counting a suppression.
+        rootObserver.observeAscension(game, ascension, () => selectAutomaticAscensionAction(bot, game,
+          action => isAscensionAvailable(action) && !session.attempted(stateBeforeDecision, action)));
+      }
       if (ascension) {
         const accepted = await session.execute(ascension, stateBeforeDecision);
         if (!session.active() || session.stopReason) return;
@@ -67,26 +88,39 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
       }
     }
     const planningStrategy = bot.strategy || bot;
-    const rawActions = bot.generateMainPhaseActions(game);
-    const sequencedActions = bot.sequenceActions(rawActions);
-    const phaseFilteredActions = filterAiActionsForCurrentPhase(
-      sequencedActions,
-      {
-        game,
-        bot,
-        player: bot,
-        strategy: planningStrategy,
-      },
-    );
+    // The candidate generation, written once so the decision-root observer
+    // reruns exactly what the live decision ran.
+    const generateCandidates = () => {
+      const rawActions = bot.generateMainPhaseActions(game);
+      const sequencedActions = bot.sequenceActions(rawActions);
+      const phaseFilteredActions = filterAiActionsForCurrentPhase(
+        sequencedActions,
+        {
+          game,
+          bot,
+          player: bot,
+          strategy: planningStrategy,
+        },
+      );
+      return { rawActions, sequencedActions, phaseFilteredActions };
+    };
+    const { rawActions, sequencedActions, phaseFilteredActions } = generateCandidates();
 
-    const isPermitted = (action: AIPlannedAction): boolean => {
+    /** The runtime checks of a candidate, without the session's repetition memory. */
+    const isAvailable = (action: AIPlannedAction): boolean => {
       if (!isSimulatedMainPhaseActionSupported(action)) return false;
-      const valid = action.type === "simulatedBattle" ? game.phase === "main1" :
+      return action.type === "simulatedBattle" ? game.phase === "main1" :
         filterAiActionsForCurrentPhase([action], { game, bot, player: bot, strategy: planningStrategy }).length > 0 &&
           bot.filterValidActionsForCurrentState([action], game).length > 0;
-      return valid && session.allowed(stateBeforeDecision, action);
     };
+    const isPermitted = (action: AIPlannedAction): boolean =>
+      isAvailable(action) && session.allowed(stateBeforeDecision, action);
     const actions = phaseFilteredActions.filter(isPermitted);
+    if (rootObserver) {
+      // The rerun reads the repetition memory without counting a suppression.
+      rootObserver.observeGeneration(game, actions, () => generateCandidates().phaseFilteredActions
+        .filter(action => isAvailable(action) && !session.attempted(stateBeforeDecision, action)));
+    }
     const fallbackActions = actions;
     session.recordProgress("ai_decision_before", game, {
       actor: bot.id, attempt: totalAttempts, rawActions: rawActions.length,
@@ -118,22 +152,36 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
       attempt: totalAttempts,
       useV2Evaluation,
     };
-    const planningProfile: Partial<AIPlanningProfile> =
-      typeof planningStrategy.getPlanningProfile === "function"
-        ? planningStrategy.getPlanningProfile(game, planningContext) || {}
-        : {};
-    planningContext.profile = planningProfile;
-    const plannerMode = resolvePlannerMode(game, planningProfile);
-    const plannerForced = plannerMode === "always";
-    const explicitPlannerOptIn =
-      plannerMode !== "off" &&
-      (plannerForced || planningProfile.enabled === true);
-    const shouldUsePlanner =
-      explicitPlannerOptIn &&
-      (plannerForced ||
-        (typeof planningStrategy.shouldUseDeepPlanning === "function"
-          ? planningStrategy.shouldUseDeepPlanning(game, planningContext)
-          : true));
+    // The planning profile and the planner gate, written once so the
+    // decision-root observer reruns exactly what the live decision resolved.
+    const resolvePlanningProfile = (context: typeof planningContext) => {
+      const profile: Partial<AIPlanningProfile> =
+        typeof planningStrategy.getPlanningProfile === "function"
+          ? planningStrategy.getPlanningProfile(game, context) || {}
+          : {};
+      context.profile = profile;
+      const plannerMode = resolvePlannerMode(game, profile);
+      const plannerForced = plannerMode === "always";
+      const explicitPlannerOptIn =
+        plannerMode !== "off" &&
+        (plannerForced || profile.enabled === true);
+      const shouldUsePlanner =
+        explicitPlannerOptIn &&
+        (plannerForced ||
+          (typeof planningStrategy.shouldUseDeepPlanning === "function"
+            ? planningStrategy.shouldUseDeepPlanning(game, context)
+            : true));
+      return { profile, plannerMode, shouldUsePlanner };
+    };
+    // The context as the live resolution receives it, before it gains the
+    // profile; copied only for the observer, each rerun resolves on its own copy.
+    const contextBeforeProfile = rootObserver ? { ...planningContext } : null;
+    const resolvedProfile = resolvePlanningProfile(planningContext);
+    const { profile: planningProfile, plannerMode, shouldUsePlanner } = resolvedProfile;
+    if (rootObserver && contextBeforeProfile) {
+      rootObserver.observeProfile(game, resolvedProfile,
+        () => resolvePlanningProfile({ ...contextBeforeProfile }));
+    }
 
     if (shouldUsePlanner && actions.length > 0) {
       const plannerBeamWidth =
@@ -188,7 +236,7 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
         `[Bot.playMainPhase] Running TurnLineSearch with ${actions.length} actions (width=${plannerBeamWidth}, depth=${plannerMaxDepth}, budget=${plannerNodeBudget}, battleSteps=${plannerBattleStepLimit})...`,
       );
       const searchReport: { completion?: TurnLineSearchCompletion } = {};
-      const plannerResult = await turnLineSearch(game, planningStrategy, {
+      const plannerOptions = {
         beamWidth: plannerBeamWidth,
         maxDepth: plannerMaxDepth,
         nodeBudget: plannerNodeBudget,
@@ -199,6 +247,9 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
         preGeneratedActions: actions,
         profile: planningProfile,
         planningContext,
+      } satisfies TurnLinePlannerOptions;
+      const plannerResult = await turnLineSearch(game, planningStrategy, {
+        ...plannerOptions,
         onComplete: completion => { searchReport.completion = completion; },
       });
 
@@ -226,6 +277,10 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
 
       console.log(`[Bot.playMainPhase] TurnLineSearch result:`, plannerResult);
       if (!await session.waitUntilReady()) return;
+      if (rootObserver) {
+        await rootObserver.observeSearch("turnLineSearch", game, searchRootOutcome(plannerResult),
+          async () => searchRootOutcome(await turnLineSearch(game, planningStrategy, plannerOptions)));
+      }
       if (session.capture() !== stateBeforeDecision) continue;
       if (!plannerResult && searchReport.completion?.terminationReason === "preferred_terminal") {
         session.stopReason = "planned_stop";
@@ -251,17 +306,22 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
       console.log(
         `[Bot.playMainPhase] Running beam search with ${actions.length} actions (width=${beamWidth}, depth=${maxDepth}, budget=${nodeBudget})...`,
       );
-      const searchResult = await beamSearchTurn(game, bot, {
+      const beamOptions = {
         beamWidth,
         maxDepth,
         nodeBudget,
         allowEarlyStop: planningProfile.allowEarlyStop === true,
         useV2Evaluation,
         preGeneratedActions: actions, // BUGFIX: Pass pre-generated actions as fallback
-      });
+      } satisfies BeamSearchOptions;
+      const searchResult = await beamSearchTurn(game, bot, beamOptions);
 
       console.log(`[Bot.playMainPhase] Beam search result:`, searchResult);
       if (!await session.waitUntilReady()) return;
+      if (rootObserver) {
+        await rootObserver.observeSearch("beam", game, searchRootOutcome(searchResult),
+          async () => searchRootOutcome(await beamSearchTurn(game, bot, beamOptions)));
+      }
       if (session.capture() !== stateBeforeDecision) continue;
       if (searchResult?.action && isPermitted(searchResult.action)) {
         bestAction = searchResult.action;
@@ -274,14 +334,19 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
     // Fallback: se beam search não retornou nada, ou só tem 1 opção, usa greedy
     if (!bestAction) {
       console.log(`[Bot.playMainPhase] Running greedy search...`);
-      const greedyResult = await greedySearchWithEvalV2(game, bot, {
+      const greedyOptions = {
         allowEarlyStop: planningProfile.allowEarlyStop === true,
         useV2Evaluation,
         preGeneratedActions: actions, // BUGFIX: Pass pre-generated actions as fallback
-      });
+      } satisfies BeamSearchOptions;
+      const greedyResult = await greedySearchWithEvalV2(game, bot, greedyOptions);
 
       console.log(`[Bot.playMainPhase] Greedy search result:`, greedyResult);
       if (!await session.waitUntilReady()) return;
+      if (rootObserver) {
+        await rootObserver.observeSearch("greedy", game, searchRootOutcome(greedyResult),
+          async () => searchRootOutcome(await greedySearchWithEvalV2(game, bot, greedyOptions)));
+      }
       if (session.capture() !== stateBeforeDecision) continue;
       if (greedyResult?.action && isPermitted(greedyResult.action)) {
         bestAction = greedyResult.action;
@@ -390,6 +455,9 @@ async function runMainPhase(bot: BotRuntimePort, game: BotGamePort, session: Mai
         matched: !!actionSuccess && !meaningfulDiff,
         diffSeverity: actionSuccess ? diff.severity : "action_failed",
         mismatchReason: actionSuccess ? diff.severity : "action_failed",
+        // The severity's backrow check, also for a failed action, whose reason
+        // stays action_failed.
+        opponentBackrowReacted: opponentBackrowReacted(expectedSummary, actualSummary),
         diffs: compactPlanningDiffs(diff.diffs || [], 6),
         plannedMilestones: (pendingPlannerTrace.milestones || []).slice(0, 8),
         plannerReason: pendingPlannerTrace.reason || null,

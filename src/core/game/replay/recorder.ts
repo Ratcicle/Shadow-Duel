@@ -11,9 +11,14 @@ import type {
   ReplayRecordingBuffer,
   ReplayRecordingOptions,
   ReplayRuntimeCard,
+  ReplayRuntimePlayer,
+  ReplaySeatControllers,
 } from "../../contracts/replay.js";
 import type { PlayerId } from "../../contracts/primitives.js";
-import { CANONICAL_REPLAY_ENGINE_VERSION } from "../../contracts/replay.js";
+import {
+  CANONICAL_REPLAY_ENGINE_VERSION,
+  DEFAULT_REPLAY_SEAT_CONTROLLERS,
+} from "../../contracts/replay.js";
 import {
   CANONICAL_REPLAY_FORMAT,
   CANONICAL_REPLAY_SCHEMA_VERSION,
@@ -44,6 +49,27 @@ function deckEntries(
       id: card.id!,
       duelCardId: game.ensureDuelCardId(card),
     }));
+}
+
+/**
+ * The seats' controllers, or null for the implied human-against-AI duel. A
+ * seat without a controller type keeps its default controller.
+ */
+function seatControllers(
+  game: ReplayRecorderGamePort,
+): ReplaySeatControllers | null {
+  const controllerOf = (seat: ReplayRuntimePlayer | undefined, seatId: keyof ReplaySeatControllers) =>
+    seat?.controllerType == null
+      ? DEFAULT_REPLAY_SEAT_CONTROLLERS[seatId]
+      : seat.controllerType === "ai" ? "ai" as const : "human" as const;
+  const controllers = {
+    player: controllerOf(game.player, "player"),
+    bot: controllerOf(game.bot, "bot"),
+  };
+  return controllers.player === DEFAULT_REPLAY_SEAT_CONTROLLERS.player &&
+    controllers.bot === DEFAULT_REPLAY_SEAT_CONTROLLERS.bot
+    ? null
+    : controllers;
 }
 
 export function startReplayRecording(
@@ -79,6 +105,7 @@ export function captureReplaySetup(
   options: { openingTurnStarted?: boolean } = {},
 ) {
   if (!this.captureReplayEnabled || !this._canonicalReplay) return null;
+  const controllers = seatControllers(this);
   this._canonicalReplay.setup = {
     seed: this.randomSeed!,
     randomState: this.getRandomState?.() || null,
@@ -88,6 +115,7 @@ export function captureReplaySetup(
     botDeck: deckEntries(this, this.bot?.deck),
     botExtraDeck: deckEntries(this, this.bot?.extraDeck),
     ...(options.openingTurnStarted === true ? { openingTurnStarted: true as const } : {}),
+    ...(controllers ? { controllers } : {}),
   };
   return this._canonicalReplay.setup;
 }
@@ -157,6 +185,11 @@ export function finalizeReplay(
   result: ReplayFinalizeInput = {},
 ): ReplayRecordingBuffer | null {
   if (!this._canonicalReplay) return null;
+  // The controllers that decided the recorded duel: a seat whose controller
+  // was configured after the Decks were set up is recorded as it played.
+  const { controllers: _setupControllers, ...setup } = this._canonicalReplay.setup;
+  const controllers = seatControllers(this);
+  this._canonicalReplay.setup = controllers ? { ...setup, controllers } : setup;
   this._canonicalReplay.result = {
     winner: result.winner || this.winner || null,
     reason: result.reason || null,

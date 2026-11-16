@@ -9,6 +9,7 @@ import {
   isQuickSpell,
 } from "./quickSpellRules.js";
 import type { QuickSpellContext } from "./quickSpellRules.js";
+import type { SpellTrapFinalizationOverride } from "./finalization.js";
 import { getUIText } from "../../i18n.js";
 import type { DecisionBrokerPort } from "../../contracts/decisions.js";
 import type { MaybePromise } from "../../contracts/actionRuntime.js";
@@ -28,6 +29,10 @@ interface ActivationResult {
   reason?: string | null;
   code?: string;
   cancelled?: boolean;
+  /** The resolution's own activation context. */
+  activationContext?: {
+    spellTrapFinalization?: SpellTrapFinalizationOverride | undefined;
+  } | null;
 }
 
 interface ActivationCommitInfo {
@@ -56,6 +61,7 @@ interface SpellTrapActivationContext {
   quickSpellActivationFromSet?: boolean;
   quickSpellContext?: QuickSpellContext | null;
   sourceWasFacedown?: boolean;
+  spellTrapFinalization?: SpellTrapFinalizationOverride;
 }
 
 interface ActionGuardConfig {
@@ -240,6 +246,21 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
     return false;
   }
   return typeof Reflect.get(value, "then") === "function";
+}
+
+/**
+ * The activation context a Spell/Trap's finalization reads. Phase 2.3 L25b:
+ * an effect that chooses its own source's destination
+ * (`set_source_after_resolution_if`) records it in the resolution's
+ * activation context, which only the result carries back.
+ */
+function getFinalizationActivationContext(
+  result: ActivationResult,
+  activationContext: SpellTrapActivationContext | undefined,
+): SpellTrapActivationContext | undefined {
+  const override = result.activationContext?.spellTrapFinalization;
+  if (!override || activationContext?.spellTrapFinalization) return activationContext;
+  return { ...activationContext, spellTrapFinalization: override };
 }
 
 function getSpellTrapSelectionMessage(
@@ -536,7 +557,12 @@ export async function tryActivateSpellTrapEffect(
           card,
           owner,
           info.activationZone === "graveyard" ? null : info.activationZone,
-          { activationContext: info.activationContext },
+          {
+            activationContext: getFinalizationActivationContext(
+              result,
+              info.activationContext,
+            ),
+          },
         );
         this.ui.log(`${card.name} effect activated.`);
       }
@@ -592,7 +618,7 @@ export async function finalizeSpellCardActivation(
     this.ui?.log?.(placementLog || `${card.name} is placed on the field.`);
   } else {
     await this.finalizeSpellTrapActivation(card, owner, activationZone === "graveyard" ? null : activationZone, {
-      activationContext: info.activationContext,
+      activationContext: getFinalizationActivationContext(result, info.activationContext),
     });
     this.ui?.log?.(
       result?.success === false

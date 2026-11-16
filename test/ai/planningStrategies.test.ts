@@ -241,7 +241,7 @@ for (const scenario of [
       assert.ok(actions.some(action => action.p2Approved === true), "actual P2 did not promote a planned action");
       assert.ok(generations.some(entry => entry.id === left.id && entry.model === scenario.left));
       assert.ok(generations.some(entry => entry.id === right.id && entry.model === scenario.right));
-      assert.ok(generations.some(entry => entry.field.length > 0), "later nodes did not observe simulated field changes");
+      assert.ok(generations.every(entry => entry.id === root.id || entry.hand.every(name => name === "")), "the opponent's node read its hidden Hand");
       assert.ok(simulated.size >= 2);
       assert.deepEqual([left, right].map(bot => ({ hand: bot.hand, field: bot.field, deck: bot.deck, lp: bot.lp })), before);
     } finally {

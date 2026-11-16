@@ -317,7 +317,7 @@ export function buildTechZeroActivationContext(
     }
   }
   for (const target of effect.targets || []) {
-    const candidates = collectExactTargetCandidates(target, source, ctx, selections);
+    const candidates = collectExactTargetCandidates(target, source, ctx, selections, effect);
     if (Object.hasOwn(selections, target.id)) {
       selections[target.id] = selections[target.id]!.filter(id => candidates.some(card => card.instanceId === id));
       continue;
@@ -372,7 +372,9 @@ export function buildTechZeroActivationContext(
       if (action.type !== "optional_target_actions") continue;
       for (const target of action.targets || []) {
         const committed = new Set(Object.values(selections).flat());
-        const candidates = collectExactTargetCandidates(target, source, ctx, selections)
+        // Like the simulated optional selection, the local choice is checked against
+        // the enclosing effect: negation eligibility applies only at activation.
+        const candidates = collectExactTargetCandidates(target, source, ctx, selections, effect)
           .filter(card => card.instanceId != null && !committed.has(card.instanceId));
         selections[target.id] = instanceIds(chooseTechZeroResourceTargets("lab", candidates, ctx, normalizeCount(target.count, 1).max));
       }
@@ -385,7 +387,7 @@ export function buildTechZeroActivationContext(
       const candidates = collectExactTargetCandidates({ id: `${effectId}_resolution`, owner: "self",
         ...(source.id === TZ.ELECTROCATAPULT ? { zones: ["hand", "graveyard"] as const } :
           { zone: source.id === TZ.PRISM ? "hand" as const : "graveyard" as const }),
-        excludeCannotBeSpecialSummoned: true }, source, ctx, selections)
+        excludeCannotBeSpecialSummoned: true }, source, ctx, selections, effect)
         .filter(card => matchesTargetFilters(card, action.filters || {}, source, "self"));
       if (source.id === TZ.ELECTROCATAPULT) {
         const selected = chooseTechZeroRevival(source, candidates, ctx);

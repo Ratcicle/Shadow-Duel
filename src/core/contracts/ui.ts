@@ -114,6 +114,7 @@ export interface GameUI {
   waitForLpPresentation: OmitThisParameter<
     typeof animations.waitForLpPresentation
   >;
+  releaseHeldLpLoss: OmitThisParameter<typeof animations.releaseHeldLpLoss>;
   captureCardAnimationSource: OmitThisParameter<
     typeof cardAnimationManager.captureCardAnimationSource
   >;

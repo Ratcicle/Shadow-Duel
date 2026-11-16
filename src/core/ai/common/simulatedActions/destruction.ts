@@ -94,7 +94,7 @@ export function applyBanishAllGraveyardAndBurn(
 }
 
 /** The modeled replacement path supports only free or single-action costs. */
-export function isSupportedSimulatedDestructionReplacement(replacement: ActionReplacementEffect): boolean {
+function isSupportedSimulatedDestructionReplacement(replacement: ActionReplacementEffect): boolean {
   if (replacement.type !== "destruction" || (replacement.reason && !["any", "battle", "effect"].includes(replacement.reason)) ||
     replacement.costCount || replacement.costFilters || replacement.costZone || replacement.costOwner || replacement.costDestination) return false;
   if (!replacement.costActions?.length) return true;
@@ -106,13 +106,17 @@ export function isSupportedSimulatedDestructionReplacement(replacement: ActionRe
     (cost.type === "remove_counters_from_field" && !cost.targetRef));
 }
 
-/** Resolve supported equipment costs after battle damage has been calculated. */
+/**
+ * Resolve supported equipment costs after battle damage has been calculated.
+ * `isPreventionNegated` rejects the replacements of an owner an active aura negates.
+ */
 export function replaceSimulatedBattleDestruction(
   state: SimulatedRuntimeState,
   target: SimulatedCardState,
   options: SimulatedActionOptions = {},
+  isPreventionNegated?: (replacementOwner: SimulatedPlayerState) => boolean,
 ): SimulatedCardState | null {
-  return replaceSimulatedDestruction(state, target, "battle", options);
+  return replaceSimulatedDestruction(state, target, "battle", options, isPreventionNegated);
 }
 
 function replaceSimulatedDestruction(
@@ -120,6 +124,7 @@ function replaceSimulatedDestruction(
   target: SimulatedCardState,
   reason: "battle" | "effect",
   options: SimulatedActionOptions = {},
+  isPreventionNegated?: (replacementOwner: SimulatedPlayerState) => boolean,
 ): SimulatedCardState | null {
   const targetOwner = findCardOwner(state, target);
   if (!targetOwner) return null;
@@ -133,7 +138,8 @@ function replaceSimulatedDestruction(
     (!replacement.targetMustBeSource || target === source) &&
     (!replacement.targetMustNotBeSource || target !== source) &&
     (!replacement.targetMustBeEquippedToSource || (source?.equippedTo || source?.equipTarget) === target) &&
-    (!replacement.targetFilters || matchesTargetFilters(target, replacement.targetFilters));
+    (!replacement.targetFilters || matchesTargetFilters(target, replacement.targetFilters)) &&
+    !isPreventionNegated?.(owner);
   const entries: Array<{ owner: SimulatedPlayerState; source: SimulatedCardState;
     effect: ReplacementEffectDefinition; firstOpportunityConsumed: boolean }> = [];
   for (const owner of [state.bot, state.player]) {
@@ -261,6 +267,8 @@ export function destroySimulatedCard(
     ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}),
     onMoveCommitted: result => { receipt.value = result; },
   })) return false;
+  // Without a receipt the card did not move (same-zone shortcut): as in the runtime, it counts as destroyed and publishes nothing.
+  if (!receipt.value) return true;
   const toZone = receipt.value?.destinationPresence.zone ?? findCardZone(destination, card) ?? "removed";
   const toPlayer = toZone === "removed" ? null : receipt.value
     ? [state.player, state.bot].find(player => player.id === receipt.value?.destinationPresence.controllerId) ?? null
@@ -275,6 +283,7 @@ export function destroySimulatedCard(
     movedByEffect: true, actionContext: options.actionContext };
   if (toZone === "graveyard") options.emitSimulatedEvent?.("card_to_grave", payload);
   options.emitSimulatedEvent?.("card_moved", payload);
+  receipt.value?.settleBoundDestructions();
   return true;
 }
 
@@ -433,9 +442,11 @@ export function applyDestroyTargetedCards(
   if (action.targetRef || (action.minTargets !== 0 && !action.targetCountFromContext)) return applyDestroy(ctx);
   const zones = (action.zones || ["field", "spellTrap", "fieldSpell"])
     .filter(zone => zone === "field" || zone === "spellTrap" || zone === "fieldSpell");
+  // As in the runtime, a top-level position narrows the targets of this action only.
   const candidates = getActionCandidates(opponent, {
     ...action, zones,
-  }, "field", options);
+  }, "field", options).filter(card =>
+    !action.position || action.position === "any" || card.position === action.position);
   let count = action.maxTargets ?? 1;
   if (action.targetCountFromContext) {
     const spec = action.targetCountFromContext;

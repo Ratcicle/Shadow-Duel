@@ -20,7 +20,7 @@ for (const seat of ["bot", "player"] as const) for (const nested of [false, true
     eventCard.effects = []; placeSimulationCards(other.field, eventCard);
     marshal.effects = [{ id: "completion-paid-owner-trigger", timing: "on_event", event: "after_summon",
       triggerRequirement: "mandatory", triggerTiming: "if",
-      activationZones: ["hand"], oncePerTurn: true, oncePerTurnScope: "card",
+      activationZones: ["hand"], condition: { requires: "self_in_hand" }, oncePerTurn: true, oncePerTurnScope: "card",
       actions: [{ type: "pay_lp", amount: failure ? 500 : 2000 },
         { type: "special_summon_from_zone", zone: "hand", requireSource: true, position: "defense" },
         ...(failure ? [{ type: "draw" as const, amount: 1 }] : [])] }];

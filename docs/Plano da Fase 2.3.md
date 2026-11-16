@@ -1,0 +1,2078 @@
+# Shadow Duel — Plano da Fase 2.3 (Limites conhecidos)
+
+## Estado de referência — 11/10/2026
+
+| Item | Estado |
+| --- | --- |
+| HEAD | `79c3868` (merge do PR #74, harness da 2.2). `git diff facccc9 HEAD -- src scripts test` sai vazio: o código medido pela v1 é o mesmo de hoje |
+| Branch | `fase2/limites-conhecidos`, criada a partir de `main` |
+| Replay | `engine-rules-v27` (`src/core/contracts/replay.ts:27`). `git log --all -S'engine-rules-v28'` sai vazio |
+| Baseline v1 | Execução `canonical-facccc9-0e7dbbda`: commit `facccc9`, árvore limpa, banco de cartas `a11dc8c4`, `configDigest` `0e7dbbda…`, `deterministicDigest` `aea47bee68de…`. 1.620 duelos (N = 20), 0 erros, 4 defeitos (todos do bug de equipamentos da ponte) |
+| Controles v1 | Corpus `3d54efc8…` (108 casos, sem falhas) e `controlsDigest` `d3e441b5…`, em `.cache/benchmark/controls-facccc9` |
+| Guarda de stall v1 | Picos de 131 decisões, 64 ações e 102 estágios de progresso por turno, contra limites de 2000/1000/20000 (`scripts/benchmark/schema.ts:82-86`) |
+| Sondas da análise | Copiadas para `.cache/plan23-probes/` (ignorada pelo git e durável). As citações de sonda deste plano usam esse caminho |
+
+Placar da v1 sem espelhos (n = 320 por preset): Dragon 82,2%, Tech-Zero 78,1%, Miragebound 67,2%, Arcanist 41,3%, Luminarch 40,0%, Shadow-Heart 39,1%, Void 39,1%, Bloomrot 37,5% e Burning West 25,6%. Os intervalos estão no roadmap.
+
+Diagnósticos da v1 que os lotes perseguem (N = 20, salvo indicação):
+
+| Diagnóstico | Valor na v1 | Lote |
+| --- | --- | --- |
+| Defeitos da ponte (`Invalid or duplicate canonical field position.`) | 4 duelos | L02 |
+| `exact_selection:tech_zero_reactor_dragon_negate_target` | 25.234 no TurnLineSearch + 177 no Beam/Greedy (cerca de 65% dos marcadores do Tech-Zero) | L04, L05 |
+| `add_status:passive_recalculation` no Tech-Zero | 11.869 no TurnLineSearch + 108 no Beam/Greedy | L06 |
+| `special_summon_matching_level` espúrio | 125 marcadores em 14 duelos, todos com a Void Mirror Dimension na mão | L07 |
+| `opponent_reaction_mismatch` vindo de contador zerado | Cerca de 21% dos casos | L01, L08 |
+| `mismatchByPath` `bot.field` | Shadow-Heart 43, Arcanist 57, Miragebound 71 | L14 |
+| Amostras com `spell:Void Lost Throne` | 91; divergência do Void 20,4% | L15 |
+
+## Visão geral
+
+| Lote | Entrega | Classe | Muda decisões? | Bump? | Depende de (funcional) |
+| --- | --- | --- | --- | --- | --- |
+| L00 | Referências R0, ponte e controles; valores v27 congelados | Preparação | Não | Não | — |
+| L01 | Diagnóstico: rótulo do MainPhaseSession e reações de backrow separadas | Instrumentação | Não | Não | — |
+| L02 | Ponte de batalha: destruição pelo movimento simulado genérico | Paridade | Sim | Não | — |
+| L03 | Extrações compartilhadas equivalentes | Refatoração equivalente | Não | Não | — |
+| L04 | Seleção exata sem candidatos legais (contrato comum) | Paridade | Sim | Não | — |
+| L05 | Coletor exato do Tech-Zero sem alvos já negados | Paridade | Sim | Não | L04 |
+| L06 | Passivas negadas na simulação (`add_status:passive_recalculation`) | Paridade | Sim | Não | — |
+| L07 | `after_summon`: fonte na mão só pela regra do runtime | Paridade | Sim | Não | L03 |
+| L07b | `after_summon`: condição `self_in_hand` e `triggerArchetype` na simulação | Paridade | Sim | Não | L07 |
+| L07c | `conditional_summon_from_hand` simulada só com a carta na mão | Paridade | Sim | Não | — |
+| L07d | `special_summon_from_zone` simulada só com o alvo na zona declarada | Paridade | Sim | Não | — |
+| L07e | `special_summon_from_zone` simulada com alvo múltiplo sem `count` | Paridade | Sim | Não | L07d |
+| L07f | Quantidade de alvos com faixa opcional pela regra do runtime em todos os presets | Paridade | Sim | Não | L07e |
+| L07g | Master of Mirrors Arcanist: quantidade de Magias devolvidas pela regra do runtime | Paridade | Sim | Não | L07f |
+| L07h | OPT da simulação do Arcanist com o uso real do turno e só com candidatos | Paridade | Sim | Não | — |
+| L07i | Passivas `conditional_status` e `position_status` negadas na simulação | Paridade | Sim | Não | L06 |
+| L07j | Passivas de status recalculadas quando a condição muda e negação da Sealing the Void | Paridade | Sim | Não | L07i |
+| L07k | Auras recalculadas depois de cada ação da Main Phase simulada | Paridade | Sim | Não | L07j |
+| L08 | Contador zerado removido na simulação | Paridade | Sim | Não | — |
+| L09 | Controle de invariância a informação oculta (opt-in, gancho mínimo em `src/`) e guarda estrutural que só registra | Instrumentação | Não | Não | L03 |
+| L10 | Projeções opacas sem uso de OPT por nome | Paridade | Sim | Não | L09 |
+| L11 | GameTree (P2) com a projeção pública do oponente | Paridade | Sim | Não | L03 |
+| L12 | Beam/Greedy e laço de batalha só com informação pública | Paridade | Sim | Não | L03 |
+| L12b | Raiz de geração no controle de invariância | Instrumentação | Não | Não | L09 |
+| L12c | Ganchos de ataque das estratégias só com informação pública | Paridade | Sim | Não | L12 |
+| L13a | Raízes `ascension` e `profile` no controle de invariância | Instrumentação | Não | Não | L12b |
+| L13b | Buscas e laço de batalha sem o jogo vivo pelo `_gameRef` | Paridade | Sim | Não | L03, L12 |
+| L13c | Visão pública do oponente nas entradas de decisão | Paridade | Sim | Não | L03, L12 |
+| M1 | Ponto intermediário N = 20 depois do bloco de informação oculta | Medição | — | — | L13c |
+| L14 | Posição de Special Summon na simulação | Paridade | Sim | Não | L03 |
+| L15 | Void Lost Throne na simulação | Paridade | Sim | Não | L14 |
+| L16 | Luminarch: seleção simulada sem viés de DEF | Paridade | Sim | Não | — |
+| L17 | Simulador de batalha de um passo do laço vivo | Paridade | Sim | Não | L02, L03 |
+| L18 | Limite base de ataques unificado e estado do hook Tech-Zero na ponte | Paridade | Sim | Não | L03, L17 |
+| L19 | Vínculo Trap–monstro na movimentação simulada e Call of the Haunted | Paridade | Sim (raro) | Não | L02, L17 |
+| L20 | Apresentação: liberar a perda de PV antecipada não consumida | Apresentação | Não | Não | — |
+| L21 | `executed` pós-efeito preservado | Regra | Não | Não | — |
+| L22 | Gates de playback do agendamento da IA | Regra (playback) | Não | Não | — |
+| L23 | Etapa `after_resolution` em `chain_link_resolution` | Instrumentação (contrato de evento) | Não | Pacote v28 | L21 |
+| L24 | `card_to_grave` aguardado e Equip na mesma SEGOC do hospedeiro | Regra | Sim (raro) | Pacote v28 | — |
+| L25 | `card_moved` sem falso destacamento | Refatoração equivalente | Não | Pacote v28 | L24 |
+| L25b | Efeitos de par de batalha resolvidos no runtime (Quick Draw in the Burning West) | Regra | Sim | Pacote v28 | L24 |
+| L25c | Proteção de batalha do equipamento preservada no runtime (D12) | Regra | Raro | Pacote v28 | L07i |
+| L26 | decision-broker:10: escolhas da IA gravadas e playback estrito | Contrato de replay | Não | Pacote v28 | L22, L24 |
+| L27 | Bump `engine-rules-v28` | Contrato de replay | Não | Bump | L23, L24, L25, L25b, L25c, L26 |
+| L28 | Baseline v2 e fechamento | Medição e documentação | Não | Não | L27 |
+
+A coluna "Depende de" só lista dependências funcionais: o código do lote usa o que o outro lote entrega. A cadeia de medição segue a ordem dos IDs, e cada lote é medido contra o elo anterior (ver "Cadeia" em "Política de medição"). Quando a ordem também protege a atribuição de uma medida, ou quando o critério de saída usa um instrumento ou um resultado de outro lote, isso aparece em "Dependência de medição" na seção do lote. Todo lote que usa o controle de invariância (L10 a L19) tem L09 como dependência de medição.
+
+Blocos: preparação e instrumento (L00–L01), defeito e extrações (L02–L03), paridade de poda (L04–L08), informação oculta (L09–L13c, M1), paridade de invocação (L14–L16), batalha (L17–L19), engine e apresentação sem bump (L20–L22), pacote v28 (L23–L27) e fechamento (L28).
+
+## Acompanhamento
+
+| Lote | Commit | Medição | Resultado |
+| --- | --- | --- | --- |
+| L00 | `f4f0d4f` | R0 N = 5 (`canonical-f4f0d4f-21712b08`, `deterministicDigest` `276cdf30…`); ponte R0 N = 2 (`1a1dafdd…`); controles | R0 idêntico à v1 nos 405 casos em comum (única diferença de identidade: o commit). Controles idênticos aos da v1 (corpus `3d54efc8…`). Ponte sem erros nem defeitos. O R0 traz 1 defeito, o caso já conhecido `bloomrot:void:2`. Valores v27 congelados em `.cache/plan23-probes/v27-envelope.json` |
+| L01 | `c768440` | N = 5 (`canonical-c768440-21712b08`, `deterministicDigest` `c986ee1c…`); controles | Registros idênticos ao R0 nos 405 casos com os campos de divergência ignorados; vencedores, turnos, aberturas e decisões iguais. Vocabulário novo esperado: `opponent_backrow_reaction` (52 no N = 5), `opponent_state_mismatch` e `failed:opponent_backrow_reaction` (13). Taxa de divergência menor só onde havia artefatos de contador zerado (Arcanist 0,070 → 0,046; Bloomrot 0,155 → 0,102). O defeito `bloomrot:void:2` continua e passa de `operation: 'action_guard'` a `'planning'`. Controles: corpus idêntico; nos smokes só mudam motivos e contagens de divergência do planejamento (3 artefatos de contador em `spellTrap`, antes `host_equip_mismatch`, somem) |
+| L02 | `fbcfea3` | N = 5 (`canonical-fbcfea3-21712b08`, `deterministicDigest` `295e6dc1…`); ponte N = 2 (`canonical-fbcfea3-43624ae9`, `06569a41…`); controles | 0 erros e 0 defeitos: o `bloomrot:void:2` some do N = 5, e o recorte dirigido dos 4 casos da v1 cai de 4 para 0 defeitos. Varredura dos 233 duelos: 0 violações e 0 exceções de simulação. Nenhum vencedor trocado no N = 5 nem na ponte; teste de sinal sem viradas em todos os presets. Duração ou PV mudam em 3 casos do N = 5 (`bloomrot:bloomrot:0` 22 → 24 turnos; `void:luminarch:4` 11 → 9; `bloomrot:burningwest:4` só PV) e em 1 da ponte (`bloomrot:dragon:1`, só PV). Ponte: sem novidades além do vocabulário de L01; divergência menor no Arcanist (0,074 → 0,044) e no Bloomrot (0,171 → 0,116). Controles: corpus idêntico; nos smokes só mudam estatísticas internas de planejamento dos presets que usam a ponte. E1 fica sem efeito observável: sem o dono do efeito, a proteção `opponent_effects` não se aplica, como no `destroyCard` do runtime. Achados registrados à parte: par de batalha não resolvido no runtime e proteção de banimento na destruição |
+| L03 | `7843a8f`…`34bbca7` (6 commits) | Prova N = 2 (`canonical-34bbca7-4feb2064`, `deterministicDigest` `132f7ac9…`); controles | Equivalência provada: 162/162 registros iguais ao N = 5 de L02 com `--expect-identical`, sem novidades; controles idênticos aos de L02 (`controlsDigest` `6b278099…`). Um commit por extração. Fora da lista do plano, só o tipo do parâmetro `preferredPosition` de `performSummonFromHand`, alargado porque o retorno de `resolveContextualSummonPosition` deixou de ser implícito |
+| L04 | `ff8515f` | N = 5 (`canonical-ff8515f-21712b08`, `deterministicDigest` `c0dc4471…`) contra L02; controles | 0 erros e 0 defeitos. Alvo: ramos não suportados do TLS no Tech-Zero 12.398 → 4.281, e a classe `sim:empty_ids:no_faceup` do Reactor deixa de marcar (também `chosen_already_negated:none_eligible`, sem candidato legal; `eligible_exists` fica para L05). 2 viradas (`miragebound:techzero:2`, a favor do Tech-Zero, e o espelho `techzero:techzero:3`); teste de sinal sem preset significativo (Miragebound 0 × 1, Tech-Zero 1 × 0). 23 casos com outra duração ou PV, todos com Tech-Zero: começando, ele fecha o combo do Reactor no turno 1 e algumas vitórias passam de T3 para T5 (risco previsto, sem compensação). Novidades explicadas, ambas da família de L06: `add_status:passive_recalculation:additional_normal_summon` (Reactor negando o Tech-Zero Connector Dragon em `techzero:techzero:0`) e `...:conditional_status` (negação do Void Serpent Drake em `void:techzero:3`, junto com `banish_protection`). Controles: corpus idêntico; em cada smoke muda só o Tech-Zero × Bloomrot da seed, por 230 disparos da classe `empty_ids:no_faceup` |
+| L05 | `cfe7cf9` | N = 5 (`canonical-cfe7cf9-21712b08`, `deterministicDigest` `6e97935e…`) contra L04; controles | 0 erros e 0 defeitos. Alvo cumprido: `exact_selection:tech_zero_reactor_dragon_negate_target` 60 → 0 (TLS e Beam/Greedy); na sonda, `chosen_already_negated` zera (`none_eligible` vira `empty_ids:all_faceup_negated`, sem marcador). 404/405 casos iguais; a única mudança é o espelho `techzero:techzero:4` (vencedor troca de assento, 9 → 8 turnos), fora do teste de sinal. Ramos não suportados do TLS no Tech-Zero 4.281 → 4.229. Sem novidades; controles idênticos aos de L04. Desvio do plano: a chamada aninhada do Lab passa o efeito envolvente (ver a tarefa) |
+| L06 | `60022c5` | N = 5 (`canonical-60022c5-21712b08`, `deterministicDigest` `ddb1c8e2…`) contra L05; controles | 0 erros e 0 defeitos. Alvo: marcadores `add_status:passive_recalculation` 5.814 → 18 (TLS e Beam/Greedy); ramos não suportados do TLS no Tech-Zero 4.229 → 571. Triagem dos 9 tipos observados, reproduzidos contra o runtime nos dois assentos: saem da marcação os replacements (o runtime ignora fonte negada; os sem suporte nunca são aplicados), a passiva só documentada da The Shadow Heart, `banish_protection`, `conditional_unaffected_by_effects` e `additional_normal_summon` (leitura no uso), `lp_cost_reduction` e `lp_gain_multiplier` (o runtime também ignora a negação) e `battle_phase_activation_lock` (sem leitor na simulação); `conditional_extra_attacks` é recalculado na negação; o rótulo `unknown` deixa de existir. Continua marcado: `conditional_status` (backlog). 2 viradas (`techzero:void:4`, Void → Tech-Zero, e o espelho `techzero:techzero:3`); teste de sinal sem preset significativo; 7 casos com outra duração ou PV, todos com Tech-Zero. Sem novidades. Controles: corpus idêntico; muda só `smoke-bridge-9713` (`techzero:bloomrot`, ramos não suportados 12 → 0) |
+| L07 | `12303eb` | N = 5 (`canonical-12303eb-21712b08`, `deterministicDigest` `8717ddb1…`) contra L06; controles | 0 erros e 0 defeitos. Alvo: `special_summon_matching_level` 9 → 0 (Beam/Greedy); na sonda, 0 disparos da Void Mirror Dimension na mão (eram 101 de 101 nos casos da análise). 404/405 casos iguais: `void:luminarch:1` só muda o PV final, e o espelho `void:void:1` troca de vencedor; teste de sinal sem viradas. Sem novidades; controles idênticos aos de L06. Auditoria das outras listas com mão sem divergência reproduzida. Fixture alterado com aval do usuário, sem asserção mudada: `test/ai/architectureLuminarchResolutionCompletion.test.ts:23` (o gatilho sintético na mão ganha `self_in_hand`). Divergência irmã (`self_in_hand`/`triggerArchetype` ignorados pela simulação) vai para L07b |
+| L07b | `d3bab7e` | N = 5 (`canonical-d3bab7e-21712b08`, `deterministicDigest` `48f1e906…`) contra L07; controles | 0 erros e 0 defeitos. Alvo: na sonda, 0 resoluções de `after_summon` fora da regra do runtime (79 no N = 2 de L07: 75 da Halberd se reinvocando e 4 com a Ascensão da Fortress Aegis); a matriz Halberd/Void Hollow/Void Raven/Iron Raptor cai de 8 divergências para 0 nos dois assentos. 405/405 com o mesmo resultado; só `luminarch:luminarch:1` muda o PV final (outra escolha de Magia). Sem novidades. Controles: corpus idêntico; nos smokes da seed 4242 só mudam estatísticas do planejamento do Luminarch em `shadowheart:luminarch`. O predicado do runtime foi reaproveitado com a visão `{ condition }`; `matchesAfterSummonTrigger` só alargou o tipo de `summonedCard`. Achado novo vai para L07c |
+| L07c | `22f41a6` (seção revista em `5462456`) | N = 5 (`canonical-5462456-21712b08`, `deterministicDigest` `e112cde1…`) contra L07b; controles | 0 erros e 0 defeitos. Alvo: na sonda, invocações "da mão" de carta fora da mão 143 → 0 (as 20 reinvocações da Halberd são recusadas; as 123 da Moonlit Blessing com o Sanctum passam a sair da mão, como no runtime); oráculo da Moonlit 0 divergências em 12. 405/405 com o mesmo resultado, nenhum caso com outra duração ou PV, sem novidades; divergência do Luminarch 0,070 → 0,067. Controles: corpus idêntico; os 4 smokes mudam só estatísticas do planejamento do Luminarch, num confronto cada. A paridade do `move` (`allowExtraDeckMonsterToHandIf`) entrou no lote por decisão do usuário. Achado novo vai para L07d |
+| L07d | `7a175cd` | N = 5 (`canonical-dd9d124-21712b08`, `deterministicDigest` `51a6d494…`, retomada com `--resume` após a interrupção da sessão) contra L07c; controles | 0 erros e 0 defeitos. Alvo: na sonda, 0 invocações de alvo fora da zona declarada (eram 576 no N = 1 e 1.930 na fatia Tech-Zero, quase todas do revive da Electrocatapult com alvo embaralhado ou adicionado à mão por outro gatilho); oráculo de zona 18 → 0 divergências em 30. 404/405 com o mesmo resultado; a única virada é o espelho `techzero:techzero:4`; `techzero:luminarch:2` termina 2 turnos antes. Teste de sinal sem viradas; sem novidades; divergência do Tech-Zero 0,059 → 0,055. Controles: corpus idêntico; muda só `smoke-natural-4242`, no `bloomrot:techzero` (outro Sincro na abertura do Tech-Zero e uma ação falhada a menos), com o mesmo vencedor e turnos. A leitura dos planos pendentes pela visão do dono entrou no lote por decisão do usuário. Achado novo vai para L07e |
+| L07e | `1047e89` | N = 5 (`canonical-f4c7e4e-21712b08`, `deterministicDigest` `51a6d494…`) contra L07d; controles | 0 erros e 0 defeitos. Registros idênticos aos de L07d (mesmo `deterministicDigest`) e controles idênticos: com a escolha de quantidade do Void pela regra do runtime, o lote não muda nenhuma decisão do benchmark. Alvo cumprido fora do benchmark: oráculo de quantidade 8 → 0 divergências em 12 e pipeline do bot com o Void Haunter 0 em 6, nos dois assentos (só a correção da quantidade dava 4 em 6). A escolha de quantidade pela regra do runtime no Void entrou por decisão do usuário; a mesma divergência nos outros presets vai para L07f |
+| L07f | `16d011f` | N = 5 (`canonical-152c116-21712b08`, `deterministicDigest` `3eda14c2…`) contra L07e; controles | 0 erros e 0 defeitos. Alvo: oráculo do pipeline do bot (Holy Shield, Spore Cloud e Glass Sovereign, nos dois assentos) 12 → 0 divergências em 18; na sonda, a simulação seleciona a quantidade do runtime nas três cartas. 1 virada (`bloomrot:miragebound:1`, Bloomrot → Miragebound); teste de sinal sem preset significativo; 7 casos com outra duração ou PV, todos com Bloomrot, Miragebound ou Void. Sem novidades. Divergência: Miragebound 0,078 → 0,072 e Bloomrot 0,105 → 0,098; ramos não suportados do TLS no Bloomrot 95 → 91. Controles: corpus idêntico; nos 4 smokes, mesmos vencedores e turnos, e só mudam estatísticas de planejamento. A flag `useRuntimeOptionalTargets` saiu (a regra é o padrão). Teste alterado com aval do usuário, sem asserção mudada: `test/ai/techZeroSimulation.test.ts` (Kaiser com o plano exato de reciclagem). Achado novo vai para L07g |
+| L07g | `d4c8304` | N = 5 (`canonical-2f77864-21712b08`, `deterministicDigest` `20b0dd91…`) contra L07f; controles | 0 erros e 0 defeitos. Alvo: na sonda, divergências de quantidade do Master of Mirrors 4 → 0 em 6, nos dois assentos. 405/405 com o mesmo resultado, nenhum caso com outra duração ou PV, sem novidades; divergência do Arcanist 0,046 → 0,041. Controles idênticos aos de L07f. Teste alterado com aval do usuário: `test/ai/arcanistDesignDecisions.test.ts` (308 devolve a quantidade do runtime; o Deck do fixture ganha uma 301). Achados: identidade da Magia devolvida vai para a 2.4; OPT simulado do Arcanist vai para L07h |
+| L07h | `1f93bc9` | N = 5 (`canonical-34cfa58-21712b08`, `deterministicDigest` `20b0dd91…`) contra L07g; controles | 0 erros e 0 defeitos. Registros idênticos aos de L07g (mesmo `deterministicDigest`): nenhum duelo do N = 5 passa pelos caminhos corrigidos. Alvo cumprido nas sondas, nos dois assentos: OPT do Master of Mirrors já gasto 2 → 0 em 4, OPT sem candidatos 2 → 0 em 4 e busca do Arcanist Apprentice 2 → 0 em 6. Controles: smokes idênticos; o corpus muda de `3d54efc8…` para `7a0ed426…` só na contabilidade do Arcanist (`_simArcanistApprenticeSearchUsed` dá lugar a `_simOncePerTurn`), sem ação ou pontuação diferente. Teste alterado com aval do usuário: `test/ai/gameTreeFidelity.test.ts` (o Apprentice lê o registro de uso). A Magic Sickle vai para a triagem; os baldes antigos, para o backlog |
+| L07i | `ebb6486` | N = 5 (`canonical-0b153d5-21712b08`, `deterministicDigest` `3e77fbc2…`, com `--workers 4`) contra L07h; controles | 0 erros e 0 defeitos. Alvo: `add_status:passive_recalculation:conditional_status` 18 → 0; ramos não suportados do TLS no Tech-Zero 571 → 553. Na reprodução, a negação fica em paridade com o runtime nos dois assentos, salvo os casos com equipamento, em que a simulação já segue D12 e o runtime só muda em L25c. 405/405 com o mesmo resultado; só `void:techzero:3` muda de duração (Tech-Zero vence em 6 turnos em vez de 4, mesmo PV), porque o TLS deixa de podar a linha da Final Singularity. Sem novidades; controles idênticos aos de L07h. Teste alterado com aval do usuário: `test/ai/negatedAuraSimulation.test.ts` (o exemplo de passiva sem suporte passa a ser `battle_indestructible_if_stat_match`). Achados: regra do equipamento vira D12 e L25c; recálculo das passivas de status e Sealing the Void vão para L07j |
+| L07j | `29bcae8` | N = 5 (`canonical-4a26038-21712b08`, `deterministicDigest` `3e77fbc2…`, com `--workers 4`) contra L07i; controles | 0 erros e 0 defeitos. Registros idênticos aos de L07i (mesmo `deterministicDigest`). Alvo cumprido nas sondas, nos dois assentos: recálculo por posição ou condição 8 → 0 em 8, Sealing the Void 4 → 0 em 4, caminhos do despachante (mudança de posição, Flip, Ascensão) 14 → 0 em 20, caminhos de condição 20 → 0 em 20 e remoção da negação 4 → 0 em 4, sem marcador; os casos com equipamento divergem do runtime por desenho até L25c (D12). Controles: corpus idêntico; mudam só `smoke-natural-9713` e `smoke-bridge-9713`, no par `shadowheart:void`, na pontuação do planejamento (o TLS do Shadow-Heart passa a apagar o flag do Drake quando a Void Hollow é destruída), com os mesmos vencedores e turnos. Achados: equipamento negado vai para L25c; posição `choice` na Ascensão simulada, para L14; auras no Flip, para L07k |
+| L07k | `815f6b7` | N = 5 (`canonical-815f6b7-21712b08`, `deterministicDigest` `05356db8…`, com `--workers 4`) contra L07j; controles | 0 erros e 0 defeitos. Alvo: na sonda do despachante (80 combinações, dois assentos, modelo genérico e do preset), 40 → 0 divergências de aura (Flip de Tenebris Horn, Arcturus, Forgotten Knight, Boneflame, Darkness Valley, Apprentice, Elementalist Master e Living Colony; Ascensão), e o material da Ascensão passa a sair do campo pelo movimento completo (auras retiradas e equipamento ligado ao Cemitério, tarefa 3). 405/405 com o mesmo resultado, nenhum caso com outra duração ou PV, sem novidades; divergência do Luminarch 0,067 → 0,066; pico da guarda de stall igual (120/66/108) e nós por busca iguais. Controles: corpus idêntico; mudam só `smoke-natural-9713` e `smoke-bridge-9713`, no par `luminarch:shadowheart`, em estatísticas do planejamento do Luminarch, com os mesmos vencedores e turnos. Void e Arcanist já recalculavam as auras nas próprias estratégias; a correção alcança os demais modelos |
+| L08 | `8d44713` | N = 5 (`canonical-8d44713-21712b08`, `deterministicDigest` `df08d523…`, com `--workers 4`) contra L07k; ponte N = 2 (`canonical-8d44713-43624ae9`, `e8fb6c86…`); controles | 0 erros e 0 defeitos. Alvo: na sonda, 24 → 0 divergências em 26 casos, nos dois assentos (handlers que removem contadores, procedure da mão e ações completas de Court of the Dead, Ink River, Rot-Stag e Harvest). 405/405 com o mesmo resultado, nenhum caso com outra duração ou PV, sem novidades; o `deterministicDigest` muda só pela deduplicação de estados (hash do TLS e fingerprint do Beam/GameTree passam a ver a chave ausente). Controles idênticos aos de L07k. Ponte N = 2 no commit de L08, referência "antes" de L10: contra a ponte de L02 (efeito acumulado de L03 a L08), 1 virada (`bloomrot:techzero:1`), sem erros, defeitos ou novidades. Na prática quem zera contadores é Bloomrot (Spore) e Arcanist (Ink). Teste alterado com aval do usuário: `test/ai/arcanistActivationCosts.test.ts` (a chave `ink` deixa de existir) |
+| L09 | `e842ebc` (controle) e `f438826` (guarda) | Prova N = 2 (`canonical-f438826-4feb2064`, `deterministicDigest` `df88333b…`); controle de invariância N = 1 (`canonical-f438826-f0027e61`, `.cache/benchmark/2.3/L09-inv`); controles | Flag desligada: 162/162 registros idênticos a L08 com `--expect-identical`, sem `--ignore`; `configDigest` e `DUEL_RECORD_VERSION` iguais; controles idênticos. Flag ligada: o duelo não muda (`deterministicDigest` igual ao da execução desligada). Valores de partida por raiz (verificadas / actionDiff / scoreDiff): P2 831 / 138 / 609 (7 presets); ataque 1.126 / 80 / 71 (9 presets); Beam 75 / 0 / 14 (Void); Greedy 78 / 0 / 8 (Void, Bloomrot); TLS 2.053 / 0 / 0, com 1 comparação não reproduzida (estado carregado entre chamadas, `burningwest:dragon:0`). Guarda: 2.121 raízes e 55.514 projeções opacas, 0 disparos, 0 tolerados. Desenho: o gancho (D10) fica no controlador da Main Phase e no de batalha, para reexecutar a escolha de ataque; o portão exclui as comparações não reproduzidas. Achados: P2 lê a mão real (L11); ataque e Beam/Greedy leem cartas viradas para baixo (L12); a raiz de geração entra em L12b |
+| L10 | `8252b1b` | N = 5 (`canonical-8252b1b-21712b08`, `deterministicDigest` `df08d523…`, com `--workers 4`) contra L08; ponte N = 2 (`e8fb6c86…`) contra a de L08; controle de invariância N = 1 (`.cache/benchmark/2.3/L10-inv`) contra L09-inv; controles | 0 erros e 0 defeitos. Registros, ponte e controle de invariância idênticos às referências (mesmos `deterministicDigest`); controles idênticos. Alvo cumprido na sonda dirigida, nos dois assentos: as 8 posições ocultas do oponente (mão, Deck, Extra Deck, monstro virado para baixo, backrow, Magia de Campo baixada e banida virada para baixo) com uso de OPT por cópia registrado no turno deixam de carregá-lo na projeção opaca (8 → 0), e a raiz do TLS fica igual com e sem a troca; a guarda conta o campo como disparo desde este lote (0 disparos no N = 1). O canal `tolerated` da guarda fica no esquema, vazio |
+| L11 | `37c4eff` | N = 5 (`canonical-37c4eff-21712b08`, `deterministicDigest` `ad78becc…`, com `--workers 4`) contra L10; controle de invariância N = 1 (`.cache/benchmark/2.3/L11-inv`) contra L10-inv; controles | 0 erros e 0 defeitos. Alvo cumprido: no controle de invariância, a raiz P2 passa de 831 / 138 / 609 (verificadas / actionDiff / scoreDiff) para 831 / 0 / 0, nos dois assentos (player 383, bot 448), com 0 não reproduzidas; TLS, Beam, Greedy e ataque ficam iguais aos de L10-inv, e o duelo não muda (mesmo `deterministicDigest` `f4df4b5b…`). Guarda: nova linha `p2`, com 873 raízes e 20.315 projeções opacas, 0 disparos. 405/405 com o mesmo resultado, nenhum caso com outra duração ou PV, sem novidades; muda só o caminho de planejamento do Dragon em `arcanist:dragon:4` (Dragon no assento `bot`). Controles: corpus idêntico; muda só `smoke-bridge-9713`, no par `shadowheart:dragon`, com o mesmo vencedor e turnos: com a mão do Dragon e a Call of the Haunted baixada opacas, a P2 do Shadow-Heart promove a Invocação de Shadow-Heart Void Mage em vez da de Shadow-Heart Shield no turno 4. Modelo Generic: horizonte quando o ator sem ação suportada tem carta opaca em qualquer zona (revisão do lote, pelo texto de D3); como o Deck do oponente é quase sempre opaco, o erro fica praticamente restrito ao ator com tudo conhecido. Teste alterado com aval de D3: `test/ai/planningStrategies.test.ts:244` (a geração do oponente não lê a mão oculta). Achado: estado devolvido pelo simulador do GameTree, para o backlog |
+| L12 | `8fae633` | N = 5 (`canonical-8fae633-21712b08`, `deterministicDigest` `49c55f5f…`, com `--workers 4`) contra L11; ponte N = 2 (`canonical-8fae633-43624ae9`, `6e4f27f1…`) contra a do commit de L11 (`992ea3a1…`); controle de invariância N = 1 (`.cache/benchmark/2.3/L12-inv`) contra L11-inv; controles | 0 erros e 0 defeitos. Alvo cumprido no controle de invariância (verificadas / actionDiff / scoreDiff): Beam 75 / 0 / 14 → 75 / 0 / 0, Greedy 78 / 0 / 8 → 70 / 0 / 0 e ataque 1.126 / 80 / 71 → 1.103 / 74 / 21; P2 e TLS continuam em 0 / 0, e o TLS mantém a comparação não reproduzida de `burningwest:dragon:0`. Guarda: novas linhas `attack` (789 raízes, 20.588 projeções), `beam` (75, 2.187) e `greedy` (71, 2.107), todas com 0 disparos. Resíduo do ataque: com a escolha descrita antes da restauração, 1.103 / 1 / 21. Os 21 vêm dos ganchos `scoreBattleAttackCandidate`, que leem o alvo vivo virado para baixo (Burning West 8, Dragon 7, Luminarch 6), e não do `_gameRef` nem do ChainAwareness: vão para L12c. O resto do `actionDiff` é defeito do controle, corrigido em L12b (no código de L11, 80 → 20). N = 5: 400/405 com o mesmo resultado e 5 viradas (`bloomrot:shadowheart:1`, `bloomrot:void:1`, `bloomrot:void:2`, `miragebound:dragon:3` e `luminarch:shadowheart:4`); teste de sinal sem preset significativo (menor p = 0,5: Shadow-Heart 2 a favor, Void 2 contra); 14 casos com outra duração ou PV; sem novidades. Ponte: 162/162 com o mesmo resultado, 7 casos com outra duração ou PV, sem novidades. Controles: corpus idêntico; mudam `smoke-natural-4242` (`luminarch:shadowheart`, mesmo vencedor, 13 → 11 turnos), `smoke-natural-9713` e `smoke-bridge-9713` (`shadowheart:miragebound`, só no planejamento). Variante B do laço de batalha por decisão do usuário, com efeito colateral: a base do Dragon recalcula o `dragonState` na cópia em vez de usar o cache do Bot vivo. Nenhum teste alterado |
+| L12b | `dd3d7ed` | Prova N = 2 (`canonical-dd3d7ed-4feb2064`, `deterministicDigest` `d933c0f5…`, com `--workers 4`) contra L12 com `--expect-identical`; controle de invariância N = 1 (`.cache/benchmark/2.3/L12b-inv`, esquema lateral v3) contra L12-inv; controles | Flag desligada: 162/162 registros idênticos aos de L12, sem `--ignore`; controles idênticos. Flag ligada: o duelo não muda (81/81 idênticos a L12-inv, mesmo `deterministicDigest` `686d20d7…`). Com a escolha descrita antes da restauração, a raiz de ataque passa de 1.103 / 74 / 21 para 1.103 / 1 / 21; o `actionDiff` que resta é real (`luminarch:bloomrot:0`, turno 10, alvo de L12c). As demais raízes ficam iguais caso a caso: P2 795 / 0 / 0, TLS 2.018 / 0 / 0 com 1 não reproduzida, Beam 75 / 0 / 0 e Greedy 70 / 0 / 0. Valores de partida da raiz `generation`: 3.099 / 94 / 8, com 124 sem troca e 0 não reproduzidas (Arcanist 61 / 2, Miragebound 21 / 0, Dragon 11 / 4, Void 1 / 1, Luminarch 0 / 1; os demais presets em 0 / 0). Nenhuma diferença vem do ChainAwareness, latente na amostra. As leituras ocultas da geração, atribuídas por módulo, entram em L13, junto com a escolha de Ascensão automática, que o controle não reexecuta. Nenhum teste alterado |
+| L12c | `12762cb` | N = 5 (`canonical-12762cb-21712b08`, `deterministicDigest` `56ec88b7…`, com `--workers 4`) contra L12; ponte N = 2 (`canonical-12762cb-43624ae9`, `cf17276d…`) contra a de L12 (`6e4f27f1…`); controle de invariância N = 1 (`.cache/benchmark/2.3/L12c-inv`) contra L12b-inv; controles | 0 erros e 0 defeitos. Alvo cumprido no controle de invariância (verificadas / actionDiff / scoreDiff): ataque 1.103 / 1 / 21 → 1.103 / 0 / 0, com Burning West, Dragon e Luminarch zerados. As demais raízes não pioram: generation 3.102 / 94 / 8, com as mesmas diferenças por preset; P2 798 / 0 / 0; TLS 2.021 / 0 / 0, com a mesma não reproduzida; Beam 75 / 0 / 0 e Greedy 70 / 0 / 0. As 3 verificadas a mais vêm de `luminarch:bloomrot:0`, o duelo do `actionDiff` real, que no turno 10 passa a atacar um alvo virado para cima, sem diferenças. Guarda sem disparos. N = 5: 404/405 com o mesmo resultado e 1 virada (`burningwest:dragon:1`, o Dragon passa a vencer, 17 → 24 turnos); teste de sinal sem preset significativo (p = 1); 4 casos com outra duração ou PV; sem novidades. Ponte: 161/162 com o mesmo resultado, a mesma virada, 2 casos com outra duração ou PV, sem novidades. Controles (`controlsDigest` `ffc3ffaa…`): corpus idêntico; mudam `smoke-natural-4242` (`shadowheart:dragon`, mesmo vencedor e turnos; no T7 o Dragon ataca um alvo virado para cima em vez do virado para baixo) e `smoke-bridge-4242` (`luminarch:shadowheart`, mesmo vencedor, 17 → 13 turnos; no T8 dois alvos virados para baixo empatam no valor público). Os ganchos recebem o alvo, o oponente e o `game` da cópia pública anterior à batalha, e não `simState.player`, que zeraria o dano inferido do Burning West. Miragebound sem mudança. Nenhum teste alterado |
+| L13a | `e86ee1a` | Prova N = 2 (`canonical-e86ee1a-4feb2064`, `deterministicDigest` `135295a7…`, com `--workers 4`) contra L12c com `--expect-identical`; controle de invariância N = 1 (`.cache/benchmark/2.3/L13a-inv`, esquema lateral v4) contra L12c-inv; controles | Flag desligada: 162/162 registros idênticos aos de L12c, sem `--ignore`; controles idênticos (`controlsDigest` `ffc3ffaa…`). Flag ligada: o duelo não muda (81/81 idênticos a L12c-inv, mesmo `deterministicDigest` `364c96b8…`), e as raízes antigas ficam iguais caso a caso. Valores de partida (verificadas / actionDiff / scoreDiff): `ascension` 1.928 / 3 / 0, com 59 sem troca; `profile` 2.163 / 3 / 0, com 71 sem troca; 0 não reproduzidas, erros ou falhas de restauração. As 6 diferenças são do Dragon em `shadowheart:dragon:0`: com a troca, ele faz a Ascensão de Metal Armored Dragon nos turnos 3 e 5 (`dragon/extraDeckPolicy.ts:170-173` e `:208-209` leem o ATK e os efeitos da carta virada para baixo) e, no turno 5, o `battleStepLimit` do perfil cai de 2 para 1 (`dragon/linePlanning.ts:472-478` lê a DEF real). Luminarch e Miragebound desligam o atalho de Ascensão (0 verificadas); o `"printed"` do Luminarch ficou latente na amostra. Limite registrado: a chave de `profile` compara os campos do plano; campos extras que os pontuadores do TLS leem por `options.profile` (`critical`, os booleanos da Miragebound e o `bestFinisherPlan` do Void) ficam para a auditoria dos perfis em L13c. Nenhum teste alterado |
+| L13b | `af991f1` | N = 5 (`canonical-af991f1-21712b08`, `deterministicDigest` `acd81e93…`, com `--workers 4`) contra L12c; ponte N = 2 (`cf17276d…`) contra a de L12c; controle de invariância N = 1 (`.cache/benchmark/2.3/L13b-inv`) contra L13a-inv; controles | 0 erros e 0 defeitos. 405/405 com o mesmo resultado, nenhum caso com outra duração ou PV, sem novidades; só `shadowheart:void:3` muda por dentro (nós do TLS do Shadow-Heart 34 → 36). Ponte: 162/162 registros idênticos aos de L12c (mesmo `deterministicDigest`). O plano esperava mudança de decisões, sobretudo na ponte; na amostra elas não viram. Na sonda de alcance (N = 1 natural e ponte), os caminhos novos são exercidos e mudam valores dentro dos nós sem mudar a escolha da raiz: geração do Shadow-Heart que agora resolve o oponente do nó 459 e 586 vezes; macro do Shadow-Heart com outra decisão 115 e 133; finalizador do Void que passa de `true` a falso 25 e 20; OPT do Dragon diferente do vivo 14.792 e 17.160. Controle de invariância igual ao de L13a-inv caso a caso (`deterministicDigest` `364c96b8…`): ascension 1.928 / 3 / 0, generation 3.102 / 94 / 8, P2 798 / 0 / 0, profile 2.163 / 3 / 0, TLS 2.021 / 0 / 0 com 1 não reproduzida, Beam 75 / 0 / 0, Greedy 70 / 0 / 0 e ataque 1.103 / 0 / 0; guarda sem disparos. Controles (`controlsDigest` `4fe8aed2…`): o corpus muda de `7a0ed426…` para `081ec805…` só em `void/full_field` (o finalizador sem motor segue a regra: `bestFinisherPlan` nulo e `turnMode` `mainOnly`), e `smoke-natural-9713` só no `repeatedStates` de um TLS do Shadow-Heart em `shadowheart:dragon`. Nenhum teste alterado |
+| L13c | `c01eb9f` | N = 5 (`canonical-c01eb9f-21712b08`, `deterministicDigest` `90c95c5f…`, com `--workers 4`) contra L13b; ponte N = 2 (`cf22baeb…`) como "antes" de L14, com leitura contra a de L13b; controle de invariância N = 1 (`.cache/benchmark/2.3/L13c-inv`) contra L13b-inv; controles | 0 erros e 0 defeitos. 405/405 com o mesmo resultado, 0 viradas e teste do sinal 0/0 em todos os presets. 389/405 registros idênticos; os 16 que mudam são `dragon:luminarch:0` e `burningwest:arcanist:0` (só `nodes.tls` +4), 7 `void:*:1`, `bloomrot:dragon:1`, `arcanist:bloomrot:1`, `luminarch:void:3`, `luminarch:dragon:3`, `dragon:luminarch:3`, `arcanist:void:3` e `bloomrot:void:3`; 9 deles mudam duração ou PV. Burning West e Tech-Zero ficam como controle negativo: os casos em que aparecem mudam pelo outro preset. Miragebound não muda decisões próprias na amostra. Novidade explicada: `mismatchPaths: bot.fieldSpell` (`arcanist:bloomrot:1`, `counter_mismatch`) é um caminho que já existe em R0 e na ponte de R0, alcançado porque o duelo mudou; explicação por leitura, sem reproduzir o estado do turno 17. Ponte: 161/162 com o mesmo resultado; a virada é `void:miragebound:1` (Void → Miragebound), e 3 casos `void:*:1` mudam duração ou PV. A Void deixa de baixar a Void Mirror Dimension, porque `getLikelyOpponentSummonLevels` só lia a mão e o Extra Deck reais do oponente; é o efeito esperado de P2, sem compensação. Controle de invariância (`deterministicDigest` `e565f7a9…`, verificadas / actionDiff / scoreDiff): ascension 1.928 / 0 / 0, generation 3.102 / 0 / 0, P2 798 / 0 / 0, profile 2.163 / 0 / 0, TLS 2.021 / 0 / 0 com 1 não reproduzida (a de `burningwest:dragon:0`, explicada em L09), Beam 75 / 0 / 0, Greedy 70 / 0 / 0 e ataque 1.103 / 0 / 0; guarda sem disparos. Com a chave estendida a todos os campos do perfil, menos os textos de motivo, `profile` segue em 0 / 0. Sonda de acessores limpa: nos 5 casos de L12b sobram 53.646 leituras de identidade, de regra ou de `cardKind` público; nenhuma decisão consome atributo oculto e não há escrita na visão. Custo de `getOpponent`: cerca de 69 µs por chamada, 0,13% do tempo de duelo. Controles (`controlsDigest` `515f50a9…`): corpus igual (`081ec805…`) e `smoke-bridge-4242` igual; mudam `smoke-natural-4242` (`arcanist:shadowheart`), `smoke-natural-9713` e `smoke-bridge-9713` (`void:shadowheart`), com os mesmos vencedores e turnos. Sem L13d. `npm test` com 8.046 aprovados e 8 pulados. Nenhum teste alterado |
+| M1 | `c01eb9f` | N = 20 (`canonical-c01eb9f-0e7dbbda`, `deterministicDigest` `0eede8ff…`, com `--workers 4`, ~64 min) contra a v1, mesma configuração (`0e7dbbda…`); controle de invariância: o de L13c | 1.620/1.620 válidos, 0 erros, 0 no limite de turnos e 0 defeitos (a v1 tinha 4, do bug de equipamentos da ponte); controle zerado. Nenhuma diferença de preset é significativa: Shadow-Heart +1,6 pontos percentuais, Luminarch −1,3, Void −0,6, Bloomrot −0,3, Miragebound +0,3, Tech-Zero +0,3 e os outros 0,0. 39 viradas, teste do sinal sem preset abaixo de p = 0,05 (menor p: Shadow-Heart 0,18, Luminarch 0,29). Novidades explicadas: `opponent_backrow_reaction`, `failed:opponent_backrow_reaction` e `opponent_state_mismatch` são o vocabulário criado em L01. Nenhum defeito raro apareceu, e L14 fica liberado. Nenhum teste alterado |
+| L14 | `3ceec8b` | N = 5 (`canonical-3ceec8b-21712b08`, `deterministicDigest` `0f51e5ce…`, com `--workers 4`) contra L13c; ponte N = 2 (`793e2dbc…`) contra a de L13c; controle de invariância N = 1 (`.cache/benchmark/2.3/L14-inv`, retomado com `--resume` depois de uma interrupção externa) contra L13c-inv; controles | 0 erros e 0 defeitos. 405/405 com o mesmo resultado, 0 viradas, nenhum caso com outra duração ou PV e sem novidades. 397/405 registros idênticos; os 8 que mudam envolvem Shadow-Heart, Arcanist ou Miragebound. `mismatchByPath` `bot.field` cai como o esperado: Shadow-Heart 4 → 0, Arcanist 13 → 11 e Miragebound 14 → 13; o que sobra nos dois últimos não vem de posição de Special Summon (spore, ordem e alvo do Oasis e da Sovereign). Divergência: Shadow-Heart 0,040 → 0,034, Arcanist 0,040 → 0,039 e Miragebound 0,070 → 0,069. Ponte: 162/162 com o mesmo resultado, 160/162 registros idênticos; só `miragebound:arcanist:0` muda duração e PV (17 → 15 turnos), sem novidades. Controle de invariância (`deterministicDigest` `fd522f5f…`): todas as raízes em ação 0 / score 0, com as mesmas verificadas de L13c e a mesma não reproduzida do TLS (`burningwest:dragon:0`, explicada em L09); guarda sem disparos. Controles (`controlsDigest` `625a052e…`): corpus igual (`081ec805…`); os quatro smokes mudam em um confronto com Shadow-Heart cada, com os mesmos vencedores e turnos, 1 `state_mismatch` a menos e 1 acerto a mais no planejamento. Sondas (`.cache/plan23-work/L14/`): `ssMatrix` 26 → 0 divergências em 66 comparações, `ssTriggers` 14/18 → 0/18 e `ssE2E` 4/8 → 0/8. `npm test` com 8.046 aprovados e 8 pulados. Nenhum teste alterado |
+| L15 | `efc4808` | N = 5 (`canonical-efc4808-21712b08`, `deterministicDigest` `0d6957e8…`, com `--workers 4`) contra L14; ponte N = 2 (`a10fa9f2…`) contra a de L14; controle de invariância N = 1 (`.cache/benchmark/2.3/L15-inv`) contra L14-inv; controles | 0 erros e 0 defeitos, sem novidades. Amostras `spell:Void Lost Throne` 27 → 2, e as 2 são `opponent_backrow_reaction`, de reação do oponente. Divergência do Void 0,210 → 0,151; `bot.deckSize` 27 → 0 e `bot.hand` 23 → 1 no Void; os outros presets variam no máximo 0,002. 399/405 com o mesmo resultado; as 6 viradas têm Void em campo (`shadowheart:void:1`, `void:luminarch:1`, `bloomrot:void:1`, `void:bloomrot:3`, `void:luminarch:4`, `void:burningwest:4`) e o teste do sinal não acusa nenhum preset (menor p: Void, 0,69). 26 casos mudam duração ou PV, todos com Void. Ponte: 159/162 com o mesmo resultado, 3 viradas e 16 casos com outra duração ou PV, todos com Void; divergência do Void 0,243 → 0,166 e amostras 25 → 2 (1 `opponent_backrow_reaction` e 1 `hand_deck_mismatch` em `void:arcanist:0`, turno 8, não investigada). Controle de invariância (`deterministicDigest` `c36bd63a…`): todas as raízes em ação 0 / score 0. Verificadas sobem um pouco porque `techzero:void:0` ficou mais longo: ascension 1.935, generation 3.109, P2 798, profile 2.169, TLS 2.027 com a mesma não reproduzida (`burningwest:dragon:0`, explicada em L09), Beam 75, Greedy 70 e ataque 1.105; guarda sem disparos. Controles (`controlsDigest` `a4cfe6cc…`, corpus `d4c2a4a9…`): no corpus mudam só `void/recovery/bot` e `void/recovery/player`, em que a linha passa de The Void para Void Lost Throne; `smoke-bridge-4242` fica igual, e os outros três smokes mudam só em confrontos Void × Shadow-Heart cujo relatório contém a carta. Sondas (`.cache/plan23-work/L15/`): `ltE2E` 16/16 → 0/16 divergências, `search_then_optional` 30/30 em paridade. Smoke do lote com `--check-replays`: 8 duelos sem divergência. `npm test` com 8.046 aprovados e 8 pulados. Nenhum teste alterado |
+| L16 | `69eaea7` | N = 5 (`canonical-69eaea7-21712b08`, `deterministicDigest` `13fda02d…`, com `--workers 4`) contra L15; ponte N = 2 (`3d062070…`) contra a de L15; controle de invariância N = 1 (`.cache/benchmark/2.3/L16-inv`) contra L15-inv; controles | 0 erros e 0 defeitos, sem novidades. 405/405 com o mesmo resultado, 0 viradas; 6 casos mudam duração ou PV, todos com Luminarch ou Miragebound. Divergência do Luminarch 0,071 → 0,060 e da Miragebound 0,070 → 0,063; os outros presets variam no máximo 0,002. `state_mismatch|summon:Luminarch Moonblade Captain` 9 → 2 e `host_equip_mismatch|spell:Luminarch Crescent Shield` 3 → 0. Ponte: 161/162 com o mesmo resultado; a virada é `miragebound:luminarch:0` (Luminarch → Miragebound) e `luminarch:luminarch:1` muda duração e PV. Luminarch 0,114 → 0,105, Miragebound 0,052 → 0,045 e Moonblade Captain 4 → 0. Controle de invariância (`deterministicDigest` `e32a0a2a…`): todas as raízes em ação 0 / score 0 (ascension 1.934, generation 3.109, P2 801, profile 2.170, TLS 2.028 com a mesma não reproduzida de `burningwest:dragon:0`, explicada em L09, Beam 75, Greedy 70 e ataque 1.105); guarda sem disparos. Controles (`controlsDigest` `55730113…`): corpus igual (`d4c2a4a9…`); nos smokes, só mudam confrontos com Luminarch ou Miragebound, com os mesmos vencedores e turnos. Sonda `repro_pref.mts`: simulação igual ao AutoSelector nos 4 cenários. Smoke do lote com `--check-replays`: 6 duelos sem divergência. `npm test` com 8.046 aprovados e 8 pulados. Nenhum teste alterado |
+| L17 | `1652077` | N = 5 (`canonical-1652077-21712b08`, `deterministicDigest` `881db72b…`, com `--workers 4`) contra L16; ponte N = 2 (`4cb78d53…`), como "antes" de L18, com leitura contra a de L16; controle de invariância N = 1 (`.cache/benchmark/2.3/L17-inv`) contra L16-inv; controles | 0 erros e 0 defeitos, sem novidades. 398/405 com o mesmo resultado; 7 viradas (`luminarch:burningwest:0`, `luminarch:luminarch:1`, `luminarch:techzero:1`, `arcanist:void:1`, `luminarch:dragon:2`, `arcanist:arcanist:2` e `arcanist:arcanist:3`) e nenhuma diferença de preset significativa; o teste do sinal não acusa nenhum preset (p = 1 em todos). 44 casos mudam duração ou PV. Divergência do Luminarch 0,060 → 0,049; os outros presets variam no máximo 0,003. Fração no limite de turnos 0 → 0,0025: é `luminarch:luminarch:1`, o duelo mais longo da amostra desde L13c (40 a 42 turnos), que agora chega aos 50 turnos e termina com 100 × 800 PV; o guarda não dispara. É atrito, sem travamento, e não é defeito. Ponte: 157/162 com o mesmo resultado, 5 viradas e 20 casos com outra duração ou PV, sem novidades. O laço de batalha é o mesmo com a ponte ligada, por isso ela muda, embora o simulador da ponte não mude. Controle de invariância (`deterministicDigest` `6db98008…`): todas as raízes em ação 0 / score 0 (ascension 1.934, generation 3.129, P2 817, profile 2.186, TLS 2.042 com a mesma não reproduzida de `burningwest:dragon:0`, explicada em L09, Beam 76, Greedy 71 e ataque 1.101); guarda sem disparos. Controles (`controlsDigest` `e56557f7…`): corpus igual (`d4c2a4a9…`); os quatro smokes mudam, em 16 duelos com Shadow-Heart. Cada um foi reexecutado com o simulador antigo sobre o mesmo estado: a primeira decisão diferente vem de proteção `battleIndestructible` (11), equipamento indo ao Cemitério (2), PV parando em 0 entre ataques já letais (2) e substituição de destruição (1). Sondas (`.cache/plan23-work/L17/`): `stepMatrix` de 60 divergências inesperadas em 86 comparações para 0 em 124; as 8 restantes são carta oculta e os achados da triagem. `npm test` com 8.046 aprovados e 8 pulados. Nenhum teste alterado |
+| L18 | `2bcd91d` | N = 5 (`canonical-2bcd91d-21712b08`, `deterministicDigest` `881db72b…`, com `--workers 4`) contra L17; ponte N = 2 (`f3121e74…`) contra L17-ponte; controle de invariância N = 1 (`.cache/benchmark/2.3/L18-inv`) contra L17-inv; controles | 0 erros e 0 defeitos, sem novidades. N = 5 com o mesmo digest de L17: 405/405 idênticos, 0 viradas e nenhum caso com outra duração ou PV. O efeito esperado no Void não aparece porque, em 24 duelos de Void sondados (175 Battle Phases), nenhum monstro com limite dinâmico chegou à Battle Phase; o lote corrige uma leitura que a amostra não exercita. Ponte: 162/162 com o mesmo resultado; 6 registros mudam, todos com Tech-Zero: em 5, só `nodes.tls` e `repeatedStates`; em `luminarch:techzero:1`, a busca do Tech-Zero muda de `planned_stop` para `planner_transition` em uma saída (`nodes.tls` 5.684 → 6.089), sem mudar resultado, duração ou PV. É o efeito do hook, que deixou de devolver −10.000 na ponte. Controle de invariância (`deterministicDigest` `6db98008…`, igual ao de L17-inv): todas as raízes em ação 0 / score 0 (ascension 1.934, generation 3.129, P2 817, profile 2.186, TLS 2.042 com a mesma não reproduzida de `burningwest:dragon:0`, explicada em L09, Beam 76, Greedy 71 e ataque 1.101); guarda sem disparos. Controles (`controlsDigest` `e56557f7…`, corpus `d4c2a4a9…`): idênticos aos de L17, então não há caso de corpus a explicar. Sonda `limitMatrix.mts` (`.cache/plan23-work/L18/`): `getMaxAttacks` com dono igual ao limite do runtime; planner com N = 0 de 1 para 0 ataques, e de 2 para 1 com segundo ataque; ataque a todos, limite explícito e carta sem dono não mudam; 0 chamadas ao hook em `mainOnly`. Smoke do lote com `--check-replays`: 6 duelos sem divergência. `npm test` com 8.046 aprovados e 8 pulados. Nenhum teste alterado |
+| L19 | `18abb54` | N = 5 (`canonical-18abb54-21712b08`, `deterministicDigest` `881db72b…`, com `--workers 4`) contra L18; ponte N = 2 (`f3121e74…`) contra L18-ponte; controle de invariância N = 1 (`.cache/benchmark/2.3/L19-inv`) contra L18-inv; controles; `compare` R0 × L19 | 0 erros e 0 defeitos, sem novidades. N = 5 e ponte com o mesmo digest de L18: 405/405 e 162/162 idênticos. A amostra quase não ativa o vínculo, como o plano previa. Controle de invariância (`deterministicDigest` `6db98008…`, igual ao de L18-inv): todas as raízes em ação 0 / score 0 (ascension 1.934, generation 3.129, P2 817, profile 2.186, TLS 2.042 com a mesma não reproduzida de `burningwest:dragon:0`, explicada em L09, Beam 76, Greedy 71 e ataque 1.101); guarda sem disparos. Controles (`controlsDigest` `645b2409…`, corpus `d4c2a4a9…`): só `smoke-bridge-9713` muda, e só no duelo `shadowheart:dragon`, com o mesmo vencedor e os mesmos 8 turnos: o Dragon ativa a Trap e o monstro vinculado sai como custo; `host_equip_mismatch` 1 → 0 e execuções casadas 14 → 15. É o diagnóstico-alvo do lote. Sondas (`.cache/plan23-work/L19/`): `bind_probe` de 48/48 para 0/48 divergências de estado e de ordem de eventos contra o runtime. Smoke do lote com `--check-replays`: 4 duelos sem divergência. `npm test` com 8.046 aprovados e 8 pulados. Nenhum teste alterado. **R0 × L19 (N = 5, efeito do bloco de IA):** 405 casos, 0 erros, 384 com o mesmo resultado e 21 viradas. Nenhum preset com diferença significativa: o teste do sinal tem menor p = 0,25 (Dragon 3 × 0 e Burning West 0 × 3). Divergência agregada 772/9.343 (8,26%) → 566/9.278 (6,10%). Por preset: Bloomrot 0,155 → 0,099, Void 0,189 → 0,147, Arcanist 0,070 → 0,038, Luminarch 0,071 → 0,049, Miragebound 0,078 → 0,063, Tech-Zero 0,066 → 0,056, Shadow-Heart 0,039 → 0,031, Dragon 0,039 → 0,036 e Burning West 0,110 → 0,112. Unsupported da busca do Tech-Zero 12.398 → 553. As novidades apontadas pelo `compare` são os rótulos de L01 (`opponent_backrow_reaction`, `failed:opponent_backrow_reaction` e `opponent_state_mismatch`). Fração no limite de turnos 0 → 0,0025, explicada em L17 |
+| L20 | `47db918` | Prova N = 2 (`canonical-47db918-4feb2064`, `deterministicDigest` `8ee51163…`, com `--workers 4`) contra L19 com `--expect-identical`; controles; navegador | 0 erros e 0 defeitos; `expect-identical` 162/162 iguais. Controles (`controlsDigest` `645b2409…`, corpus `d4c2a4a9…`) idênticos aos de L19. Navegador (Laboratório, `npm run dev`, ataque direto de ATK 2.000, leitura de `#bot-lp`): aborto na primeira janela da Damage Step `8.000 → 6.000 → 8.000`, sem esperar outra ação, com 1 liberação; ataque normal `8.000 → 6.000`, com 1 sequência e 0 liberações; controle sem a liberação fica em 6.000 com PV real 8.000. Console sem erros. Sonda real (`.cache/plan23-work/L20/probe.mts`): com a liberação, o contador termina no PV real em aborto, `stoppedBeforeCalculation`, falha de preparação, divergência de valor, exceção e retornos `continueDeclaredAttack()`, em ataque direto e contra monstro, com a fila animando e ociosa; sem ela, 14 desses cenários ficam presos. Smoke do lote com `--check-replays`: 4 duelos sem divergência. Portão de golden 25/25. `npm test` com 8.046 aprovados e 8 pulados. Nenhum teste alterado |
+| L21 | `6234b06` | Prova N = 2 (`canonical-6234b06-4feb2064`, `deterministicDigest` `8ee51163…`, com `--workers 4`) contra L19 com `--expect-identical`; controles | 0 erros e 0 defeitos; `expect-identical` 162/162 iguais. Controles (`controlsDigest` `645b2409…`, corpus `d4c2a4a9…`) idênticos aos de L20. Sonda do plano (`.cache/plan23-probes/executed/probe.mts`), nos dois assentos: `executed` `false` → `true`, com `success: false` e `failedAction: conditional_actions`; eventos `chain_link_resolution` iguais. Diferencial HEAD × lote com seed fixa: 76 eventos na mesma ordem e com os mesmos payloads, hash canônico e snapshot iguais, e só `linkResult.executed` muda. Invariância do hash (`.cache/plan23-work/L21/hash_invariance.mts`): inverter ou apagar o campo não muda hash, snapshot nem estado público em 3 momentos. O valor corrigido não tem leitor hoje: `notifyChainLinkOutcome` roda antes do pós-efeito, e L23 depende dessa semântica. `audit:chain` com 0 erros e 0 avisos. Smoke do lote com `--check-replays`: 6 duelos sem divergência. Portão de golden 25/25. `npm test` com 8.046 aprovados e 8 pulados. Nenhum teste alterado |
+| L22 | `aa24a0d` | Prova N = 2 (`canonical-aa24a0d-4feb2064`, `deterministicDigest` `8ee51163…`, com `--workers 4`) contra L19 com `--expect-identical`, sem `--ignore`; controles | 0 erros e 0 defeitos; `expect-identical` 162/162 iguais, inclusive picos de progresso e ações. Controles (`controlsDigest` `645b2409…`, corpus `d4c2a4a9…`) idênticos aos de L21. Sonda (`.cache/plan23-work/L22/probe.mts`, 25 cenários nos dois assentos): ao vivo, os 6 cenários iguais; em playback, `makeMove` da cópia de `combat.ts` 1 → 0, inclusive com troca de modo antes da execução e antes do retry pelo guard; `nextPhase` autônomo de `schedulePhaseRetry` 1 → 0, e a fase fica em `main1`; rota completa gravada ao vivo e reproduzida pelo driver com 0 `makeMove` no playback e hash igual. Na suíte inteira e no smoke, 0 `makeMove` e 0 `nextPhase` por timer em jogos em playback, antes e depois. A cópia de `combat.ts` só é alcançada pela Power Force Field, que nenhum preset usa, e nenhum teste existente cobre os dois caminhos corrigidos. Smoke do lote com `--check-replays`: 6 duelos sem divergência. Portão de golden 25/25. `npm test` com 8.046 aprovados e 8 pulados. Nenhum teste alterado |
+| L23 | `9414eca` | Prova N = 2 (`canonical-9414eca-4feb2064`, `deterministicDigest` `8ee51163…`, com `--workers 4`) contra L19 com `--expect-identical`; controles | 0 erros e 0 defeitos; `expect-identical` 162/162 iguais. Controles (`controlsDigest` `645b2409…`, corpus `d4c2a4a9…`) idênticos aos de L22: o benchmark e o relatório compacto do smoke não leem `chainLinks`. Contagens novas da Arena: só o Tech-Zero Scrapyard declara `afterResolutionActions`; uma falha pós-efeito depois de um primário executado vira `partial_failure` (Synchro sem não-Tuner: por assento 3 sucessos → 2 + 1 `partial_failure`, mesclado 6 → 4 + 2), e um pós-efeito com sucesso não muda nada. Sonda (`.cache/plan23-work/L23/probe.mts`, 8 cenários nos dois assentos): hash canônico e eventos `completed` iguais nas 16 linhas; `after_resolution` só em falha e conclusão do pós-efeito, nunca em negação, teardown ou pausa. Smoke com contagem passiva (`--seed 4242`): 215 links terminais, 2 `after_resolution` do Scrapyard com `success`, 0 reclassificações. `audit:chain` com 0 erros e 0 avisos; manifest do Chain com 92 métodos, sem colisão. Smoke do lote com `--check-replays`: 6 duelos sem divergência. Portão de golden 25/25. `npm test` com 8.046 aprovados e 8 pulados. Testes alterados com aval do usuário: asserções CURRENT BEHAVIOR de `arenaChainOutcomes` (contagens, mensagem do `completed`, `failedAction` da amostra do mismatch e leitura do evento `after_resolution`) e `synchroTransactionResponse.test.ts:60` (`["success"]` → `["success", "success"]`, `completed` mais `after_resolution`), que o plano listava na validação sem prever a mudança |
+| L24 | `8aa736f` | N = 5 (`canonical-8aa736f-21712b08`, com `--workers 4`) contra L19; invariância; ponte; controles; navegador | 0 erros e 0 defeitos; `deterministicDigest` `881db72b…`, igual ao de L19: 405/405 casos com o mesmo resultado, 0 viradas, nenhuma abertura diferente e nenhuma novidade; fração no limite de turnos 0,0025 → 0,0025. Invariância (`6db98008…`) e ponte (`f3121e74…`) iguais às de L19; controles (`controlsDigest` `645b2409…`, corpus `d4c2a4a9…`) idênticos aos de L23. Contagem (`.cache/plan23-probes/patch.mts`, smoke seed 7, 27 duelos): no HEAD, 24 de 890 movimentos ao Cemitério destacados, todos `equipped_host_left_field` em contexto adiado; no lote, 0 de 890, com os 27 duelos idênticos. Navegador (Laboratório, Radícula com Armadura Fúngica, os dois lados humanos, roteiro `.cache/plan23-work/L24/roteiro-navegador.md`): volta à mão `oportunidades [3]`, destruição `[4]` e duas Armaduras `[5]`, sempre com um só grupo atômico e o prompt aberto com o movimento pendente; a Armadura ao Cemitério `[1, 1]`, com o prompt antes do `card_moved`; o controle destacado devolve o movimento antes do prompt (`pendente: não`). Console sem erros. Correção F1 do validador antes do commit: o `card_to_grave` do hospedeiro mantém o precheck de alvos fora do adiamento. Smoke do lote com `--check-replays`: 8 duelos sem divergência. Portão de golden 25/25. `npm test` com 8.046 aprovados e 8 pulados. Testes alterados com aval do usuário (D6): as 3 execuções de `test/equippedContinuousCounterBuff.test.ts` (linhas 44 e 94, esta nos dois assentos) respondem o gatilho obrigatório; os valores verificados não mudam |
+| L25 | `1d39240` | Prova N = 2 (`canonical-1d39240-4feb2064`, `deterministicDigest` `8ee51163…`, com `--workers 4`) contra L23 com `--expect-identical` (L24 só tem N = 5; a prova antecipada do validador também deu 162/162 contra L24 com `--allow-config-diff`); controles | 0 erros e 0 defeitos; `expect-identical` 162/162 iguais. Controles (`controlsDigest` `645b2409…`, corpus `d4c2a4a9…`) idênticos aos de L24. Sonda (`.cache/plan23-work/L25/probe.mts`, HEAD × lote, nos dois assentos): tempo igual nos 16 cenários (mesmas rodadas de microtask até o retorno e mesma ordem de eventos); nos 48 cenários de falha, resultado e zona final iguais, e só o registro muda em 20: some o `detached_event_emit` de `card_moved`, a falha aninhada fica com o escopo da contenção e somem as duplicatas. Ninguém lê `detached_event_emit` nem `engineFaults` por escopo; o escopo fica para o `card_to_grave` destacado de verdade. Num smoke com seed 4242, 122 de 338 movimentos passavam pelo ramo removido. `audit:chain` com 0 erros. Smoke do lote com `--check-replays`: 6 duelos sem divergência. Portão de golden 25/25. `npm test` com 8.046 aprovados e 8 pulados. Nenhum teste alterado |
+| L25b | `f260584` | N = 5 (`canonical-f260584-21712b08`, com `--workers 4`) contra L24; invariância; ponte; controles; navegador | 0 erros e 0 defeitos; `deterministicDigest` `9e9b820c…`: 405/405 casos com o mesmo resultado, 0 viradas, nenhuma abertura diferente e nenhuma novidade; fração no limite de turnos 0,0025 → 0,0025; teste de sinal sem pares discordantes. 16 casos mudam, todos com Burning West e só em diagnóstico (`expect-identical` 389/405): divergências de plano `host_equip_mismatch` em `bot.spellTrap` e `bot.graveyard`, decisões do broker (por exemplo, 71 → 126 em `bloomrot:burningwest:0`) e nós de busca; vencedor, turnos e PV iguais. Causa: a Quick Draw fica na zona com o destino pendente até o par resolver ou o turno virar, enquanto a simulação a finaliza na ativação; baixada, ela vira candidata nas janelas de resposta. Divergência do Burning West 0,112 → 0,118. Invariância (`498b5c76…`, 79/81) e ponte (`b17ec253…`, 158/162) mudam só em casos com Burning West, pela mesma causa; tabela de invariância igual à de L24 (`turnLineSearch` com 1 não reproduzida, como antes). Controles (`controlsDigest` `645b2409…`, corpus `d4c2a4a9…`) idênticos aos de L25: os pares com Burning West dos controles não ativam a Quick Draw. Sonda das Quick Draw presas (`.cache/plan23-work/L25b/stuck_probe.mts`, 24 duelos, seed 4242): HEAD 8 ativações, todas ao Cemitério na ativação; lote 6 ativações, 6 pendentes na virada do turno e 0 depois da limpeza (4 baixadas, 2 ao Cemitério), 0 falhas de engine. Nenhuma batalha do par nos duelos de bot (achado abaixo). Navegador (Laboratório em Test Mode, os dois lados humanos, roteiro `.cache/plan23-work/L25b/roteiro-navegador.md`): diferença 400 pelo clique normal (ativação, alvos, Battle Phase e ataque) destrói o Dragon no `start_of_damage_step` e baixa a Quick Draw (`setTurn=2`); diferença 800 manda a Magia ao Cemitério; nos dois, PV 8000/8000, ataque usado e Damage Step parada antes do cálculo. Sem batalha do par (ataque no Steed, 7.700 PV), a Magia fica pendente até o começo do turno 3 e então é baixada (400) ou vai ao Cemitério (800), com o alvo intacto. Console sem erros. Smoke do lote com `--check-replays`: 8/8 sem divergência (também com `--seed 4242`). Portão de golden 25/25. `npm test` com 8.046 aprovados e 8 pulados. Nenhum teste alterado |
+| L25c | `867ce15` | N = 5 (`canonical-867ce15-21712b08`, com `--workers 4`) contra L25b; invariância; ponte; controles; navegador | 0 erros e 0 defeitos; `deterministicDigest` `bc15177d…`: 405/405 casos com o mesmo resultado, 0 viradas, nenhuma abertura diferente e nenhuma novidade; fração no limite de turnos 0,0025 → 0,0025. 2 casos mudam (`expect-identical` 403/405), os dois por D12 com a Shadow-Heart Shield negada pela Tech-Zero Final Singularity: `shadowheart:techzero:1` (mesmo vencedor e 10 turnos; PV final do bot 400 → 500: no turno 8 o Warlord negado perde a proteção e o Tech-Zero o ataca) e `techzero:shadowheart:3` (mesmo vencedor; 6 → 4 turnos: a Imp com a Shield negada é destruída no turno 2 em vez de aguentar 4 ataques). Atribuição reproduzida em processo nas duas árvores (`.cache/plan23-work/L25c/probe/attribution.mts`). Invariância (`498b5c76…`) e ponte (`b17ec253…`) iguais às de L25b; controles (`controlsDigest` `645b2409…`, corpus `d4c2a4a9…`) idênticos aos de L25b: os pares dos controles não incluem Shadow-Heart × Tech-Zero. Sonda recriada (`.cache/plan23-work/L25c/probe/finding_equip.mts`, 32 casos × 2 assentos × dono humano ou IA, comparando runtime, flag, prévia do bot, TLS e simulação): HEAD 372 divergências, lote 32, todas nos 2 casos de hospedeiro virado para baixo, já divergentes no HEAD (achado abaixo). Navegador (Laboratório em Test Mode, os dois lados humanos, roteiro `.cache/plan23-work/L25c/roteiro-navegador.md`): Metal Armored Dragon em Ataque com a Shield, pelo clique normal (ativação, alvo, Battle Phase e ataque), fica no Campo (J1 7.300); Void Serpent Drake sem Hollow fica no Campo (J1 7.800); o Drake negado pela Sealing the Void, pelo clique, fica no Campo com 0/0 (J1 5.200); a Void Hollow com a Shield negada (`add_status` `effectsNegated`, a action do Orathus) vai ao Cemitério com a Shield (J1 7.000); controle: a Shield enviada ao Cemitério na manutenção do turno 3 deixa o Metal destrutível (J1 6.800). No assento 2, os cenários do Metal (J2 7.300) e da Hollow negada (J2 7.000) dão o mesmo. `canDestroyByBattle` concordou com a batalha em todos. Console sem erros do jogo. Smokes do lote com `--check-replays`: 8/8 (`shadowheart:void,shadowheart:dragon,void:shadowheart,dragon:shadowheart`) e 4/4 (`shadowheart:techzero,techzero:shadowheart`, com o caminho de D12 alcançado ao vivo e no playback) sem divergência. Portão de golden 25/25. `npm test` com 8.046 aprovados e 8 pulados. Nenhum teste alterado |
+| L26 | `7389b59` | N = 5 (`canonical-7389b59-21712b08`, com `--workers 4`) contra L25c com `--expect-identical --ignore guard.peaks.decisions,seatMetrics.*.decisions.broker`; invariância; ponte; controles; navegador | 0 erros e 0 defeitos; `deterministicDigest` `308b3ad3…`; `expect-identical` 405/405 iguais com os campos ignorados (vencedores, turnos, `opening`, `mainPhase` e `measured` idênticos). Folga da guarda: pico de 147 decisões por turno (`techzero:bloomrot:3`; L25c tinha 120) contra o limite de 2000, 0 disparos; decisões do broker 37.945 → 45.858 (+19,5 por duelo, nenhum duelo com menos). Invariância (`336fd44e…`, 81/81) e ponte (`cc9c360d…`, 162/162) iguais às de L25c com os mesmos `--ignore`; controles (`controlsDigest` `645b2409…`, corpus `d4c2a4a9…`) idênticos aos de L25c. Sonda db10 (9 pares × 3 duelos, seed 4242, presets trocados): HEAD 2 a 3 de 27 divergências e 505 chamadas de política no playback (444 em `buildActivationContextForEffect` e 61 em `shouldActivateEffect`, `src/core/effects/triggers/core.ts`); lote 0 de 27 e 0 chamadas de Strategy, Bot, AutoSelector e `aiRandom`, com comandos e decisões sem `trigger_activation` iguais ao HEAD nos 27 duelos (+545 `trigger_activation`). Smoke com playback estrito nos 9 pares (seed 4242, `--check-replays`): 27/27, com vencedores, turnos e comandos iguais ao HEAD; mais 56 duelos de Arena estritos em outras seeds sem falha. `npm run replay`: replays adulterados (sem `trigger_activation`, gatilho trocado por `pass`, sem `setup.controllers`, controlador inválido) saem com código 1. Navegador (duelo normal humano × Tech-Zero, o humano só passando de fase, derrota no turno 6; replay capturado do botão de exportar em `.cache/plan23-work/L26/browser-replay-techzero.json`): 20 comandos, 2 `trigger_activation`, `engine-rules-v27`, sem `setup.controllers`; `npm run replay` deu `Replay OK (strict playback; seats player=human, bot=ai)` com código 0. typecheck, auditorias, `validate:actions`, `check:actions-doc` e build ok. Portão de golden 25/25, goldens sem mudança. `npm test` com 8.046 aprovados e 8 pulados. Testes alterados com aval do usuário (15/11/2026): `test/luminarchDesign.test.ts:418` e `test/replay/fusionDecisionReplay.test.ts:199-200` (listas de kinds com +1 `trigger_activation`); o observador de `test/replay/techZeroPriorityThreeReplay.test.ts` também envolve `requestDecisionSync`; `test/replay/mirageboundSourcePresenceS02.test.ts:222` reproduz com o controlador gravado |
+| L27 | `9d17ff6` | N = 2 (`canonical-9d17ff6-4feb2064`, com `--workers 4`) contra L26 com `--expect-identical --allow-identity-change engineVersion`; controles; navegador | 0 erros e 0 defeitos; `deterministicDigest` `d1d84512…`, igual ao da prova antecipada do validador; `expect-identical` 162/162 iguais, 0 viradas; sem `--allow-identity-change engineVersion`, a comparação recusa a identidade (código 2). Controles (`controlsDigest` `645b2409…`, corpus `d4c2a4a9…`) idênticos aos de L26. `git log --all -S'engine-rules-v28' -- src test` vazio antes do bump; depois, `git grep -n "engine-rules-v2[67]" -- src test` só encontra a projeção e os passos históricos de `test/replay/canonicalReplay.test.ts` e as listas de rejeição. Passo histórico v27 igual aos valores congelados em L00 (`.cache/plan23-probes/v27-envelope.json`); passos v26 a v12 com os valores de antes. Smoke com playback estrito nos 9 pares (seed 4242): 27/27, idêntico ao de L26. Navegador (duelo normal humano × Dragon, o humano só passando de fase, derrota no turno 4; replay capturado do botão de exportar em `.cache/plan23-work/L27/browser-replay-dragon.json`): `engine-rules-v28`, 23 comandos, 2 `trigger_activation`; `npm run replay` deu `Replay OK (strict playback; seats player=human, bot=ai)` com o hash final gravado (`9bf5a9cb`) e código 0. O replay v27 do navegador de L26 é recusado com código 1 por `validateCanonicalReplay`, antes de criar o `Game` de playback. `npm run check` com código 0 (`npm test` com 8.046 aprovados e 8 pulados); portão de golden 59/59 (`canonicalReplay`, `canonicalDriver`, `canonicalValidation`). Testes alterados como o plano prevê, com aval do usuário (14/11/2026): a projeção v28 → v27 e o passo histórico v27 em `test/replay/canonicalReplay.test.ts`, o hash corrente do envelope `711ca428` → `2f912d05` e o v27 nas listas de rejeição de `test/replay/canonicalDriver.test.ts` e `test/replay/canonicalValidation.test.ts` |
+| L28 | `b72194e` | v2 N = 20 (`canonical-b72194e-0e7dbbda`, com `--workers 4`, retomada com `--resume` a partir do caso 454) contra a v1 com `--allow-identity-change engineVersion` e contra M1; controles contra L27; controle de invariância N = 1 (`.cache/benchmark/2.3/v2-inv`); ponte N = 5 de referência (`.cache/benchmark/2.3/v2-ponte`) | 1.620/1.620 válidos, 0 erros e 0 defeitos; sanidade ok e baseline elegível; `deterministicDigest` `fbcbf520…`. Um duelo no limite de turnos (`luminarch:luminarch:1`, 100 × 800 PV, explicado em L17). Guarda com picos 147/66/108 e 0 disparos. Quem começa vence 53,2%. **Contra a v1**, com a mesma configuração (`0e7dbbda…`), nenhuma diferença de preset é significativa: Void +1,3 pontos percentuais, Shadow-Heart +0,9, Dragon +0,3, Bloomrot +0,3, Tech-Zero 0,0, Luminarch −0,3, Miragebound −0,3, Burning West −0,6 e Arcanist −1,6. Há 1.537 casos com o mesmo resultado e 83 viradas. O teste do sinal não acusa nenhum preset (menor p: Arcanist, 0,30, com 5 viradas a favor e 10 contra). As novidades são os rótulos de L01 (`opponent_backrow_reaction`, `failed:opponent_backrow_reaction` e `opponent_state_mismatch`). A divergência cai em oito presets (Bloomrot 0,159 → 0,078, Void 0,204 → 0,161, Arcanist 0,078 → 0,038 e Luminarch 0,072 → 0,048) e sobe no Burning West (0,082 → 0,086). Unsupported do Tech-Zero: 36.668 → 955. **Contra M1**: 1.566 casos com o mesmo resultado e 54 viradas, sem novidades; o teste do sinal não acusa nenhum preset (menor p: Arcanist, 0,23, com 3 viradas a favor e 8 contra). Controles (`controlsDigest` `645b2409…`, corpus `d4c2a4a9…` com 108 casos sem falhas) idênticos aos de L27. Invariância (`336fd44e…`, igual à de L26): todas as raízes em ação 0 / score 0, sem disparos da guarda. Ponte N = 5 (`canonical-b72194e-45173ff3`, `27199d66…`): 405/405 válidos, 0 erros, 0 defeitos e 1 duelo no limite de turnos. A `main` não mudou desde a criação da branch: `79c3868` é ancestral do HEAD. Roadmap atualizado: v2 registrada, 2.3 concluída e resíduos levados para a 2.4. `npm run check` com código 0 (`npm test` com 8.046 aprovados e 8 pulados). Nenhum teste alterado |
+
+## Objetivo e limites
+
+**A 2.3 entrega:**
+
+1. **Instrumento limpo:** diagnóstico de planejamento sem rótulo enganoso, reações de backrow separadas e controle de invariância a informação oculta.
+2. **Zero defeitos:** a ponte de batalha deixa de abortar a Main 1.
+3. **Paridade de simulação:** seleção exata, passivas negadas, coletor `after_summon`, contador zerado, posição de Special Summon, Void Lost Throne, seleção do Luminarch, passo de batalha, limite de ataques e vínculo do Call of the Haunted.
+4. **Informação oculta:** GameTree, Beam/Greedy, laço de batalha, TurnLineSearch e ChainAwareness só leem informação pública do oponente.
+5. **Engine e replay:** `executed` pós-efeito, gates de playback, etapa `after_resolution`, `card_to_grave` aguardado, decision-broker:10 e um único bump `engine-rules-v28`.
+6. **Baseline v2:** N = 20, medida no commit final, como referência da 2.4.
+
+**A 2.3 não faz:**
+
+- Nenhum ajuste de política: pesos, prioridades, heurísticas, bônus, limiares e orçamentos ficam como estão. Quando uma correção muda o placar, a mudança é documentada e não é compensada.
+- Não generaliza a projeção sequencial de batalha nem cria o modelo de backrow (2.4).
+- Não trata os gatilhos de batalha na ponte (D9: primeiro lote do caminho de batalha da 2.4).
+- Não altera textos EN/PT de cartas. Divergências de texto são reportadas ao diretor criativo.
+- Não adiciona cartas, efeitos de negação ou hand traps.
+- Não cria testes novos.
+
+**Regras seguidas (`AGENTS.md` e regras de mudança da fase 2 no roadmap):**
+
+- Uma classe por lote. Quando uma correção depende de uma extração, a extração vem antes, num lote equivalente próprio (L03).
+- A divergência é reproduzida antes da correção, nos dois assentos e nas duas perspectivas, com testes existentes, corpus, harness ou sondas descartáveis.
+- Correções genéricas: a busca comum não conhece nomes de cartas, e o conhecimento de cada deck fica no pacote dele.
+- Bugs de regra encontrados no caminho são registrados à parte.
+- Uma asserção que fixa o comportamento atual só muda com aval do usuário (D3, D5 e D6) ou quando o roadmap já autoriza (`test/ai/arenaChainOutcomes.test.ts`).
+- Exit code zero não basta: erros, stderr, defeitos, crossCheck, motivos de divergência, vocabulário novo e timeouts são inspecionados.
+
+---
+
+## Decisões tomadas
+
+### Decisões do usuário (aprovadas em 11/10/2026, todas com a recomendação)
+
+| # | Decisão | Onde vale |
+| --- | --- | --- |
+| D1 | Reescrever a tabela 2.3 do roadmap com os achados. A generalização da batalha sequencial vai para a 2.4. Em cobertura de handlers, o efeito mensurável é a origem na mão em `after_summon` e o vínculo do Call of the Haunted. O `optional` do Lost Throne já está em paridade. No Tech-Zero, o Reactor responde por cerca de 65% dos marcadores, e a família `add_status` é separada. No engine-bugs:5, o `card_moved` já é aguardado e o defeito real é o `card_to_grave` na limpeza de Equip. O Luminarch adota o default do runtime (ATK) na 2.3. Entra o item novo de informação oculta no Beam/Greedy, no laço de batalha e no ChainAwareness/`_gameRef` | Roadmap; L04–L06 (Reactor e `add_status`), L07, L10, L12 e L13 (informação oculta), L15, L16, L17 e L18 (batalha só com paridade), L19, L24, L25 |
+| D2 | Incluir os itens novos: passivas negadas do Tech-Zero (L06), ChainAwareness/`_gameRef` (L13) e o contador zerado guardado pela simulação (L08), cada um como lote de paridade medido | L06, L08, L13 |
+| D3 | GameTree mascarado: o nó do oponente que só tem recursos ocultos vira horizonte (folha). Só a asserção de comportamento atual de `test/ai/planningStrategies.test.ts:244`, que exige uma geração do oponente com a mão real, é atualizada. O modelo do oponente continua escolhido pelo preset real (`planningModelId`, `src/core/Bot.ts:81-97`) | L11 |
+| D4 | Um único bump `engine-rules-v28` no fim do pacote, cobrindo a etapa `after_resolution`, o `card_to_grave` e o decision-broker:10. Os replays v27 salvos deixam de carregar depois do merge | L23–L27 |
+| D5 | decision-broker:10 com escopo completo: todos os sítios, inclusive as regras fixas de bot no engine (`normalFromHand`, desempate de `destroySelectiveField`, pagamento de contadores e confirmação do de_synchro), `setup.controllers` e playback estrito. As contagens de decisões dos testes de replay afetados são atualizadas com justificativa | L26 |
+| D6 | `card_to_grave` com B1+B2: o trigger do Equip entra na mesma SEGOC do hospedeiro, e o default passa a aguardar o evento. As 3 asserções de `test/equippedContinuousCounterBuff.test.ts` são ajustadas | L24 |
+| D7 | Método novo `releaseHeldLpLoss` no `GameUI` (o manifest do Renderer vai de 114 para 115 métodos, e o `AGENTS.md` é atualizado). O contador volta ao PV real por salto | L20 |
+| D8 | Reações do oponente só acompanhadas na 2.3; o modelo de backrow fica para a 2.4. O rótulo residual passa a ser `opponent_state_mismatch` | L01 |
+| D9 | Os gatilhos de batalha na ponte (`grant_second_attack`, `damage_from_destroyed_atk`, `destroy_attacker_on_archetype_destruction` e `banish_destroyed_monster`) ficam fora da 2.3. Eles são o primeiro lote do caminho de batalha da 2.4, antes de qualquer ajuste ali, com medição própria | Fora do escopo |
+| D10 | O controle de invariância pode ter um gancho mínimo em `src/`, num lote de instrumentação que não muda decisões | L09 |
+| D12 | (15/10/2026) A proteção de batalha concedida por um equipamento continua valendo quando o monstro é negado ou quando a passiva própria dele deixa de valer; só negar ou remover o equipamento a encerra. A simulação segue a regra desde L07i; a correção do runtime entra como lote de regra no pacote v28 | L07i, L25c, L27 |
+| D11 | (12/10/2026) O runtime não resolve os efeitos de par de batalha desde `3256e50` (achado de L02, Quick Draw in the Burning West). A correção entra como lote de regra dentro do pacote v28, coberta pelo mesmo bump | L25b, L27 |
+
+**Fluxo de trabalho (definido pelo usuário):** branch remota `fase2/limites-conhecidos`, commit e push por lote, PR e merge só no fim da 2.3. Os commits e pushes são feitos pelo usuário ou a pedido dele.
+
+### Decisões provisórias (04/11/2026, com o usuário ausente)
+
+O usuário pediu para seguir sem perguntas. Estas escolhas foram tomadas pela recomendação do mapeamento de L13 e ficam para confirmação. Nenhuma altera teste, texto de carta ou golden.
+
+| # | Escolha | Alternativas descartadas | Lote |
+| --- | --- | --- | --- |
+| P1 | Desenho híbrido do L13: visão pública do oponente em `getOpponent` e nas entradas do bot, mais as buscas sem o jogo vivo, em três sublotes | Corrigir leitor a leitor; gerar a Main Phase viva sobre a cópia pública | L13a–L13c |
+| P2 | A carta virada para baixo do oponente vale o que a projeção dá, em paridade com os nós | 1500 só onde há conta de batalha; 1500 em toda leitura de ATK ou DEF | L13c |
+| P3 | O controle ganha só as raízes `ascension` e `profile`; resolução, Chain e Extra Deck ficam como limites registrados | Raiz `resolution` com wrappers no harness; nenhuma instrumentação nova | L13a |
+
+### Escolhas fechadas pelo plano
+
+Estas escolhas foram deixadas em aberto pelas análises e fechadas aqui, com a recomendação da revisão.
+
+| # | Escolha | Motivo | Lote |
+| --- | --- | --- | --- |
+| E1 | Na ponte, a destruição pelo efeito do par de batalha usa `movedByEffect: true`, e `destroyIfAllowed` usa `false`. A destruição só entra no resumo quando o movimento acontece | Um destino substituído ou um banimento protegido não pode contar como destruição | L02 |
+| E2 | A guarda estrutural da projeção pública só conta e registra; nunca lança erro em produção. Ela é instrumentação e entra em L09, não no lote de extrações. O contador fica fora do registro determinístico do benchmark | Um N = 2 de 162 casos não prova que a guarda não dispara em estados raros. Uma chave nova em `seatMetrics` seria rejeitada pelas chaves exatas do leitor (`scripts/benchmark/schema.ts:1105-1120`) | L09 |
+| E3 | Partes A e B do item do Reactor em dois lotes, com dois pontos de medição | A parte A vale para todos os presets; a parte B muda a política do Tech-Zero e a escolha real | L04, L05 |
+| E4 | A marca de reação de backrow em `action_failed` é uma chave declarada e documentada, `failed:opponent_backrow_reaction`, em `mismatchBySeverity`. Não há registro v2 do benchmark. O `summarize` lê o prefixo `failed:` numa linha própria e não o soma às divergências; o esquema documenta o prefixo. Invariante: a soma das chaves de `mismatchBySeverity` sem o prefixo `failed:` é igual a `planning.mismatches`, e o `summarize` confere isso | O leitor exige `DUEL_RECORD_VERSION = 1` e chaves exatas em `planning` e em `planning.failed` (`scripts/benchmark/schema.ts:991` e `:1105-1120`). Um registro v2 obrigaria um leitor de v1 e v2 só por este contador. Hoje o ramo de falha do observer não incrementa `mismatchBySeverity` (`scripts/benchmark/observer.ts:476-491`), por isso a soma valia sem exceção até aqui | L01 |
+| E5 | Posição de Special Summon pela opção (a): a simulação adota a preferência que o runtime já aplica. A preferência da IA não passa a valer no runtime | A opção (b) muda decisões ao vivo e é política | L14 |
+| E6 | O `optional` do Void Lost Throne continua invocando na simulação quando a condição vale, como o runtime, cujo `resolveAI` devolve sempre `true` (`src/core/actionHandlers/resources.ts:1547`) | Recusar a invocação é política da 2.4 | L15 |
+| E7 | `executed` pós-efeito com acumulador, e não com a correção mínima | O acumulador preserva a informação de cada ação pós-efeito e alimenta L23 | L21 |
+| E8 | O `card_moved` (L25) entra no pacote, depois do `card_to_grave` (L24) | Trocar `return eventResult` por `return await eventResult` muda a quantidade de microtasks em todo `card_moved`. Com o `card_to_grave` ainda concorrente, a intercalação poderia mudar | L25 |
+| E9 | Os gates de playback viram um lote próprio antes do pacote, só com o gate no agendador que não o tem e no `schedulePhaseRetry`. As três cópias de `scheduleAiMoveAfterPaint` não são unificadas na 2.3 | São uma correção isolada, sem bump, e reduzem o tamanho do lote do broker. Unificar é refatoração equivalente; no mesmo lote, misturaria duas classes. As cópias também diferem nos estágios de progresso, e unificá-las mudaria `guard.peaks.progress` | L22 |
+| E10 | A regra AST opcional contra `.strategy.*`/`autoSelector.*` sai do lote do broker | É ferramenta e escopo extra. Fica no backlog, junto com decision-broker:12 | Fora do escopo |
+| E11 | Aceite estatístico pareado e ponto intermediário N = 20 | Ver "Política de medição" | Todos |
+| E12 | Um teste de replay com bot cujas decisões mudam por causa de um lote de IA é atualizado com aval do usuário, teste a teste. Ele não é desviado para o pacote | Os lotes de IA vêm antes do pacote, e a mudança é de decisão, não de interpretação | Todos |
+
+---
+
+## Convenções deste plano
+
+### Branch, commits e CI
+
+- Todos os lotes entram em sequência na branch `fase2/limites-conhecidos`, um commit por lote. Exceções, sempre dentro da mesma classe: L03 usa um commit por extração, e L09 separa a guarda do controle.
+- `npm run check` roda antes do push de qualquer lote que alcance vários subsistemas.
+- O CI da branch roda pelo `workflow_dispatch` do Verify (`.github/workflows/verify.yml:11`): `gh workflow run verify.yml --ref fase2/limites-conhecidos`, acompanhado com `gh run list --branch fase2/limites-conhecidos` e `gh run view --log-failed`. O `gh` é chamado pelo caminho completo. O deploy só roda em push na `main`, então o CI da branch não publica o site.
+- PR e merge só no fim (L28), a pedido do usuário.
+- A tabela de acompanhamento por lote (commit, classe, runId, `deterministicDigest`, `controlsDigest`, viradas pareadas) vai para a descrição do PR, não para `docs/`.
+
+### Premissa do merge atômico
+
+A branch entra em `main` num merge único, com o pacote v28 e o bump. Isso é necessário, e não só conveniente:
+
+- Alguns lotes de IA mudam o playback de replays v27 sem bump, porque o playback ainda recalcula escolhas fora do broker até L26. São eles:
+  - L05, que muda a escolha real do alvo do Reactor quando o alvo já está negado;
+  - L18, porque `getMaxAttacks` (`src/core/ai/common/cardValue.ts:173`) alimenta `estimateMonsterValue`, usado pelo AutoSelector (`src/core/AutoSelector.ts:643`) e pela escolha de materiais de fusão do bot (`src/core/effects/fusion/execution.ts:20`);
+  - qualquer lote que altere `buildActivationContextForEffect`, `shouldActivateEffect` (`src/core/effects/triggers/core.ts:501-553`) ou o AutoSelector.
+- Esses lotes só chegam à `main` junto com L26 e L27. Nenhum lote da 2.3 é levado para a `main` isoladamente.
+- Se algum dia o pacote sair da 2.3, os lotes acima passam a exigir bump próprio.
+
+### Regra de golden fora do pacote
+
+- Todo lote de L01 a L22 roda como portão `test/replay/canonicalReplay.test.ts`, `test/replay/canonicalDriver.test.ts` e os replays do caminho tocado.
+- Goldens, checkpoints de hash e decisões gravadas não mudam.
+- Se um lote de **engine** (L03, L20, L21, L22) falhar nesse portão, o item afetado sai do lote e vai para o pacote, antes de L27.
+- Se um teste de replay **com bot** mudar por decisão de um lote de IA, vale E12: atualização com aval, teste a teste.
+- Dentro do pacote (L23–L27), goldens só mudam com justificativa por item.
+
+### Casos obrigatórios
+
+Quando pertinentes: os dois assentos e as duas perspectivas, cópias iguais com instâncias distintas, custos insuficientes e redutores, campo cheio, efeitos negados e OPT, compras desconhecidas com replanejamento, invariância a informação oculta, e o mesmo plano na geração, na simulação e na execução.
+
+### Comandos
+
+```bash
+# testes do caminho alterado
+node --import=tsx --test --test-concurrency=1 test/caminho/arquivo.test.ts
+# smoke com replay (matchups de cada lote)
+node --import=tsx --import=./scripts/register_node_asset_loader.ts scripts/run_bot_arena_smoke.ts --matchups "<pares>" --duels 2 --check-replays
+# ponto de medição N = 5 (cria um elo)
+npm run benchmark -- --seeds 5 --workers 10 --preset-metrics techzero-combo --out .cache/benchmark/2.3/<lote>
+npm run benchmark:analyze -- compare .cache/benchmark/2.3/<elo anterior> .cache/benchmark/2.3/<lote> --markdown -
+# prova N = 2 (não cria elo)
+npm run benchmark -- --seeds 2 --workers 10 --preset-metrics techzero-combo --out .cache/benchmark/2.3/<lote>
+npm run benchmark:analyze -- compare .cache/benchmark/2.3/<elo anterior> .cache/benchmark/2.3/<lote> --expect-identical --allow-config-diff seeds.count,seeds.values,matrix.plannedCases,matrix.caseListSha256 --markdown -
+# controles (todo lote)
+npm run benchmark -- controls --workers 10 --compare-with .cache/benchmark/2.3/<lote anterior>-controls --out .cache/benchmark/2.3/<lote>-controls
+```
+
+---
+
+## Política de medição
+
+### Instrumentos
+
+| Instrumento | Quando | Custo |
+| --- | --- | --- |
+| Controles (corpus de 108 casos e matriz de 7 pares × 2 seeds, natural e ponte) com `--compare-with` os controles do lote anterior | Todo lote | ~2 min |
+| Ponto de controle N = 5 (405 duelos), no commit limpo do lote | Todo lote que muda decisões, L01 e L26 | ~12 min |
+| Prova N = 2 com `--expect-identical` | Lotes que não mudam decisões, exceto L01 e L26 | ~5 min |
+| Ponte N = 2 com `--planner-mode always --planner-turn-mode mainBattleMain2`, mesmos orçamentos | L02, L10, L12, L12c, L13b, L14, L15, L16, L18 e L19 | ~5 min por execução |
+| Controle de invariância (N = 1, flag de L09) | L09 a L19, M1 e L28 | ~3-5 min |
+| Fatia com `--cases` | Só diagnóstico dirigido, quando o N = 5 não mostra o efeito esperado. Inelegível a baseline | Variável |
+| N = 20 intermediário (M1) | Depois de L13c | ~1 h |
+
+- **Cadeia.** O primeiro elo é o R0 (L00), idêntico aos k = 0..4 da v1. Os elos são só os pontos N = 5 e o M1. O elo anterior de um lote é o último desses pontos antes dele; uma prova N = 2 não cria elo. Por isso L04 é comparado com L02, L10 com L08, L12c com L12 (L12b só tem prova N = 2), L13b com L12c (L13a só tem prova N = 2), L13c com L13b, L14 com o M1, L20 a L24 com L19, L25 e L25b com L24 e L26 com L25b. Contra a v1 ou contra N diferentes, usar `--allow-config-diff seeds.count,seeds.values,matrix.plannedCases,matrix.caseListSha256`.
+- **Controles.** Todo lote roda controles, então eles formam uma cadeia própria: cada lote compara os seus com os do lote anterior.
+- **Ponte "antes e depois".** O "antes" é a execução da ponte no commit do elo anterior. Quando o elo anterior também rodou a ponte, a execução é reaproveitada.
+- **Lotes sem ponte.** L04–L08 mudam handlers, coletores e seleção da simulação comum, não o passo de batalha da ponte nem a projeção da raiz do TurnLineSearch; o efeito deles na ponte natural aparece no N = 5. L11 só toca o GameTree. L17 só toca o simulador do laço vivo (`Bot.simulateBattle`), que a ponte não usa. L13c muda as entradas de decisão da raiz viva, não a projeção da raiz do TurnLineSearch nem o passo de batalha; a ponte roda no commit dele só como "antes" de L14.
+- **Mesma configuração.** Só se comparam execuções com a mesma configuração efetiva registrada.
+- **N diferentes.** Com N diferente, além de `seeds.count` mudam os campos derivados `seeds.values`, `matrix.plannedCases` e `matrix.caseListSha256`. Os quatro precisam estar em `--allow-config-diff`; com só `seeds.count`, o `compare` sai com código 2 (incomparável) mesmo com os registros iguais.
+
+### Critério de aceite de um lote que muda decisões
+
+1. Sanidade ok e crossCheck ok.
+2. 0 erros e 0 defeitos novos (console_error/warning, rejeições, `Math.random`).
+3. Vocabulário novo explicado.
+4. O diagnóstico-alvo do lote observado (por exemplo, o marcador X zerado).
+5. Casos pareados com outro resultado **listados automaticamente** pelo `compare`. Só são explicados caso a caso: erros, defeitos, vocabulário novo e casos ligados ao diagnóstico-alvo. Uma decisão diferente no começo do duelo muda tudo o que vem depois, então não se exige explicação causal para cada virada.
+6. Placar avaliado pelo **teste de sinal pareado** por preset: viradas a favor × contra o preset, binomial bicaudal com p = 0,5. A conta é feita fora do repositório, sobre a saída JSON do `compare`. Um preset com p < 0,05 é investigado como possível efeito inesperado e nunca compensado. Nos lotes de efeito amplo (L04, L12, L13b e L13c), se a investigação não for conclusiva, o elo anterior e o lote são estendidos para N = 10.
+7. Invariância: de L10 a L13b, o lote não pode piorar o controle de L09 (`actionDiff` por raiz não aumenta, e a raiz do lote diminui quando é o alvo). Até L12, o `actionDiff` da raiz de ataque é inflado por um defeito do controle (a escolha trocada é descrita depois da restauração), corrigido em L12b; de L12b em diante, a comparação usa o controle corrigido. A partir de L13c, todas as raízes, inclusive a de geração de L12b e as de Ascensão e perfil de L13a, ficam com `actionDiff = scoreDiff = 0`, e isso é conferido em cada lote de L14 a L19, em M1 e em L28. Desde L09, o portão exclui as comparações cuja reexecução sobre o estado real não repete a decisão viva (`nonReproducible`); a partir de L13c, `nonReproducible` também precisa ser 0, ou cada caso é explicado. L14 a L19 mudam simulação e geração e poderiam reintroduzir uma leitura oculta; o controle em cada um evita achar o problema só em L28.
+
+O placar não é critério de aceite na 2.3. O N = 5 dá cerca de ±11 pp por preset, por isso o limiar fixo de 10 pp foi descartado.
+
+### Ponto intermediário M1 (N = 20)
+
+- Depois de L13c, no commit limpo: `npm run benchmark -- --seeds 20 --workers 4 --preset-metrics techzero-combo --out .cache/benchmark/2.3/M1` (no máximo 4 workers, a pedido do usuário).
+- Objetivo: revelar defeitos raros (frequência abaixo de 1/400) introduzidos pelas cartas opacas em geradores e avaliadores (L10 a L13c) antes de seguir. Achar esse defeito só na v2 exigiria bisseção com execuções de 50 minutos.
+- Critério de saída: 0 erros e 0 defeitos; controle de invariância zerado.
+- `compare` contra a v1 (`engine-rules-v27` nos dois lados) resume para o usuário o efeito acumulado até aqui. Inelegível como baseline nova.
+
+### Baseline v2
+
+- Medida no commit final (L28), depois do bump e com a branch atualizada com a `main`.
+- N = 20 canônico completo: 1.620 duelos, ~50 min, com a mesma configuração efetiva da v1.
+- Precisa ser elegível, com 0 erros e 0 defeitos.
+- `compare` contra `canonical-facccc9-0e7dbbda` com `--allow-identity-change engineVersion`, e também `cardDatabaseSignature` se a `main` trouxer cartas. As diferenças são o efeito acumulado das correções; a atribuição por lote vem da cadeia N = 5.
+- Controles e corpus do mesmo commit viram os controles v2, junto com uma referência de ponte N = 5 para a 2.4.
+
+### Custo estimado
+
+| Item | Quantidade | Tempo |
+| --- | --- | --- |
+| Pontos N = 5 | 33 (R0 e 32 lotes: L01, L02, L04–L08, L07b–L07k, L10–L12, L12c, L13b, L13c, L14–L19, L24, L25b e L26) | ~7,5 h |
+| Provas N = 2 | 10 (L03, L09, L12b, L13a, L20–L23, L25 e L27) | ~1 h |
+| Ponte N = 2 | 15: R0, o "depois" dos 10 lotes de ponte e o "antes" que não pode ser reaproveitado (nos commits de L08, L11, L13c e L17) | ~1,8 h |
+| Controle de invariância | 16 (L09–L19 com L12b, L12c e o L13 dividido em L13a–L13c, e L28; o do M1 é o de L13c, no mesmo commit) | ~1,8 h |
+| Controles | 1 por lote | ~1 h |
+| M1 | 1 | ~1 h |
+| v2, controles e ponte N = 5 | 1 | ~1,1 h |
+
+Total: cerca de 12 h de máquina ao longo da 2.3, com `--workers 4`, sem contar extensões para N = 10.
+
+---
+
+## L00 — Preparação e referências de medição
+
+**Objetivo:** provar que o ambiente reproduz a v1 e congelar as referências da cadeia, da ponte e do envelope v27.
+
+**Tarefas**
+
+- [x] Publicar a branch `fase2/limites-conhecidos` (a pedido do usuário).
+- [x] `npm ci` e conferir a identidade do ambiente contra `.cache/benchmark/canonical-facccc9-0e7dbbda/run-end.json` (Node v24.21.0 e hash do lockfile).
+- [x] **R0:** `npm run benchmark -- --seeds 5 --workers 10 --preset-metrics techzero-combo --out .cache/benchmark/2.3/R0`, seguido de `compare` contra a v1 com `--expect-identical --allow-config-diff seeds.count,seeds.values,matrix.plannedCases,matrix.caseListSha256`.
+- [x] **Controles:** `npm run benchmark -- controls --workers 10 --compare-with .cache/benchmark/controls-facccc9 --out .cache/benchmark/2.3/R0-controls`.
+- [x] **Ponte R0:** `npm run benchmark -- --seeds 2 --workers 10 --preset-metrics techzero-combo --planner-mode always --planner-turn-mode mainBattleMain2 --out .cache/benchmark/2.3/R0-ponte`. Não é elegível a baseline por causa do override.
+- [x] Congelar, fora do repositório (`.cache/plan23-probes/v27-envelope.json`), os valores v27 do envelope do fixture de `test/replay/canonicalReplay.test.ts`: hash, comprimento e hashes de comando. Eles alimentam o passo histórico de L27.
+- [x] Conferir que as sondas citadas estão em `.cache/plan23-probes/` e rodam a partir de lá.
+- [x] Abrir a tabela de acompanhamento por lote.
+
+**Validação**
+
+- O `compare` R0 × v1 sai com exit 0, com 405 casos em comum, todos iguais.
+- Controles com o corpus `3d54efc8…` e o `controlsDigest` `d3e441b5…`.
+- A ponte R0 termina sem erros nem defeitos.
+
+**Medição:** R0 (N = 5, ~12 min) é o primeiro elo. Ponte N = 2 (~5 min). Controles ~2 min.
+
+**Critério de saída:** R0 idêntico à v1 nos 405 casos; controles com os digests da v1; valores v27 congelados.
+
+**Riscos**
+
+- Se o ambiente tiver mudado, o R0 diverge da v1. Nesse caso o R0 passa a ser a referência, e a diferença é registrada antes do primeiro lote.
+- `--expect-identical` só compara os casos em comum. Conferir que são 405.
+
+**Esforço:** P.
+
+---
+
+## L01 — Instrumentação de diagnóstico
+
+**Itens:** "LP exibido quando a Damage Step aborta", parte B (`operation=action_guard` nas falhas de planejamento); "Reações do oponente", opção "acompanhar a métrica" (D8).
+
+**Objetivo:** consertar o instrumento sem mudar decisões, para que os lotes seguintes sejam lidos com diagnóstico limpo.
+
+**Tarefas**
+
+- [x] `src/core/bot/mainPhaseSession.ts:98-99`: `actionGuard()` aplica `phase_guard`/`action_guard` só durante `canStartAction` e restaura o rótulo anterior no retorno normal. `waitUntilReady` passa o rótulo explícito para `failure`. `execute()` volta a `planning` em cada retorno normal. Nenhum dos dois usa `finally`, para que uma exceção do executor continue rotulada `execute_action` (asserção de `test/ai/mainPhaseRecovery.test.ts`).
+- [x] `summarizeCounters` (`src/core/ai/common/planningDiagnostics.ts:152`): ignorar contadores com valor 0, como o runtime. Não mexer no hash do TurnLineSearch nem em `setCounterValue`; a representação na simulação é corrigida em L08.
+- [x] Severidade `opponent_backrow_reaction` em `PlanningDiffSeverity` (`src/core/contracts/ai.ts`), atribuída por um helper genérico chamado em `classifyDiff`. Critério: uma carta do oponente que estava virada para baixo em spellTrap/fieldSpell no estado esperado e no real saiu da zona ou ficou com a face para cima. O helper usa só `instanceId` e `faceDown`, que a máscara pública já preserva.
+- [x] Rótulo residual renomeado para `opponent_state_mismatch` (D8).
+- [x] O mesmo helper roda no `comparePayload` do controlador, inclusive em `action_failed`, cujo motivo continua `action_failed`. A marca entra no ArenaAnalytics e no observer do harness com a chave declarada `failed:opponent_backrow_reaction` (E4). No observer, o ramo de falha (`scripts/benchmark/observer.ts:476-491`) passa a incrementar só essa chave; os contadores `planning.failed` não mudam. `DUEL_RECORD_VERSION` não muda.
+- [x] `summarize` (`scripts/analyze_benchmark.ts`) separa as reações de backrow do resto e mostra o prefixo `failed:` numa linha própria, fora da soma de divergências. Ele confere o invariante de E4: a soma das chaves de `mismatchBySeverity` sem o prefixo `failed:` é igual a `planning.mismatches`. O esquema documenta o prefixo e o invariante.
+
+**Validação**
+
+- Testes: `test/ai/planningDiagnostics`, `searchBehavior`, `arcanistDesignDecisions`, `arenaPlanningAnalytics`, `techZeroBenchmark`, `mainPhaseIdentity` e `mainPhaseRecovery`. Também `npm run typecheck`, `npm run audit:typescript-escapes` e `npm test` antes do commit.
+- Rótulo nos 4 casos de defeito da v1: `npm run benchmark -- --seeds 16 --cases bloomrot:void:2,shadowheart:bloomrot:14,luminarch:bloomrot:14,bloomrot:arcanist:15 --workers 4 --out <scratch>`. Os logs mostram `operation: 'planning'` com a mesma mensagem. Os defeitos continuam e só somem em L02.
+- Classificação com as sondas `.cache/plan23-probes/classify*.mts` sobre `diffs_s4.jsonl`. Esperado: ~41 artefatos de contador somem, ~48 casos passam a `opponent_backrow_reaction` e ~18 `action_failed` ganham a marca, 11 deles de Vanishing Step.
+- Controles: corpus idêntico. Nos smokes, só os campos de motivo podem mudar, e cada mudança é explicada.
+- Portão de golden.
+
+**Medição:** N = 5 contra o R0 com `--expect-identical --ignore diag.mismatchSamples,seatMetrics.*.planning.matches,seatMetrics.*.planning.mismatches,seatMetrics.*.planning.mismatchBySeverity,seatMetrics.*.planning.mismatchByPath`. Vencedores, turnos, decisões e marcadores saem idênticos. Esse N = 5 passa a ser o elo da cadeia. O vocabulário novo (`opponent_backrow_reaction`, `opponent_state_mismatch`, `failed:opponent_backrow_reaction`) é esperado e registrado.
+
+**Critério de saída:** decisões idênticas ao R0; rótulos e classificação conferidos nas sondas.
+
+**Riscos**
+
+- Falso positivo de reação: se a simulação erra o alvo de um efeito do próprio bot sobre a backrow, a saída da carta parece reação. Mitigação: exigir a carta virada para baixo no estado esperado e validar por amostragem.
+- Restaurar o rótulo num `finally` quebraria a asserção de `mainPhaseRecovery`.
+- Renomear o rótulo residual quebra a comparação textual de motivos com a v1. A explicação entra uma vez no `compare`.
+- O `compare` lista `failed:opponent_backrow_reaction` como severidade nova (`scripts/analyze_benchmark.ts:1187`), junto com os dois rótulos novos. É vocabulário esperado, registrado uma vez.
+
+**Esforço:** M.
+
+---
+
+## L02 — Ponte de batalha: destruição pelo movimento simulado genérico
+
+**Item:** "Equipamentos na batalha simulada da ponte" (achado da v1).
+
+**Objetivo:** eliminar os únicos defeitos da v1, o crash da ponte que abortava a Main 1.
+
+**Dependência de medição:** L01 (o rótulo é validado nos casos de defeito antes de eles sumirem).
+
+**Tarefas**
+
+- [x] Reproduzir no commit de L01 com `.cache/plan23-probes/triage/verify/` e os 4 casos de defeito. Com equipamento do oponente (Bloomrot Overgrowth), a cópia fica em duas zonas e a busca lança `Invalid or duplicate canonical field position.`. Com equipamento próprio, a cópia vai duas vezes ao Cemitério.
+- [x] `destroyPlannerMonster` (`src/core/ai/TurnLineSearch.ts:1018-1027`) passa a chamar `moveCardToZone(..., 'graveyard', controller, { state, movedByEffect })`, como já faz `destroySimulatedCard`. Ajustar os tipos sem cast duplo.
+- [x] `movedByEffect` conforme E1: `true` na destruição pelo efeito do par de batalha e `false` em `destroyIfAllowed`.
+- [x] `recordDestroyedCard` só publica no resumo quando o movimento acontece. O registro é capturado antes de mover, porque a saída do campo reseta os status.
+- [x] Remover `removeFromZone`, `pushToGraveyard`, `detachEquipsForDestroyedMonster` (`TurnLineSearch.ts:988-1016`) e o import de `appendSimulatedZoneCard`. Não acrescentar a limpeza de controle temporário, para manter o comportamento de `destroySimulatedCard`.
+
+**Validação**
+
+- Os 4 casos de defeito passam de 4 para 0 defeitos, sem `[Bot.MainPhase]` no stderr.
+- Varredura dos 233 duelos com Bloomrot (`.cache/plan23-probes/triage/`): zero violações e zero exceções de simulação.
+- Testes: `test/ai/architectureBloomrotBattle`, `architectureBattleIdentity`, `architectureDamageCalculationSimulation`, `techZeroBattleProtectionSimulation`, `techZeroPlanning`, `architectureArcanist`, `arcanistDesignDecisions`, `architectureBurningWestEffects`, `architectureBurningWestMaterialHistory`, `shadowHeartFusionPlanning`, `synchroBot`, `fieldPositions`, `beamStateIdentity`, `mainPhaseIdentity`, `mainPhaseConcurrency`, `mainPhaseRecovery`, `searchBehavior`, `planningDiagnostics`, `turnLineOwnerPolicy`, `unsupportedSimulationSearch`, `cloneProfiles` e `arenaSeed`. Também typecheck e `npm test`.
+- Controles: só podem mudar casos que usam a ponte.
+- Smoke: `--matchups bloomrot:void,shadowheart:bloomrot,luminarch:bloomrot,bloomrot:arcanist --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L01 (o N = 5 só contém `bloomrot:void:2`; os outros três casos ficam no recorte dirigido). Ponte N = 2 contra R0-ponte.
+
+**Critério de saída:** 0 defeitos no N = 5 e no recorte; ponte sem erros nem defeitos; mudanças de duração ou de PV listadas (na varredura, 5 de 233 duelos, nenhum vencedor trocado).
+
+**Riscos**
+
+- O reset de status muda o `entry.card` que os hooks de recompensa repassam a `emitSimulatedBattleDestroy` (Bloomrot, comum e Dragon). Um efeito que leia o ATK atual do destruído pode mudar de valor.
+- Uma substituição de destino ou um banimento protegido pode recusar o movimento; E1 evita contar uma destruição que não houve.
+- Todos os presets que usam a ponte (todos menos o Tech-Zero) podem mudar decisões.
+
+**Esforço:** P.
+
+---
+
+## L03 — Extrações compartilhadas equivalentes
+
+**Itens:** pré-requisitos de GameTree, `after_summon`, posição de Special Summon e batalha.
+
+**Objetivo:** reunir as extrações de que os lotes de paridade precisam, para que nenhum deles carregue refatoração. A guarda estrutural da projeção pública é instrumentação e fica em L09 (E2).
+
+**Tarefas** (um commit por extração)
+
+- [x] `src/core/ai/common/planningCopy.ts`: exportar `PUBLIC_UNKNOWN_CARD_FIELDS` e `registerPublicOpponentProjection(copy, opponent)`, movendo o bloco `hide` do TurnLineSearch. O TurnLineSearch passa a usar o helper.
+- [x] `src/core/ai/common/planningExecution.ts`: extrair `runWithUnknownLocationGuard(state, run)` do diff `unknownLocations` do TurnLineSearch.
+- [x] `src/core/effects/triggers/collectors/afterSummon.ts`: exportar o predicado de fonte na mão (`self_in_hand` ou `conditional_summon_from_hand` aninhado) e fazer o coletor usá-lo.
+- [x] `src/core/actionHandlers/summon/position.ts`: extrair `resolveSummonPositionPreference(sources, targetRef, cardName)` com a mesma ordem de leitura (o objeto direto vence o aninhado inteiro, mesmo vazio; precedência `byTargetRef` → `byName` → `default`). `resolveContextualSummonPosition` delega à função nova.
+- [x] `src/core/ai/common/battleProjection.ts`: extrair `resolveVisibleBattleStep` (destruições, dano e uso da proteção OPT). `evaluateVisibleBattle` passa a usá-la.
+- [x] `src/core/game/combat/availability.ts:280-305`: extrair uma função pura do **limite base** de ataques a partir da carta e do Cemitério do dono. `getMonsterAttackLimit` delega a ela. Segundo ataque e ataque a todos continuam nos chamadores.
+
+**Validação**
+
+- Corpus e `controlsDigest` idênticos aos de L02.
+- Testes: `test/contracts/triggerCollectors`, `test/ai/techZeroBattle`, `bloomrotPriorityOneAttackLock`, `test/fieldPresencePassives`, `test/swordOfTwoDarks`, `test/ai/architectureShadowHeartMigration`, `planningExecution`, `commonSimulation`, `cloneProfiles` e `searchBehavior`. Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Portão de golden (o lote toca o runtime).
+
+**Medição:** prova N = 2 com `--expect-identical --allow-config-diff seeds.count,seeds.values,matrix.plannedCases,matrix.caseListSha256` contra o N = 5 de L02 (162 casos em comum), mais controles idênticos.
+
+**Critério de saída:** equivalência provada.
+
+**Riscos**
+
+- As extrações de runtime (coletor, posição e limite) passam pelo portão de golden. Um golden alterado tira o commit deste lote.
+
+**Esforço:** M.
+
+---
+
+## L04 — Seleção exata sem candidatos legais
+
+**Item:** "Branches não suportados do Tech-Zero", parte A (contrato comum).
+
+**Objetivo:** alinhar a seleção exata simulada ao runtime quando não há candidatos legais. Vale para todos os presets.
+
+**Tarefas**
+
+- [x] Reproduzir com `.cache/plan23-probes/probe_reactor.mts` (seeds 4242 e 9713). Interessa a classe `sim:empty_ids:no_faceup`.
+- [x] `exactSelection` (`src/core/ai/common/targetSelection.ts:734-740`): se `candidates.length < count.min`, devolver `[]` sem marcador, na mesma ordem do runtime (`src/core/effects/targeting/resolution.ts:645-651`). Planos inválidos com candidatos presentes continuam marcados: id ausente, duplicado, contagem ou zona errada.
+- [x] Registrar à parte o bug de regra exposto: um gatilho obrigatório com plano inválido é perdido em silêncio no runtime (`resolution.ts:649-651`), sem cair no AutoSelector. Não corrigir neste lote.
+
+**Validação**
+
+- Na sonda, `sim:empty_ids:no_faceup` deixa de marcar.
+- Testes: `test/ai/exactDecisionSimulation`, `bloomrotResolutionChoices` (os casos de plano inválido continuam marcados), `bloomrotCounterParity`, `dragonCostSemantics`, `techZeroSimulation`, `techZeroPlanning`, `planningDiagnostics`, `planningExecution` e `turnLineOwnerPolicy`. Também typecheck e `npm test`.
+- Smoke: `--matchups techzero:dragon,miragebound:techzero,techzero:void,bloomrot:techzero --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L02 (L03 só tem prova N = 2), na matriz inteira. Esperado: queda do marcador do Reactor e de `unsupported_branches` no Tech-Zero; nenhum marcador de Rotting Ground sem candidato.
+
+**Critério de saída:** critério de aceite geral; marcador `empty_ids` zerado na sonda.
+
+**Riscos**
+
+- As linhas do Reactor contra campo vazio nunca foram pontuadas; o efeito no placar é documentado, nunca compensado.
+- Também muda planos exatos `[]` sem candidatos em outros decks, como o Bloomrot.
+- Mais branches explorados podem fazer crescer a família `add_status`, cuja causa é outra (L06).
+
+**Esforço:** P.
+
+---
+
+## L05 — Coletor exato do Tech-Zero sem alvos já negados
+
+**Item:** "Branches não suportados do Tech-Zero", parte B.
+
+**Objetivo:** o coletor de candidatos exatos exclui alvos que o runtime já recusa.
+
+**Tarefas**
+
+- [x] `collectExactTargetCandidates` (`targetSelection.ts`) passa a receber o efeito ou as actions e exclui monstros com `effectsNegated` quando `requiresUnnegatedTarget` vale. É o mesmo predicado da simulação e do runtime.
+- [x] A chamada aninhada do Lab (`src/core/ai/techzero/priorities.ts`) passa o efeito envolvente, e não `{ actions: action.actions }` como previsto. É o que a simulação faz na escolha opcional (`localEffect` mantém as actions do efeito), e o runtime resolve essa escolha com `timing: "resolution"`, que desliga a exigência de alvo não negado. Com só as actions aninhadas, uma escolha local que negasse o próprio alvo excluiria monstros que o runtime aceita. No banco atual, os 14 alvos locais de `optional_target_actions` dão o mesmo resultado nas duas formas.
+- [x] A política continua emitindo `[]` sem candidato, sinal de que os guardas de `TechZeroStrategy.ts` dependem. O ranking do alvo (`priorities.ts:365-366`) não muda.
+
+**Validação**
+
+- Na sonda, `chosen_already_negated` zera.
+- Testes: `test/ai/techZeroPriorities`, `techZeroPolicyIntegration`, `techZeroSelectionParity`, `techZeroPlanning`, `techZeroSimulation`, `techZeroEffectSimulation`, `techZeroLifecycleSimulation`, `techZeroPriorityTwoSimulation`, `techZeroPriorityThreeSimulation`, `techZeroDrawPlanning`, `techZeroResponses`, `techZeroStrategy`, `test/replay/techZeroPriorityOneReplay`, `techZeroPriorityTwoReplay`, `techZeroDurationDefaultsReplay` e `test/techZeroCombos`. Também typecheck e `npm test`.
+- Smoke: o mesmo de L04.
+
+**Medição:** N = 5 contra L04. Esperado: `exact_selection:tech_zero_reactor_dragon_negate_target` perto de zero no TLS e no Beam/Greedy (na v1, ~6,3 mil em N = 5).
+
+**Critério de saída:** critério de aceite geral; marcador do Reactor perto de zero.
+
+**Riscos**
+
+- No caso raro de alvo já negado, muda a escolha real. Replays v27 do Tech-Zero com esse caso podem divergir no playback até L26 (ver "Premissa do merge atômico"). Um teste de replay afetado segue E12.
+- ~~Sem as actions aninhadas do Lab, o filtro não vale ali.~~ Não se confirmou: a exigência só vale na ativação, e a chamada aninhada usa o efeito envolvente, como a simulação.
+
+**Esforço:** P.
+
+---
+
+## L06 — Passivas negadas na simulação
+
+**Item:** família `add_status:passive_recalculation` do Tech-Zero (D2).
+
+**Objetivo:** tirar a marcação dos tipos de passiva cuja negação a simulação já honra, e recalcular os demais de forma genérica.
+
+**Dependência de medição:** L05 (mais branches do Tech-Zero vivos mudam a base dessa família).
+
+**Tarefas**
+
+- [x] Triagem por `passive.type` marcado em `src/core/ai/common/simulatedActions/stats.ts` (bloco de `effectsNegated`, por volta de `:1061-1081`). Na v1: `unknown` 5.009, `lp_cost_reduction` 3.372, `battle_phase_activation_lock` 1.739 e `conditional_extra_attacks` 947.
+- [x] Descobrir o que é `unknown`. Para cada tipo, decidir se os leitores simulados já leem `effectsNegated` no uso ou se o efeito precisa de recálculo.
+- [x] Reproduzir cada tipo contra o runtime. Leitor que honra a negação entra na lista de leitura direta. Tipo que precisa de recálculo ganha um recálculo genérico no produtor, sem nomes de carta.
+- [x] Tipo cuja correção se mostrar grande continua marcado e vai para o backlog com o motivo.
+
+**Validação**
+
+- Sonda por tipo, antes e depois, nos dois assentos.
+- Testes: `test/ai/techZeroSimulation`, `techZeroEffectSimulation`, `techZeroLifecycleSimulation`, `techZeroPriorityTwoSimulation`, `techZeroPriorityThreeSimulation`, `test/fieldPresencePassives` e os testes de passivas do caminho tocado. Também typecheck e `npm test`.
+- Smoke: `--matchups techzero:dragon,techzero:void,techzero:luminarch,bloomrot:techzero --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L05. Esperado: a família `add_status` do Tech-Zero cai sem marcador novo.
+
+**Critério de saída:** critério de aceite geral; cada tipo desmarcado tem reprodução registrada.
+
+**Riscos**
+
+- Um recálculo parcial cria divergência nova em vez de marcar. Cada tipo só sai da marcação com reprodução.
+- Mais linhas do Tech-Zero sobrevivem, e o placar dele pode subir. Isso é documentado, não compensado.
+
+**Esforço:** M.
+
+---
+
+## L07 — `after_summon`: fonte na mão só pela regra do runtime
+
+**Item:** "Cobertura de handlers simulados", efeito real medido (D1).
+
+**Objetivo:** a simulação só dispara fontes na mão de `after_summon` quando o runtime dispara.
+
+**Tarefas**
+
+- [x] Reproduzir com `.cache/plan23-probes/probe.mjs`. Na v1, 101 de 101 disparos tinham a Void Mirror Dimension na mão.
+- [x] Aplicar à simulação o predicado exportado em L03, nas fontes na mão de `after_summon` (`src/core/ai/common/simulation.ts`, bloco de `:951` e `matchesSimulatedEventEffect`).
+- [x] Auditar as outras listas de origem com mão (por exemplo, `battle_destroy`) contra os coletores do runtime. Só entra divergência reproduzida.
+- [x] Não implementar o handler `special_summon_matching_level`: sem este gate, a Trap na mão invocaria em vez de podar.
+
+**Validação**
+
+- Na sonda, zero disparos de fonte na mão fora da regra.
+- Testes: `test/chain/deferredSummonTriggers`, `test/chain/summonWindows`, `test/downOfTheFool`, `test/ai/beamStateIdentity`, `exactDecisionSimulation`, `gameTreeModels`, `architecture*Migration`, `architectureVoidEvents`, `architectureVoidEventCapabilities`, `tributeSimulationEvents` e `simulatedActionInventory`. Nos `architecture*Migration`, as fontes `self_in_hand` e `conditional_summon_from_hand` de Luminarch, Tech-Zero, Void, Shadow-Heart, Dragon e Burning West continuam disparando. Também typecheck e `npm test`.
+- Smoke: `--matchups void:luminarch,void:miragebound,dragon:void,burningwest:void --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L06. Esperado: `special_summon_matching_level` = 0 em `beamGreedyByMarker` e `tlsByMarker` (~32 em N = 5 pela v1). Sem efeito visível, fatia `--cases void:*:*,*:void:* --seeds 20` (~10 min).
+
+**Critério de saída:** critério de aceite geral; marcador zerado.
+
+**Riscos**
+
+- Um predicado diferente do runtime silenciaria invocações legítimas da mão em seis presets.
+- Os ramos de invocação podados contra o Void voltam a contar e mudam o placar desses pares.
+
+**Esforço:** P.
+
+---
+
+## L07b — `after_summon`: condição `self_in_hand` e `triggerArchetype` na simulação
+
+**Item:** divergência irmã exposta por L07 (decisão do usuário, 12/10/2026: lote de paridade próprio, medido depois de L07).
+
+**Objetivo:** a simulação aplica ao `after_summon` a mesma regra de condição do runtime. No runtime, `matchesAfterSummonTrigger` (`src/core/effects/triggers/collectors/shared.ts:51-59`) exige a fonte na mão quando `condition.requires` vale `self_in_hand` e o arquétipo do monstro invocado quando há `triggerArchetype`. A simulação só lê `effect.conditions` (`effectConditionsPass`) e ignora `effect.condition`.
+
+**Tarefas**
+
+- [x] Reproduzir nos dois assentos com as sondas de L07 (`scratchpad/plan23/L07/halberd_field.mts` e `fix/r2_hand_archetype.mts`): a Luminarch Enchanted Halberd na mão dispara com a Invocação de um monstro que não é Luminarch; o Void Raven na mão dispara com a de um monstro que não é Void; a Halberd no campo se reinvoca quando ela mesma é Invocada do Cemitério (79 resoluções no N = 2 de L07). O runtime recusa os três.
+- [x] Aplicar na simulação a regra do runtime, reaproveitando `matchesAfterSummonTrigger` ou o predicado de condição que ele usa, sem duplicar a lógica e na mesma ordem de filtros (bloco `after_summon` de `matchesSimulatedEventEffect`, `src/core/ai/common/simulation.ts`).
+- [x] Conferir se outros eventos leem `effect.condition` no runtime e não na simulação. Só entra divergência reproduzida.
+
+**Validação**
+
+- Testes: os de L07, mais `architectureLuminarchMigration`, `architectureVoidMigration`, `architectureVoidEvents`, `deferredSummonTriggers` e `summonWindows`. Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Smoke: `--matchups luminarch:void,void:luminarch,luminarch:dragon,void:bloomrot --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07.
+
+**Critério de saída:** critério de aceite geral; na sonda, nenhum disparo de `after_summon` fora da regra do runtime.
+
+**Riscos**
+
+- A Halberd faz parte das linhas do Luminarch, e o Void Raven das do Void: os dois presets podem mudar decisões. O teste de sinal decide, sem compensação.
+
+**Esforço:** P.
+
+---
+
+## L07c — `conditional_summon_from_hand` simulada só com a carta na mão
+
+**Item:** divergência exposta por L07b (decisão do usuário, 12/10/2026: lote de paridade próprio, medido depois de L07b). A paridade do `move` com `allowExtraDeckMonsterToHandIf`, da mesma classe, entrou no lote por decisão do usuário (12/10/2026), a partir da revisão de L07c: sem ela, a guarda da mão troca um estado final correto da Moonlit Blessing por divergência (oráculo de 0 para 4 divergências em 12; fatia Luminarch N = 5 com 4 viradas).
+
+**Objetivo:** a action simulada `applyConditionalSummonFromHand` (`src/core/ai/common/simulatedActions/summon.ts`) recusa quando a carta não está na mão, como o handler do runtime (`src/core/actionHandlers/summon/conditionalFromHand.ts:93-96`). O `applyMove` simulado (`src/core/ai/common/simulatedActions/movement.ts`) aplica `allowExtraDeckMonsterToHandIf` como o runtime (`shouldAllowExtraDeckMonsterToHand`, `src/core/effects/actions/movement.ts`), em vez de ler só `allowExtraDeckMonsterToHand`.
+
+**Tarefas**
+
+- [x] Reproduzir nos dois assentos com a sonda de L07b (`scratchpad/plan23/L07b/moonlit_extra.mts`) e as de L07c (`scratchpad/plan23/L07c/halberd_field.mts` e `moonlit_oracle.mts`). Na fatia Luminarch/Void de L07b foram 209 resoluções com a carta fora da mão. As 38 da Halberd (20 reinvocações) são a divergência da action: a Halberd é reinvocada do campo depois de ser invocada da mão por outro efeito, emite `fromZone: "hand"`, e o runtime recusa. As 171 da Moonlit Blessing têm uma Fusão ou Ascensão no Extra Deck. Sem o Sanctum of the Luminarch Citadel (39), o runtime também a manda ao Extra Deck, e a condição já recusava. Com ele (132), o runtime leva a carta à mão, mas o `move` simulado, que ignora `allowExtraDeckMonsterToHandIf`, a deixava no Extra Deck, e a simulação a invocava de lá: o estado final coincidia nas 123 invocações, e nas outras 9 a carta ficava no Extra Deck, onde o runtime não a deixa.
+- [x] Aplicar ao `move` simulado a regra do runtime para monstro do Extra Deck ir à mão, reaproveitando o predicado do runtime com uma visão estrutural do jogador, lido para o controlador do efeito a cada movimento e sem nomes de carta.
+- [x] Exigir a carta na mão na action simulada, na mesma ordem de checagens do handler do runtime e sem nomes de carta.
+- [x] Conferir os outros handlers simulados de invocação a partir da mão contra os pares do runtime. Só entra divergência reproduzida.
+
+**Validação**
+
+- Oráculo da Moonlit Blessing (`scratchpad/plan23/L07c/moonlit_oracle.mts`): runtime contra simulação nos dois assentos, com e sem o Sanctum, para alvos de Fusão, Ascensão e Main Deck. Esperado: 0 divergências em 12.
+- Testes: os de L07 e L07b, os de Luminarch do caminho (`architectureLuminarchMigration`, `architectureLuminarchResolutionCompletion`), `deferredSummonTriggers`, `summonWindows` e os do `move` (`test/contracts/fieldPlacementActions`, `test/ai/fieldPositions`). Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Smoke: `--matchups luminarch:void,luminarch:dragon,shadowheart:luminarch,luminarch:techzero --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07b.
+
+**Critério de saída:** critério de aceite geral; na sonda, nenhuma invocação "da mão" de carta que não estava na mão; no oráculo da Moonlit Blessing, 0 divergências.
+
+**Riscos**
+
+- Mudam as linhas do Luminarch que dependiam da reinvocação da Halberd. A Moonlit Blessing com o Sanctum continua invocando a Fusão ou a Ascensão, agora a partir da mão. O teste de sinal decide, sem compensação.
+- A guarda da mão sem a paridade do `move` mede uma regressão. As duas mudanças entram e são medidas juntas.
+
+**Esforço:** P.
+
+---
+
+## L07d — `special_summon_from_zone` simulada só com o alvo na zona declarada
+
+**Item:** divergência exposta por L07c (decisão do usuário, 12/10/2026: lote de paridade próprio, medido depois de L07c). A leitura dos planos pendentes pela visão do dono, da mesma classe, entrou no lote por decisão do usuário (12/10/2026), a partir da validação de L07d: sem ela, a guarda troca um campo previsto que coincidia por acaso (Turbocharge Kaiser com Electrocatapult) por divergência.
+
+**Objetivo:** a action simulada `special_summon_from_zone` (`src/core/ai/common/simulatedActions/summon.ts`, caminho com `targetRef`) recusa um alvo que não está mais na zona declarada, como o handler do runtime (`src/core/actionHandlers/summon/fromZone.ts:430-448`, "Target cards are no longer in the specified zone"). `getSimulatedPendingEffectPlans` (`src/core/ai/common/simulation.ts`) lê também os planos do estado por trás da visão do dono no planejamento (`planningOwner.ts`), para que a política do Tech-Zero veja o alvo que a Electrocatapult já reservou, como o runtime vê pela Chain.
+
+**Tarefas**
+
+- [x] Reproduzir nos dois assentos com a sonda de L07c (`scratchpad/plan23/L07c/val/ssfz_field_repro.mts`): com o revive da Tech-Zero Electrocatapult mirando uma Multimodal Machine que já está no campo, o runtime recusa sem `after_summon`, e a simulação a reinvoca com uma presença nova e `after_summon` com `fromZone: "field"`. No harness aparece em `techzero:burningwest:0` (duas Electrocatapult mirando a mesma máquina; sequência em `scratchpad/plan23/L07c/val/ssfz_seq5.jsonl`).
+- [x] Na action simulada, conferir a zona do alvo antes de invocar, na mesma ordem de checagens do handler do runtime e sem nomes de carta.
+- [x] Conferir os outros caminhos de invocação com alvo (`targetRef`) da simulação contra os pares do runtime. Só entra divergência reproduzida.
+- [x] Ler os planos pendentes pela visão do dono (`resolvePlanningExecutionState` em `planningExecution.ts`), sem nomes de carta.
+
+**Validação**
+
+- Testes: os de Tech-Zero da simulação (`techZeroSimulation`, `techZeroEffectSimulation`, `techZeroLifecycleSimulation`, `techZeroPriorityTwoSimulation`, `techZeroPriorityThreeSimulation`), os de L07–L07c, `deferredSummonTriggers` e `summonWindows`. Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Smoke: `--matchups techzero:burningwest,techzero:void,techzero:dragon,bloomrot:techzero --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07c.
+
+**Critério de saída:** critério de aceite geral; na sonda, nenhuma invocação de alvo fora da zona declarada.
+
+**Riscos**
+
+- Linhas do Tech-Zero que contavam com a reinvocação mudam. O teste de sinal decide, sem compensação.
+- A guarda sem a leitura dos planos pela visão do dono mede uma regressão da linha Kaiser + Electrocatapult. As duas mudanças entram e são medidas juntas.
+
+**Esforço:** P.
+
+---
+
+## L07e — `special_summon_from_zone` simulada com alvo múltiplo sem `count`
+
+**Item:** divergência exposta por L07d (decisão do usuário, 12/10/2026: lote de paridade próprio, medido depois de L07d). A escolha de quantidade pela regra do runtime na simulação do Void (`useRuntimeOptionalTargets`, como o Dragon), da mesma classe, entrou no lote por decisão do usuário (12/10/2026), a partir da validação de L07e: sem ela, a simulação do Void Haunter passa a prever 2 ou 3 Void Hollow, e o bot invoca 1.
+
+**Objetivo:** quando o alvo seleciona várias cartas e a action não declara `count`, a simulação invoca todos os alvos válidos, como o handler do runtime (`src/core/actionHandlers/summon/fromZone.ts:413-527`). Hoje ela limita a `count.max`, que vale 1 por padrão (`src/core/ai/common/simulatedActions/summon.ts`).
+
+**Tarefas**
+
+- [x] Reproduzir nos dois assentos com a sonda de L07d (`scratchpad/plan23/L07d/count_oracle.mts`): o Void Haunter com 3 Void Hollow invoca 3 no runtime e 1 na simulação; o Magmatic Obsidian Leviathan com 2 alvos invoca 2 e 1.
+- [x] Alinhar a quantidade da simulação à do runtime no caminho com `targetRef`, sem nomes de carta; cada invocação continua individual e sequencial.
+- [x] Conferir os outros caminhos simulados que aplicam `count.max` por padrão a uma seleção do runtime. Só entra divergência reproduzida.
+- [x] Na simulação do Void, escolher a quantidade de alvos pela regra do AutoSelector do runtime (`useRuntimeOptionalTargets` em `VoidStrategy.ts`). A mesma divergência nos outros presets vai para L07f.
+
+**Validação**
+
+- Testes: os de L07d, mais os de Void e Shadow-Heart da simulação do caminho (`architectureVoidMigration`, `architectureVoidEvents`, `architectureShadowHeartMigration`), `deferredSummonTriggers` e `summonWindows`. Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Smoke: `--matchups void:luminarch,void:dragon,shadowheart:void,void:techzero --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07d.
+
+**Critério de saída:** critério de aceite geral; no oráculo, 0 divergências de quantidade.
+
+**Riscos**
+
+- Mais invocações previstas mudam a avaliação das linhas do Void e do Shadow-Heart. O teste de sinal decide, sem compensação.
+
+**Esforço:** P.
+
+---
+
+## L07f — Quantidade de alvos com faixa opcional pela regra do runtime
+
+**Item:** divergência exposta por L07e (decisão do usuário, 12/10/2026: lote de paridade próprio, medido depois de L07e).
+
+**Objetivo:** fora de custos, `selectSimulatedTargets` (`src/core/ai/common/targetSelection.ts`) escolhe o máximo de uma faixa opcional de alvos, e o bot no runtime escolhe pela regra do AutoSelector (`getDesiredCount`, `src/core/AutoSelector.ts`: o mínimo quando ele é maior que 0). Só o Dragon e, desde L07e, o Void usam a regra do runtime (`useRuntimeOptionalTargets`). O lote aplica a regra a todos os presets, de forma genérica. Se a escolha do AutoSelector é boa política fica para a 2.4.
+
+**Tarefas**
+
+- [x] Reproduzir com a sonda de L07e (`scratchpad/plan23/L07e/probe_select.mjs` e `select_summary.cjs`), nos dois assentos. No N = 1 de L07e: Luminarch Holy Shield {1,3} seleciona 3 na simulação e 1 no runtime; Bloomrot Spore Cloud {1,2} seleciona 2 em 50 de 76 e 1; Miragebound Glass Sovereign {1,2} seleciona 2 em 174 de 378 e 1. O Tech-Zero, com planos exatos, e o Dragon já estão em paridade.
+- [x] Tornar a regra do runtime o padrão da seleção simulada fora de custos, sem nomes de carta e sem flag por estratégia; manter os planos exatos e as preferências declaradas.
+- [x] Conferir as estratégias que dependiam da escolha do máximo (avaliação, geração e prioridades) e os testes que fixam a quantidade.
+
+**Validação**
+
+- Testes: os de seleção e de simulação dos presets afetados (`exactDecisionSimulation`, `commonSimulation`, `architectureLuminarchMigration`, `architectureMirageboundMigration`, `bloomrotResolutionChoices`, `architectureVoidMigration`, `dragon*` do caminho), os de L07–L07e e o portão de golden. Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Smoke: `--matchups luminarch:bloomrot,miragebound:luminarch,bloomrot:miragebound,void:dragon --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07e. Lote de efeito amplo: se o teste de sinal acusar um preset e a investigação não for conclusiva, L07e e L07f são estendidos para N = 10.
+
+**Critério de saída:** critério de aceite geral; na sonda, a quantidade selecionada pela simulação igual à do runtime nas cartas reproduzidas.
+
+**Riscos**
+
+- Luminarch, Bloomrot e Miragebound mudam a avaliação de linhas que contavam com mais alvos. O teste de sinal decide, sem compensação.
+- Algum teste pode fixar a escolha do máximo; ele só muda com o aval do usuário.
+
+**Esforço:** M.
+
+---
+
+## L07g — Master of Mirrors Arcanist: quantidade de Magias devolvidas pela regra do runtime
+
+**Item:** divergência exposta por L07f (decisão do usuário, 12/10/2026: lote de paridade próprio, medido depois de L07f).
+
+**Objetivo:** a simulação própria da estratégia do Arcanist (`src/core/ai/arcanist/simulation.ts`, `.slice(0, Math.min(3, ordered.length))`) devolve ao Deck 2 ou 3 Magias "Arcanist" do Cemitério com o efeito de Invocação-Normal do Master of Mirrors Arcanist, e o bot no runtime devolve 1, pela regra do AutoSelector. Esse caminho não passa por `selectSimulatedTargets`, por isso L07f não o alcançou.
+
+**Tarefas**
+
+- [x] Reproduzir nos dois assentos com a sonda de L07f (`scratchpad/plan23/L07f/mirrors_pipeline.mts`): 4 divergências em 6, iguais antes e depois de L07f. Aparece também no diagnóstico de `arcanist:bloomrot:0`.
+- [x] Escolher a quantidade pela mesma regra do runtime que L07f adotou na seleção comum, reaproveitando-a sem duplicar lógica e sem nomes de carta no núcleo comum; a preferência por nomes continua só ordenando.
+- [x] Conferir as outras simulações próprias de estratégia que fixam a quantidade de uma faixa opcional. Só entra divergência reproduzida.
+
+**Validação**
+
+- Testes: os de Arcanist do caminho (`architectureArcanist`, `arcanistDesignDecisions`) e os de L07f. Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Smoke: `--matchups arcanist:bloomrot,arcanist:void,luminarch:arcanist,arcanist:techzero --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07f.
+
+**Critério de saída:** critério de aceite geral; na sonda, 0 divergências de quantidade.
+
+**Riscos**
+
+- A linha do Master of Mirrors do Arcanist muda. O teste de sinal decide, sem compensação.
+
+**Esforço:** P.
+
+---
+
+## L07h — OPT da simulação do Arcanist com o uso real do turno e só com candidatos
+
+**Item:** divergências expostas por L07g (decisão do usuário, 13/10/2026: lote de paridade próprio, medido depois de L07g).
+
+**Objetivo:** o OPT simulado da estratégia do Arcanist (`useSimOpt` e o balde `_simArcanistOptUsed`, `src/core/ai/arcanist/simulation.ts`) segue o runtime em dois pontos:
+
+- o balde começa vazio a cada clone e não vê o uso real do turno: com o OPT do Master of Mirrors Arcanist já gasto, o runtime não ativa o gatilho, e a simulação ainda devolve, compra e marca replanejamento;
+- o OPT é gasto antes de conferir os candidatos: com 0 Magias "Arcanist" no Cemitério, o runtime não ativa e mantém o OPT para uma segunda cópia, e a simulação o consome.
+
+**Tarefas**
+
+- [x] Reproduzir nos dois assentos com as sondas de L07g (`scratchpad/plan23/L07g/mirrors_opt.mts` e `r2_opt_zero_candidates.mts`): 2 de 4 casos divergem em cada uma.
+- [x] Ler o uso real do turno, pela projeção de uso que o planejamento já copia do runtime (`projectRuntimeEffectUsage` e afins), sem um balde paralelo que ignore o estado real.
+- [x] Só consumir o OPT simulado quando houver candidatos suficientes para o mínimo do alvo declarado, como o runtime.
+- [x] Conferir os outros OPT próprios das simulações de estratégia. Só entra divergência reproduzida.
+
+**Validação**
+
+- Testes: os de Arcanist do caminho (`architectureArcanist`, `arcanistDesignDecisions`) e os de L07g. Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Smoke: `--matchups arcanist:bloomrot,arcanist:void,luminarch:arcanist,arcanist:techzero --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07g.
+
+**Critério de saída:** critério de aceite geral; nas sondas, 0 divergências.
+
+**Riscos**
+
+- Linhas do Arcanist com segunda Invocação-Normal do Master of Mirrors no turno mudam. O teste de sinal decide, sem compensação.
+
+**Esforço:** P.
+
+---
+
+## L07i — Passivas `conditional_status` e `position_status` negadas na simulação
+
+**Item:** resíduo de L06 no backlog (Void Serpent Drake). Autorizado pelo usuário em 15/10/2026, inclusive a troca do tipo no fixture do teste que fixa o marcador; lote de paridade próprio, medido depois de L07h.
+
+**Objetivo:** quando um card com passiva `conditional_status` ou `position_status` fica negado, a simulação apaga o status concedido, como o runtime (`src/core/effects/passives/passiveBuffs.ts`, bloco de `conditional_status`/`position_status`), em vez de manter o flag copiado e marcar o ramo com `add_status:passive_recalculation:*`. Hoje o Void Serpent Drake negado pelo Reactor ou pela Final Singularity continua `battleIndestructible` na simulação (18 marcadores em `void:techzero:3` no N = 5 de L06).
+
+**Tarefas**
+
+- [x] Reproduzir nos dois assentos: Serpent Drake com Void Hollow com a face para cima, negado; o runtime apaga `battleIndestructible`, a simulação mantém.
+- [x] Na negação simulada (`applyAddStatus`, bloco de `effectsNegated` em `src/core/ai/common/simulatedActions/stats.ts`), apagar o status concedido por `conditional_status` e `position_status` quando o card fica negado com a face para cima e na zona exigida, como o produtor do runtime. Só o status da própria passiva. A proteção de batalha concedida por um equipamento ativo continua (regra do usuário, D12): só negar ou remover o equipamento a encerra. O runtime ainda a apaga; a correção dele é L25c.
+- [x] Remoção da negação: se a simulação não reavaliar a condição como o runtime, o ramo continua marcado nesse sentido (como `conditional_extra_attacks` em L06).
+- [x] Teste com aval do usuário: em `test/ai/negatedAuraSimulation.test.ts`, "negating passives without a supported contribution map reports an explicit limit", trocar no fixture o tipo `conditional_status` por um tipo que continua sem suporte (por exemplo, `battle_indestructible_if_stat_match`) e o nome esperado na asserção da linha 135. O teste continua cobrindo o limite explícito.
+- [x] Atualizar a linha do backlog de passivas negadas.
+
+**Validação**
+
+- Testes: `negatedAuraSimulation`, os de L06 (`techZeroSimulation`, `techZeroEffectSimulation`, `techZeroLifecycleSimulation`, `techZeroPriorityTwoSimulation`, `techZeroPriorityThreeSimulation`, `test/fieldPresencePassives`) e os de Void do caminho (`architectureVoidMigration`, `architectureVoidEvents`). Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Smoke: `--matchups void:techzero,techzero:void,void:bloomrot --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07h.
+
+**Critério de saída:** critério de aceite geral; `add_status:passive_recalculation:conditional_status` em 0 no N = 5; na reprodução, simulação e runtime iguais nos dois assentos.
+
+**Riscos**
+
+- A linha do Tech-Zero que nega o Serpent Drake passa a contar com a destruição em batalha. O teste de sinal decide, sem compensação.
+
+**Esforço:** P.
+
+---
+
+## L07j — Passivas de status recalculadas quando a condição muda e negação da Sealing the Void
+
+**Item:** lacunas irmãs expostas por L07i (decisão do usuário, 16/10/2026: um lote só, medido depois de L07i).
+
+**Objetivo:** a simulação passa a recalcular `conditional_status` e `position_status` quando a posição ou a condição mudam, como o produtor do runtime faz a cada atualização, e a negar pela Sealing the Void com a mesma classificação de passivas de L06/L07i.
+
+**Tarefas**
+
+- [x] Reproduzir nos dois assentos com as sondas de L07i (`scratchpad/plan23/L07i/finding_producer.mts` e `finding_sealing.mts`): o Metal Armored Dragon que vai para Ataque, ou o Void Serpent Drake que perde a Void Hollow ao lado, continuam `battleIndestructible` na simulação, sem marcador (8 de 8); a Sealing the Void no Drake deixa o flag verdadeiro na simulação e falso no runtime (4 de 4).
+- [x] Recalcular o status dessas passivas na simulação quando a posição ou a condição declarada muda, reaproveitando a avaliação de condição do runtime, sem nomes de carta; a proteção de um equipamento ativo continua (D12).
+- [x] `applySetStatsToZeroAndNegate` (`src/core/ai/common/simulatedActions/stats.ts`) passa pela mesma classificação de passivas da negação de `add_status`.
+- [x] Conferir outros caminhos simulados que negam ou mudam posição sem recalcular. Só entra divergência reproduzida.
+
+**Validação**
+
+- Testes: `negatedAuraSimulation`, os de L06 e L07i, os de Void e Dragon do caminho (`architectureVoidMigration`, `architectureVoidEvents`, `architectureDragon*`) e `fieldPresencePassives`. Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Smoke: `--matchups void:techzero,void:dragon,dragon:void,void:bloomrot --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07i.
+
+**Critério de saída:** critério de aceite geral; nas sondas, 0 divergências.
+
+**Riscos**
+
+- Linhas de Void e Dragon que contavam com a proteção mudam. O teste de sinal decide, sem compensação.
+
+**Esforço:** M.
+
+---
+
+## L07k — Auras recalculadas depois de cada ação da Main Phase simulada
+
+**Item:** achado da revisão de L07j, anterior ao lote (decisão do usuário, 16/10/2026: lote de paridade próprio, medido depois de L07j).
+
+**Objetivo:** depois de cada ação do despachante genérico da Main Phase (`applyGenericSimulatedMainPhaseAction`, `src/core/ai/common/simulation.ts`), a simulação recalcula todas as auras e produtores contínuos, como o `updateBoard` do runtime, e não só os status passivos. Hoje a Invocação por Virar (`case "position_change"`) só recalcula `field_presence_type_summon_count_buff` e, desde L07j, os status passivos: com a Void Tenebris Horn com a face para cima e uma Void Hollow virada, depois do Flip o runtime dá ATK 1700 e a simulação 1600, nos dois assentos.
+
+**Tarefas**
+
+- [x] Reproduzir nos dois assentos com `scratchpad/plan23/L07j/review/flip_aura.mts`.
+- [x] No fim do despachante, trocar `refreshSimulatedPassiveStatuses(state)` por `refreshSimulatedFieldAuras(state)`, que já termina no produtor de status de L07j (variante conferida em `review/flip_aura_fixcheck.mts`). Sem nomes de carta.
+- [x] Conferir os outros casos do despachante (mudança manual de posição, Ascensão, procedimentos de invocação) contra o runtime. Só entra divergência reproduzida.
+
+**Validação**
+
+- Testes: os de L07j, `fieldPresencePassives`, `commonSimulation` e os de Void do caminho (`architectureVoidMigration`, `architectureVoidEvents`). Também typecheck, `npm run audit:typescript-escapes` e `npm test`.
+- Smoke: `--matchups void:dragon,void:techzero,shadowheart:void,void:bloomrot --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07j.
+
+**Critério de saída:** critério de aceite geral; na sonda, 0 divergências.
+
+**Riscos**
+
+- Recalcular todas as auras no fim de cada ação custa mais tempo de busca; conferir que o pico da guarda de stall e os nós por busca não mudam de ordem de grandeza. O teste de sinal decide o efeito nas decisões, sem compensação.
+
+**Esforço:** P.
+
+---
+
+## L08 — Contador zerado removido na simulação
+
+**Item novo (D2, revisão F26).**
+
+**Objetivo:** a simulação representa um contador zerado como o runtime, que remove a chave (`src/core/Card.ts`), em vez de guardar 0.
+
+**Tarefas**
+
+- [x] Reproduzir: `setCounterValue` (`src/core/ai/common/counters.ts:76-90`) grava 0 no mapa. Comparar com o runtime nos dois assentos (Bloomrot e Tech-Zero são os usuários principais de contadores).
+- [x] Remover a chave quando o valor chega a 0, no `Map` e no objeto legado, sem nomes de carta.
+- [x] Conferir os leitores que distinguem "chave ausente" de "valor 0" e o hash/deduplicação de estados do TurnLineSearch.
+
+**Validação**
+
+- Sonda: o estado simulado depois de remover o último contador é igual ao do runtime.
+- Testes: `test/ai/bloomrotCounterParity`, `commonSimulation`, `techZeroSimulation`, `searchBehavior`, `planningDiagnostics` e os testes de contadores do caminho. Também typecheck e `npm test`.
+- Controles: cada digest que mudar é explicado.
+- Smoke: `--matchups bloomrot:techzero,bloomrot:void,techzero:shadowheart --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L07k (o último elo N = 5 antes deste lote, depois dos lotes L07b–L07k). Esperado: `repeatedStates` e a deduplicação do TLS podem mudar; as divergências por contador zerado (já ocultas no diagnóstico por L01) somem na fonte.
+
+**Critério de saída:** critério de aceite geral.
+
+**Riscos**
+
+- Um leitor que trate chave ausente como "não suporta contadores" muda de comportamento.
+- A normalização de L01 fica redundante, mas é mantida: ela protege o diagnóstico contra outras fontes de zero.
+
+**Esforço:** P.
+
+---
+
+## L09 — Controle de invariância a informação oculta
+
+**Itens:** "GameTree com informação oculta" (controle no runtime) e itens novos de vazamento.
+
+**Objetivo:** um instrumento opt-in que mostra, por raiz de busca, se a decisão depende de informação oculta do oponente, e uma guarda estrutural que conta os campos de identidade oculta nas projeções opacas.
+
+**Depende de (funcional):** L03 (`PUBLIC_UNKNOWN_CARD_FIELDS` e `registerPublicOpponentProjection`, que a guarda confere).
+
+**Tarefas**
+
+- [x] Flag opt-in em `scripts/run_benchmark.ts` e `scripts/benchmark/observer.ts`. Em cada decisão da IA, o harness reexecuta as raízes alcançáveis: a P2 (`evaluateCriticalSituationWithGameTree`, `src/core/ai/BaseStrategy.ts:505`), o TurnLineSearch, o Beam/Greedy e a escolha de ataque.
+- [x] Cada raiz roda duas vezes: sobre o estado real e com a informação oculta trocada:
+  - mão e Deck do oponente rotacionados, com tamanhos preservados;
+  - cartas viradas para baixo do oponente, no campo e no spellTrap, trocadas por cartas do mesmo tipo vindas do Deck, preservando `instanceId`, posição, `fieldSlot` e `isFacedown`.
+- [x] Depois de cada reexecução, o estado é restaurado com ordem e identidade exatas, sem eventos.
+- [x] O `_arenaTracker` e o observer ficam silenciados durante as reexecuções, para não inflar `planning.searches` nem quebrar o crossCheck.
+- [x] Gancho mínimo em `src/` (D10): um callback opcional, inerte quando ausente, no controlador da Main Phase, que expõe as opções de busca já resolvidas. O harness reaproveita essas opções e não as recalcula.
+- [x] Saída `{root, checked, actionDiff, scoreDiff}` num arquivo lateral, fora do registro determinístico. Desligada, a flag não entra na configuração: `configDigest` e `DUEL_RECORD_VERSION` ficam iguais.
+- [x] Guarda `assertPublicPlanningProjection(root, perspectiveId)` na raiz do TurnLineSearch, com a allowlist exata dos campos que o TLS já copia para projeções opacas. **Conforme E2, a guarda só conta e registra**, sem lançar. É um commit próprio dentro deste lote, da mesma classe (instrumentação).
+- [x] O contador da guarda fica no diagnóstico de planejamento do ArenaAnalytics, por campo e por raiz. O harness o copia para o arquivo lateral do controle quando a flag está ligada. Ele nunca entra no registro determinístico: uma chave nova em `seatMetrics` seria rejeitada pelas chaves exatas do leitor (`scripts/benchmark/schema.ts:1105-1120`), e a prova N = 2 falharia.
+- [x] `summarize` mostra o portão `actionDiff = scoreDiff = 0` por raiz e os disparos da guarda por campo quando o arquivo existe. Protótipo da P2: `.cache/plan23-probes/gt/`.
+
+**Validação**
+
+- Flag desligada (a guarda continua ativa, só contando): N = 2 com `--expect-identical` contra L08, sem `--ignore`.
+- Ligada (N = 1, 81 duelos): reproduz a divergência de partida (na P2, ~14% das ações; 20 de 145 na sonda) e registra o valor de cada raiz, inclusive o vazamento pela backrow (ChainAwareness, folha do GameTree e `battleController.ts:253`).
+- Testes do caminho do gancho (`test/ai/mainPhaseIdentity`, `mainPhaseConcurrency` e `mainPhaseRecovery`), typecheck dos projetos app e Node, e `npm test`.
+- Portão de golden.
+
+**Medição:** sem medição de força. Execuções diagnósticas com a flag neste lote, em L10 a L19, em M1 e em L28. Nunca servem para medir placar.
+
+**Critério de saída:** prova N = 2 idêntica com a flag desligada; valores de partida por raiz e disparos de partida da guarda registrados (os disparos não precisam ser zero).
+
+**Riscos**
+
+- As buscas extras podem consumir o RNG da IA; por isso a execução diagnóstica nunca é medição.
+- Se o harness resolver opções diferentes das do controlador, o controle mede outra coisa. O gancho existe para evitar isso.
+- Uma troca de carta virada para baixo que mude o tipo ou a posição criaria diferença falsa.
+- Se a allowlist da guarda expuser identidade oculta, removê-la é paridade e fica para L10.
+
+**Esforço:** M.
+
+---
+
+## L10 — Projeções opacas sem uso de OPT por nome
+
+**Item:** vazamento de `oncePerTurnUsageByName` nas projeções opacas (revisão C13).
+
+**Objetivo:** as cartas opacas do oponente deixam de carregar uso de OPT derivado do nome real, no TurnLineSearch e nas projeções compartilhadas que L11 e L12 vão usar.
+
+**Depende de (funcional):** L09 (o campo sai da allowlist da guarda).
+
+**Dependência de medição:** L09 (controle de invariância e disparos da guarda).
+
+**Tarefas**
+
+- [x] Reproduzir: `projectRuntimeEffectUsage` (`src/core/ai/common/planningCopy.ts:80-97`) copia `oncePerTurnUsageByName`, vindo do nome da carta, para alvos opacos. Confirmar com a guarda e o controle de L09.
+- [x] Pular alvos opacos em `projectRuntimeEffectUsage` e tirar o campo da allowlist da guarda.
+- [x] Conferir que o uso por nome que depende só de ativações públicas continua disponível pelo caminho público.
+
+**Validação**
+
+- Disparos da guarda nesse campo zerados no arquivo lateral do controle (N = 1, flag de L09), lidos pelo `summarize`.
+- Controle de L09: não piora; a parte do TurnLineSearch ligada ao campo diminui.
+- Testes: `test/ai/cloneProfiles`, `planningExecution`, `searchBehavior`, `turnLineOwnerPolicy`, `commonSimulation` e os testes de OPT do caminho. Também typecheck e `npm test`.
+- Smoke: `--matchups shadowheart:luminarch,void:dragon,arcanist:miragebound --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L08 (L09 só tem prova N = 2). Ponte N = 2 antes (no commit de L08) e depois (a projeção da raiz do TLS alcança a ponte).
+
+**Critério de saída:** critério de aceite geral; campo fora das projeções opacas.
+
+**Riscos**
+
+- Uma OPT do oponente de fato pública pode deixar de ser vista. Se isso acontecer, ela volta pela via pública, nunca pela projeção opaca.
+
+**Esforço:** P.
+
+---
+
+## L11 — GameTree (P2) com a projeção pública do oponente
+
+**Item:** "GameTree com informação oculta" (D3).
+
+**Dependência de medição:** L09 (controle de invariância e guarda) e L10 (sem L10, a projeção do oponente ainda carrega uso de OPT por nome, e a raiz P2 não chega a `actionDiff = scoreDiff = 0`).
+
+**Tarefas**
+
+- [x] `createGameTreeCopy(input, perspective, { publicOpponent })` (`src/core/ai/common/gameTreeSimulation.ts`) chama `registerPublicOpponentProjection` antes de clonar o oponente. `_gameRef` continua sendo o jogo vivo (contrato de `test/ai/cloneProfiles.test.ts`).
+- [x] A raiz em `src/core/ai/GameTreeSearch.ts` usa `publicOpponent: true` e passa pela guarda de L09. A máscara vale para todos os nós.
+- [x] `simulateAction` roda sob `runWithUnknownLocationGuard` e encerra o ramo em `_simRequiresReplan`.
+- [x] Modelo Generic (`src/core/ai/PlanningStrategies.ts`): com o oponente só com recursos ocultos, devolve `[]` (horizonte, D3) em vez de lançar erro. O critério é "sem ação suportada e com carta opaca em qualquer zona"; com todos os recursos conhecidos, o erro continua.
+- [x] Na folha, `evaluateLeafState` (`GameTreeSearch.ts:147-150`) deixa de somar o ATK real de monstros virados para baixo do oponente. A máscara já cumpre a tarefa (a projeção opaca não tem `atk`); o código da folha só ganhou um comentário.
+- [x] `planningModelId` continua vindo do preset real (D3).
+- [x] Atualizar só a asserção que exige uma geração do oponente com a mão real, `test/ai/planningStrategies.test.ts:244`, com aval de D3. As asserções da P2 promovida e da geração do assento da raiz continuam. O teste alterna a raiz entre os cenários (`root: "player"` e `root: "bot"`), então a linha 243 também representa o oponente num deles. Se mais de uma linha precisar mudar, cada linha alterada é listada no commit e no PR e passa pelo aval do usuário, no regime de E12.
+
+**Validação**
+
+- Controle de L09: a raiz P2 com `actionDiff = scoreDiff = 0` e a guarda sem disparos.
+- Testes: `test/ai/gameTreeModels`, `gameTreeSimulation`, `gameTreeFidelity`, `gameTreeStateIdentity`, `planningStrategies`, `searchBehavior`, `cloneProfiles`, `bloomrotSimulation`, `shadowHeartFusionPlanning`, `architectureMirageboundMigration`, `architectureVoidMigration`, `planningExecution`, `commonSimulation` e `test/replay/fusionDecisionReplay`. Também typecheck e `npm test`.
+- Corpus idêntico (o corpus não chama o GameTree).
+- Smoke: `--matchups shadowheart:luminarch,void:dragon,arcanist:miragebound,bloomrot:burningwest,luminarch:void,dragon:arcanist --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L10. Pode sair idêntico: com o protótipo, os 81 registros de k = 0 ficaram iguais.
+
+**Critério de saída:** critério de aceite geral; raiz P2 invariante.
+
+**Riscos**
+
+- Sem o horizonte, o caminho Generic contra humano lançaria erro e anularia a P2.
+- O `instanceId` de mão e Deck ocultos continua exposto, como no TLS. É um canal teórico, registrado no backlog.
+
+**Esforço:** M.
+
+---
+
+## L12 — Beam/Greedy e laço de batalha só com informação pública
+
+**Itens novos:** o Beam/Greedy clona a mão, o Deck e as cartas viradas para baixo reais do oponente (`src/core/ai/BeamSearch.ts:152-170`); o clone do laço de batalha (`src/core/bot/simulationBridge.ts:53`) não é mascarado; o ATK oculto é lido em `src/core/bot/battleController.ts:253`.
+
+**Dependência de medição:** L07 (a máscara esconderia a Trap na mão do oponente e apagaria a medida de L07), L09 (controle de invariância e guarda) e L10 (sem L10, as cartas opacas ainda carregam uso de OPT por nome).
+
+**Tarefas**
+
+- [x] Raiz do beam e do greedy: quando a entrada é o jogo vivo, aplicar `registerPublicOpponentProjection` e a guarda de L09. Os clones de nó herdam as projeções opacas. A pontuação base do greedy usa a mesma raiz pública dos candidatos.
+- [x] Aplicar `withoutLiveGameReference` na simulação do Beam/Greedy, como o GameTree faz. Hoje o Beam fixa `_gameRef` no clone (`BeamSearch.ts:200` e `:462`).
+- [x] Beam e greedy tratam `_simRequiresReplan` como folha (hoje só checam `_simUnsupportedActions`) e simulam a ação sob `runWithUnknownLocationGuard`. O beam já tratava `_simRequiresReplan` como folha na recursão; faltava a guarda de localização.
+- [x] `cloneBotGameState` mascara o oponente com o mesmo helper. A máscara é opcional (`{ publicOpponent: true }`) e desligada por padrão: a cópia padrão mantém a informação completa para fixtures e simulações de estado conhecido, e todo consumidor de decisão ao vivo liga a opção (hoje, só o laço de batalha). O laço avalia a pontuação base e os candidatos na mesma cópia pública (variante B, decisão do usuário em 03/11/2026); com a base no jogo vivo, o `scoreDiff` do ataque subia de 71 para 101.
+- [x] `battleController.ts:249-256` (hoje `:259-266`): **só quando `target.isFacedown`**, usar o valor público de `getBattleStatForAttackTarget(target)` (`src/core/ai/common/cardStats.ts:62-69`). Nos outros casos, manter `target.atk`. Usar o valor da função para alvos visíveis trocaria ATK por DEF em defesa, o que é política.
+- [x] Conferir que avaliadores e geradores toleram cartas opacas. Os ganchos de ataque das estratégias ainda recebem o alvo vivo: lote L12c.
+
+**Validação**
+
+- Controle de L09: raízes Beam/Greedy e ataque não pioram; o vazamento restante vem só de leituras pelo `game` vivo, tratadas em L13.
+- Testes: `test/ai/beamStateIdentity`, `gameTreeUsage`, `searchBehavior`, `techZeroBattle`, `architectureBattleIdentity`, `mainPhaseConcurrency`, `mainPhaseRecovery`, `fieldPositions` e `unsupportedSimulationSearch`. Também typecheck e `npm test`.
+- Smoke cobrindo os 9 presets: `--matchups shadowheart:luminarch,void:dragon,arcanist:miragebound,bloomrot:burningwest,techzero:void --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L11. Ponte N = 2 antes e depois. Espera-se mudança ampla de decisões; lote de efeito amplo (extensão para N = 10 se o teste de sinal não for conclusivo).
+
+**Critério de saída:** critério de aceite geral.
+
+**Riscos**
+
+- Sem a mão real, o beam pode perder força; é o efeito esperado da paridade.
+- A avaliação de board do laço de batalha muda com monstros opacos.
+
+**Esforço:** M.
+
+---
+
+## L12b — Raiz de geração no controle de invariância
+
+**Item:** ponto da validação de L09 (decisão do usuário, 17/10/2026: lote de instrumentação antes de L13). Recebe também o achado de L12 sobre a descrição da escolha trocada (decisão do usuário, 03/11/2026).
+
+**Objetivo:** o controle de invariância de L09 reexecuta o TurnLineSearch, o Beam e o Greedy com a mesma lista de candidatos (`preGeneratedActions`) que a raiz viva gerou com a informação real. Por isso uma leitura oculta na geração de candidatos da raiz viva (por exemplo, o ChainAwareness lendo a backrow do oponente, alvo de L13) não aparece em nenhuma raiz. O lote acrescenta uma raiz `generation`: a geração de candidatos da Main Phase (`generateMainPhaseActions` com o estado vivo) roda sobre o estado real e com a informação oculta trocada, e o controle compara as duas listas (identidade e ordem das ações; score, quando houver).
+
+O lote também corrige um defeito do controle achado em L12: `probeRoot` e `probeSearchRoot` (`scripts/benchmark/invariance.ts`) restauram a troca (`restoreTrade`) antes de descrever a escolha trocada. Como a troca grava o `instanceId` da posição na carta de reposição, um alvo virado para baixo escolhido nas duas execuções sai descrito com outra identidade e conta como `actionDiff`. No N = 1 de L12, descrever a escolha antes da restauração leva o `actionDiff` da raiz de ataque de 74 para 1 (de 80 para 20 no código de L11); o `scoreDiff` não muda.
+
+**Tarefas**
+
+- [x] Estender o observador opcional de L09 (D10, inerte quando ausente) para expor a reexecução da geração de candidatos do controlador da Main Phase, com as mesmas opções resolvidas. A geração fica escrita uma vez no controlador; a reexecução lê a memória de repetição da sessão sem contar supressão (`MainPhaseSession.attempted`).
+- [x] No harness (`scripts/benchmark/invariance.ts`), rodar a geração com e sem a troca, com a mesma restauração exata, silenciamento e preservação do cache de targeting de L09; gravar `generation` no `invariance.jsonl` (`checked`, `actionDiff` para a lista, `scoreDiff` quando houver ordem por score, `nonReproducible`), com versão nova do esquema lateral. A chave de cada candidato junta o fingerprint do planejador sem a prioridade, a identidade da ação no runtime (`fingerprintMainPhaseAction`, com os valores canônicos do contexto de ativação) e as decisões (revisão do lote: só o fingerprint deixava passar uma preferência de alvo que muda com a informação oculta); as prioridades formam o vetor de score. O esquema lateral passa de 2 para 3, com leitor estrito, como de 1 para 2: o `summarize` atual não relê os arquivos laterais de L09 a L12-inv, cujos `summary.*` continuam valendo.
+- [x] `summarize` mostra a raiz nova no portão.
+- [x] Descrever (ou congelar) a escolha da execução trocada antes de `restoreTrade` em `probeRoot` e `probeSearchRoot`, sem mudar a comparação. Patch diagnóstico de L12: `.cache/plan23-work/L12/invariance-print-before-restore.diag.patch`.
+
+**Validação**
+
+- Flag desligada: N = 2 com `--expect-identical` contra o elo anterior, sem `--ignore`; controles idênticos.
+- Flag ligada (N = 1): valores de partida da raiz `generation`, por preset, com o vazamento do ChainAwareness esperado nos presets que o usam (Shadow-Heart, Dragon e Luminarch).
+- Flag ligada (N = 1): com a correção da descrição, o `actionDiff` da raiz de ataque cai para o resíduo real (1 no código de L12), o `scoreDiff` das raízes fica igual ao de L12-inv e o duelo não muda (mesmo `deterministicDigest`).
+- Testes do caminho do gancho (`mainPhaseIdentity`, `mainPhaseConcurrency`, `mainPhaseRecovery`), typecheck e `npm test`.
+
+**Medição:** sem medição de força. Prova N = 2 idêntica com a flag desligada.
+
+**Critério de saída:** prova idêntica; valores de partida da raiz `generation` e valores corrigidos da raiz de ataque registrados. A partir de L13, o critério "todas as raízes zeradas" inclui `generation`.
+
+**Riscos**
+
+- A geração de candidatos ao vivo pode ter efeitos de cache; a restauração e o cache de targeting seguem a disciplina de L09.
+
+**Esforço:** P.
+
+---
+
+## L12c — Ganchos de ataque das estratégias só com informação pública
+
+**Item:** achado da validação de L12 (decisão do usuário, 03/11/2026: lote próprio de paridade).
+
+**Objetivo:** no laço de batalha, os ganchos `scoreBattleAttackCandidate` das estratégias recebem o alvo, o oponente e o `game` vivos (`src/core/bot/battleController.ts:284-297`) e leem atributos ocultos do monstro virado para baixo do oponente. Essas leituras não passam por `_gameRef` nem pelo ChainAwareness, então L13 não as cobre:
+
+- Dragon: `cardThreatValue` (`src/core/ai/dragon/battleDefensePolicy.ts:98-106`, via `dragon/knowledge.ts:685-687`) lê ATK, DEF, Nível, efeitos, tipo de monstro, arquétipos e nome.
+- Burning West: `targetThreat` e `isExtraDeckMonster` (`src/core/ai/burningwest/battle.ts:70` e `:499-501`) leem ATK, DEF, Nível e tipo de monstro.
+- Luminarch: `getBattleCardValue` (`src/core/ai/luminarch/simulation.ts:1134-1135`) lê ATK, DEF e Nível.
+- Miragebound, latente: `miragebound/linePlanning.ts:950` lê o ATK do alvo virado para baixo, sem diferença na amostra de L12.
+
+No controle de L12, com a escolha descrita antes da restauração, essas leituras respondem pelos 21 `scoreDiff` restantes da raiz de ataque (Burning West 8, Dragon 7, Luminarch 6) e pelo único `actionDiff` real (Luminarch). A variante diagnóstica que passa aos ganchos o alvo e o oponente da projeção pública zera a raiz (1.103 / 0 / 0) e muda decisões.
+
+**Dependência de medição:** L12 (laço de batalha mascarado) e L12b (o controle descreve a escolha antes da restauração; sem isso, o `actionDiff` do ataque fica inflado).
+
+**Tarefas**
+
+- [x] Contrato do gancho (`src/core/contracts/bot.ts:84-97`): o laço vivo passa a entregar aos ganchos o alvo e o oponente da cópia pública (`simTarget` e `simState.player`, com o alvo virado para baixo como projeção opaca), sem acesso a atributos ocultos pelo `game` vivo. O contrato já aceita a forma do TurnLineSearch (`BattleCandidateScoreInput`, com cartas e estado do planejamento), que a ponte usa sobre a projeção pública da raiz do TLS; a forma final é decidida no lote, preservando o que cada estratégia lê de público (próprio campo, PV, turno). Forma final: o alvo, o oponente e o `game` vêm da cópia pública anterior à batalha (a da pontuação base de L12), não de `simTarget` e `simState.player`. O oponente depois da batalha zeraria o dano que o Burning West infere por `opponent.lp − opponentLpAfter` e mudaria leituras públicas de PV e campo de outros presets; o alvo e o oponente precisam vir da mesma cópia, porque Bloomrot e Luminarch comparam o alvo com o campo do oponente por identidade; e `simTarget` é mutado pelo `simulateBattle`. O atacante, o bot e `simState` continuam os de antes. Só o Tech-Zero lê o `game`, e só o `turnCounter`.
+- [x] Ajustar as leituras de Dragon, Burning West e Luminarch para tolerar a projeção opaca, com o valor público do alvo virado para baixo (como `getBattleStatForAttackTarget`), sem nomes de carta. Conferir a leitura latente da Miragebound e os ganchos dos demais presets. Dragon (`attackTargetThreatValue`, só no gancho; a `cardThreatValue` da geração fica para L13), Burning West (`targetThreat`) e Luminarch (`getBattleCardValue`) dão ao alvo virado para baixo o valor público; o bônus do Purified Crystal Dragon, que lê o Nível, e o `isExtraDeckMonster` do Burning West passam a ler a projeção (0 e falso). A Miragebound não muda: a leitura de `linePlanning.ts:950` vê o ATK 0 da projeção, como a ponte do TLS já via, e a penalidade de alvo sobrevivente com ATK maior deixa de valer contra alvo virado para baixo; usar o valor público ali seria mudança de política. Shadow-Heart, Void, Bloomrot e Tech-Zero já liam só o público, e o Arcanist não tem gancho.
+- [x] Conferir que nenhuma outra leitura do laço lê o alvo vivo virado para baixo. `isActiveAttackPriorityTarget` (`src/core/game/combat/availability.ts:259` e `:264`) lê `effectsNegated` e `mustBeAttacked`, mas decide por `isFacedown` e não vaza. Do alvo vivo, o laço lê só `isFacedown`, `instanceId` e o valor público do ATK.
+
+**Validação**
+
+- Controle de L09, com a correção de L12b: raiz de ataque com `actionDiff = scoreDiff = 0`; as demais raízes não pioram; a guarda sem disparos.
+- Testes: `test/ai/architectureBattleIdentity`, `architectureDamageCalculationSimulation`, `architectureDragonBattleHistory`, `architectureLuminarchBattleLp`, `architectureBurningWestEffects`, `architectureBurningWestRewards`, `techZeroBattle` e `searchBehavior`. Também typecheck e `npm test`.
+- Smoke: `--matchups dragon:luminarch,burningwest:dragon,luminarch:burningwest,miragebound:shadowheart --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L12. Ponte N = 2 antes (a de L12, reaproveitada) e depois: o TurnLineSearch chama o mesmo gancho na ponte.
+
+**Critério de saída:** critério de aceite geral; raiz de ataque invariante.
+
+**Riscos**
+
+- Dragon, Burning West e Luminarch podem perder força no ataque contra monstros virados para baixo; é o efeito esperado da paridade.
+- Mudar o contrato do gancho alcança todos os presets; um gancho que dependa de campo vivo precisa da projeção pública equivalente.
+
+**Esforço:** M.
+
+---
+
+## L13 — Leituras ocultas pelo `_gameRef` e pelo ChainAwareness (L13a–L13c)
+
+**Item novo (D2):** o ChainAwareness e os geradores leem as cartas viradas para baixo do oponente no jogo vivo, inclusive dentro da simulação (`src/core/ai/ChainAwareness.ts:180-278`).
+
+**Achados de L12b** (raiz `generation`, N = 1: 3.099 comparações, `actionDiff` 94, `scoreDiff` 8). Nenhuma diferença da amostra vem do ChainAwareness: o `chainRisks` é calculado e não é lido em `shadowheart/actionGeneration.ts:240`, `dragon/generation.ts:289` e `LuminarchStrategy.ts:643`, e o `assessActionSafety` só muda a prioridade a partir do risco 0,5 (em Invocação, 0,7, acima do teto de 0,63), então o vazamento dele fica latente. As diferenças vêm de leituras diretas de monstros do oponente virados para baixo pelo `game` vivo, sem `_gameRef`:
+
+- Arcanist (61 / 2): `getHighestValueOpponentNames` (`arcanist/priorities.ts:636-647`) grava o nome real da carta virada para baixo em `preferredNames` de preferências de remoção; `getSwitchedBattleStat` (`arcanist/priorities.ts:72-74`, via `evaluateTeraPositionPlan`) lê o ATK real.
+- Miragebound (21 / 0, só no espelho): `rankOpponentCardsForRemoval` (`miragebound/targeting.ts:98-119`) ordena cartas viradas para baixo por tipo, subtipo e valor.
+- Dragon (11 / 4): `hasImmediateStelyaPayoff` (`dragon/banishPolicy.ts:91-97` e `:178-180`), `analyzeGameState` (`DragonStrategy.ts:333-341`, copia ATK, DEF, Nível, `cardKind` e nome para `oppField`) e `battleStat` → `defensiveNeed` (`dragon/battleDefensePolicy.ts:92-96` e `:319-322`).
+- Void (1 / 1): `evaluateVoidFusionRemovalPriority` (`void/priorities.ts:1100-1101`) lê o Nível.
+- Luminarch (0 / 1): `detectDefensiveNeed` (`MacroPlanning.ts:146-153`) soma o ATK de todos os monstros do oponente.
+
+O rastreio de L12b listou 110 linhas de leitura oculta na geração (`.cache/plan23-work/L12b/hidden-read-sites.txt`), ponto de partida da auditoria abaixo; reprodução com `node .cache/plan23-work/L12b/gendiff2.cjs <saída do N = 1 com a flag>`.
+
+**Mapeamento (04/11/2026).** Auditoria só de leitura sobre o código de L12c, com a crítica de cobertura em separado (`.cache/plan23-work/L13/`: `proposal.md`, `maps.json` e `critic.json`). Ela cobre 109 das 110 linhas do rastreio de L12b (a restante, `void/costPolicy.ts:108`, é pública) e os 54 usos de `_gameRef` em 26 arquivos.
+
+- As 9 estratégias obtêm o oponente por `BaseStrategy.getOpponent` (`src/core/ai/BaseStrategy.ts:474-496`, 34 chamadas), inclusive nas análises e nos ganchos de resolução. Ficam de fora só três entradas do bot: `src/core/bot/ascensionController.ts` (`:42`, `:145` e `:186`) e o `oppField` de `actionValidation.ts:203-230` e `actionExecutors/summon.ts:118-136`.
+- Há leituras ocultas também onde o controle não mede: Ascensão automática (Dragon, `dragon/extraDeckPolicy.ts:170` e `:209`), perfil de planejamento (Dragon, Luminarch, Arcanist e Bloomrot), tributos (o `oppField` acima), ganchos de resolução e a resposta de Chain da Miragebound.
+- Pelo `_gameRef`, só o Shadow-Heart lê informação oculta (o macro usa o oponente vivo nos nós); as políticas do Dragon leem só o OPT próprio.
+- As leituras de regra da engine (filtros, legalidade, prévias, `Player.ts:320`) dão ao bot o mesmo veredito que o jogador real recebe e ficam fora do L13: nenhum alvo do banco filtra carta virada do oponente por atributo oculto.
+- O ChainAwareness também é inerte por outro motivo: `BlockingCategory` não tem `spell`, e as políticas só penalizam `very_risky`.
+
+**Desenho (decisão provisória P1):** híbrido. Uma visão pública do oponente entra em `getOpponent` e nas três entradas do bot (L13c), e as buscas e o laço de batalha deixam de usar o jogo vivo pelo `_gameRef` (L13b). A raiz viva passa a ver o que os nós do TLS, do Beam, do Greedy e do GameTree já veem desde L11 e L12, sem valor novo. Ficam descartadas:
+
+- corrigir leitor a leitor: cerca de 45 sítios em mais de 20 arquivos, cada um com um valor escolhido à mão, e L14 a L19 poderiam reabrir o vazamento;
+- gerar a Main Phase viva sobre a cópia pública: quebra as prévias, a P2, os procedimentos de Invocação e a identidade das ações (`mainPhaseIdentity.ts:64`), e não cobre Ascensão, perfil nem resolução.
+
+Custo da escolha: a raiz `generation` zera por construção e passa a medir só os canais que escapam da visão. Leituras que não mudam decisão (ChainAwareness, OpponentPredictor) só aparecem na sonda de acessores de L12b.
+
+**Divisão.** L13a (instrumentação), L13b e L13c (paridade), nesta ordem, cada um com a regra de aceite do L13. L13c é o último sublote e o elo antes do M1. Se sobrar diferença depois dele, abre-se L13d por módulo, com a mesma regra, antes do M1.
+
+**Dependência de medição:** L09 (controle de invariância), L12 e L12c (o critério "todas as raízes zeradas" só vale com o Beam/Greedy, o laço de batalha e os ganchos de ataque já mascarados) e L12b (raiz de geração e controle corrigido).
+
+**Riscos:** três presets podem perder força até o prior público da 2.4.
+
+### L13a — Raízes `ascension` e `profile` no controle de invariância
+
+**Classe:** instrumentação; não muda decisões.
+
+**Objetivo:** o controle passa a reexecutar com a troca a escolha de Ascensão automática e o perfil de planejamento da Main Phase, que leem o oponente vivo e que a raiz `generation` não cobre.
+
+**Dependência de medição:** L12b (observador e esquema lateral v3).
+
+**Tarefas**
+
+- [x] Contrato do observador (`src/core/contracts/bot.ts:219-243`): `observeAscension(game, live, rerun)` e `observeProfile(game, live, rerun)`, síncronos e inertes sem observador (D10).
+- [x] `src/core/bot/mainPhaseController.ts`: em `:70-82`, entregar ao observador o resultado de `selectAutomaticAscensionAction` e uma reexecução com o mesmo filtro, que lê a memória de repetição sem contar supressão (`MainPhaseSession.attempted`), como a geração de L12b; em `:146-163`, o perfil resolvido (`getPlanningProfile`, `resolvePlannerMode` e `shouldUsePlanner`), com uma reexecução sobre uma cópia do `planningContext`. A disponibilidade da Ascensão e a resolução do perfil ficam escritas uma vez; sem observador, o caminho vivo é o mesmo código, e a cópia do contexto é tirada antes da resolução viva, porque o Tech-Zero lê `context.profile` (`techzero/linePlanning.ts:47-51`).
+- [x] Raiz `ascension` (`scripts/benchmark/invariance.ts`, com `probeRoot` e `saveOwnFields(bot.strategy)`, como `probeGeneration`): compara a escolha (material por índice, carta de Ascensão por instância e posição) ou a ausência dela. Cobre `selectAutomaticAscension`, `chooseAutomaticAscensionPosition` e os substitutos `selectBestAscension` e `getAscensionPositionPreference`. A sonda da geração virou genérica (`probeStrategyRoot`) e serve às três raízes da estratégia.
+- [x] Raiz `profile`: compara `enabled`, `mode`, `beamWidth`, `maxDepth`, `nodeBudget`, `candidateLimit`, `turnMode`, `battleStepLimit`, `allowEarlyStop` e `shouldUsePlanner`, sem os textos de motivo.
+- [x] Restaurar os campos próprios da estratégia em volta das duas raízes (o Void regrava `currentAnalysis` em `VoidStrategy.ts:371`, e o perfil chama `analyzeGameState`) e descrever cada escolha antes de `restoreTrade`.
+- [x] Esquema lateral de 3 para 4 (`scripts/benchmark/schema.ts`), com leitor estrito, e `summarize` com as raízes novas.
+- [x] Registrar os limites do controle (decisão provisória P3): ganchos de resolução, resposta de Chain, e Extra Deck e banidas viradas para baixo, que `planHiddenTrade` não troca (`invariance.ts:124-205`). Eles ficam cobertos por construção pela visão de L13c e conferidos por revisão, smoke e sonda. Entraram também as escolhas feitas na execução de uma ação (tributos, `actionExecutors/summon.ts:118-136`) e, na raiz `profile`, os campos de perfil fora da chave (`critical`, os booleanos da Miragebound e o `bestFinisherPlan` do Void), que a auditoria dos perfis de L13c confere.
+
+**Validação**
+
+- Flag desligada: prova N = 2 com `--expect-identical` contra L12c, sem `--ignore`; controles idênticos.
+- Flag ligada (N = 1): o duelo fica igual ao de L12c-inv (`deterministicDigest` `364c96b8…`); as raízes existentes ficam iguais caso a caso (generation 3.102 / 94 / 8, P2 798 / 0 / 0, TLS 2.021 / 0 / 0 com 1 não reproduzida, Beam 75 / 0 / 0, Greedy 70 / 0 / 0 e ataque 1.103 / 0 / 0); os valores de partida de `ascension` e `profile` ficam registrados por preset.
+- Testes: `test/ai/mainPhaseIdentity`, `mainPhaseConcurrency`, `mainPhaseRecovery`, `mainPhaseAscension`, `mainPhaseContinuation` e `test/ascensionSelection`. Também typecheck, auditoria de escapes e `npm test`.
+- Smoke: `--matchups dragon:void,burningwest:luminarch,arcanist:bloomrot,shadowheart:miragebound,techzero:dragon --duels 2 --check-replays`.
+
+**Medição:** prova N = 2 (não cria elo); controle de invariância N = 1 contra L12c-inv; controles contra os de L12c.
+
+**Critério de saída:** prova idêntica, raízes antigas iguais e valores de partida das novas registrados, mesmo que deem 0 na amostra.
+
+**Esperado:** nenhum efeito no duelo. A raiz `ascension` pode diferir no Dragon, se a amostra tiver a escolha; a `profile`, no Dragon (`dragon/linePlanning.ts:2320` em diante) e no Luminarch (leituras `"printed"` em `luminarch/finisherPlanning.ts:84` e `:244` e `luminarch/combos.ts:292`).
+
+**Riscos**
+
+- A reexecução pode ter efeitos colaterais na estratégia; por isso a restauração.
+- O atalho de Ascensão roda antes da geração; a reexecução parte do mesmo `stateBeforeDecision`.
+- O leitor v4 recusa os laterais v3, como na passagem de v2 para v3; os `summary.*` antigos continuam valendo.
+
+**Esforço:** P.
+
+### L13b — Buscas e laço de batalha sem o jogo vivo pelo `_gameRef`
+
+**Classe:** paridade; muda decisões.
+
+**Objetivo:** as chamadas de estratégia nos nós das buscas e no laço de batalha passam a rodar sob `withoutLiveGameReference`, como a simulação do TLS (`TurnLineSearch.ts:744`) e o GameTree (`GameTreeSearch.ts:205` e `:223`) já fazem.
+
+**Dependência de medição:** L12 e L12c; medido depois de L13a, com as raízes novas.
+
+**Tarefas**
+
+- [x] Aplicar `withoutLiveGameReference`, só quando `models !== null`, em `TurnLineSearch.ts` (geração em `:1595-1597`; `evaluateTributeTrade` em `filterStillLegalRootActions`, `:474`; `evaluateBoardV2`, `:764-766`; `evaluatePlanningTerminal`, `:784-818`; `selectPlanningCandidates`, `:1708-1711`; ponte de batalha em `:1404-1460`, com o gancho em `:1448`), em `BeamSearch.ts` (geração do nó em `:316` e `evaluateState` em `:191` e `:463`) e em `src/core/bot/battleController.ts` (avaliação em `:165` e `:232` e gancho em `:290-297`). O gate `models !== null` existe só no TLS (`createNodeStrategyCall`), onde `models` também decide se a raiz é a projeção pública. No Beam, no Greedy e no laço de batalha, o helper vale sem condição, como a simulação do nó do Beam desde L12: eles não recebem modelos e rodam só pelo Bot, que sempre os tem. No TLS, `getCandidatesForDepth` é envolvido inteiro, e o terminal tira o `_gameRef` também da raiz, porque os pontuadores recebem `initialState`.
+- [x] Shadow-Heart (`ShadowHeartStrategy.ts:405-408`): em estado de perspectiva, o macro usa `game.bot`, como `LuminarchStrategy.ts:1129-1131` e `DragonStrategy.ts:395-398`.
+- [x] Void (`void/priorities.ts:693-711`, `canUseAscensionFinisher`): no estado sem motor, usar `checkSimulatedAscension` (`common/ascensionPlanning.ts:30`) em vez do `true` otimista. Conferir com uma sonda, nos dois assentos, que o veredito é o do motor; se não for, manter o `true` e registrar. Na sonda (10 cenários, 2 assentos), `checkSimulatedAscension` dá o veredito do motor em 20/20; o plano do finalizador no nó sem motor divergia em 18/20 e passa a 0/20. A correção alcança também os nós do GameTree e as cópias do laço, que já não tinham motor.
+- [x] Conferir os demais leitores de `_gameRef`: as políticas do Dragon (`banishPolicy.ts`, `bossPolicy.ts`, `costPolicy.ts`, `extraDeckPolicy.ts` e `searchPolicy.ts`) passam a ler o OPT e as estatísticas do nó, que são informação própria; `phaseTiming.ts:115` e `miragebound/knowledge.ts:87` já têm alternativa no próprio estado.
+- [x] Não tocar: `clonePlanningState`, o `cloneGameState` do Beam, `simulationBridge.ts:111`, o substituto do Greedy (`BeamSearch.ts:543`, coberto pela visão em L13c) e o caminho de fixture com `models === null`. O `_gameRef` continua nos clones (`test/ai/cloneProfiles.test.ts`).
+- [x] Registrar a classificação dos 54 usos de `_gameRef`: 4 escritores, 15 tipos, 2 comentários, 11 mecânicas ou proteções e 22 leitores (`.cache/plan23-work/L13b/gameref-uses.tsv`). Sem efeito nos nós: `phaseTiming.ts:115` e `miragebound/knowledge.ts:87` (alternativa no próprio estado), `previewGuards.ts:61` e `shadowheart/actionGeneration.ts:87` e `:298` (só no jogo vivo), `void/analysis.ts:174` e `:201` e `dragon/actionPolicy.ts:99` (guardados por perspectiva). Mudam de alvo: 11 sítios do Dragon (6 de OPT ou histórico próprio e 5 substitutos de oponente, latentes), `shadowheart/actionGeneration.ts:224`, o macro do Shadow-Heart (leitura removida) e `void/priorities.ts:694`.
+
+**Validação**
+
+- Controle N = 1: P2, TLS, Beam, Greedy e ataque continuam em 0 / 0; em generation, ascension e profile, as diferenças restantes vêm só das origens já atribuídas; guarda sem disparos.
+- Testes: `test/ai/cloneProfiles`, `gameTreeSimulation`, `searchBehavior`, `turnLineOwnerPolicy`, `beamStateIdentity`, `unsupportedSimulationSearch`, `planningExecution`, `planningStrategies`, `planningHeuristics`, `architectureBattleIdentity`, `techZeroBattle`, `architectureDragonPolicyIsolation`, `architectureShadowHeart*`, `architectureVoidMaterialCount`, `architectureVoidMigration`, `mainPhaseConcurrency` e `mainPhaseRecovery`. Também typecheck, auditoria e `npm test`.
+- Smoke: `--matchups shadowheart:dragon,dragon:void,void:shadowheart,luminarch:shadowheart --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L12c. Ponte N = 2 antes (a de L12c, reaproveitada) e depois. Controle de invariância contra L13a-inv. Lote de efeito amplo.
+
+**Critério de saída:** critério de aceite geral; as raízes das buscas e do ataque continuam invariantes; nenhuma origem nova de diferença.
+
+**Esperado:** o Shadow-Heart deixa de ler o oponente vivo nos nós, as políticas do Dragon usam o OPT do nó e o finalizador de Ascensão do Void é avaliado nos nós. O efeito aparece mais na ponte que no N = 5. As decisões mudam por estado próprio do nó, não por informação oculta, e isso é documentado.
+
+**Riscos**
+
+- Envolver uma clonagem com o helper faz o filho apontar `_gameRef` para o pai.
+- `checkSimulatedAscension` pode divergir do motor (ver a tarefa).
+
+**Esforço:** P/M.
+
+### L13c — Visão pública do oponente nas entradas de decisão
+
+**Classe:** paridade; muda decisões. Último sublote do L13.
+
+**Objetivo:** no jogo vivo, as estratégias e as três entradas do bot leem o oponente pela mesma regra da projeção opaca dos nós.
+
+**Dependência de medição:** L13a (raízes novas) e L13b (elo).
+
+**Tarefas**
+
+- [x] Helper `publicOpponentView(opponent)` em `src/core/ai/common/planningCopy.ts`, junto de `PUBLIC_UNKNOWN_CARD_FIELDS`. Ele aplica a regra de `registerPublicOpponentProjection` (`PUBLIC_UNKNOWN_CARD_FIELDS`, `_simUnknownCard` e `cardKind: "monster"` só no campo) sem alterar essa função; memoriza as projeções por carta viva (`WeakMap`) e recopia os campos de colocação a cada chamada; mantém como referências vivas as cartas viradas para cima e o Cemitério; usa os mesmos campos de jogador da cópia (`simulationBridge.ts:95-98`).
+- [x] `BaseStrategy.getOpponent` (`BaseStrategy.ts:474-496`): no jogo vivo (sem `_isPerspectiveState` e com `getOpponent`, como `perspective.ts:94-95`), devolve a visão. O tipo de retorno não muda e não há cast duplo. A regra de "jogo vivo" ficou no helper `publicPlayerForViewer`, que também serve ao substituto de assento do perfil em `dragon/linePlanning.ts:214`, sítio que o desenho não listava. Esse substituto mantém a suposição de assento do backlog.
+- [x] As três entradas do bot: `ascensionController.ts:42` (oponente entregue aos ganchos) e os substitutos de `:145-147` e `:186-189`; o `oppField` de `actionValidation.ts:203-213` e `:226-230` e de `actionExecutors/summon.ts:118-136`.
+- [x] ChainAwareness (`ChainAwareness.ts:180-201`, `:225-280` e `:310`): carta com `isFacedown` ou `_simUnknownCard` passa a ser desconhecida, e a mão do oponente sai da consulta. A falta de `spell` em `BlockingCategory` não é corrigida (política; backlog). O ramo `chainSystem`, que não tem chamador, recebe o mesmo filtro.
+- [x] Tolerâncias que preservam fatos públicos: `void/combos.ts:66-76` conta a ocupação da zona, não o `cardKind` de Magia/Armadilha; as listas de nomes deixam de receber `undefined`, sem mudar a ordem (`arcanist/priorities.ts:147` e `:646`, `dragon/generation.ts:770` e `:787`, `luminarch/defensePolicy.ts:505`), porque `arcanist/simulation.ts:51-71` casaria `undefined`. `luminarch/defensePolicy.ts:505` já ignorava nome ausente e não mudou. O filtro vem depois do `slice(0, 3)`: carta oculta ainda ocupa vaga, porque filtrar antes acrescentaria nomes, o que seria política.
+- [x] Valor da carta virada para baixo onde hoje se lê o atributo real (decisão provisória P2): o que a projeção dá, como nos nós. Atributo ausente vale 0, os helpers mantêm o próprio valor público e `"printed"` vale 0 para carta do oponente. Sai por construção, sem código. Efeitos visíveis, sem compensação: a Void deixa de baixar a Void Mirror Dimension; no Dragon, DEF 0 em carta virada liga `battleBridge`, com `turnMode` `mainBattleMain2` e `nodeBudget` 260; e, pela leitura do código, a Tera e o Lightning Lance do Arcanist ficam otimistas contra carta virada.
+- [x] Auditoria de identidade e de motor: nenhuma carta oculta da visão é comparada por referência com uma carta viva (usar `instanceId`) nem passada a um método do motor. A sonda acha quatro origens no motor, todas só de leitura: `chain/legality.ts`, `game/combat/availability.ts:30`, `Player.ts:258` e `:320`, e o retrato de `activationContext.analysis` em `chain/segoc.ts`, que só o Bloomrot preenche e que o motor não lê.
+- [x] Auditoria dos caminhos que nunca viram a projeção, porque só rodam no jogo vivo: perfis de planejamento (inclusive os campos fora da chave da raiz `profile`: `critical`, que no Bloomrot também vem de `battleProfile.critical`, os booleanos da Miragebound e o `bestFinisherPlan` do Void), ganchos de Ascensão e de resolução, P2 e OpponentPredictor. Uma exceção ali faz `analyzeOpponentPosition` devolver `null` e desliga a P2 (`BaseStrategy.ts:588-590`). Com os 46 `try/catch` de `src/core/ai`, `src/core/bot`, `Bot.ts` e `AutoSelector.ts` instrumentados, 81 duelos dão 0 exceções engolidas, 0 `undefined` nas listas de nomes e a mesma contagem de `checked` na P2.
+- [x] Nenhum prior de backrow: o desconto fixo de `BaseStrategy.ts:197-201` continua. Sem nomes de carta.
+
+**Validação**
+
+- Controle de L09: **todas as raízes** (generation, ascension, profile, P2, TLS, Beam, Greedy e ataque) com `actionDiff = scoreDiff = 0`; `nonReproducible = 0` ou explicado (o caso do TLS em `burningwest:dragon:0` foi explicado em L09); guarda sem disparos.
+- Sonda de acessores de L12b (`.cache/plan23-work/L12b/make-diag.cjs`), adaptada para armar as armadilhas em toda reexecução, no recorte dos 5 casos de L12b: sobram só leituras de regra e de identidade (`Player.ts:320`, prévias e `mainPhaseIdentity`). A sonda é descartável, e o harness volta ao estado do commit.
+- Testes: `test/ai/planningHeuristics`, `autoSelectorVisibility`, `architectureArcanist*`, `arcanistDesignDecisions`, `architectureDragon*`, `architectureLuminarch*`, `architectureMirageboundMigration`, `mirageboundSourcePresenceS02`, `architectureVoid*`, `architectureShadowHeart*`, `bloomrot*`, `architectureBurningWest*`, `techZero*`, `mainPhase*`, `test/ascensionSelection`, `searchBehavior`, `turnLineOwnerPolicy`, `architectureNormalSummon` e `architectureLpQuote`; replays `canonicalReplay`, `canonicalDriver`, `arcanistDesignReplay`, `arcanistPriorityOneReplay`, `plannedTargetReplay` e `fusionDecisionReplay`. Também typecheck, auditoria e `npm test`.
+- Smoke com os 9 presets: `--matchups arcanist:miragebound,dragon:luminarch,void:shadowheart,miragebound:miragebound,bloomrot:burningwest,techzero:arcanist --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L13b. Controle de invariância contra L13b-inv. Ponte N = 2 no commit, só como "antes" de L14 (L13c não muda a projeção da raiz do TurnLineSearch nem o passo de batalha). Lote de efeito amplo. O M1 roda no mesmo commit.
+
+**Critério de saída (vale para o L13 inteiro):** critério de aceite geral; todas as raízes zeradas; sonda limpa. Se sobrar diferença, abre-se L13d por módulo antes do M1.
+
+**Esperado:** generation 94 / 8 → 0 / 0, e ascension e profile em 0 / 0. Mudam decisões no Arcanist, na Miragebound, no Dragon, no Void e no Luminarch, e podem mudar no Shadow-Heart e no Bloomrot, onde o vazamento era latente. Burning West e Tech-Zero devem ficar iguais (controle negativo). Perdas de placar são documentadas sem compensação.
+
+**Riscos**
+
+- Identidade por referência e chamadas ao motor com cartas da visão.
+- Acesso a `name` sem guarda nos caminhos que só rodam no jogo vivo, e leitores que provam a ocupação da backrow pelo `cardKind`.
+- Testes de unidade com `Game` real que fixam a leitura oculta: a asserção só muda com aval do usuário; replays com bot que mudarem seguem E12. Nos dois casos, o sublote para até o aval.
+- As saídas de `buildActivationContextForEffect` e as entradas do AutoSelector mudam o playback v27, o que a premissa do merge atômico cobre.
+- Custo de `getOpponent` em laço, mitigado pela memória por carta.
+- Se a auditoria achar consumidores que comparam por referência, o sublote passa a G e é dividido em estratégias e bot.
+
+**Esforço:** M.
+
+---
+
+## M1 — Ponto intermediário N = 20
+
+Ver "Política de medição". Roda no commit de L13c, com o controle de invariância (o de L13c, no mesmo commit). Um defeito novo bloqueia L14 até ser bisseccionado na cadeia N = 5.
+
+**Resultado (05/11/2026), no commit `c01eb9f`:** critério de saída cumprido, com 0 erros, 0 defeitos e controle de invariância zerado. Contra a v1 (`compare` em `.cache/plan23-work/L13c/M1-vs-v1.md`):
+
+| Preset | v1 | M1 | Divergência v1 → M1 |
+| --- | ---: | ---: | --- |
+| Shadow-Heart | 39,1% | 40,6% | 0,047 → 0,046 |
+| Luminarch | 40,0% | 38,8% | 0,072 → 0,059 |
+| Void | 39,1% | 38,4% | 0,204 → 0,206 |
+| Dragon | 82,2% | 82,2% | 0,047 → 0,046 |
+| Arcanist | 41,3% | 41,3% | 0,078 → 0,041 |
+| Miragebound | 67,2% | 67,5% | 0,072 → 0,066 |
+| Bloomrot | 37,5% | 37,2% | 0,159 → 0,078 |
+| Burning West | 25,6% | 25,6% | 0,082 → 0,083 |
+| Tech-Zero | 78,1% | 78,4% | 0,053 → 0,046 |
+
+Os ICs de todas as diferenças contêm zero. Dos 1.620 casos, 1.581 têm o mesmo resultado e 39 viram de vencedor; 229 mudam duração ou PV. `Unsupported` do TLS: Tech-Zero 36.668 → 970, Void 54 → 35 e Bloomrot 327 → 379. O M1 passa nas regras de elegibilidade do harness, mas não é baseline: a baseline nova sai só em L28.
+
+---
+
+## L14 — Posição de Special Summon na simulação
+
+**Item:** "Posição de Special Summon na simulação" (E5).
+
+**Tarefas**
+
+- [x] Reproduzir com `.cache/plan23-probes/ssPosition.mts`: no caso Imp → Gecko, o runtime invoca em ATK e a simulação em DEF, nos dois assentos.
+- [x] `chooseSpecialSummonPosition` (`src/core/ai/common/simulatedActions/shared.ts:1170-1192`) ganha `preferredPosition` opcional, aplicado depois da posição forçada e antes do chooser, como em `src/core/effects/activation/positionChoice.ts`. `applySummonState` repassa o parâmetro.
+- [x] `applySpecialSummonFromZone` calcula a preferência com a função de L03, a partir de `options.actionContext`, `options.activationContext?.actionContext`, `action.targetRef` e `card.name`. Uma função interna recebe a flag `contextualPosition`: o handler exportado passa `true`, e o wrapper de counter limit passa `false`, como o runtime. `applyConditionalSummonFromHand` também calcula a preferência.
+- [x] Não aplicar a preferência onde o runtime não aplica: token, `hand_with_cost`, `tiered_cost`, `search_then_optional`, `draw_and_summon`, Sincro, Fusão, Ascensão e lifecycle. `bounce_and_summon` fica como está. `special_summon_matching_level` não tem handler simulado, e `draw_and_summon` para depois da compra.
+- [x] Conferir na sonda o merge raso do `actionContext` dos triggers simulados contra o contexto limpo do runtime. Se a preferência de um efeito vazar para um trigger, isolar o `actionContext` por efeito neste lote. A sonda confirmou o vazamento (14 de 18 casos). O isolamento cobre só a chave `specialSummonPositions`, nos dois despachos de `dispatchSimulatedEvent` (`ownSummonPositions`): o resto do contexto herdado é usado de propósito, como as `targetPreferences` de `bloomrot/battle.ts:236`.
+
+- [x] Conferir a Ascensão simulada sem posição planejada: a carta fica com `position: "choice"` (`src/core/ai/common/simulation.ts`, caso da Ascensão), hoje só no combo do Rainbow (`dragon/combos.ts`). Achado de L07j, sonda `scratchpad/plan23/L07j/finding_ascension_choice.mts` (só o lado da simulação). A sonda não existe mais; a conferência foi refeita com `val/ascensionParity.mts` e confirmou o achado. A posição livre agora passa pelo chooser antes de pagar o material, como no runtime, sem preferência (`simulation.ts:3465`). É latente: as 84 Ascensões simuladas do N = 1 têm posição planejada, e o combo do Rainbow só alimenta log e um filtro por nome.
+
+**Validação**
+
+- Na sonda, runtime e simulação iguais nos dois assentos. Variações: Infusion (`byName` defense), Arcanist (default e `byTargetRef`), posição forçada e counter limit; nas duas últimas, a preferência é ignorada nos dois lados.
+- Controle de L09 (N = 1): todas as raízes continuam com `actionDiff = scoreDiff = 0`, e a guarda sem disparos.
+- Testes: `test/ai/architectureShadowHeartMigration`, `bounceAndSummonSimulation`, `shadowHeartCosts`, `planningExecution`, `arcanistActivationCosts`, `protectorActivation`, `architectureShadowHeartRuntimePolicy`, `architectureMirageboundMigration`, `architectureArcanist*`, `architectureLuminarchMigration`, `techZeroSimulation`, `test/shadowHeartTargetingTiming`, `test/contracts/fieldPlacementActions`, `test/arcanistActivationModes` e `test/arcanistDesignDecisions`. Também typecheck e `npm test`.
+- Smoke: `--matchups shadowheart:arcanist,arcanist:miragebound,shadowheart:burningwest --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra M1/L13c. Ponte N = 2 antes e depois (a posição projetada muda a avaliação de batalha da ponte). Esperado: `mismatchByPath` `bot.field` cai em Shadow-Heart, Arcanist e Miragebound.
+
+**Critério de saída:** critério de aceite geral.
+
+**Riscos**
+
+- O opt-out do counter limit precisa ser exato.
+- O default attack do Arcanist passa a valer na projeção e muda a avaliação de batalha. Isso não autoriza ajustar pesos.
+
+**Esforço:** P.
+
+---
+
+## L15 — Void Lost Throne na simulação
+
+**Item:** "Void Lost Throne na simulação" (D1, E6).
+
+**Tarefas**
+
+- [x] Reproduzir com `.cache/plan23-probes/lost_throne_probe.mts`: `buildActionFilter` gera `position: 'choice'`, e a busca devolve `[]`.
+- [x] `src/core/ai/common/targetSelection.ts:365`: tirar `position` das chaves promovidas do topo da action. `filters.position` aninhado continua valendo como filtro.
+- [x] `destroy_targeted_cards` sem `targetRef` (simulação): traduzir `action.position` em filtro de campo, como o runtime faz.
+- [x] `applySearchThenOptionalSpecialSummonFromHand`: a busca recebe `options` e é registrada como `applyAddFromZoneToHand` (`lastAddedToHand` e `card_moved` do Deck para a mão). A invocação delega a `applySpecialSummonFromZone` com uma ação sintetizada: zona mão, 1 carta, `contextLabel` com sufixo exclusivo `:followup_summon`, posição e restrição de ataque da action, `chooseSpecialSummonCards: () => [searched]` e `contextualPosition: false`. A checagem de `summonCondition` e de zona livre continua. A ação sintetizada leva também `filters: { cardKind: "monster" }`, como a guarda do runtime, e o `player` da busca; a delegação usa o resolvedor interno `resolveSpecialSummonFromZone`.
+- [x] `optional`: a simulação continua invocando quando a condição vale (E6). A leitura passa por um helper comum à política do runtime (`aiConfirmsFollowupSummon`, em `actionHandlers/shared.ts`).
+
+**Validação**
+
+- Na sonda, os Voids com ATK até 1600 são encontrados; o Hollow vai da mão ao campo com `lastSummonedFromZone` `hand`, o trigger dispara e o Deck diminui, nos dois assentos.
+- Controle de L09 (N = 1): todas as raízes continuam com `actionDiff = scoreDiff = 0`, e a guarda sem disparos.
+- Testes: `test/ai/bounceAndSummonSimulation`, `exactDecisionSimulation`, `searchBehavior`, `architectureVoid*`, `planningExecution`, `architectureActionGenerationEntries`, `techZeroEffectSimulation`, `techZeroLifecycleSimulation`, `mirageboundSourcePresenceS02`, `bloomrotCounterParity`, `architectureShadowHeartMigration`, `protectorActivation`, `unsupportedSimulationSearch`, `actionContinuationSimulation` e `test/replay/optionalEffectsReplay`. Também typecheck e `npm test`.
+- Controles: só mudam casos com Lost Throne.
+- Smoke: `--matchups void:void,void:bloomrot,void:shadowheart,techzero:void --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L14. Ponte N = 2 antes e depois. Esperado: amostras com `spell:Void Lost Throne` perto de zero e queda da divergência do Void.
+
+**Critério de saída:** critério de aceite geral.
+
+**Riscos**
+
+- Se o `contextLabel` colidir com decisões de outro passo do mesmo efeito, a simulação consome a decisão exata errada.
+- O hook `rankSearchCandidates` do Void passa a rodar na simulação.
+
+**Esforço:** P.
+
+---
+
+## L16 — Luminarch: seleção simulada sem viés de DEF
+
+**Item:** "Preferência de alvo sem `targetPreference`" (D1: default do runtime).
+
+**Dependência de medição:** L14 (o resíduo do Moonblade Captain vem da posição).
+
+**Tarefas**
+
+- [x] Reproduzir com `.cache/plan23-probes/repro_pref.mts`, que compara o `effectEngine.resolveTargets` real com `selectSimulatedTargets` no Sunforged Blade e no revive do Moonblade.
+- [x] Remover `preferDefense: true` de `buildLuminarchSimulationOptions` (`src/core/ai/luminarch/simulation.ts:1388`).
+- [x] Remover `preferDefense: !targetPreference` do caso `fieldEffect` da simulação comum, mantendo a `targetPreference` do hook. Esse caminho também alcança a Miragebound Oasis, que não tem hook e tem alvos por `activationCases`: a simulação antiga escolhia DEF e o runtime ATK. É efeito de paridade e explica a queda da divergência da Miragebound.
+- [x] Tirar `preferDefense` dos contratos de seleção simulada. `CardValueOptions.preferDefense` continua para os avaliadores.
+
+**Validação**
+
+- Na sonda, a simulação escolhe o mesmo alvo que o AutoSelector.
+- Controle de L09 (N = 1): todas as raízes continuam com `actionDiff = scoreDiff = 0`, e a guarda sem disparos.
+- Testes: `test/ai/architectureLuminarch*`, `architectureShadowHeartLuminarch`, `commonSimulation`, `bloomrotSimulation`, `techZeroSelectionParity`, `exactDecisionSimulation` e `autoSelectorVisibility`. Também typecheck e `npm test`.
+- Smoke: `--matchups luminarch:shadowheart,bloomrot:luminarch,techzero:bloomrot --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L15. Ponte N = 2 antes e depois. Esperado: queda da divergência do Luminarch, de `state_mismatch|summon:Moonblade Captain` e de `host_equip_mismatch|Crescent Shield`.
+
+**Critério de saída:** critério de aceite geral.
+
+**Riscos**
+
+- O planner do Luminarch passa a valorizar menos linhas que dependiam de um alvo defensivo que o runtime nunca escolhia.
+- As assimetrias residuais do fallback continuam (backlog) e não podem ser compensadas com pesos.
+
+**Esforço:** P.
+
+---
+
+## L17 — Simulador de batalha de um passo do laço vivo
+
+**Item:** "Batalha gulosa", paridade do passo único (D1: a generalização vai para a 2.4).
+
+**Dependência de medição:** L12 (laço já mascarado).
+
+**Tarefas**
+
+- [x] Reproduzir com `.cache/plan23-probes/battle_probe.mts` adaptada: comparar o clone depois de `bot.simulateBattle` com o estado real depois de `game.resolveCombat` (PV, campo e Cemitério), nos dois assentos.
+- [x] `src/core/Bot.ts` (`simulateBattle`): aplicar `resolveVisibleBattleStep` (L03) no clone, com `moveCardToZone` e `state` como em L02, e usar a substituição simulada de destruição. Isso corrige:
+  - a proteção em batalha ignorada;
+  - `preventsBattleDamageToController` e `battleDamageHealsControllerThisTurn`;
+  - o empate 0 × 0 (o runtime só destrói com `attackerAtk > 0`, `src/core/game/combat/damageStep.ts:818`);
+  - os equipamentos do monstro destruído.
+- [x] Os hooks de arquétipo recebem o mesmo contexto de hoje. Nenhum bônus ou limiar do laço muda. Para isso, o termo de −0,5 de `battleController.ts` passa a ler o ATK de antes da batalha, e o dano inferido do Burning West não conta a cura do oponente. A aura do Shadow-Heart Devastation Dragon, que o runtime verifica antes das proteções, entra no passo por um parâmetro opcional lido só de fontes viradas para cima; sem ela, o lote pioraria esse caso.
+
+**Validação**
+
+- Na sonda, o passo previsto bate com o runtime nos casos de proteção, prevenção e empate.
+- Controle de L09 (N = 1): todas as raízes continuam com `actionDiff = scoreDiff = 0`, e a guarda sem disparos.
+- Testes: `test/ai/techZeroBattle`, `architectureBattleIdentity`, `architectureDamageCalculationSimulation`, `architectureBattleResourceActions`, `bloomrotPriorityOneAttackLock`, `mainPhaseConcurrency`, `mainPhaseRecovery` e `shadowHeartFusionPlanning`. Também typecheck e `npm test`.
+- Smoke: `--matchups dragon:luminarch,void:bloomrot,techzero:shadowheart,burningwest:miragebound --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L16. Sem ponte (o simulador do laço vivo não é usado pela ponte).
+
+**Critério de saída:** critério de aceite geral.
+
+**Riscos**
+
+- Hooks que leem status do monstro destruído depois do reset mudam de valor; isso é paridade.
+- Nenhum valor de continuação entra aqui.
+
+**Esforço:** M.
+
+---
+
+## L18 — Limite base de ataques unificado e estado do hook Tech-Zero na ponte
+
+**Item:** "Batalha gulosa", limite de ataques com `dynamicExtraAttacks` e hook Tech-Zero da ponte.
+
+**Tarefas**
+
+- [x] `getPlannerMaxAttacks` (`src/core/ai/TurnLineSearch.ts:889-913`), `getMaxAttacks` (`src/core/ai/common/cardValue.ts:173-191`) e o cálculo de `Bot.simulateBattle` passam a usar a função pura do **limite base** de L03. No runtime, o limite dinâmico é o número de cópias no Cemitério do dono, e 0 se não houver nenhuma. A carta afetada hoje é a de `src/data/cards/void.ts:1539`, que conta Void Hollow.
+- [x] Preservar os ajustes de segundo ataque e de ataque a todos (`canMakeSecondAttackThisTurn` e `canAttackAllOpponentMonstersThisTurn`), que o runtime trata nos chamadores (`availability.ts:838-859` e `:930-947`) e que `getPlannerMaxAttacks` já cobre.
+- [x] Definir o caso sem dono: `getMaxAttacks` é chamado com `owner` nulo pelo AutoSelector. Sem dono, o limite dinâmico usa o valor neutro documentado na função pura (o mesmo de hoje para esse caminho), sem ler Cemitério.
+- [x] Hook Tech-Zero na ponte: passar o estado pré-batalha à projeção. Hoje ele recebe o estado pós-batalha e pode devolver -10000; o caminho está inativo porque o Tech-Zero usa `mainOnly`.
+
+**Consumidores no runtime:** AutoSelector (`estimateMonsterValue`) e escolha de materiais de fusão do bot. O lote deixa de ser só simulação e cai na premissa do merge atômico.
+
+**Validação**
+
+- O corpus pode mudar, porque `cardValue` entra na avaliação. Cada caso é explicado.
+- Controle de L09 (N = 1): todas as raízes continuam com `actionDiff = scoreDiff = 0`, e a guarda sem disparos.
+- Testes: `test/ai/techZeroBattle`, `architectureBattleIdentity`, `architectureVoid*`, `planningHeuristics`, `autoSelectorVisibility`, `shadowHeartFusionPlanning` e `test/replay/fusionDecisionReplay`. Também typecheck e `npm test`.
+- Smoke: `--matchups void:dragon,void:luminarch,shadowheart:void --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L17. Ponte N = 2 antes e depois, como manda a regra da fase 2. Esperado: mudanças no Void e nas linhas com ponte que dependem do limite.
+
+**Critério de saída:** critério de aceite geral; segundo ataque e ataque a todos inalterados nos testes.
+
+**Riscos**
+
+- A avaliação de board de todos os presets passa pelo limite. A mudança fica isolada neste lote.
+- O estado novo do hook Tech-Zero não pode ativar o caminho nos perfis `mainOnly`.
+
+**Esforço:** P.
+
+---
+
+## L19 — Vínculo Trap–monstro e Call of the Haunted na simulação
+
+**Item:** "Cobertura de handlers simulados", vínculo do Call of the Haunted (D1).
+
+**Tarefas**
+
+- [x] Reproduzir com `test/callOfTheHaunted.test.ts` e uma sonda: na simulação, o monstro vinculado sai e a Trap fica, e vice-versa, ao contrário do runtime (`src/core/game/zones/movement.ts`).
+- [x] `moveCardToZone` (`src/core/ai/common/zones.ts:622`), no padrão dos equipamentos: quando sai um monstro com `boundTrapSource`, a Trap ligada é destruída se estiver com a face para cima, no spellTrap e sem negação. Quando sai uma Trap Contínua com `boundMonsterTarget`, o monstro é destruído. Os dois links são limpos, `card_to_grave`/`card_moved` saem pelo emissor simulado, e o dono vem de `options.state`. Ao contrário da limpeza de equipamentos, a destruição vinculada do runtime roda depois do `card_moved` da carta que saiu; por isso ela é adiada pelo recibo do movimento (`settleBoundDestructions`). O Tributo simulado passa o emissor e publica também a limpeza de equipamentos. Monstro opaco, sem link próprio, é achado pela Trap pública que aponta para ele.
+- [x] Handler `call_of_haunted_summon_and_bind` em `simulatedActions/summon.ts`, reaproveitando `applySpecialSummonFromZone` e gravando os links, registrado em `simulatedActions/index.ts`.
+
+**Validação**
+
+- Controle de L09 (N = 1): todas as raízes continuam com `actionDiff = scoreDiff = 0`, e a guarda sem disparos.
+- Testes: `test/callOfTheHaunted`, `test/bloomrotEquipHostExit`, `test/ai/architectureDragon*`, `planningExecution` e `simulatedActionInventory`. Também typecheck e `npm test`.
+- Smoke: `--matchups dragon:shadowheart,dragon:void --duels 2 --check-replays`.
+
+**Medição:** N = 5 contra L18. Ponte N = 2 antes e depois (`moveCardToZone` é usado pela ponte desde L02). Espera-se pouca ou nenhuma mudança (1 ativação em 162 duelos na sonda).
+
+**Critério de saída:** critério de aceite geral. Ao fim deste lote, um `compare` R0 × L19 (N = 5) resume para o usuário o efeito do bloco de IA.
+
+**Riscos**
+
+- A ordem dos eventos e as checagens de negação e de face precisam seguir o runtime; senão nasce um `host_equip_mismatch`.
+
+**Esforço:** M.
+
+---
+
+## L20 — Apresentação: liberar a perda de PV antecipada não consumida
+
+**Item:** "LP exibido quando a Damage Step aborta", parte A (D7).
+
+**Tarefas**
+
+- [x] `src/ui/renderer/animations.ts`: `releaseHeldLpLoss(this: Renderer, player)` desliga `holdFinalUntilReal`. Com a fila ociosa, chama `setDisplayedLp(player, player.lp)` (salto, D7). Com a fila animando, deixa o `finally` existente ressincronizar. Também limpa o hold das entradas ainda na fila, porque a fila o religa ao chegar em cada entrada; sem isso, uma entrada atrás de outra animação termina presa no valor previsto.
+- [x] Registrar em `RENDERER_METHODS` (`src/ui/renderer/attachments.ts`), declarar no `GameUI` (`src/core/contracts/ui.ts`), criar o fallback inerte `() => false` em `src/core/UIAdapter.ts` e o método opcional na porta de UI do CombatHost (`src/core/game/combat/resolution.ts`).
+- [x] Atualizar `AGENTS.md` (contagem de 114 para 115 métodos anexados do Renderer) e `docs/Estrutura do Projeto.md`, se citar a contagem.
+- [x] `resolution.ts`: closure `releaseBattleLpLossFeedback` e try/finally do primeiro `setBattleLpLossPreview` ao retorno final. Cobre aborto, `stoppedBeforeCalculation`, falha de preparação, divergência de valor e os retornos `continueDeclaredAttack()`. A liberação acontece depois do retorno de `executeDamageStepTransaction`.
+- [x] Não mexer em `damageStep.ts`, na ordem de eventos nem na engine.
+- [x] Observar no navegador o achado adjacente: com a fila ociosa, `updateLP` limpa o hold no meio das janelas da Damage Step (`src/ui/renderer/log.ts:206-210`). Se reproduzir, vira item de apresentação próprio. Reproduziu: janela de 4 s com `updateBoard` antes do dano, `8.000 → 6.000 → 8.000 → 6.000`. Registrado na triagem.
+
+**Validação**
+
+- Testes: `test/lpPresentation`, `test/chain/damageStep`, `test/contracts/uiAdapter`, `test/contracts/gameAttachments` e `test/types/gameDomains`. Também typecheck.
+- Portão de golden.
+- Smoke: `--matchups bloomrot:void,shadowheart:bloomrot --duels 2 --check-replays`.
+- Navegador (`npm run dev`, Laboratório): uma prévia não consumida volta ao PV real no fim da animação, e um ataque normal mostra a perda uma vez só.
+
+**Medição:** N = 2 com `--expect-identical` contra L19 e controles idênticos (no headless o caminho não roda).
+
+**Critério de saída:** prova idêntica; comportamento confirmado no navegador.
+
+**Riscos**
+
+- Liberar antes do consumo faria o contador voltar ao PV anterior antes do dano real.
+
+**Esforço:** P.
+
+---
+
+## L21 — `executed` pós-efeito preservado
+
+**Item:** "`executed` pós-efeito" (E7).
+
+**Tarefas**
+
+- [x] Reproduzir com `.cache/plan23-probes/executed/probe.mts`: `linkResult.executed = false` mesmo com o primário executado.
+- [x] `ChainAfterResolutionState` (`src/core/contracts/chainRuntime.ts`) ganha `executed: boolean`, iniciado em `src/core/chain/resolution.ts`.
+- [x] `src/core/chain/afterResolution.ts:23-33`: acumular `executed` depois de cada `applyActions` que não pediu seleção. Na falha, devolver `{ ...state.primaryResult, ...result, executed: state.executed }`; no sucesso, `{ ...state.primaryResult, executed: state.executed }`.
+- [x] O acumulador não entra em `getAfterResolutionState`, que vai para o hash canônico.
+
+**Validação**
+
+- Sonda: `executed: true` com `success: false` e `failedAction: conditional_actions`, e eventos `chain_link_resolution` idênticos.
+- Testes: `test/chain/afterEffectResolution`, `test/ai/arenaChainOutcomes`, `test/replay/afterResolutionMetadata`, `test/replay/techZeroPriorityTwoReplay` e `test/contracts/chainAttachments`. Também typecheck (inclui `test/types/chainRuntime.type-test.ts`) e `npm run audit:chain`.
+- Portão de golden.
+- Smoke: `--matchups techzero:shadowheart,techzero:void,bloomrot:techzero --duels 2 --check-replays`.
+
+**Medição:** N = 2 com `--expect-identical` contra L19 e controles idênticos.
+
+**Critério de saída:** prova idêntica; hash canônico inalterado.
+
+**Riscos**
+
+- Se o acumulador entrar na projeção canônica, o hash muda e o item vai para o pacote.
+
+**Esforço:** P.
+
+---
+
+## L22 — Gates de playback do agendamento da IA
+
+**Item:** parte de decision-broker:10 separada por E9.
+
+**Objetivo:** no playback, nenhum agendador chama a IA. Hoje `scheduleAiMoveAfterPaint` em `src/core/effects/actions/combat.ts:48` não checa `replayMode`, ao contrário das cópias de `src/core/game/turn/lifecycle.ts:85` e `src/core/game/turn/transitions.ts:122`.
+
+**Tarefas** (só regra, conforme E9)
+
+- [x] Gate de `replayMode === "playback"` no agendamento e na execução de `scheduleAiMoveAfterPaint` de `effects/actions/combat.ts:48`, no mesmo formato das duas cópias que já checam.
+- [x] Gatear também `schedulePhaseRetry` (`turn/transitions.ts:86`).
+- [x] Não unificar as três cópias neste lote. Só a cópia de `turn/lifecycle.ts` emite estágios de progresso (`ai_move_scheduled` e `ai_move_before_makeMove`, `turn/lifecycle.ts:96` e `:111`), que alimentam `guard.peaks.progress` e o contador `actions` do harness. A unificação é refatoração equivalente e vai para o backlog. Para ela: a cópia de `combat.ts` não espera `waitForCommandsToSettle`, que as outras duas esperam, e não checa `isDisposed` no agendamento; sem efeito reproduzido no Node.
+
+**Validação**
+
+- Testes: `test/replay/phaseAiScheduling`, `test/phaseLifecycle`, `test/phaseRetryLifetime`, `test/ai/mainPhaseConcurrency`, `test/replay/canonicalDriver` e os testes de batalha do bot. Também typecheck e `npm test`.
+- Portão de golden.
+- Smoke: `--matchups shadowheart:luminarch,void:dragon,techzero:bloomrot --duels 2 --check-replays`.
+
+**Medição:** N = 2 com `--expect-identical` contra L19, sem `--ignore` (picos de progresso e ações iguais), e controles idênticos.
+
+**Critério de saída:** prova idêntica; nenhuma chamada de IA agendada em `replayMode` nos testes de playback.
+
+**Riscos**
+
+- Um gate posto fora do lugar mudaria a intercalação ao vivo; a prova sem `--ignore` detecta isso.
+
+**Esforço:** P.
+
+---
+
+## Pacote de replay `engine-rules-v28` (L23–L27)
+
+**Regras do pacote**
+
+- Um único bump, `engine-rules-v27` → `engine-rules-v28` (D4), como último commit do pacote (L27). Nada que mude a interpretação de replay entra depois dele.
+- O pacote vive na própria branch da 2.3, sem branch de integração separada, com a mesma disciplina do v27 da fase 1.5.
+- Dentro do pacote, goldens só mudam com justificativa por item.
+- Contingência: L23 é aditiva e, sozinha, não justificaria bump (o driver não compara `events`). Ela entra no pacote porque divide o mesmo bump com L24 e L26.
+
+### L23 — Etapa `after_resolution` em `chain_link_resolution`
+
+**Item:** "Visibilidade pós-efeito da Arena".
+
+**Tarefas**
+
+- [x] `stage` de `ChainLinkResolutionEventPayload` (`src/core/contracts/events.ts`) ganha `after_resolution`. O `completed` continua no fim do efeito primário (`src/core/chain/resolution.ts:208`), como fixam `afterEffectResolution.test.ts` e `techZeroPriorityTwoReplay.test.ts`.
+- [x] Mover `notifyChainLinkOutcome` para `src/core/chain/link.ts`, conferindo colisão de nome. Em `afterResolution.ts`, chamá-la só nos dois pontos terminais em que ações pós-efeito rodaram (falha e conclusão), com o resultado combinado de L21.
+- [x] `src/core/ai/ArenaAnalytics.ts`: o `Set` vira `Map<chave, amostra>`. Uma etapa terminal posterior com outcome diferente reclassifica a mesma amostra; uma repetição idêntica não faz nada. O valor do `Map` é `amostra | null`: `null` marca uma chave sem outcome contável (traço legado ou link sem assento) e preserva a deduplicação atual. A repetição idêntica é a mesma classificação gravada (`outcome`, `failedAction` e `reason`).
+- [x] Atualizar as asserções marcadas CURRENT BEHAVIOR em `test/ai/arenaChainOutcomes.test.ts` (já previsto no roadmap). Também mudou `test/chain/synchroTransactionResponse.test.ts:60`, com aval do usuário: o Synchro pós-efeito bem-sucedido agora publica `after_resolution` com `success`.
+
+**Validação**
+
+- Testes: `arenaChainOutcomes` com as contagens novas; `afterEffectResolution` e `techZeroPriorityTwoReplay` sem mudança (o `completed` não se moveu); `afterResolutionMetadata`, `test/chain/canonicalTrace`, `test/contracts/events`, `test/chain/synchroTransactionResponse`, `test/chain/negation`, `test/techZeroPriorityTwoRuntime` e `test/ai/techZeroResponses`. Também typecheck.
+- Smoke: `--matchups techzero:void,techzero:bloomrot,techzero:techzero --duels 2 --check-replays`.
+
+**Medição:** N = 2 com `--expect-identical` contra L19 (o registro do benchmark não inclui chainLinks).
+
+**Critério de saída:** prova idêntica; contagens novas da Arena justificadas.
+
+**Riscos**
+
+- Falhas pós-efeito legítimas, como o Synchro do Scrapyard sem materiais, passam a aparecer como `partial_failure`.
+
+**Esforço:** M.
+
+### L24 — `card_to_grave` aguardado e Equip na mesma SEGOC do hospedeiro
+
+**Item:** engine-bugs:5, parte B (D6).
+
+**Tarefas**
+
+- [x] Reproduzir com o default invertido em memória: aparecem 3 timeouts em `test/equippedContinuousCounterBuff.test.ts`, nos dois assentos. `.cache/plan23-probes/patch.mts` conta os movimentos destacados (26 de 906 na amostra, todos `equipped_host_left_field`).
+- [x] B1: a limpeza de Equip (`src/core/game/zones/movement.ts`) herda o modo do movimento pai (`atomicGroupId`, `actionContext`/`chainId`/`linkId` e o adiamento), anexando o pacote ao resultado do pai. `MoveCardResult` passa a aceitar uma lista de pacotes adiados, consumida por `src/core/game/zones/destruction.ts`.
+- [x] B2: default `awaitCardToGraveEvent !== false` em `movement.ts`, como já faz `destruction.ts`.
+- [x] Ajustar as 3 asserções de `test/equippedContinuousCounterBuff.test.ts` para responder ou recusar o trigger explicitamente (D6).
+
+**Validação**
+
+- Testes: `test/equippedContinuousCounterBuff`, `test/bloomrotEquipHostExit`, `test/lightDividingSword`, `test/swordOfTwoDarks`, `test/bloomrotPriorityOneTriggers`, `test/replay/equipCleanupReplay`, `test/replay/movementContractsReplay`, `test/replay/bloomrotPriorityOneTriggersReplay`, `test/chain/afterEffectResolution`, `deferredSummonTriggers`, `committedMovedSource`, `test/replay/canonical*` e `test/contracts/fieldPlacement`. Também `npm test`.
+- Smoke nos dois assentos: `--matchups void:bloomrot,bloomrot:techzero,shadowheart:bloomrot,bloomrot:luminarch --duels 2 --check-replays`.
+- Navegador (Laboratório): um hospedeiro com Fungal Armor sai do campo fora de Chain, e o prompt aparece depois do movimento, sem ação concorrente.
+
+**Medição:** N = 5 contra L19 (L20 a L23 só têm provas N = 2). Esperado: registros idênticos ou poucas mudanças raras, todas atribuídas (na amostra de 27 duelos não houve nenhuma).
+
+**Critério de saída:** critério de aceite geral.
+
+**Riscos**
+
+- Inverter o default sem B1 separaria em Chains distintas triggers que deveriam ser simultâneos.
+- Um movimento feito dentro de um listener ou de um prompt pendente pode esperar a si mesmo.
+- A pausa de 160 ms de `movement.ts` passa a valer nos movimentos que antes eram destacados.
+- Com vários pacotes no `MoveCardResult`, a mudança alcança Chain, summon, Sincro e Damage Step.
+
+**Esforço:** M.
+
+### L25 — `card_moved` sem falso destacamento
+
+**Item:** engine-bugs:5, parte A (D1: o `card_moved` já é aguardado). Dentro do pacote por E8.
+
+**Tarefas**
+
+- [x] `emitCardMovedEvent` (`src/core/game/zones/movement.ts:750`): trocar os dois ramos por um único `return await eventResult`. Os quatro chamadores já aguardam o resultado. Remover o `detached_event_emit` falso desse ramo.
+- [x] Marcar `awaitCardMovedEvent` como sem efeito no contrato (`src/core/contracts/gameRuntime.ts`). A remoção das 34 ocorrências fica para o backlog.
+
+**Validação**
+
+- Testes: `test/replay/movementContractsReplay`, `test/replay/equipCleanupReplay`, `test/chain/*`, `test/contracts/gameMovementContracts` e `test/equippedContinuousCounterBuff`. Também `npm test`.
+- Portão de golden e smokes com Bloomrot: `--matchups void:bloomrot,bloomrot:techzero,shadowheart:bloomrot --duels 2 --check-replays`.
+
+**Medição:** N = 2 com `--expect-identical` contra L24, e controles idênticos.
+
+**Critério de saída:** prova idêntica; goldens do pacote inalterados por este lote.
+
+**Riscos**
+
+- Uma rejeição de `card_moved` deixa de ser reportada em duplicidade como `detached_event_emit`. Conferir a política de falhas.
+
+**Esforço:** P.
+
+### L25b — Efeitos de par de batalha resolvidos no runtime
+
+**Item:** bug de regra exposto por L02 (D11). Desde `3256e50`, `register_battle_pair_effect` registra a entrada em `temporaryBattlePairEffects`, mas nada a resolve: só a prévia de PV a lê (`src/core/game/combat/resolution.ts`). A Quick Draw in the Burning West (457) não destrói o monstro do oponente no início da Damage Step, e a finalização adiada da Magia (`deferFinalizationUntil: "battle_pair_effect"`) nunca roda, então ela fica virada para cima na zona. A ponte da IA simula a destruição.
+
+**Objetivo:** o runtime volta a resolver os efeitos de par de batalha, e a Magia de origem sempre recebe um destino.
+
+**Dependência de ordem:** depois de L24 e L25, que mudam o movimento ao Cemitério usado pela destruição; antes de L26, que grava as decisões tomadas durante a resolução.
+
+**Leitura do texto (decisão do usuário, 12/10/2026):** o texto decide o destino da Magia "depois que este efeito resolve", e os dados adiam esse destino até a resolução do par. A revisão de texto e dados fica para a etapa de suporte do Burning West (seção 4 do roadmap). L25b mantém os dados atuais: o tipo da finalização (Setar ou Cemitério) continua decidido na ativação, pela diferença de ATK naquele momento, e é aplicado quando o par resolve. O texto EN/PT da carta não muda.
+
+**Tarefas**
+
+- [x] Reproduzir no runtime, nos dois assentos (humano e bot): com o par registrado, o ataque entre os dois alvos não destrói o monstro do oponente no início da Damage Step, e a Magia fica virada para cima com `pendingSpellTrapFinalization`.
+- [x] Restaurar a resolução de forma genérica no módulo de combate (`src/core/game/combat/`), no início da Damage Step e antes do cálculo, conforme o `timing` da entrada, com o contrato da função removida em `3256e50` (`resolveTemporaryBattlePairEffects`): casar o par pela identidade, conferir que o alvo afetado continua no campo do oponente, aplicar as actions com os alvos do par, tratar `needsSelection` e finalizar a fonte com `resolvePendingSpellTrapFinalization(..., { deferUntil: "battle_pair_effect" })`. Adaptar à transação atual do Damage Step e do Chain, com resolução sequencial e sem lógica nova na fachada.
+- [x] Expiração sem batalha: `cleanupExpiredTemporaryBattlePairEffects` (`src/core/game/turn/cleanup.ts`) aplica a finalização pendente já registrada na ativação, para que nenhuma Magia fique presa na zona.
+- [ ] Conferir contra o runtime corrigido a prévia de PV (`hasMatchingTemporaryBattlePairDamageStepEffect`), a ponte da IA (`resolveSimulatedBattlePairEffects`, `src/core/ai/TurnLineSearch.ts`) e o laço de batalha vivo do bot: mesmo timing, mesma condição de alvo e mesmo destino da Magia.
+- [x] Ampliação aprovada pelo usuário (15/11/2026): a premissa da reprodução não se confirmou no HEAD. A Quick Draw nunca ficava pendente: o destino escolhido pela resolução (`set_source_after_resolution_if`) não chegava ao finalizador, nem no pipeline de ativação nem nos elos de resposta da Chain, e a Magia ia sempre ao Cemitério (`.cache/plan23-work/L25b/diag-head.txt`). O lote também alterou `src/core/game/spellTrap/activation.ts`, `src/core/chain/finalization.ts` e `src/core/contracts/chainRuntime.ts`; elos sem essa escolha seguem iguais. A finalização pendente guarda a versão de localização e é descartada se a Magia saiu e voltou à zona.
+- [x] R1, aprovada pelo usuário (15/11/2026): uma batalha parada na Damage Step antes do cálculo, com o atacante ainda no campo, marca o ataque como usado, como já acontece na Battle Step e como fazia o contrato de `3256e50`. Vale para qualquer carta; sem ela, o Specialist atacava direto depois da destruição pela Quick Draw.
+
+**Validação**
+
+- Testes existentes do Burning West, da Damage Step e da ponte de batalha (`architectureBurningWestEffects`, `architectureBattleIdentity`, `architectureDamageCalculationSimulation`), portão de golden do pacote com justificativa por item e `npm test`.
+- Smoke: `--matchups burningwest:void,burningwest:dragon,luminarch:burningwest,burningwest:techzero --duels 2 --check-replays`.
+- Navegador (Laboratório): ativar a Quick Draw e atacar o alvo do oponente com o alvo Burning West, com diferença de ATK de até 500 e maior que 500; repetir sem batalhar até o fim do turno.
+
+**Medição:** N = 5 contra L24 (L25 só tem prova N = 2), mais controles. Uma sonda conta as Quick Draw presas na zona com finalização pendente no fim do turno.
+
+**Critério de saída:** critério de aceite geral; o caso reproduzido resolve nos dois assentos; nenhuma Magia presa com finalização pendente.
+
+**Riscos**
+
+- O preset do Burning West usa 2 cópias da Quick Draw: decisões e placar do Burning West podem mudar. O teste de sinal decide, sem compensação.
+- Um `needsSelection` no meio da Damage Step precisa retomar sem perder o passo nem duplicar a destruição.
+- Replays v27 com a Quick Draw ativada passam a ser interpretados de outro jeito; o bump de L27 cobre.
+
+**Esforço:** M.
+
+### L25c — Proteção de batalha do equipamento preservada no runtime
+
+**Item:** bug de regra exposto por L07i (D12).
+
+**Objetivo:** no runtime, o `battleIndestructible` concedido por um equipamento ativo continua valendo quando o monstro é negado ou quando a passiva própria dele (`conditional_status`/`position_status`) deixa de valer. Só negar ou remover o equipamento encerra a proteção. Hoje o produtor das passivas (`src/core/effects/passives/passiveBuffs.ts`) apaga o flag sem olhar a origem, e a destruição em batalha (`src/core/game/combat/availability.ts`) exige o flag antes de consultar o equipamento.
+
+**Tarefas**
+
+- [x] Reproduzir nos dois assentos com `scratchpad/plan23/L07i/finding_equip.mts` e `repro.mts` (casos `equip_also_grants`): Metal Armored Dragon em Ataque ou Void Serpent Drake sem Void Hollow, com a Shadow-Heart Shield, perdem a proteção; negados, também.
+- [x] Corrigir de forma genérica: o produtor só apaga o status que a própria passiva concedeu, ou a checagem de batalha consulta o equipamento ativo mesmo sem o flag. A negação ou a remoção do equipamento continuam encerrando a proteção.
+- [x] Negar o equipamento encerra a proteção (D12): hoje a Shadow-Heart Shield negada num monstro sem passiva de status (Void Hollow) continua deixando-o indestrutível em batalha, no runtime (`isActiveEquipForCard` ignora a negação) e na simulação (nada apaga o flag), em 4 de 4 casos (`scratchpad/plan23/L07j/finding_negated_equip.mts`). Corrigir nos dois lados.
+- [x] Conferir a prévia de batalha e a simulação contra o runtime corrigido (a simulação já segue D12 desde L07i, salvo o equipamento negado).
+- [x] As sondas de L07i e L07j não existem mais (o scratchpad foi apagado); foram recriadas numa matriz única em `.cache/plan23-work/L25c/probe/finding_equip.mts` e rodadas no HEAD exportado com `git archive`. As duas alternativas da correção foram aplicadas juntas: os produtores de status só removem o que a própria regra concede e mantêm o flag fiel (a IA, as prévias e o hash do replay leem o flag), e `canDestroyByBattle` consulta o Equip ativo antes do flag. Um monstro sem regra de status própria passa a seguir os Equips que o protegem, no runtime e na simulação (`src/core/ai/common/zones.ts`), pela função compartilhada de `src/core/effects/passives/passiveBuffs.ts`.
+- [x] A premissa da medição não se confirmou: a Tech-Zero Final Singularity, do Extra Deck do preset Tech-Zero, nega a Shield do preset Shadow-Heart. A medição foi N = 5 contra L25b, com o critério de aceite geral.
+
+**Validação**
+
+- Testes do caminho (Shadow-Heart Shield, passivas de status, combate), portão de golden do pacote com justificativa por item e `npm test`.
+- Navegador (Laboratório): Shield em um monstro com passiva de status negado ou fora da condição; o monstro não é destruído em batalha até a Shield ser negada ou removida.
+
+**Medição:** prova N = 2 com `--expect-identical` contra L25b se nenhum preset alcançar o caso (a Shield só equipa monstro do próprio jogador, e nenhum preset a combina com essas passivas); senão, N = 5 contra L25b.
+
+**Critério de saída:** a reprodução passa nos dois assentos; prova idêntica ou critério de aceite geral.
+
+**Riscos**
+
+- Replays v27 com esse caso passam a ser interpretados de outro jeito; o bump de L27 cobre.
+
+**Esforço:** P.
+
+### L26 — decision-broker:10: escolhas da IA gravadas e playback estrito
+
+**Item:** decision-broker:10 (D5), sem os gates de playback (L22) e sem a regra AST (E10).
+
+**Dependência funcional:** L22 (gates) e L24 (B1 muda onde e quando os gatilhos do Equip são coletados, e este lote grava decisões exatamente na coleta).
+
+**Tarefas**
+
+- [x] Reproduzir com `.cache/plan23-probes/db10/probe.mts`: com presets trocados, 4 de 26 replays divergem, e o playback faz 521 chamadas de política.
+- [x] Plano das ativações de Main Phase no comando: `ActivateReplayCommandPayload.decisions?` (`src/core/contracts/replay.ts`), serializado nos descritores de captura (`src/core/game/replay/capture.ts`) com as funções de `src/core/game/decisions/chainResponse.ts`, validado em `validation.ts` e repassado pelo driver.
+- [x] Gatilhos da IA: decisão nova `trigger_activation` no ponto de `src/core/effects/triggers/core.ts:501-553`, uma por oportunidade real e nunca em preview, com uma variante síncrona do broker restrita a resolvers síncronos de IA. Contratos em `DecisionByKind`, `DECISION_KINDS` e `validateDecisionValue`.
+- [x] Escolhas diretas pelos helpers existentes, no escopo de D5: `bounce_and_summon`, `normalFromHand`, o desempate de `destroySelectiveField`, o pagamento de contadores, `synchroEffects`, o modal do Extra Deck, a confirmação do de_synchro, `activationPipeline` e `targeting/resolution`. `autoStoreForAI` fica como está.
+- [x] Replay autocontido: `setup.controllers` e playback estrito em `createHeadlessPlaybackGame` (driver), no smoke (`scripts/run_bot_arena_smoke.ts`) e em `scripts/replay_duel.ts`. O assento de replay não tem strategy e lança erro se for consultado.
+- [x] `docs/Replay canônico.md` recebe só texto de contrato. As contagens de decisões dos testes de replay afetados são atualizadas com justificativa (D5).
+- [x] A reprodução deu 2 a 3 de 27 e 505 chamadas no HEAD, e não 4 de 26 e 521: a amostra mudou com os lotes seguintes, nos mesmos sítios. A medição foi contra L25c, e não contra L25b, porque L25c virou o último ponto N = 5 da cadeia.
+- [x] Sítios além da lista, dentro de D5: o ramo de IA de `selectCards` (cobre também os alvos obrigatórios de `destroy_targets` e o `tier_destroy`), os materiais de Sincro da IA (`src/core/game/summon/synchro.ts`), a substituição automática de envio ao Cemitério (`src/core/game/zones/movement.ts`), a leitura da estratégia dentro do resolver em `src/core/effects/activation/positionChoice.ts` e o plano das Field Spells (`activateFieldSpellEffect`). `setup.controllers` só é gravado fora dos assentos padrão.
+- [x] Ampliações aprovadas pelo usuário (15/11/2026), achados da revisão: o playback estrito falha quando uma recusa de política, uma decisão gravada rejeitada (`replayRejections` do broker) ou uma falha contida pela engine é engolida por um `catch`; um `pass` gravado para gatilho obrigatório é rejeitado; um plano de ativação que não pode ser gravado falha durante a gravação; no `bounce_and_summon` da IA, a posição forçada pela action vale mais que o plano e não gera decisão (nenhuma carta usa a action).
+- [x] Testes alterados com aval do usuário (15/11/2026), além das contagens: o observador de `test/replay/techZeroPriorityThreeReplay.test.ts` passa a envolver `requestDecisionSync`, e os 4 testes "under AI control" de `test/replay/mirageboundSourcePresenceS02.test.ts` reproduzem com o controlador gravado (o título ficou como estava).
+
+**Validação**
+
+- Sonda: 0 de 26 divergências com presets trocados e 0 chamadas de Strategy, AutoSelector e `aiRandom` no playback.
+- Testes: `test/replay/canonicalReplay`, `canonicalDriver`, `canonicalValidation`, `plannedTargetReplay`, `optionalEffectsReplay`, `phaseAiScheduling` e os replays dos sítios convertidos; `test/normalSummonEffect`, `test/ai/bounceAndSummonSimulation`, `test/ai/deSynchroOriginalOwner`, `test/contracts/destructionRuntime`, `test/chain/deferredSummonTriggers`, `test/ai/techZero*` e `test/bloomrotPriorityOneTriggers`. Também `npm run check`.
+- Smoke com playback estrito nos 9 presets (os 9 pares da sonda, seed 4242).
+- Navegador: um duelo humano contra um bot que não seja Shadow-Heart, exportado e reproduzido com `npm run replay`.
+
+**Medição:** N = 5 contra L25b com `--expect-identical --ignore guard.peaks.decisions,seatMetrics.*.decisions.broker`. Cada decisão do broker emite `decision_made` (`src/core/game/decisions/broker.ts:132`), que o harness conta nesses campos; o lote acrescenta cerca de 17 decisões `trigger_activation` por duelo. Por isso:
+
+- vencedores, turnos, `opening`, `mainPhase` e `measured` são comparados à parte e precisam sair idênticos;
+- a folga da guarda é registrada (na v1, pico de 131 decisões por turno contra o limite de 2000).
+
+Qualquer outra diferença, por exemplo de intercalação de microtasks, bloqueia o lote até ser explicada.
+
+**Critério de saída:** decisões do bot idênticas; playback estrito sem consultas de política.
+
+**Riscos**
+
+- `buildTriggerEntry` é síncrono. Mover a decisão para a SEGOC mudaria o estado que a política vê.
+- Gravar em preview, ou mais de uma vez por oportunidade, desalinha o vivo e o playback.
+- Os novos `await` mudam a intercalação de microtasks.
+- O playback estrito pode revelar outras divergências latentes e ampliar o lote.
+- Os replays crescem (~17 decisões de gatilho por duelo).
+
+**Esforço:** G.
+
+### L27 — Bump `engine-rules-v28`
+
+**Tarefas**
+
+- [x] Conferir que `git log --all -S'engine-rules-v28'` sai vazio.
+- [x] `src/core/contracts/replay.ts:27` → `engine-rules-v28`.
+- [x] `test/replay/canonicalReplay.test.ts`:
+  - regenerar os goldens atuais;
+  - criar uma projeção v28 → v27, no padrão de `stripV27SnapshotFields`, que remove `setup.controllers`, as `decisions` do payload de `activate_*` e as decisões `trigger_activation`;
+  - o passo histórico v27 aplica os valores congelados em L00 sobre essa projeção;
+  - os passos v26 a v20 passam a partir da projeção v27, preservando os valores atuais (por exemplo, o tamanho 14016 e o hash `bbfb1fb5` do passo v26);
+  - conferir se o fixture ganha `controllers` mesmo sem IA e tratar isso na projeção.
+- [x] Incluir v27 nas listas de rejeição de `test/replay/canonicalDriver.test.ts` e `test/replay/canonicalValidation.test.ts`.
+- [x] `docs/Replay canônico.md` só com texto de contrato, sem changelog.
+- [x] A constante fica na linha 29 de `src/core/contracts/replay.ts`, e não na 27. `docs/Replay canônico.md` não mudou: o texto não cita versão, e o contrato de `setup.controllers` e `trigger_activation` entrou em L26. O fixture não ganha `controllers` (assentos padrão, sem decisões), então a projeção não remove nada nele. O pino `43ba430d` (envelope v27 com a assinatura anterior) passou da parte corrente para o passo v27. No driver, o v27 entrou num bloco novo, sem deslocar os blocos v26, v25 e v23.
+
+**Validação**
+
+- `git grep -n "engine-rules-v2[67]" -- src test` só encontra projeções históricas e listas de rejeição.
+- `npm run check`.
+- Smoke com playback estrito nos 9 presets.
+- Um replay v28 de um duelo novo, exportado pelo usuário, reproduz com `npm run replay` e hash final igual; um replay v27 é rejeitado antes da inicialização.
+
+**Medição:** N = 2 com `--expect-identical --allow-identity-change engineVersion` contra L26.
+
+**Critério de saída:** todos os passos históricos batem; replay novo reproduz; v27 rejeitado.
+
+**Riscos**
+
+- Dois bumps ou um item de replay depois do bump. Mitigação: nada que mude a interpretação de replay entra depois de L27.
+
+**Esforço:** P.
+
+---
+
+## L28 — Baseline v2 e fechamento
+
+**Tarefas**
+
+- [x] Atualizar a branch com a `main`, se ela tiver mudado. Cartas novas mudam a assinatura do banco.
+- [x] v2: `npm run benchmark -- --seeds 20 --workers 10 --preset-metrics techzero-combo` no commit final limpo.
+- [x] `summarize` elegível, com portões de sanidade, 0 erros e 0 defeitos.
+- [x] `compare` contra a v1 com `--allow-identity-change engineVersion` (e `cardDatabaseSignature`, se for o caso).
+- [x] Controles, corpus, controle de invariância e uma referência de ponte N = 5 com override no mesmo commit.
+- [x] Roadmap: registrar a v2 como a v1 foi registrada, marcar a 2.3 como concluída e mover os resíduos para a 2.4 e o backlog. Atualizar `AGENTS.md` e `docs/Estrutura do Projeto.md` se alguma contagem tiver mudado.
+- [x] A `main` não mudou (`79c3868`, ancestral do HEAD), então a branch não foi atualizada e o banco de cartas continua `a11dc8c4`. A v2 rodou com `--workers 4`, por causa do limite de carga da máquina; a configuração efetiva é a mesma da v1 (`0e7dbbda…`). A execução foi interrompida no caso 453, sem erro no log, e retomada com `--resume` pelo diário. As contagens de `AGENTS.md` e de `docs/Estrutura do Projeto.md` não mudaram desde L20 (115 métodos do Renderer, 222 do Game, 92 do Chain e 16 wrappers de replay), então os dois arquivos ficam como estão.
+- [ ] Abrir o PR da branch para `main` com a tabela de lotes, com `verify` verde. O merge acontece a pedido do usuário, como merge único (premissa do merge atômico).
+
+**Validação:** `summarize` elegível; `verify` verde no PR; `npm run check` local.
+
+**Medição:** v2 N = 20 (1.620 duelos, ~50 min), controles (~2 min) e ponte N = 5 (~15 min).
+
+**Critério de saída:** v2 elegível, 0 erros, 0 defeitos e invariância zerada; PR aberto com CI verde.
+
+**Riscos**
+
+- Se a `main` mudar `src/` durante a 2.3, a branch é atualizada e a v2 é medida depois disso.
+- Uma mudança grande de placar sem atribuição na cadeia. A cadeia N = 5 e o M1 existem para evitar isso.
+
+**Esforço:** M.
+
+---
+
+## Correspondência com a numeração da análise
+
+O `plan.json` da análise (`.cache/plan23-probes/plan.json`) usava L00–L24. A revisão dividiu e acrescentou lotes, e a numeração final é a deste documento.
+
+| Lote final | Origem na análise | Mudança |
+| --- | --- | --- |
+| L00 | L00 | Sondas já em `.cache/plan23-probes/` |
+| L01 | L01 | Registro da marca em `action_failed` decidido (E4); rótulo `opponent_state_mismatch` |
+| L02 | L02 | — |
+| L03 | L03 | Só extrações; a guarda foi para L09 (E2) |
+| L04 | L04, parte A | Separado (E3); bug de regra do gatilho obrigatório registrado à parte |
+| L05 | L04, parte B | Separado (E3) |
+| L06 | L05 | — |
+| L07 | L06 | — |
+| L08 | Backlog (contador zerado) | Novo lote medido (D2, revisão F26) |
+| L09 | L07 | Troca também as cartas viradas para baixo; silencia tracker e observer; gancho mínimo em `src/` (D10); recebe a guarda que só registra, com o contador fora do registro determinístico (E2) |
+| L10 | Parte de L03/L08 | Novo lote: `oncePerTurnUsageByName` fora das projeções opacas, cobrindo o TurnLineSearch |
+| L11 | L08 | Só a asserção de `planningStrategies.test.ts:244` muda (D3) |
+| L12 | L09 | Valor público só para alvo virado para baixo; `withoutLiveGameReference` no Beam; ponte N = 2 |
+| L13a–L13c | L10 | Dividido pelo mapeamento de 04/11/2026 (P1–P3): raízes `ascension` e `profile` (L13a); `withoutLiveGameReference` nas buscas e no laço de batalha, com ponte N = 2 (L13b); visão pública do oponente (L13c) |
+| M1 | — | Ponto N = 20 intermediário |
+| L14 | L11 | Ponte N = 2 |
+| L15 | L12 | Ponte N = 2 |
+| L16 | L13 | Ponte N = 2; dependência de L14 só de medição |
+| L17 | L14 | — |
+| L18 | L15 | Só o limite base; segundo ataque, ataque a todos e caso sem dono preservados; consumidores de runtime listados |
+| L19 | L16 | Ponte N = 2 |
+| L20 | L17 | Correção da citação do roadmap feita na reescrita da tabela, fora do lote |
+| L21 | L18 | — |
+| L22 | Parte de L22 (gates C1/C2) | Novo lote antes do pacote, só com os gates; sem unificar as cópias do agendador (E9) |
+| L23 | L20 | Marcação de bump alinhada à contingência |
+| L24 | L21 | — |
+| L25 | L19 | Movido para dentro do pacote, depois de L24 (E8) |
+| L25b | — | Lote novo (D11), achado de L02 |
+| L07b | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07 |
+| L07c | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07b |
+| L07d | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07c |
+| L07e | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07d |
+| L07f | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07e |
+| L07g | — | Lote novo (decisão do usuário em 12/10/2026), achado de L07f |
+| L07h | — | Lote novo (decisão do usuário em 13/10/2026), achado de L07g |
+| L07i | — | Lote novo (autorização do usuário em 15/10/2026), resíduo de L06 no backlog |
+| L07j | — | Lote novo (decisão do usuário em 16/10/2026), achados de L07i |
+| L07k | — | Lote novo (decisão do usuário em 16/10/2026), achado da revisão de L07j |
+| L12b | — | Lote novo de instrumentação (decisão do usuário em 17/10/2026), ponto da validação de L09; recebe a correção da descrição da escolha trocada (decisão do usuário em 03/11/2026), achado de L12 |
+| L12c | — | Lote novo de paridade (decisão do usuário em 03/11/2026), achado da validação de L12 |
+| L25c | — | Lote novo de regra (D12), achado de L07i |
+| L26 | L22 | Sem gates e sem regra AST; depende de L24; `--ignore` declarado; N = 5 contra L25b (antes, L24) |
+| L27 | L23 | Projeção v28 → v27 no passo histórico |
+| L28 | L24 | — |
+
+---
+
+## Fora do escopo da 2.3
+
+### Para a 2.4 (política ou paridade que bloqueia um caminho)
+
+| Item | Motivo e condição |
+| --- | --- |
+| Gatilhos de batalha na ponte: `grant_second_attack`, `damage_from_destroyed_atk`, `destroy_attacker_on_archetype_destruction` e `banish_destroyed_monster` | D9. Primeiro lote do caminho de batalha da 2.4, antes de qualquer ajuste ali, com medição própria (N = 5 natural e ponte contra a v2). Pede análise própria, porque se sobrepõe às recompensas por deck (`dragon/linePlanning.ts` e `prepareSimulatedBattle`/`applySimulatedBattleRewards` do TurnLineSearch), que são conhecimento protegido. Medidos depois da v2, as comparações de batalha usam a medição nova desse lote |
+| Generalizar a projeção sequencial de batalha: valor de continuação aditivo com peso medido, coerência entre a ponte e o laço vivo e letal sob incerteza | Política. Depende de L02, L12, L17, L18 e dos gatilhos de batalha na ponte. A sonda mostrou 82% de concordância no primeiro ataque e 46 de 50 letais visíveis já convertidos |
+| Modelo conservador de backrow: prior público por quantidade, zona e turno no lugar do -0,3 fixo de `BaseStrategy.ts:197-201` | D8. Política, só depois de L13 |
+| Preferência explícita por efeito (`statBasis`) se o diretor quiser que o Luminarch prefira DEF | D1. Política; muda as escolhas reais do bot |
+| Recusar invocações opcionais (Lost Throne, `conditional_summon_from_hand` e `draw_and_summon`) com um hook comum ao `resolveAI` e à simulação | E6. Política |
+| Ranking do alvo de negação do Reactor (`techzero/priorities.ts:365-366`) | Política |
+| Resíduo por nome: Void Mirror Dimension em `src/core/chain/botResponsePolicy.ts:240-241` | Já listado nos resíduos por nome da 2.4 |
+| Métrica `lethal` sempre zero e falhas sem código | Limitações do harness que dependem da certificação de letal sob incerteza e de códigos de falha em `src/` |
+| Políticas que supõem mais alvos do que o bot escolhe no runtime: Bloomrot (`resourcePolicy.ts`, o Ancient Husk exige 2 ou mais alvos; `targeting.ts`, `sporePreference(analysis, 2)`) e Luminarch (`defensePolicy.ts`, até 3 nomes preferidos e urgência com 2 ou mais alvos) | L07f. Política: a simulação já segue a quantidade do runtime; se a escolha do mínimo pelo AutoSelector é boa, é decisão da 2.4 |
+| Qual Magia o Master of Mirrors Arcanist devolve ao Deck: a simulação ordena pelo ranking de busca da estratégia, e o AutoSelector do runtime desempata pela ordem do Cemitério (8 de 12 casos divergem na sonda de L07g, sem divergência de quantidade) | Decisão do usuário (13/10/2026). O desempate do runtime é arbitrário; a correção é a política escolher a Magia e o runtime honrar o plano, o que muda decisões ao vivo |
+
+### Triagem antes da 2.4
+
+Antes do primeiro lote de cada caminho da 2.4, os itens abaixo passam por uma triagem com critério objetivo: uma sonda conta as ocorrências nos matchups do caminho num N = 5 com a configuração da v2. O item reabre como lote de paridade, antes do ajuste, se houver **pelo menos uma ocorrência** em que simulação e runtime divergem.
+
+- O chooser próprio do Luminarch aplica preferências em handlers onde o runtime não aplica (`luminarch/simulation.ts`). L14 acrescenta: ele lê o contexto da ação planejada (`:648` e `:1418`), então a preferência externa ainda alcança um trigger fora do TLS (sonda `.cache/plan23-work/L14/val/finding_luminarch_hook_leak.mts`; cenário sintético).
+- `destroy_targeted_cards` com `minTargets: 0` e mais de 1 alvo possível: o AutoSelector do runtime escolhe 1 (`src/core/AutoSelector.ts:506`), e a simulação destrói até o máximo (`simulatedActions/destruction.ts:453` e `:460`). Na Bloomrot Harvest, 8 e 12 contadores destroem 1 no runtime contra 2 e 3 na simulação, nos dois assentos (sonda `.cache/plan23-work/L15/finding_optional_destroy_count.mts`). Achado de L15.
+- Latentes em `search_then_optional_special_summon_from_hand` e `destroy_targeted_cards`, sem carta atingida hoje: o runtime lê `summonCondition || condition` e recusa tipos diferentes de `empty_field`, e a simulação só lê `summonCondition`; `destroy_targeted_cards` sem `targetRef` e com `minTargets` diferente de 0 cai em `applyDestroy`, que não busca candidatos. Achado de L15.
+- Proteções de batalha passivas que `resolveVisibleBattleStep` e a ponte não leem: `conditional_protection` de batalha (Volcanic Extreme Dragon) e `battle_indestructible_if_stat_match` (Executioner of the Burning West). A correção em `isProtectedFromBattle` também muda `evaluateVisibleBattle` do Tech-Zero, então pede lote próprio (sonda `.cache/plan23-work/L17/stepMatrix.mts`, casos `finding_`). Achado de L17.
+- A aura de negação de proteção agora vale no laço vivo, mas segue ignorada em `TurnLineSearch.ts:1038` e em `evaluateVisibleBattle`. Limite anterior a L17. Substituições com custo selecionável (Aurora Seraph, Shadow-Heart Warlord) continuam sem modelo na simulação (`destruction.ts:97`). Achado de L17.
+- Com proteção uma vez por turno e proteção concedida juntas, o runtime gasta o uso e a simulação não, sem efeito em PV ou campo (sonda `.cache/plan23-work/L17/validator/stepMatrix-extra.mts`, `x_opt_and_granted`). Achado de L17.
+- `Bot.simulateBattle` não modela segundo ataque: com ataque extra pendente, a função retorna sem simular e o laço vivo pontua o ataque só pelas heurísticas. A disponibilidade aceita o ataque, a simulação não muda nada (8.000 PV, 1 monstro) e o runtime resolve (6.400 PV, 0 monstros). Limite anterior a L18 (sonda `.cache/plan23-work/L18/val/secondAttack.mts`, nos dois assentos). Achado de L18.
+- Leitores de limite fora do lote, sem efeito hoje: `techzero/linePlanning.ts:173` não lê limite dinâmico (um Demon adversário conta sempre 1) e `battleProjection.ts:66` é equivalente à função pura. Na ponte, o `baseDelta` do hook do Tech-Zero é só o delta da avaliação, então dano/450 e destruições ficam somados à projeção, ao contrário do laço vivo; só é alcançável com override. Achado de L18.
+- Custos sem emissor na simulação (`simulation.ts:2710`, `:3470`, `:3528`; `summon.ts:761`, `:1156`): a Trap vinculada é destruída sem eventos e antes dos eventos do custo. Só o Tributo publica; a Fusão por efeito já estava certa. Achado de L19.
+- `applyMove` com os dois lados do vínculo como alvos publica um `card_moved` extra de Cemitério para Cemitério (`simulatedActions/movement.ts:387`, sonda `.cache/plan23-work/L19/review_move_probe.mts`). Nenhuma carta alcança hoje. Achado de L19.
+- A destruição de regra ao expirar controle temporário sem espaço (`simulatedActions/movement.ts:535`) não passa por `moveCardToZone`: a Trap vinculada fica e os links continuam (sonda `.cache/plan23-work/L19/control_return_probe.mts`). Achado de L19.
+- A saída de um Equip `destroy_on_leave` destrói o hospedeiro no runtime (`game/zones/movement.ts:2982-3003`), e não na simulação (The Shadow Heart, sonda `.cache/plan23-work/L19/equip_leave_probe.mts`). Anterior a L19. Achado de L19.
+- Item de apresentação próprio, confirmado no navegador: com a fila de PV ociosa, um `updateLP` no meio das janelas da Damage Step limpa o hold (`src/ui/renderer/log.ts:206-210`), e o contador faz `8.000 → 6.000 → 8.000 → 6.000`. Exige uma janela longa depois do fim da investida, cerca de 2,3 s, como um prompt humano (roteiro `.cache/plan23-work/L20/roteiro-navegador.md`, cenário 3). Achado de L20.
+- Na divergência de valor com a fila ociosa, a segunda sequência recomeça do PV anterior (`src/ui/renderer/animations.ts:841-843`), e o contador faz `6.000 → 8.000 → 5.500`, com ou sem a liberação de L20 (sonda `.cache/plan23-work/L20/probe.mts`, `value_divergence|idle`). Achado de L20.
+- O resultado do `catch` de `src/core/chain/resolution.ts:183-205` não carrega o `executed` do primário. Com a reclassificação de L23, quando o primário executa e uma ação pós-efeito lança exceção, o link conta como `failed` na Arena, e não como `partial_failure` (sonda `.cache/plan23-work/L23/probe.mts`, cenário `post_effect_throws`, nos dois assentos). Só ocorre com falha de engine; ausente do smoke e do benchmark. Achado de L23.
+- Fora de contexto adiado, o desenho de L24 não junta tudo numa SEGOC: o `card_to_grave` do hospedeiro resolve antes da limpeza, cada Equip em seguida e o `card_moved` do hospedeiro por último (sonda `.cache/plan23-work/L24/probe.mts`, `immediate_bounce`). Juntar exigiria coletar sem resolver; decisão de desenho. Achado de L24.
+- O ramo de redirecionamento ao Extra Deck (`src/core/game/zones/movement.ts`, cerca das linhas 3413-3427) publica o `card_moved` do hospedeiro sem `equipBindingsAtFieldExit` (sonda `.cache/plan23-work/L24/finding_extradeck_bindings.mts`). Anterior a L24. Achado de L24.
+- O fallback inerte `showTriggerOrderModal: () => Promise.resolve([])` (`src/core/UIAdapter.ts:104`) faz uma SEGOC humana com 2 ou mais gatilhos obrigatórios terminar em `mandatory_trigger_order_cancelled`, sem resolvê-los; o caminho explícito seria o `needsSelection` `trigger_order_ui_unavailable` (`src/core/chain/segoc.ts:700-711`). Ambiente de teste; mudar o fallback é decisão de desenho. Achado de L24.
+- Item de apresentação, visto no navegador: em viewport de 1.024 × 768, o painel de pré-visualização da barra lateral (`#card-preview`) cobre o botão de confirmar a ordem ("Confirm order" em inglês) do modal de ordem de gatilhos (`.trigger-order-modal`), e o clique não chega ao botão; a 1.600 × 1.000 funciona. Com L24, esse modal aparece quando um hospedeiro com 2 Equips de gatilho obrigatório sai do campo. Achado de L24.
+- Para L27: `git log --all -S'engine-rules-v28'` já não sai vazio por causa do plano e do roadmap em `docs/`; a conferência precisa de `-- src test`. Achado de L24.
+- Numa rejeição de `card_moved` vinda de fora da contenção do `resolveEvent` (por exemplo, `recordReplayEvent` ou `_arenaTracker.recordEvent`), num `moveCard` raiz, só sobra o rollback do `runZoneOp`, sem `reportEngineFault` nem `console.error` fora do modo dev, como já acontecia com os movimentos com flag (sonda `.cache/plan23-work/L25/val-probe-root.mts`). Proposta: registrar a falha no rollback de raiz (`src/core/game/zones/operations.ts`, `finalizeFailure`), em lote próprio de instrumentação. Achado de L25.
+- O exemplo de handler em `AGENTS.md` e os tipos locais de `src/core/game/zones/destruction.ts` e `src/core/game/combat/damageStep.ts` ainda usam `awaitCardMovedEvent`, que não tem mais efeito; vão com a remoção das ocorrências no backlog. Achado de L25.
+- O laço de batalha vivo do bot ignora os efeitos de par: `Bot.simulateBattle` e o `battleController` não leem `temporaryBattlePairEffects`, e o gancho do Burning West é chamado sem o resumo da batalha, então o ataque do par parece uma batalha perdida. Nos 24 duelos da sonda (`.cache/plan23-work/L25b/stuck_probe.mts`, seed 4242), as 6 ativações acontecem na Main Phase 1 e nenhum ataque é declarado no resto do turno, como no HEAD. A destruição restaurada não aparece nos duelos de bot. Achado de L25b.
+- A simulação da IA aplica o destino da Quick Draw na ativação, e o runtime o aplica quando o par resolve ou no começo do turno seguinte; é a origem das divergências de plano `host_equip_mismatch` dos casos alterados em L25b. Achado de L25b.
+- A ponte da IA (`resolveSimulatedBattlePairEffects`, `src/core/ai/TurnLineSearch.ts`) só resolve registros de `start_of_damage_step` (nenhuma carta usa `before_damage_calculation`), só procura o monstro afetado no lado do oponente do bot e destrói sem consultar proteção, imunidade ou substituição de destruição, enquanto o runtime usa `destroyCard`. Este último vem da leitura do código, sem reprodução. Achado de L25b.
+- Sem batalha do par, o destino da Magia é aplicado no começo do turno seguinte (contador já mudado, fase ainda `end`, antes da compra), e não na End Phase do turno da ativação, porque `cleanupExpiredTemporaryBattlePairEffects` roda em `startTurn`. Segue o plano; registrar se a etapa de suporte do Burning West pedir outro momento. Achado de L25b.
+- A Shadow-Heart Shield negada mantém o bônus de +500 ATK/DEF, no runtime e na simulação, antes e depois de L25c (a Void Hollow continua com 1.800/1.700 depois da negação, também no navegador), enquanto os ataques extras de um Equip já saem com a negação (`refreshEquipExtraAttackBonus`). Reprodução: `.cache/plan23-work/L25c/probe/finding_negated_equip_stats.mts`. Decisão de regra para o diretor criativo. Achado de L25c.
+- Hospedeiro virado para baixo com a Shield ligada (só pelo `set_facedown_defense` do Magmatic Obsidian Leviathan, fora dos presets): o runtime protege, mas a cópia pública da IA torna a carta opaca e `Bot.simulateBattle`, o TLS e o refresh simulado a tratam como destrutível; depois de um `set_facedown` simulado, `simulateBattle` diz destrutível e o TLS diz protegido, porque `src/core/ai/common/battleProjection.ts:111` ignora a proteção de carta virada. Igual no HEAD. Reprodução: casos `*|set_facedown` de `.cache/plan23-work/L25c/probe/finding_equip.mts`. Achado de L25c.
+- A passada final de L25c (`refreshEquipBattleIndestructible`) zera um `battleIndestructible` vindo de `add_status` ou do custo em níveis (`src/core/actionHandlers/summon/handWithCost.ts:559`) quando o monstro também tem um Equip de proteção inativo. Nenhuma carta usa esses caminhos hoje, e a remoção do Equip já zerava o flag do mesmo jeito; resolver pede rastrear a origem do status. Achado de L25c.
+- Até o bump de L27, um replay `engine-rules-v27` gravado antes de L26 com gatilhos da IA passa na validação e diverge no primeiro gatilho do bot no playback estrito (reprodução: `.cache/plan23-work/L26/replays-head/techzero-0.json`). Para L27, a projeção v28 → v27 do passo histórico precisa remover `setup.controllers`, `commands[].payload.decisions` dos `activate_*` e as decisões `trigger_activation`. Achado de L26.
+- `replayCanonicalDuel` com `options.game` não confere os assentos contra `setup.controllers` e não faz as conferências estritas: o contrato fica como pré-condição do chamador. Impor a checagem quebraria os testes "human … under AI control" que ainda passam, por exemplo `test/replay/marshalPositionDecision.test.ts`; decisão para L27. Achado de L26.
+- Nos duelos de Arena estritos não apareceram o caminho síncrono de `target` em `resolveTargets` nem os ramos de IA de `activationPipeline`, `normalFromHand`, `bounce_and_summon`, contadores, Extra Deck, materiais de Sincro e substituição automática; esses sítios só têm cobertura dos testes existentes e das sondas de `.cache/plan23-work/L26/review/`. Achado de L26.
+- As preferências do contexto da IA (`targetPreferences`, `costPreferences`, `specialSummonPositions`, `autoSelectTargets`, preferências de fusão) não atravessam o replay; pela auditoria só são lidas em resolvers, com o risco residual de um `autoSelectTargets` vindo do contexto de gatilho sem Chain (`disableChains`). `autoStoreForAI` (`src/core/effects/blueprints/index.ts`) segue fora de um resolver, como o plano prevê, determinístico pelos dados da carta e pelo controlador. Achado de L26.
+- `AGENTS.md` ainda diz que o smoke reproduz "com bots nos dois assentos"; desde L26 os assentos do playback são estritos, sem estratégia. Atualização de documentação opcional, fora do lote. Achado de L26.
+- O fixture do golden não tem campos de IA, então o teste não exercita as remoções de `stripV28ReplayFields`, e uma projeção quebrada passaria; a remoção foi conferida só por sonda (`.cache/plan23-work/L27/validator/probe/projection_check.mts`). A projeção também não renumera `decisionId` nem `sequence`, então numa gravação de IA não reproduz o hash de uma v27 genuína. Nenhum dos dois afeta o passo histórico. Achado de L27.
+- A decisão de L26 sobre `replayCanonicalDuel` com `options.game` (conferir os assentos contra `setup.controllers` e aplicar as conferências estritas) não foi tomada em L27: não estava nas tarefas, mudaria o driver e quebraria `test/replay/marshalPositionDecision.test.ts`. Não exige bump; fica para o backlog. Achado de L27.
+- Assimetrias do fallback de alvo: bônus de arquétipo em `cardValue.ts`, offsets de dono e o custo do AutoSelector (`goodDiscard`/Extreme Dragons).
+- `clearSimulatedTemporaryControl` falta em `destroySimulatedCard`.
+- Merge raso do `actionContext` dos triggers simulados. L14 isolou só `specialSummonPositions`; as `costPreferences` ainda vazam (sonda `.cache/plan23-work/L14/finding_cost_pref_leak.mts`: o runtime paga com Gecko e a simulação com Scale Dragon). A correção preserva as `targetPreferences` que o Bloomrot passa de propósito.
+- Posição de Fusão da IA: o runtime lê `fusionPositions`, depois a posição da fusão, depois `attack`, e nunca consulta o hook (`effects/fusion/execution.ts:201`); a simulação usa o hook e ignora `fusionPositions` (`simulatedActions/summon.ts:1431`). Num recorte Void de 27 casos, 28 de 29 divergências `spell:Polymerization` são só de posição (sonda `.cache/plan23-work/L14/finding_fusion_position.mts`). Pesa na divergência do Void; merece lote próprio. Achado de L14.
+- Efeito temporário de evento sem política de planejamento não lê o mapa `specialSummonPositions` da estratégia dona (`simulation.ts:2120`, `ownerPolicy === undefined ? {}`, anterior a L14); o runtime lê (`triggers/core.ts:542`). Latente: o único efeito temporário com Special Summon é o de Cursed Rock Behemoth (`generic.ts:1506`), fora dos nove presets. A correção não pode só remover o `{}`, porque isso também passaria `targetPreferences` e `decisions` a outros efeitos temporários. Achado de L14.
+- `summonToOwner: "opponent"`: o hook de posição recebe o controlador no runtime (`fromZone.ts:991-998`) e quem recebe o monstro na simulação (`simulatedActions/summon.ts:514`). A única carta é o Arctroth Pursuer. Achado de L14.
+- Metal Armored Dragon sem posição planejada e com oponente mais forte: runtime DEF e simulação ATK, pela regra por nome de `src/core/bot/ascensionController.ts:190-204`. Nenhum gerador atual emite esse caso. Achado de L14.
+- Divergência de PV (`bot.lp`) no planejamento da Ascensão da Luminarch Fortress Aegis (`void:luminarch:3`, turno 8), anterior a L07k; provavelmente o ganho de PV da Ascensão. Não investigada.
+- O cache de targeting do EffectEngine não é transparente: em `bloomrot:burningwest:0`, turno 19, limpá-lo sem restaurar gerou 2 decisões `chain_response` a mais para o jogador do turno (possível entrada desatualizada). Achado de L09; o controle de invariância salva e restaura o cache. Sonda: `scratchpad/plan23/L09/probe_decisions.mts`.
+- OPT próprio da Luminarch Magic Sickle na simulação de batalha (`meta.magicSickleBattleUsed`, `luminarch/simulation.ts`), que não lê o uso real do turno. Reproduzido em L07h só com o OPT marcado como gasto no clone; no fluxo real a ponte roda a partir da Main 1, antes de qualquer Damage Step do turno (decisão do usuário, 15/10/2026).
+- Famílias de marcadores sem análise: `deferred_trigger_source_presence` (Bloomrot 329 e Void 52 na v1) e `negated_field_exit_trigger` (Bloomrot 34), mantidas como diagnóstico deliberado desde a fase 1.5, e o restante de `exact_selection:tech_zero_development_lab_shuffle_choice`, se sobrar depois de L05.
+
+### Backlog
+
+| Item | Motivo |
+| --- | --- |
+| Handlers simulados sem exposição no benchmark (aliases, handlers pequenos e 6 tipos sem preset) | Entram junto com o consumidor, os gatilhos da ponte ou o modelo de reações, como refatoração equivalente com corpus e controles idênticos. O alias de `special_summon_matching_level` só depois de L07 |
+| Negação de destruição com `negationCost` (Void Hydra Titan, `reduce_self_atk`) e `upkeep_pay_or_send_to_grave` | Junto com o modelo de reações do oponente; a Standby fica fora do horizonte do planner |
+| Aplicar a preferência de posição da IA em toda Special Summon com escolha no runtime (opção b) | Muda decisões ao vivo; lote próprio de runtime ou de política |
+| Identidade do deck do oponente no GameTree (`planningModelId`) | D3. Fica pública assim que as cartas aparecem |
+| `instanceId` de mão e Deck ocultos expostos nas projeções | Canal teórico, comum ao TLS e ao GameTree |
+| No GameTree (`simulateAction`), a guarda de localização e a marca de leitura opaca gravam `_simRequiresReplan` em `copy.state`; um simulador que devolva outro objeto de estado perde a marca e continua o ramo | Achado de L11. Nenhum simulador em `src/` devolve outro objeto (541 simulações do GameTree em 7 presets), só o fixture de `test/ai/gameTreeSimulation.test.ts:86`. Correção mínima: propagar a marca para o objeto devolvido. Reprodução: `.cache/plan23-work/L11/probe_returned_state.ts` |
+| Regra AST contra `.strategy.*`/`autoSelector.*` fora de `resolveAI` | E10. Junto com decision-broker:12 |
+| Código morto e limpeza mecânica: `activateTrapFromZone` (mexe no manifest de 222 métodos), `sendCardsToGraveyard` e `sendSourceToGraveAfter` sem uso, as 34 ocorrências de `awaitCardMovedEvent` e os contornos de `position` que L15 torna redundantes; `EffectEngine.checkEffectCondition`, que repete a regra do `after_summon` e não tem chamadores (achado de L07b); os baldes de OPT do Arcanist que L07h deixou sem produtor (`_simArcanistOptUsed`, `_simArcanistApprenticeSearchUsed` e `_simOptUsed` em `contracts/aiState.ts`, `GAME_TREE_ACTOR_FIELDS`, `PLANNING_STATE_FIELDS`, e `useSimOpt`/`ensureSimOptSet`/`SimOptSetKey` em `simStateUtils.ts`), ainda usados como fixture em testes sintéticos; imports sem uso de `getCounterValue`/`setCounterValue` em 8 módulos de `simulatedActions/` (combat, destruction, equip, flow, movement, resources, stats e summon), achado de L08 | Refatoração equivalente, junto com decision-broker:9 |
+| Unificar as três cópias de `scheduleAiMoveAfterPaint` (`effects/actions/combat.ts`, `turn/lifecycle.ts` e `turn/transitions.ts`) | E9. Refatoração equivalente; o agendador unificado precisa emitir os mesmos estágios de progresso de hoje, provado por N = 2 sem `--ignore` |
+| Captura de replay canônico nos duelos do harness com limite de turnos (H4 da 2.2) | Exige serializar o limite no setup de replay. Só entra num bump por decisão explícita do usuário |
+| Passivas negadas ainda marcadas: `conditional_extra_attacks` quando a negação é removida (`conditional_status` e `position_status` saíram em L07j, com o produtor de status simulado); e os tipos nunca observados (`activation_negation_protection`, `battle_indestructible_if_stat_match`, `conditional_destruction_protection_aura`, `negate_opponent_battle_destruction_prevention`) | L06 e L07i. Na negação, a simulação apaga o status que a própria passiva declarou e preserva a proteção de batalha concedida por um equipamento ativo (regra do usuário, D12); o runtime ainda a apaga, e a correção é L25c. A volta exige reavaliar a condição ou a posição como o runtime faz a cada atualização; nenhuma carta do banco remove uma negação por `add_status`, e a expiração de fim de turno da simulação (`resolveSimulatedEndPhase`) não tem chamador em `src/` |
+| Lacunas da simulação que não dependem da negação: `destroy_on_leave` da The Shadow Heart não é modelado; a trava de Battle Phase do Arcturus não é modelada para os gatilhos do oponente; `applySetStatsToZeroAndNegate` (Sealing the Void) passou a classificar as passivas em L07j | L06. Triagem antes da 2.4 para o que resta |
+| Divergências latentes de fonte na mão, sem carta no banco que as dispare: em `card_to_grave` o runtime nunca lista cartas da mão; em `card_moved` só as que têm gatilho com `requireZone: "hand"`; em `end_phase`, `spell_activated`, `effect_activated` e `counter_removed` a simulação inclui as fontes de `position_change` na mão e o runtime não | L07. Entram quando uma carta passar a disparar |
+| Semântica de falha das actions simuladas: no runtime, um handler que falha interrompe a lista de actions (`src/core/effects/core.ts`), salvo no-op opcional; na simulação, `fail()` só interrompe com `haltOnFailure`/`stopOnFailure` | L07d. Sem efeito observável no banco atual (nos 25 efeitos com `targetRef`, as actions seguintes já têm halt, não são simuladas ou viram no-op). Paridade de outra classe, para quando uma carta a expuser |
+| Actions de contador latentes: `remove_counter` com menos contadores que `amount` (o runtime pula o card; a simulação remove o que houver) e `add_counter`/`remove_counter` sem `counterType` (o runtime usa `default`, a simulação `counter`) | L08. Nenhuma carta alcança: `remove_counter` só aparece como custo (cartas 17 e 311), que `canPaySimulatedActivationCosts` protege, e todas declaram `counterType`. Reprodução: `scratchpad/plan23/L08/finding_counter_actions.mts` |
+| Ordem das invocações de `special_summon_from_zone` com `targetRef` quando há menos zonas livres que alvos: o runtime segue a ordem da seleção, e a simulação segue o ranking ou a preferência, que então decide quais cartas entram | L07e. Sem carta de preset com alvos diferentes nesse caminho (o Void Haunter só mira Hollows iguais; o Leviathan não está em preset) |
+| ChainAwareness: `BlockingCategory` não tem `spell` (`ChainAwareness.ts:34` e `:244`); `chainRisks` é calculado e não é lido; `calculateBlockingRiskPenalty` não tem chamador | Mapeamento de L13. Incluir `spell` ativaria a penalidade (política); remover o código morto é refatoração equivalente |
+| `currentAnalysis` é sobrescrito pela geração dos nós do TLS e do Beam e lido depois na resolução e em `DragonStrategy.ts:211` | Mapeamento de L13. Estado da estratégia, não informação oculta; paridade de estado |
+| Ação de profundidade 0 gerada em cópia, com carta-clone equipada no `actionContext`, dispara "Cyclic main-phase identity metadata" (`src/core/bot/mainPhaseIdentity.ts:64`) e fecha a sessão com `capture_error` | Mapeamento de L13. Latente enquanto a raiz viva gera sobre o jogo vivo |
+| Escolhas por carta no bot: `asc.id === 123` e "Metal Armored Dragon" em `src/core/bot/ascensionController.ts:158` e `:182` | Mapeamento de L13. Contrariam a regra de handlers genéricos; L13c troca só a leitura do ATK |
+| Erros de assento: `LuminarchStrategy.ts:932` supõe o oponente em `game.player` (leitura pública); `dragon/linePlanning.ts:214-216`, os substitutos de oponente das políticas do Dragon e `dragon/battleDefensePolicy.ts:323` | Mapeamento de L13 |
+| Canal `Player.game` (`void/priorities.ts:737-740` e `:922-926`, e o bot vivo nos ganchos de batalha): as leituras são públicas, mas na cópia o oponente fica `null` | Mapeamento de L13. Fechar o canal é paridade de estado e mudaria os nós do Void |
+| Engine: regra no `CardDatabaseValidator` que exija `requireFaceup` em filtros por atributo oculto do oponente; candidato decorado com nome e ATK (`src/core/effects/targeting/resolution.ts:672-692`) e `candidateKey` com o id de definição (`src/core/game/selection/contract.ts:59`), que exigem revisão de replay; logs e leituras de `effects` antes do teste de carta virada (`selection.ts:1004`, `:1010` e `:1342`, `Player.ts:320-321`, `lpCost.ts:129-138`), que poluem as sondas | Mapeamento de L13. Hoje nenhum alvo do banco filtra carta virada do oponente por atributo oculto |
+| Código morto achado no mapeamento de L13: `calculateResourceValue` e `rankByResourceValue` (`ThreatEvaluation.ts`), `isLowValueDiscard` e `hasLowValueDiscard` do Arcanist | Refatoração equivalente, junto com a linha de código morto acima |
+| A política da Void Mirror Dimension (`void/analysis.ts:101-130`, `getLikelyOpponentSummonLevels`) não tem mais efeito no jogo vivo, como já acontecia nos nós: só lia a mão e o Extra Deck reais do oponente | Achado de L13c. Depende de um prior público, assunto da 2.4 |
+| Substitutos latentes de oponente sem a visão: `getOpponent` das políticas do Dragon, `dragon/battleDefensePolicy.ts:323`, `common/summonAssessment.ts:308` e `luminarch/simulation.ts:624`. O canal `bot.game` do Void só lê dados públicos | Achado de L13c. A sonda não acusa leitura oculta por eles |
+| O Tech-Zero não passa pela visão e lê campos de carta virada sem efeito na decisão: `evaluateVisibleBattle` e `collectExactTargetCandidates`, este só em `techzero:dragon:0` | Achado de L13c. O controle de invariância segue zerado |
+| A visão é um retrato das zonas: quem lê `currentAnalysis.opp*` depois de o estado mudar vê dados antigos. O controle de invariância também altera projeções memorizadas guardadas no `currentAnalysis` restaurado, até a próxima chamada da visão | Achado de L13c. Sem efeito na amostra: o `deterministicDigest` é igual com a flag ligada e desligada |
+| `BotTributeSelectionContext` (`contracts/bot.ts`) não tem consumidor | Achado de L13c. Código morto; o tipo foi corrigido para a visão |
+| No Dragon, `makeContext` de `dragon/banishPolicy.ts` usa `isSimulatedState ?? !game`, que dá falso num nó | Achado de L13b. Latente: na amostra, o `dragonState` sempre veio do contexto |
+| A projeção opaca esconde os contadores de um monstro virado para baixo: `PUBLIC_UNKNOWN_CARD_FIELDS` não inclui `counters`, que são públicos (ex.: os Spore do Bloomrot) | Achado de L12c. O TLS já lia assim, e o controle de invariância trata contadores como públicos. Nos presets não acontece: só o `set_facedown_defense` da Magmatic Obsidian Leviathan (27), fora dos decks de preset, vira para baixo um monstro que já tem contadores, e o handler os preserva (`src/core/actionHandlers/stats.ts:2247`) |
+| A Ascensão simulada não emite `card_to_grave` nem `card_moved` do material (o runtime emite, com `contextLabel` `ascension_material`) e não grava `lastSentToGraveAsMaterial` ("ascension" no runtime); os eventos do equipamento que acompanha o material também não são emitidos, como no Sincro | Achado de L07k, anterior ao lote. Nenhuma carta lê o marcador de Ascensão hoje (só o de fusão, em `src/data/cards/generic.ts`). Reprodução: `scratchpad/plan23/L07k/R1/ascension_events.mts` |
+
+### Bugs de regra registrados à parte
+
+| Bug | Onde | Estado |
+| --- | --- | --- |
+| Um gatilho obrigatório com plano exato inválido é perdido em silêncio no runtime, sem cair no AutoSelector | `src/core/effects/targeting/resolution.ts:649-651` | Exposto por L04. Não corrigido na 2.3 |
+| Em `bounce_and_summon`, a preferência `byName` sobrescreve a posição forçada e ignora `byTargetRef`/default | `src/core/actionHandlers/movement.ts` | Nenhuma carta usa a action. Em L26, para um controlador de IA, a posição forçada pela action passa a valer mais que o plano |
+| O runtime nunca resolve os efeitos de par de batalha (`register_battle_pair_effect`). A Quick Draw in the Burning West (457) não destrói no início da Damage Step, e a finalização adiada (`deferFinalizationUntil: "battle_pair_effect"`) nunca roda, então a Magia fica virada para cima na zona. A ponte simula a destruição | `resolveTemporaryBattlePairEffects` e suas duas chamadas foram removidos em `3256e50`; o registro fica em `src/core/actionHandlers/conditional.ts` e só a prévia de PV o lê (`src/core/game/combat/resolution.ts`) | Exposto por L02. Corrigido em L25b, no pacote v28 (D11) |
+| No runtime, `protectFrom: "opponent_effects"` nunca recusa um banimento que vem de uma destruição, porque o `destroyCard` não repassa a fonte ao `moveCard`; o `destroySimulatedCard` da simulação recusa | `src/core/game/zones/destruction.ts` e `src/core/game/zones/movement.ts` | Exposto por L02. Questão de regra para o diretor criativo: se um banimento por `banishWhenLeavesField` conta como banido por efeito do oponente |
+| `lp_cost_reduction` (Pure Knight) e `lp_gain_multiplier` (Barbarias) continuam valendo com a fonte negada | `src/core/effects/costs/lpCost.ts` e `src/core/Player.ts`; a simulação espelha (`simulatedActions/shared.ts` e `resources.ts`) | Exposto por L06. A correção muda runtime e simulação juntos |
+| O `destroy_on_leave` da The Shadow Heart é aplicado por padrão de id, mesmo com a carta negada | `src/core/game/zones/movement.ts` | Exposto por L06. Questão de regra para o diretor criativo |
+| O produtor de `conditional_status`/`position_status` apaga o `battleIndestructible` concedido por um equipamento (Shadow-Heart Shield) quando o card é negado ou quando a regra da própria passiva deixa de valer; a destruição em batalha exige o flag antes de olhar o equipamento | `src/core/effects/passives/passiveBuffs.ts` e `src/core/game/combat/availability.ts` | Exposto por L07i. Corrigido em L25c, no pacote v28 (D12) |
+| Um monstro que sai do campo mantém os contadores (`Card.counters` não é limpo na mudança de zona); a simulação espelha. Ex.: o Miragebound False King devolvido à mão continua com 3 Contadores de Esporo e, invocado de novo, perde 300 de ATK e DEF pela Living Colony do oponente | `src/core/game/zones/movement.ts` (nenhuma limpeza de contadores) | Exposto por L07k. Questão de regra para o diretor criativo. Reprodução: `scratchpad/plan23/L07k/false_king_counters.mts`, caso A |
+| O OPT por cópia continua consumido depois de um monstro ser virado para baixo e para cima de novo no mesmo turno (`set_facedown_defense` seguido de `switch_position`), ou de uma carta ir do Cemitério para a mão e voltar; `oncePerTurnResetVersion` só muda quando a carta sai das zonas de campo | `src/core/game/zones/movement.ts`; o campo faz parte do contrato do replay (`src/core/game/replay/canonical.ts`) | Exposto por L10. Questão de regra para o diretor criativo; nenhum preset alcança (a Leviathan, única com `set_facedown_defense`, não está em preset). Reprodução: `scratchpad/plan23/L10/finding_soft_opt_presence.mts` |
+
+## Riscos gerais e mitigação
+
+| Risco | Mitigação |
+| --- | --- |
+| Um lote de IA chega à `main` sem o pacote e quebra o playback de replays v27 | Premissa do merge atômico: merge único no fim |
+| Viradas atribuídas ao lote errado | Cadeia N = 5 no commit limpo de cada lote, na ordem dos IDs, e dependências de medição explícitas |
+| Defeito raro introduzido pelas cartas opacas | M1 (N = 20) antes da paridade de invocação |
+| Falso alarme de placar com N = 5 | Teste de sinal pareado e extensão para N = 10 nos lotes amplos |
+| Bots mais fracos depois do bloco de informação oculta | Efeito esperado da paridade; documentado e não compensado até a 2.4 |
+| Pacote grande demais | Gates de playback e `card_moved` separados; `--ignore` declarado no broker; projeção v28 → v27 planejada desde L00 |

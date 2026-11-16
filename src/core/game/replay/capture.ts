@@ -1,5 +1,7 @@
 import type { GameAttachedMethods } from "../attachments.js";
+import type { AIDecisionPlan } from "../../contracts/ai.js";
 import type { BattlePosition, GameCard } from "../../contracts/cards.js";
+import type { SerializedChainResponseDecisions } from "../../contracts/decisions.js";
 import type { GamePhase } from "../../contracts/game.js";
 import type { GameRuntimeState } from "../../contracts/gameRuntime.js";
 import type { GamePlayer } from "../../contracts/player.js";
@@ -14,10 +16,16 @@ import type {
 } from "../../contracts/replay.js";
 import type { CanonicalSelectionMap } from "../../contracts/selection.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
+import { createDecisionPlanIdentities } from "../decisions/chainResponse.js";
+
+/** What an activation command keeps of its caller's context: the exact plan. */
+interface ActivationPlanCaptureContext {
+  decisions?: AIDecisionPlan | null | undefined;
+}
 
 interface MonsterActivationCaptureOptions {
   effectId?: string | null;
-  activationContext?: { effectId?: string | null } | null;
+  activationContext?: ({ effectId?: string | null } & ActivationPlanCaptureContext) | null;
 }
 
 interface ExtraDeckCaptureOptions {
@@ -36,6 +44,7 @@ interface SpellActivationCaptureOptions {
   owner?: GamePlayer | null;
   activationZone?: ReplayCardZone | null;
   effectId?: string | null;
+  activationContext?: ActivationPlanCaptureContext | null;
 }
 
 interface CapturedGameMethods {
@@ -94,7 +103,10 @@ interface CapturedGameMethods {
     selections?: CanonicalSelectionMap | null,
     options?: SpellActivationCaptureOptions,
   ): Promise<unknown>;
-  activateFieldSpellEffect(card: GameCard | null | undefined): unknown;
+  activateFieldSpellEffect(
+    card: GameCard | null | undefined,
+    options?: { activationContext?: ActivationPlanCaptureContext | null },
+  ): unknown;
   changeMonsterPosition(
     card: GameCard,
     position: BattlePosition,
@@ -321,6 +333,32 @@ function cardPayload<Extra extends object>(
   };
 }
 
+/** Whether a command that starts now is one the recording keeps. */
+function isRecordingCommands(game: ReplayCaptureGameHost): boolean {
+  return game.captureReplayEnabled === true && game.replayMode !== "playback" &&
+    Boolean(game._canonicalReplay) && !game._activeDeferredReplayCommandDescriptor;
+}
+
+/**
+ * An activation's exact plan, read when the command starts: playback hands
+ * it back to the same entrypoint, so the plan never comes from a strategy.
+ * The caller's other preferences stay out; they are read only by AI resolvers.
+ * Like a Chain response or trigger plan, a plan the recording cannot carry
+ * fails here: a command recorded without it would resolve differently in
+ * playback, far from the cause.
+ */
+function activationPlanPayload(
+  game: ReplayCaptureGameHost,
+  context: ActivationPlanCaptureContext | null | undefined,
+): { decisions?: SerializedChainResponseDecisions } {
+  const plan = context?.decisions;
+  if (!plan) return {};
+  const decisions = createDecisionPlanIdentities(game).serialize(plan);
+  if (decisions) return { decisions };
+  if (isRecordingCommands(game)) throw new Error("Cannot record unavailable activation choices.");
+  return {};
+}
+
 // Only a concrete position is part of a command. "choice" and an absent
 // position both leave the position to the summon, which records it as a
 // decision when it asks.
@@ -456,6 +494,7 @@ export const REPLAY_CAPTURE_BINDINGS = Object.freeze([
             sourceZone: zone,
             effectId:
               options.effectId || options.activationContext?.effectId || null,
+            ...activationPlanPayload(this, options.activationContext),
           }),
         }
       : null;
@@ -467,7 +506,10 @@ export const REPLAY_CAPTURE_BINDINGS = Object.freeze([
       ? {
           type: "activate_card",
           actorId: actor.id,
-          payload: cardPayload(this, card, { sourceZone: "hand" as const }),
+          payload: cardPayload(this, card, {
+            sourceZone: "hand" as const,
+            ...activationPlanPayload(this, options.activationContext),
+          }),
         }
       : null;
   }),
@@ -482,17 +524,21 @@ export const REPLAY_CAPTURE_BINDINGS = Object.freeze([
           payload: cardPayload(this, card, {
             sourceZone: options.activationZone || "spellTrap",
             effectId: options.effectId || null,
+            ...activationPlanPayload(this, options.activationContext),
           }),
         }
       : null;
   }),
   binding("activateFieldSpellEffect", function (args) {
-    const [card] = args;
+    const [card, options = {}] = args;
     const actor = card?.owner === "bot" ? this.bot : this.player;
     return card ? {
       type: "activate_effect",
       actorId: actor.id,
-      payload: cardPayload(this, card, { sourceZone: "fieldSpell" as const }),
+      payload: cardPayload(this, card, {
+        sourceZone: "fieldSpell" as const,
+        ...activationPlanPayload(this, options.activationContext),
+      }),
     } : null;
   }),
   binding("changeMonsterPosition", function (args) {

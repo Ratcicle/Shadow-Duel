@@ -1,4 +1,7 @@
-import type { BotRuntimePort, BotGamePort } from "../contracts/bot.js";
+import { getBattleStatForAttackTarget } from "../ai/common/cardStats.js";
+import { withoutLiveGameReference } from "../ai/common/gameTreeSimulation.js";
+import { assertPublicPlanningProjection } from "../ai/common/planningCopy.js";
+import type { BotAttackChoice, BotRootOutcome, BotRuntimePort, BotGamePort } from "../contracts/bot.js";
 import type { GameCard } from "../contracts/cards.js";
 import type { GamePlayer } from "../contracts/player.js";
 
@@ -43,6 +46,15 @@ export function getBattleProgressFingerprint(
 
 function getBattlePairKey(attacker: GameCard, target: GameCard | null): string {
   return `${attacker.instanceId}>${target ? target.instanceId : "direct"}`;
+}
+
+/** An attack selection as the optional decision-root observer compares it. */
+function attackRootOutcome(
+  attack: { attacker: GameCard; target: GameCard | null; delta: number } | null,
+): BotRootOutcome<BotAttackChoice> {
+  return attack
+    ? { choice: { attacker: attack.attacker, target: attack.target }, score: attack.delta }
+    : { choice: null, score: null };
 }
 
 function getGuardFailureCode(result: unknown): string | null {
@@ -137,10 +149,22 @@ export function playBotBattlePhase(
       attacker: GameCard;
       target: GameCard | null;
       threshold: number;
+      delta: number;
     } | null = null;
     let bestDelta = -Infinity;
     let bestAttackerAtk = 0;
-    const baseScore = bot.evaluateBoard(game, bot);
+    // Phase 2.3 L12: the base score and every candidate are scored on the
+    // bot's perspective copy, where the opponent's hidden cards are opaque.
+    // Phase 2.3 E2: the guard of that projection only counts, into the Arena's tracker.
+    // Phase 2.3 L13b: the strategy reads each copy without its live game reference.
+    const publicCopy = { publicOpponent: true } as const;
+    const publicView = bot.cloneGameState(game, publicCopy);
+    const guardSink = game._arenaTracker;
+    if (guardSink?.recordPublicProjectionGuard) {
+      guardSink.recordPublicProjectionGuard(publicView.bot.id, "attack",
+        assertPublicPlanningProjection(publicView, publicView.bot.id));
+    }
+    const baseScore = withoutLiveGameReference(publicView, () => bot.evaluateBoard(publicView, publicView.bot));
     const opponentLp = opponent.lp || 0;
     const totalAtkPotential = availableAttackers.reduce(
       (sum, m) => sum + (m.atk || 0),
@@ -190,7 +214,7 @@ export function playBotBattlePhase(
         }
         if (rejectedPairs.has(getBattlePairKey(attacker, target))) continue;
 
-        const simState = bot.cloneGameState(game);
+        const simState = bot.cloneGameState(game, publicCopy);
         const simAttacker = simState.bot.field.find((c) =>
           isSameBattleCard(c, attacker),
         );
@@ -207,7 +231,7 @@ export function playBotBattlePhase(
         if (!simAttacker) continue;
 
         bot.simulateBattle(simState, simAttacker, simTarget);
-        const scoreAfter = bot.evaluateBoard(simState, simState.bot);
+        const scoreAfter = withoutLiveGameReference(simState, () => bot.evaluateBoard(simState, simState.bot));
         let delta = scoreAfter - baseScore;
         const opponentLpAfter = simState.player.lp || 0;
         const attackerSurvived = simState.bot.field.some((c) =>
@@ -246,29 +270,41 @@ export function playBotBattlePhase(
         if (target && !targetSurvived && attackerSurvived) {
           delta += 0.4;
         }
+        // A face-down target's ATK is hidden: only its public battle estimate counts.
+        const targetAtk = target
+          ? target.isFacedown ? getBattleStatForAttackTarget(target) : (target.atk || 0)
+          : 0;
+        // The attacker's ATK before the battle: the copy's is already the one after it.
         if (
           target &&
           simAttacker &&
           simAttacker.cardKind === "monster" &&
-          (simAttacker.atk || 0) <= (target.atk || 0)
+          (attacker.atk || 0) <= targetAtk
         ) {
           delta -= 0.5;
         }
 
-        const strategyBattleDelta = bot.strategy?.scoreBattleAttackCandidate?.({
-          attacker,
-          target,
-          baseDelta: delta,
-          simState,
-          game,
-          bot: bot,
-          opponent,
-          isSecondAttack,
-          attackerSurvived,
-          targetSurvived,
-          lethalNow,
-          opponentLpAfter,
-        });
+        // Phase 2.3 L12c: the strategy hook reads the target, the opponent and
+        // the game from the public copy before the battle, where the base
+        // score is taken; a face-down target is an opaque projection there.
+        const publicTarget = target
+          ? publicView.player.field.find((c) => isSameBattleCard(c, target)) ?? null
+          : null;
+        const strategyBattleDelta = withoutLiveGameReference(publicView, () =>
+          withoutLiveGameReference(simState, () => bot.strategy?.scoreBattleAttackCandidate?.({
+            attacker,
+            target: publicTarget,
+            baseDelta: delta,
+            simState,
+            game: publicView,
+            bot: bot,
+            opponent: publicView.player,
+            isSecondAttack,
+            attackerSurvived,
+            targetSurvived,
+            lethalNow,
+            opponentLpAfter,
+          })));
         if (Number.isFinite(strategyBattleDelta)) {
           delta += strategyBattleDelta as number;
         } else if (
@@ -286,7 +322,7 @@ export function playBotBattlePhase(
         ) {
           bestDelta = delta;
           bestAttackerAtk = attacker.atk || 0;
-          bestAttack = { attacker, target, threshold: attackThreshold };
+          bestAttack = { attacker, target, threshold: attackThreshold, delta };
         }
       }
     }
@@ -311,6 +347,9 @@ export function playBotBattlePhase(
       }
 
       const bestAttack = selectAttack();
+      // Benchmark diagnostics only: absent in play, and synchronous when present.
+      bot.decisionRootObserver?.observeAttack(game, attackRootOutcome(bestAttack),
+        () => attackRootOutcome(selectAttack()));
       if (!bestAttack) {
         await waitBattleDelay(battleDelayMs);
         endBattlePhase();

@@ -1,13 +1,25 @@
 import { DAMAGE_STEP_ACTIVATION_CATEGORIES } from "../spellTrap/quickSpellRules.js";
 import { getActivePiercingMultiplier, hasActivePiercing } from "./availability.js";
+import {
+  BATTLE_PAIR_EFFECT_FINALIZATION,
+  battlePairEffectApplies,
+  type BattlePairEffect,
+} from "./resolution.js";
+import { isAI } from "../../Player.js";
 import { DAMAGE_STEP_TIMINGS } from "../../contracts/effects.js";
+import type { CardAction } from "../../contracts/actions.js";
 import type {
   ChainOperationResult,
   ChainRuntimePort,
   ChainRuntimeTriggerOccurrence,
   FastEffectContextInput,
 } from "../../contracts/chainRuntime.js";
-import type { DamageStepTiming } from "../../contracts/effects.js";
+import type { DamageStepTiming, EffectDefinition } from "../../contracts/effects.js";
+import type {
+  RawSelectionContract,
+  SelectionResult,
+  SelectionSessionInput,
+} from "../../contracts/selection.js";
 import type {
   DamageStepBuff,
   DamageStepCard,
@@ -87,6 +99,61 @@ interface DamageStepDestroyOptions {
   };
 }
 
+/** A battle pair effect as `register_battle_pair_effect` registers it. */
+interface BattlePairRegistration extends BattlePairEffect {
+  controllerId?: string | null;
+  opponentId?: string | null;
+  source?: DamageStepCard | null;
+  sourceEffectId?: string | null;
+  firstTargetRef?: string | null;
+  secondTargetRef?: string | null;
+  affectedTargetRef?: string | null;
+  affectedTarget?: DamageStepCard | null;
+  actions?: readonly CardAction[] | null;
+}
+
+interface BattlePairActionResult {
+  success?: boolean;
+  needsSelection?: boolean;
+  selectionContract?: RawSelectionContract | null;
+  reason?: string | null;
+}
+
+/** The context a battle pair effect's actions resolve with. */
+interface BattlePairActionContext {
+  source: DamageStepCard | null;
+  player: GamePlayer;
+  opponent: GamePlayer;
+  effect: EffectDefinition | null;
+  effectId: string | null;
+  attacker: DamageStepCard;
+  attackerOwner: GamePlayer;
+  defender: DamageStepCard | null;
+  defenderOwner: GamePlayer | null;
+  target: DamageStepCard | null;
+  targetOwner: GamePlayer | null;
+  isDamageStep: true;
+  actionContext: ReturnType<typeof buildStagePayload>["actionContext"];
+  activationContext: {
+    effectId: string | null;
+    autoSelectSingleTarget: boolean;
+    autoSelectTargets: boolean;
+  };
+  selections?: SelectionResult;
+}
+
+interface DamageStepEffectEnginePort {
+  clearTargetingCache?(): void;
+  applyActions?(
+    actions: readonly CardAction[],
+    context: unknown,
+    targets: unknown,
+  ): Promise<BattlePairActionResult | boolean | null | undefined>;
+}
+
+/** A choice still unanswered after this many rounds ends its action. */
+const BATTLE_PAIR_CHOICE_ROUNDS = 8;
+
 type DamageStepEventPayload = ReturnType<typeof buildStagePayload> & {
   event?: string;
   addTriggerToChain?: false;
@@ -116,7 +183,8 @@ interface DamageStepHost {
   pendingEventSelection: unknown;
   pendingTriggerSelection: unknown;
   chainSystem: ChainRuntimePort;
-  effectEngine?: { clearTargetingCache?(): void } | null;
+  effectEngine?: DamageStepEffectEnginePort | null;
+  temporaryBattlePairEffects?: Array<BattlePairRegistration | null> | null;
   ui?: DamageStepUiPort | null;
   getOpponent?(player: GamePlayer | null): GamePlayer | null;
   notify?(eventName: string, payload?: unknown): void;
@@ -157,6 +225,14 @@ interface DamageStepHost {
   checkWinCondition?(): unknown;
   cleanupDamageStepTransaction?(reason?: string): unknown;
   getDamageStepState?(): DamageStepState;
+  resolvePendingSpellTrapFinalization?(
+    card: DamageStepCard,
+    owner: GamePlayer,
+    activationZone: "spellTrap",
+    options: { deferUntil: typeof BATTLE_PAIR_EFFECT_FINALIZATION },
+  ): Promise<boolean>;
+  startTargetSelectionSession?(session: SelectionSessionInput): unknown;
+  devLog?(code: string, detail?: unknown): void;
 }
 
 interface EndDamageStepOptions {
@@ -870,6 +946,8 @@ async function resolveQueuedDestructionTriggers(
   game: DamageStepHost,
   transaction: DamageStepTransaction,
   queueStart: number,
+  timing: DamageStepTiming = DAMAGE_STEP_TIMINGS.END,
+  event = "battle_destroy",
 ): Promise<DamageStepWindowResult | null> {
   const queue = game.chainSystem?.pendingTriggerOccurrences;
   if (!Array.isArray(queue) || queue.length <= queueStart) return null;
@@ -879,14 +957,309 @@ async function resolveQueuedDestructionTriggers(
     context: {
       ...buildStagePayload(
         transaction,
-        DAMAGE_STEP_TIMINGS.END,
+        timing,
         occurrences[0]?.atomicGroupId || null,
       ),
       type: "damage_step",
-      event: "battle_destroy",
+      event,
     } as FastEffectContextInput,
     deferPostChainWindow: true,
   });
+}
+
+function findPlayerById(
+  game: DamageStepHost,
+  playerId: string | null | undefined,
+): GamePlayer | null {
+  if (!playerId) return null;
+  if (game.player?.id === playerId) return game.player;
+  if (game.bot?.id === playerId) return game.bot;
+  return null;
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    ((typeof value === "object" && value !== null) || typeof value === "function") &&
+    typeof Reflect.get(value, "then") === "function"
+  );
+}
+
+function asBattlePairActionResult(
+  value: BattlePairActionResult | boolean | null | undefined,
+): BattlePairActionResult {
+  if (typeof value === "object" && value !== null) return value;
+  return { success: value !== false };
+}
+
+/**
+ * A choice an action asks its controller while its battle pair resolves. As in
+ * a Chain Link's resolution, it is mandatory and never an activation target.
+ * An AI controller's actions choose for themselves, so it is not asked here.
+ */
+function requestBattlePairChoice(
+  game: DamageStepHost,
+  source: DamageStepCard | null,
+  controller: GamePlayer,
+  contract: RawSelectionContract | null | undefined,
+): Promise<SelectionResult | null> {
+  if (
+    !contract ||
+    isAI(controller) ||
+    typeof game.startTargetSelectionSession !== "function" ||
+    contract.timing === "activation" ||
+    contract.purpose === "target" ||
+    contract.kind === "target"
+  ) {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (selections: SelectionResult | null): void => {
+      if (settled) return;
+      settled = true;
+      resolve(selections);
+    };
+    const opened = game.startTargetSelectionSession?.({
+      kind: contract.kind || "choice",
+      owner: controller,
+      card: source,
+      selectionContract: {
+        ...contract,
+        timing: "resolution",
+        purpose: "resolution",
+        ui: { ...(contract.ui || {}), allowCancel: false, preventCancel: true },
+      },
+      message: contract.message || `Select target(s) for ${source?.name || "the battle"}`,
+      allowCancel: false,
+      preventCancel: true,
+      execute: (selections) => {
+        finish(selections);
+        return { success: true, needsSelection: false };
+      },
+      onAbort: () => finish(null),
+    });
+    // A contract that opens no session is never answered.
+    if (game.targetSelection == null && !isPromiseLike(opened)) finish(null);
+  });
+}
+
+/**
+ * The registration's actions, one at a time. A choice resumes only the action
+ * that asked for it: an action that already resolved, such as a destruction,
+ * is never applied again, and the Damage Step waits at its timing meanwhile.
+ */
+async function applyBattlePairActions(
+  game: DamageStepHost,
+  entry: BattlePairRegistration,
+  controller: GamePlayer,
+  ctx: BattlePairActionContext,
+  targets: Readonly<Record<string, readonly DamageStepCard[]>>,
+): Promise<void> {
+  const engine = game.effectEngine;
+  if (typeof engine?.applyActions !== "function") return;
+  for (const action of entry.actions || []) {
+    let result = asBattlePairActionResult(await engine.applyActions([action], ctx, targets));
+    for (let round = 0; result.needsSelection && round < BATTLE_PAIR_CHOICE_ROUNDS; round += 1) {
+      const selections = await requestBattlePairChoice(
+        game,
+        ctx.source,
+        controller,
+        result.selectionContract,
+      );
+      if (!selections) break;
+      ctx.selections = { ...ctx.selections, ...selections };
+      result = asBattlePairActionResult(await engine.applyActions([action], ctx, targets));
+    }
+    if (result.needsSelection || result.success === false) {
+      game.devLog?.("BATTLE_PAIR_EFFECT_STOPPED", {
+        summary: `${ctx.source?.name || "Battle pair effect"} stopped at ${action.type}`,
+        action: action.type,
+        needsSelection: result.needsSelection === true,
+        reason: result.reason ?? null,
+      });
+      return;
+    }
+  }
+}
+
+function getBattlePairSourceEffect(
+  entry: BattlePairRegistration,
+): EffectDefinition | null {
+  const effects = entry.source?.effects;
+  if (!Array.isArray(effects) || !entry.sourceEffectId) return null;
+  return effects.find((effect) => effect?.id === entry.sourceEffectId) || null;
+}
+
+/**
+ * One registration. As in the contract removed in 3256e50, its actions apply
+ * with the pair's targets while the monster it affects is still a monster on
+ * the opponent's field. Its source then receives the finalization decided at
+ * its activation even when they did not apply, so it never stays in its zone.
+ */
+async function applyBattlePairEffect(
+  game: DamageStepHost,
+  transaction: DamageStepTransaction,
+  entry: BattlePairRegistration,
+): Promise<void> {
+  const source = entry.source ?? null;
+  const controller =
+    findPlayerById(game, entry.controllerId) || resolveOwner(game, source);
+  if (!controller) return;
+  const opponent =
+    findPlayerById(game, entry.opponentId) || game.getOpponent?.(controller) || null;
+  const first = entry.firstTarget ?? null;
+  const second = entry.secondTarget ?? null;
+  const affected = entry.affectedTarget ?? null;
+  if (
+    opponent &&
+    first &&
+    second &&
+    affected?.cardKind === "monster" &&
+    opponent.field.includes(affected)
+  ) {
+    game.ui?.log?.(`${source?.name || "A battle pair effect"} applies to this battle.`);
+    const timing = transaction.timing as DamageStepTiming;
+    const ctx: BattlePairActionContext = {
+      source,
+      player: controller,
+      opponent,
+      effect: getBattlePairSourceEffect(entry),
+      effectId: entry.sourceEffectId ?? null,
+      attacker: transaction.attacker,
+      attackerOwner: transaction.attackerOwner,
+      defender: transaction.defender,
+      defenderOwner: transaction.defenderOwner,
+      target: transaction.defender,
+      targetOwner: transaction.defenderOwner,
+      isDamageStep: true,
+      actionContext: buildStagePayload(transaction, timing, null).actionContext,
+      activationContext: {
+        effectId: entry.sourceEffectId ?? null,
+        autoSelectSingleTarget: isAI(controller),
+        autoSelectTargets: isAI(controller),
+      },
+    };
+    const targets: Record<string, readonly DamageStepCard[]> = {
+      battle_pair_first: [first],
+      battle_pair_second: [second],
+      battle_pair_affected: [affected],
+    };
+    if (entry.firstTargetRef) targets[entry.firstTargetRef] = [first];
+    if (entry.secondTargetRef) targets[entry.secondTargetRef] = [second];
+    if (entry.affectedTargetRef) targets[entry.affectedTargetRef] = [affected];
+    await applyBattlePairActions(game, entry, controller, ctx, targets);
+    game.updateBoard?.();
+    game.checkWinCondition?.();
+  } else {
+    game.devLog?.("BATTLE_PAIR_EFFECT_WITHOUT_TARGET", {
+      summary: `${source?.name || "Battle pair effect"}: the affected monster left the opponent's field`,
+      timing: transaction.timing,
+    });
+  }
+  if (source) {
+    await game.resolvePendingSpellTrapFinalization?.(source, controller, "spellTrap", {
+      deferUntil: BATTLE_PAIR_EFFECT_FINALIZATION,
+    });
+  }
+}
+
+/**
+ * The battle pair effects registered for this battle at the current timing,
+ * consumed from the registry before any of them runs, so each applies once.
+ */
+function takeBattlePairEffects(
+  game: DamageStepHost,
+  transaction: DamageStepTransaction,
+): BattlePairRegistration[] {
+  const registrations = game.temporaryBattlePairEffects;
+  if (transaction.directAttack || !Array.isArray(registrations)) return [];
+  const timing = transaction.timing as DamageStepTiming;
+  const turnCounter = Number(game.turnCounter || 0);
+  const applicable = registrations.filter(
+    (entry): entry is BattlePairRegistration =>
+      battlePairEffectApplies(entry, turnCounter, transaction.attacker, transaction.defender, timing),
+  );
+  if (applicable.length > 0) {
+    game.temporaryBattlePairEffects = registrations.filter(
+      (entry) => !entry || !applicable.includes(entry),
+    );
+  }
+  return applicable;
+}
+
+/**
+ * Phase 2.3 L25b: battle pair effects (`register_battle_pair_effect`) apply
+ * when their pair battles, as the Damage Step timing each one declares
+ * begins. Their movements are queued as the Damage Step's own procedure and
+ * resolve as one trigger opportunity, as the end of the Damage Step does for
+ * battle destruction.
+ */
+async function resolveBattlePairEffects(
+  game: DamageStepHost,
+  transaction: DamageStepTransaction,
+  applicable: readonly BattlePairRegistration[],
+): Promise<DamageStepWindowResult | null> {
+  const timing = transaction.timing as DamageStepTiming;
+  const queue = game.chainSystem?.pendingTriggerOccurrences;
+  const queueStart = Array.isArray(queue) ? queue.length : 0;
+  game.damageStepProcedureDepth = Number(game.damageStepProcedureDepth || 0) + 1;
+  try {
+    for (const entry of applicable) {
+      await applyBattlePairEffect(game, transaction, entry);
+    }
+  } finally {
+    game.damageStepProcedureDepth = Math.max(
+      0,
+      Number(game.damageStepProcedureDepth || 0) - 1,
+    );
+  }
+  return await resolveQueuedDestructionTriggers(
+    game,
+    transaction,
+    queueStart,
+    timing,
+    "damage_step",
+  );
+}
+
+/**
+ * A timing whose battle pair effects apply as it begins. Their trigger
+ * opportunity defers its post-Chain window to this timing's own window, which
+ * therefore opens even when one of those effects failed, as at the end of the
+ * Damage Step; the failure is propagated after it.
+ */
+async function resolveTimingWithBattlePairEffects(
+  game: DamageStepHost,
+  transaction: DamageStepTransaction,
+  applicable: readonly BattlePairRegistration[],
+  events: readonly string[],
+): Promise<DamageStepWindowResult> {
+  const pairResult = await resolveBattlePairEffects(game, transaction, applicable);
+  if (pairResult?.needsSelection) return pairResult;
+  const windowResult = await resolveStageWindow(game, transaction, events);
+  if (
+    pairResult?.ok !== false ||
+    windowResult?.needsSelection ||
+    windowResult?.ok === false
+  ) {
+    return windowResult;
+  }
+  return { ...pairResult, timingRecovery: windowResult };
+}
+
+/**
+ * The window of a timing at which battle pair effects can apply. Without one
+ * for this battle, it is the stage window itself, with no added step.
+ */
+function resolvePairTimingWindow(
+  game: DamageStepHost,
+  transaction: DamageStepTransaction,
+  events: readonly string[],
+): Promise<DamageStepWindowResult> {
+  const applicable = takeBattlePairEffects(game, transaction);
+  return applicable.length > 0
+    ? resolveTimingWithBattlePairEffects(game, transaction, applicable, events)
+    : resolveStageWindow(game, transaction, events);
 }
 
 async function finalizeBattleDestruction(
@@ -1041,6 +1414,30 @@ async function requireEndOfDamageStep(
   return endResult;
 }
 
+/**
+ * Phase 2.3 L25b: an attack that stops before damage calculation was still
+ * declared, so the attacker that declared it consumes it, as when an attack
+ * stops in the Battle Step and as in the contract removed in 3256e50. An
+ * attacker that left the field, even to return as a new card, has no attack
+ * to consume.
+ */
+async function stopBeforeDamageCalculation(
+  game: DamageStepHost,
+  transaction: DamageStepTransaction,
+): Promise<void> {
+  transaction.stoppedBeforeCalculation = true;
+  if (
+    cardStillMatchesSnapshot(
+      transaction.attackerOwner,
+      transaction.attacker,
+      transaction.sourceAtStart.attacker,
+    )
+  ) {
+    game.markAttackUsed?.(transaction.attacker, transaction.defender);
+  }
+  await requireEndOfDamageStep(game, transaction);
+}
+
 export async function executeDamageStepTransaction(
   this: DamageStepHost,
   transaction: DamageStepTransaction | null | undefined,
@@ -1051,15 +1448,14 @@ export async function executeDamageStepTransaction(
   let result: DamageStepExecutionResult | null = null;
   try {
     setDamageStepTiming(this, transaction, DAMAGE_STEP_TIMINGS.START);
-    let windowResult = await resolveStageWindow(this, transaction, [
+    let windowResult = await resolvePairTimingWindow(this, transaction, [
       "damage_step",
     ]);
     if (windowResult?.needsSelection || windowResult?.ok === false) {
       throw new Error(windowResult?.reason || "damage_step_start_failed");
     }
     if (!participantsRemainValid(transaction)) {
-      transaction.stoppedBeforeCalculation = true;
-      await requireEndOfDamageStep(this, transaction);
+      await stopBeforeDamageCalculation(this, transaction);
     } else {
       setDamageStepTiming(
         this,
@@ -1067,7 +1463,7 @@ export async function executeDamageStepTransaction(
         DAMAGE_STEP_TIMINGS.BEFORE_CALCULATION,
       );
       await revealDefender(this, transaction);
-      windowResult = await resolveStageWindow(
+      windowResult = await resolvePairTimingWindow(
         this,
         transaction,
         transaction.directAttack
@@ -1078,8 +1474,7 @@ export async function executeDamageStepTransaction(
         throw new Error(windowResult?.reason || "damage_step_before_failed");
       }
       if (!participantsRemainValid(transaction)) {
-        transaction.stoppedBeforeCalculation = true;
-        await requireEndOfDamageStep(this, transaction);
+        await stopBeforeDamageCalculation(this, transaction);
       } else {
         setDamageStepTiming(this, transaction, DAMAGE_STEP_TIMINGS.CALCULATION);
         windowResult = await resolveStageWindow(this, transaction, [
@@ -1091,8 +1486,7 @@ export async function executeDamageStepTransaction(
           );
         }
         if (!participantsRemainValid(transaction)) {
-          transaction.stoppedBeforeCalculation = true;
-          await requireEndOfDamageStep(this, transaction);
+          await stopBeforeDamageCalculation(this, transaction);
         } else {
           await calculateBattleOutcome(this, transaction);
           this.clearDamageCalculationBuffs?.();

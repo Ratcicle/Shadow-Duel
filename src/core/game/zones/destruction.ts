@@ -815,15 +815,21 @@ export async function destroyCard(
         };
       }
 
+      // A deferring caller owns every collected package, Equip cleanups included.
+      const deferredPackages = moveResult.deferredCardToGraveTriggerPackages?.length
+        ? { deferredCardToGraveTriggerPackages: moveResult.deferredCardToGraveTriggerPackages }
+        : {};
+
       if (moveResult.needsSelection) {
         return {
           destroyed: true,
           needsSelection: true,
           selectionContract: moveResult.selectionContract,
+          ...deferredPackages,
         };
       }
 
-      return { destroyed: true };
+      return { destroyed: true, ...deferredPackages };
     },
     {
       contextLabel: options.contextLabel || "destroyCard",

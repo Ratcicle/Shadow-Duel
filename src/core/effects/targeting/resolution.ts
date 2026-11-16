@@ -10,7 +10,9 @@ import { captureReferencePresence, matchesFrozenReferencePresence, getEventEffec
 
 import { isAI } from "../../Player.js";
 import { resolveExactInstanceSelection } from "../../AutoSelector.js";
+import { aiSelectionDecisionRequest } from "../../actionHandlers/shared.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
+import type { DecisionBrokerPort } from "../../contracts/decisions.js";
 import type {
   ActionRuntimeCard,
   ActionRuntimeGamePort,
@@ -130,6 +132,8 @@ type TargetResolutionGamePort = Omit<
   player: RuntimePlayer;
   bot: RuntimePlayer;
   autoSelector?: TargetAutoSelectorPort | null;
+  /** An AI's pick made while targets resolve is recorded synchronously. */
+  decisionBroker?: Pick<DecisionBrokerPort, "requestDecisionSync"> | null;
   devModeEnabled?: boolean;
   canSpecialSummonUnderRestrictions?(
     card: RuntimeCard,
@@ -449,6 +453,26 @@ function frozenReferenceStillPresent(engine: TargetResolutionHost, snapshot: Cha
     snapshot.zone === engine.findCardZone(owner, card) &&
     snapshot.faceUp === (card.isFacedown !== true) &&
     snapshot.locationVersion === Number(card.locationVersion ?? 0);
+}
+
+/**
+ * An AI's target pick made while targets resolve, which cannot await: it is
+ * recorded through the synchronous broker, so playback replays the pick
+ * instead of selecting again. A host without a broker uses the pick directly.
+ */
+function decideAiTargets(
+  host: TargetResolutionHost,
+  player: RuntimePlayer,
+  requirements: readonly RawSelectionRequirement[],
+  choose: () => SelectionResult | null,
+): SelectionResult | null {
+  const broker = host.game?.decisionBroker;
+  return broker
+    ? broker.requestDecisionSync({
+        ...aiSelectionDecisionRequest(player, "target", requirements),
+        resolveAI: choose,
+      })
+    : choose();
 }
 
 /**
@@ -790,6 +814,20 @@ export function resolveTargets(
     if (shouldAutoSelect) {
       const desiredCount = autoSelectExplicit ? max : 1;
       const takeCount = Math.min(desiredCount, candidates.length);
+      const aiPlayer = isAIPlayer ? ctx.player : null;
+      // The bot takes the first candidates, as its recorded decision. Inside an
+      // automatic selection below, this pass only repeats the recorded pick:
+      // a decision nested in that resolver would precede it live but not in
+      // playback, where the resolver never runs.
+      if (allowAutoSelectForBot && aiPlayer && activationContext._autoSelectAttempted !== true) {
+        const picked = decideAiTargets(this, aiPlayer, [{ id: def.id, candidates: decoratedCandidates }],
+          () => ({ [def.id]: decoratedCandidates.slice(0, takeCount).map(candidate => candidate.key) }));
+        targetMap[def.id] = (picked?.[def.id] || []).flatMap(key => {
+          const card = decoratedCandidates.find(candidate => candidate.key === key)?.cardRef;
+          return card ? [card] : [];
+        });
+        continue;
+      }
       targetMap[def.id] = candidates.slice(0, takeCount);
       continue;
     }
@@ -902,49 +940,68 @@ export function resolveTargets(
     ) {
       activationContext._autoSelectAttempted = true;
       try {
-        const autoResult = this.game.autoSelector.select(selectionContract, {
-          owner: ctx?.player,
-          activationContext,
-          selectionKind: "target",
-        });
+        const autoSelector = this.game.autoSelector;
+        const live: { resolved: TargetResolutionResult | null } = { resolved: null };
+        // The selections that resolve (AutoSelector, else the minimal fallback).
+        const chooseAutomatically = (): SelectionResult | null => {
+          const autoResult = autoSelector.select(selectionContract, {
+            owner: ctx?.player,
+            activationContext,
+            selectionKind: "target",
+          });
 
-        if (autoResult?.ok && autoResult.selections) {
-          const resolved = this.resolveTargets(
-            targetDefs,
-            ctx,
-            autoResult.selections,
-          );
-          if (resolved?.ok) {
-            return resolved;
+          if (autoResult?.ok && autoResult.selections) {
+            const resolved = this.resolveTargets(
+              targetDefs,
+              ctx,
+              autoResult.selections,
+            );
+            if (resolved?.ok) {
+              live.resolved = resolved;
+              return autoResult.selections;
+            }
           }
-        }
 
-        const fallbackSelections: SelectionResult = {};
-        const hasDependencies = selectionContract.requirements.some(requirement => requirement.excludeTargetRefs?.length);
-        const feasible = hasDependencies ? findFeasibleSelection(selectionContract.requirements) : null;
-        for (const req of selectionContract.requirements || []) {
-          const min = Number(req.min ?? 0);
-          const max = Number(req.max ?? min);
-          const candidates = Array.isArray(req.candidates)
-            ? req.candidates
-            : [];
-          const pickCount = min > 0 ? Math.min(min, candidates.length) : 0;
-          fallbackSelections[req.id] = (hasDependencies
-            ? candidates.filter(candidate => feasible?.[req.id]?.includes(candidate.key))
-            : candidates.slice(0, Math.min(pickCount, max, candidates.length)))
-            .map((cand) => cand.key)
-            .filter(Boolean);
-        }
-
-        if (Object.keys(fallbackSelections).length > 0) {
-          const resolvedFallback = this.resolveTargets(
-            targetDefs,
-            ctx,
-            fallbackSelections,
-          );
-          if (resolvedFallback?.ok) {
-            return resolvedFallback;
+          const fallbackSelections: SelectionResult = {};
+          const hasDependencies = selectionContract.requirements.some(requirement => requirement.excludeTargetRefs?.length);
+          const feasible = hasDependencies ? findFeasibleSelection(selectionContract.requirements) : null;
+          for (const req of selectionContract.requirements || []) {
+            const min = Number(req.min ?? 0);
+            const max = Number(req.max ?? min);
+            const candidates = Array.isArray(req.candidates)
+              ? req.candidates
+              : [];
+            const pickCount = min > 0 ? Math.min(min, candidates.length) : 0;
+            fallbackSelections[req.id] = (hasDependencies
+              ? candidates.filter(candidate => feasible?.[req.id]?.includes(candidate.key))
+              : candidates.slice(0, Math.min(pickCount, max, candidates.length)))
+              .map((cand) => cand.key)
+              .filter(Boolean);
           }
+
+          if (Object.keys(fallbackSelections).length > 0) {
+            const resolvedFallback = this.resolveTargets(
+              targetDefs,
+              ctx,
+              fallbackSelections,
+            );
+            if (resolvedFallback?.ok) {
+              live.resolved = resolvedFallback;
+              return fallbackSelections;
+            }
+          }
+          return null;
+        };
+        // An AI's automatic pick is its recorded decision; playback resolves
+        // the recorded selections instead of selecting again.
+        const aiPlayer = isAIPlayer ? ctx.player : null;
+        const chosen = aiPlayer
+          ? decideAiTargets(this, aiPlayer, selectionContract.requirements, chooseAutomatically)
+          : chooseAutomatically();
+        if (live.resolved) return live.resolved;
+        if (chosen) {
+          const resolved = this.resolveTargets(targetDefs, ctx, chosen);
+          if (resolved?.ok) return resolved;
         }
       } finally {
         delete activationContext._autoSelectAttempted;

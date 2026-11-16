@@ -1,7 +1,7 @@
 /**
  * Canonical Chain Link contract.
  *
- * Identity, classification, snapshots, status and serialization.
+ * Identity, classification, snapshots, status, terminal outcome and serialization.
  * Timing, SEGOC and resolution are handled by their respective modules.
  */
 
@@ -27,6 +27,7 @@ import type {
   ChainDeclaredTargetSnapshot,
   ChainEffect,
   ChainLink,
+  ChainOperationResult,
   ChainPlayer,
   ChainResolvedSelectionCounts,
   ChainSelectionMap,
@@ -40,6 +41,7 @@ import type {
   SerializedChainLink,
 } from "../contracts/chainRuntime.js";
 import type { ChainId, ChainLinkId } from "../contracts/primitives.js";
+import type { ChainLinkResolutionEventPayload, ChainLinkResolutionOutcome } from "../contracts/events.js";
 
 const VALID_ACTIVATION_KINDS = new Set(Object.values(CHAIN_ACTIVATION_KINDS));
 const VALID_EFFECT_KINDS = new Set(Object.values(CHAIN_EFFECT_KINDS));
@@ -647,6 +649,47 @@ export function setChainLinkResolutionStatus(
     link.finalizationStatus = details.finalizationStatus;
   }
   return link;
+}
+
+/**
+ * Publish a link's terminal outcome. `completed` closes the primary effect;
+ * the post-effect phase publishes its combined result as `after_resolution`.
+ */
+export function notifyChainLinkOutcome(
+  chain: FullChainHost,
+  link: ChainLink,
+  result: ChainOperationResult | undefined,
+  stage: Exclude<ChainLinkResolutionEventPayload["stage"], "resolving"> = "completed",
+): void {
+  const success = result?.success !== false;
+  const outcome: ChainLinkResolutionOutcome = result?.activationNegated === true
+    ? "activation_negated"
+    : result?.effectNegated === true
+      ? "effect_negated"
+      : !success
+        ? result?.executed === true ? "partial_failure" : "failed"
+        : "success";
+  chain.game?.notify?.("chain_link_resolution", {
+    stage,
+    chainId: link.chainId,
+    linkId: link.linkId,
+    chainLevel: link.chainLevel,
+    controllerId: link.controller?.id || null,
+    cardId: link.card.id ?? null,
+    cardInstanceId: link.card.instanceId ?? null,
+    cardName: link.card.name || null,
+    effectId: link.effectId || link.effect?.id || null,
+    activationKind: link.activationKind,
+    effectKind: link.effectKind,
+    success,
+    outcome,
+    executed: result?.executed === true,
+    failedAction: result?.failedAction || null,
+    reason: result?.reason || (result?.fizzled ? link.sourceValidity?.reason || "source_unavailable" : null),
+    activationNegated: result?.activationNegated === true,
+    effectNegated: result?.effectNegated === true,
+    resolvedWithoutEffect: result?.resolvedWithoutEffect === true,
+  });
 }
 
 function isSerializedChainCard(

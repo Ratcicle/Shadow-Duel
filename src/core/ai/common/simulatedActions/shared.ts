@@ -265,8 +265,6 @@ export function isSimulatedSourcePresenceValid(
 }
 
 export interface SimulatedActionOptions {
-  /** Reuse runtime optional-target policy only for explicitly migrated consumers. */
-  useRuntimeOptionalTargets?: boolean;
   /** Nested continuation batches share the already completed preflight. */
   _contextualReferencePreflight?: {
     readonly effect: EffectDefinition | null | undefined;
@@ -393,7 +391,6 @@ export interface SimulatedActionOptions {
 /** Execution-only policy. Never stored in a simulation graph or replay. */
 export interface SimulatedOwnerPolicy extends SimulatedActionOptions {
   archetype?: string | null;
-  preferDefense?: boolean;
   buildActivationContextForEffect?(input: {
     sourceCard: SimulatedCardState;
     effect: EffectDefinition;
@@ -1173,8 +1170,11 @@ export function chooseSpecialSummonPosition(
   state: SimulatedRuntimeState,
   player: SimulatedPlayerState,
   options: SimulatedActionOptions = {},
+  preferredPosition?: BattlePosition | null,
 ): BattlePosition {
   if (action.position && action.position !== "choice") return action.position;
+  // A contextual preference outranks the strategy hook, never a forced position.
+  if (preferredPosition) return preferredPosition;
   const chooser =
     options.chooseSpecialSummonPosition ||
     options.strategy?.chooseSpecialSummonPosition?.bind(options.strategy);
@@ -1210,11 +1210,12 @@ export function applySummonState(
   state: SimulatedRuntimeState,
   player: SimulatedPlayerState,
   options: SimulatedActionOptions = {},
+  preferredPosition?: BattlePosition | null,
 ): void {
   assignSimulatedFieldPresenceId(card, state);
   card.summonedTurn = state.turnCounter ?? null;
   card.lastSummonedTurn = state.turnCounter ?? null;
-  card.position = chooseSpecialSummonPosition(card, action, state, player, options);
+  card.position = chooseSpecialSummonPosition(card, action, state, player, options, preferredPosition);
   card.isFacedown = false;
   card.hasAttacked = false;
   card.attacksUsedThisTurn = 0;

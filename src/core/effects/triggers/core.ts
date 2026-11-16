@@ -5,7 +5,9 @@ import { captureProcedureTriggerConditions } from "../conditions/runtime.js";
 import { captureSourceSnapshot } from "../../chain/link.js";
 import { walkActionList } from "../../actionHandlers/actionWalker.js";
 import { requestOptionalConfirmation } from "../../actionHandlers/shared.js";
+import { createTriggerActivationDecisionAdapter } from "../../game/decisions/chainResponse.js";
 import type { ActionRuntimeGamePort } from "../../contracts/actionRuntime.js";
+import type { TriggerActivationDecisionResult } from "../../contracts/decisions.js";
 
 type TriggerConfirmationGame = Pick<ActionRuntimeGamePort, "requestDecision">;
 import { findTriggerSourceLocation, isTriggerSourceLegal, matchesEquipHostExitSourcePresence } from "./collectors/shared.js";
@@ -437,6 +439,68 @@ function mergeStrategyActivationContext(
   };
 }
 
+type AiTriggerActivationChoice =
+  | { readonly declined: true }
+  | { readonly declined: false; readonly context: TriggerActivationContext | null };
+
+/**
+ * An AI controller decides one materialized trigger opportunity where it is
+ * collected, so its policy sees the same state as before (the entry is built
+ * synchronously). The answer is a recorded decision: playback replays the
+ * declined trigger or the exact plan without consulting a strategy. Only the
+ * plan crosses the replay boundary; live keeps the full policy context.
+ */
+function decideAiTriggerActivation(
+  host: TriggerCollectorHost,
+  owner: TriggerRuntimePlayer,
+  sourceCard: TriggerRuntimeCard,
+  effect: TriggerEffectLike,
+  requestedZone: TriggerZone | undefined,
+  activationZone: TriggerZone | undefined,
+): AiTriggerActivationChoice {
+  const live: { planned: TriggerActivationContext | null } = { planned: null };
+  const resolveAI = (): TriggerActivationDecisionResult | null => {
+    const strategy = owner.strategy;
+    if (
+      effect.triggerRequirement === "optional" &&
+      strategy?.shouldActivateEffect?.({
+        sourceCard, effect, player: owner, game: host.game,
+        activationZone: requestedZone,
+      }) === false
+    ) return null;
+    live.planned = strategy?.buildActivationContextForEffect?.({
+      sourceCard, effect, player: owner, game: host.game, activationZone,
+    }) ?? null;
+    return { decisions: live.planned?.decisions ?? null };
+  };
+  const broker = host.game?.decisionBroker;
+  const effectId = effect.id ?? null;
+  const sourceDuelCardId = sourceCard.duelCardId;
+  const decision = broker
+    ? broker.requestDecisionSync({
+        kind: "trigger_activation",
+        actor: owner,
+        candidates: [],
+        requireCandidate: false,
+        contextSnapshot: {
+          type: "trigger_activation",
+          sourceDuelCardId: typeof sourceDuelCardId === "number" && Number.isInteger(sourceDuelCardId)
+            ? sourceDuelCardId : null,
+          effectId,
+        },
+        resolveAI,
+        ...createTriggerActivationDecisionAdapter(host.game, effectId, {
+          optional: effect.triggerRequirement === "optional",
+        }),
+      })
+    : resolveAI();
+  if (decision === null) return { declined: true };
+  return {
+    declined: false,
+    context: live.planned ?? (decision.decisions ? { decisions: decision.decisions } : null),
+  };
+}
+
 /**
  * Builds a trigger entry for chain/activation handling.
  * @param {Object} options - Configuration options
@@ -499,14 +563,6 @@ export function buildTriggerEntry(
   if (!isTriggerSourceLegal(sourceCard, effect, sourceZone, equipHostExitBinding)) return null;
 
   if (
-    !deferActivationChecks && isAI(owner) && effect.triggerRequirement === "optional" &&
-    owner.strategy?.shouldActivateEffect?.({
-      sourceCard, effect, player: owner, game: this.game,
-      activationZone: options.activationZone,
-    }) === false
-  ) return null;
-
-  if (
     typeof options.activate !== "function" &&
     !hasRegisteredTriggerActions(effect, this.actionHandlers)
   ) {
@@ -538,19 +594,23 @@ export function buildTriggerEntry(
       ),
     selectionKind: "triggered",
   };
-  const strategyContext =
-    !deferActivationChecks && typeof owner.strategy?.buildActivationContextForEffect === "function"
-      ? owner.strategy.buildActivationContextForEffect({
+  // One recorded answer per real opportunity: a deferred entry decides when
+  // it is materialized, and a preview never asks.
+  const aiChoice =
+    !deferActivationChecks && isAI(owner) && activationContext.preview !== true
+      ? decideAiTriggerActivation(
+          this,
+          owner,
           sourceCard,
           effect,
-          player: owner,
-          game: this.game,
-          activationZone: activationContext.activationZone,
-        })
+          options.activationZone,
+          activationContext.activationZone,
+        )
       : null;
+  if (aiChoice?.declined) return null;
   activationContext = mergeStrategyActivationContext(
     activationContext,
-    strategyContext,
+    aiChoice?.context ?? null,
   );
   const selectionKind = options.selectionKind || "triggered";
   const selectionMessage =

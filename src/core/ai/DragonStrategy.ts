@@ -82,7 +82,6 @@ export default class DragonStrategy extends BaseStrategy {
     return {
       strategy: this,
       placeSpellCard: this.placeSpellCard.bind(this),
-      useRuntimeOptionalTargets: true,
       chooseFusionSummon,
       onFusionSummon: () => {
         if (!completedFusion) return;

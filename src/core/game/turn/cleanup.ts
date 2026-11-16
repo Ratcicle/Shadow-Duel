@@ -16,6 +16,8 @@ import { expireEffectNegation } from "../../effects/negation.js";
 
 import { restoreTemporaryStatuses } from "../../Card.js";
 import { expireLevelModifications, removeTrackedStatChange } from "../../effects/actions/stats.js";
+import { BATTLE_PAIR_EFFECT_FINALIZATION } from "../combat/resolution.js";
+import { getPendingSpellTrapFinalizationDeferral } from "../spellTrap/finalization.js";
 import type {
   FullGameHost,
   GameCard,
@@ -24,6 +26,12 @@ import type {
 
 interface ExpiringBattlePairEffect {
   expiresOnTurn?: number | null;
+  source?: GameCard | null;
+}
+
+interface DeferredBattlePairSource {
+  card: GameCard;
+  owner: GamePlayer;
 }
 
 interface ExpiringTemporaryEventEffect {
@@ -43,6 +51,12 @@ type CleanupHost = Pick<
   temporaryEventEffects: ExpiringTemporaryEventEffect[];
   createDeterministicId?(scope: string): string;
   devLog?(code: string, detail?: unknown): void;
+  resolvePendingSpellTrapFinalization?(
+    card: GameCard,
+    owner: GamePlayer,
+    activationZone: "spellTrap",
+    options: { deferUntil: typeof BATTLE_PAIR_EFFECT_FINALIZATION },
+  ): Promise<boolean>;
 };
 
 /**
@@ -244,19 +258,83 @@ export function cleanupExpiredEffectMarkers(this: CleanupHost) {
   }
 }
 
-export function cleanupExpiredTemporaryBattlePairEffects(this: CleanupHost) {
-  if (!Array.isArray(this.temporaryBattlePairEffects)) {
-    this.temporaryBattlePairEffects = [];
-    return;
-  }
-
-  this.temporaryBattlePairEffects = this.temporaryBattlePairEffects.filter(
-    (entry) =>
-      !entry ||
-      typeof entry.expiresOnTurn !== "number" ||
-      !Number.isFinite(entry.expiresOnTurn) ||
-      this.turnCounter <= entry.expiresOnTurn,
+function isExpiredBattlePairEffect(
+  host: CleanupHost,
+  entry: ExpiringBattlePairEffect | null,
+): boolean {
+  return (
+    !!entry &&
+    typeof entry.expiresOnTurn === "number" &&
+    Number.isFinite(entry.expiresOnTurn) &&
+    host.turnCounter > entry.expiresOnTurn
   );
+}
+
+/**
+ * The Spell/Traps whose finalization waits for a battle pair effect that no
+ * longer exists: the source of an expired registration, and a deferral whose
+ * registration was never made or was already consumed. A source that still
+ * has a registration keeps waiting for it.
+ */
+function collectDeferredBattlePairSources(
+  host: CleanupHost,
+  expired: readonly (ExpiringBattlePairEffect | null)[],
+  remaining: readonly (ExpiringBattlePairEffect | null)[],
+): DeferredBattlePairSource[] {
+  const players = [host.player, host.bot];
+  const candidates = new Set<GameCard>();
+  for (const entry of expired) if (entry?.source) candidates.add(entry.source);
+  for (const player of players) {
+    for (const card of player?.spellTrap || []) candidates.add(card);
+  }
+  const sources: DeferredBattlePairSource[] = [];
+  for (const card of candidates) {
+    if (getPendingSpellTrapFinalizationDeferral(card) !== BATTLE_PAIR_EFFECT_FINALIZATION) {
+      continue;
+    }
+    if (remaining.some((entry) => entry?.source === card)) continue;
+    const owner =
+      players.find((player) => player?.spellTrap?.includes(card)) ||
+      (card.owner === host.bot?.id ? host.bot : host.player);
+    if (owner) sources.push({ card, owner });
+  }
+  return sources;
+}
+
+async function applyDeferredBattlePairFinalizations(
+  host: CleanupHost,
+  sources: readonly DeferredBattlePairSource[],
+): Promise<void> {
+  for (const { card, owner } of sources) {
+    await host.resolvePendingSpellTrapFinalization?.(card, owner, "spellTrap", {
+      deferUntil: BATTLE_PAIR_EFFECT_FINALIZATION,
+    });
+  }
+}
+
+/**
+ * Removes the expired battle pair effects. Phase 2.3 L25b: a source whose
+ * finalization waited for its pair receives the one decided at its
+ * activation, so no Spell stays in its zone; that work is returned only when
+ * there is some.
+ */
+export function cleanupExpiredTemporaryBattlePairEffects(
+  this: CleanupHost,
+): Promise<void> | void {
+  const entries = Array.isArray(this.temporaryBattlePairEffects)
+    ? this.temporaryBattlePairEffects
+    : [];
+  const expired = entries.filter((entry) => isExpiredBattlePairEffect(this, entry));
+  this.temporaryBattlePairEffects = entries.filter(
+    (entry) => !isExpiredBattlePairEffect(this, entry),
+  );
+  const sources = collectDeferredBattlePairSources(
+    this,
+    expired,
+    this.temporaryBattlePairEffects,
+  );
+  if (sources.length === 0) return;
+  return applyDeferredBattlePairFinalizations(this, sources);
 }
 
 export function cleanupExpiredTemporaryEventEffects(this: CleanupHost) {

@@ -5,7 +5,7 @@ import type { MaterialDuelStats, GameRuntimeState } from "../../contracts/gameRu
 import type { analyzeDragonState } from "./stateAnalysis.js";
 
 /** Read projection shared by the Dragon policies for live and simulated cards. */
-export interface DragonCard extends Omit<SimulatedCardShape, "equips" | "equippedTo" | "equipTarget" | "sourceCard" | "counters"> {
+export interface DragonCard extends Omit<SimulatedCardShape, "equips" | "equippedTo" | "equipTarget" | "boundTrapSource" | "boundMonsterTarget" | "sourceCard" | "counters"> {
   printedAtk?: number;
   effectActivations?: number;
   simEffectActivations?: number;

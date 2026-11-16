@@ -3,6 +3,8 @@ import { applyCostSummonMarker, applyPaidCostSummonMarkers } from "../../../effe
 import { appendSimulatedZoneCard } from "../zones.js";
 import { getNormalSummonTributeOptions } from "../../../game/summon/tributeValue.js";
 import { getCounterLimitSummonOptions } from "../../../actionHandlers/summon/counterLimit.js";
+import { resolveSummonPositionPreference } from "../../../actionHandlers/summon/position.js";
+import { aiConfirmsFollowupSummon } from "../../../actionHandlers/shared.js";
 import { recordNormalSummonForTurn } from "../../../Player.js";
 import { resolveExactInstanceSelection } from "../../../AutoSelector.js";
 import { appendSimulatedFieldCard } from "../zones.js";
@@ -356,8 +358,33 @@ export function applyRestrictSpecialSummons(
   });
 }
 
+/** The resolving effect's position preference, read as the runtime handlers read it. */
+function resolveContextualPositionPreference(
+  action: { readonly targetRef?: string | undefined },
+  card: SimulatedCardState,
+  options: SimulatedActionOptions,
+) {
+  return resolveSummonPositionPreference(
+    [options.actionContext, options.activationContext?.actionContext],
+    action.targetRef,
+    card.name,
+  );
+}
+
 export function applySpecialSummonFromZone(
   ctx: SimulatedActionHandlerContext<"special_summon_from_zone">,
+): void | typeof STOP_SIMULATION {
+  return resolveSpecialSummonFromZone(ctx, { contextualPosition: true });
+}
+
+/**
+ * Zone-summon transaction. As in the runtime, the zone handler reads the position
+ * preference of the action context; a handler built on this transaction whose
+ * runtime counterpart ignores that preference passes `contextualPosition: false`.
+ */
+function resolveSpecialSummonFromZone(
+  ctx: SimulatedActionHandlerContext<"special_summon_from_zone">,
+  { contextualPosition }: { contextualPosition: boolean },
 ): void | typeof STOP_SIMULATION {
   const {
     action,
@@ -402,16 +429,18 @@ export function applySpecialSummonFromZone(
       : null;
   if (!candidates || candidates.length === 0) {
     if (action.targetRef) return fail();
-    const candidateAction = { ...action };
-    delete candidateAction.position;
     candidates = getActionCandidates(
       targetPlayer,
-      candidateAction,
+      action,
       "deck",
       options,
     );
   }
   if (action.targetRef) {
+    // As in the runtime handler, a target that is no longer in the declared
+    // zone of a declared owner is refused before the filters are read.
+    candidates = candidates.filter(sourceInConfiguredZone);
+    if (candidates.length === 0) return fail();
     const filters = buildActionFilter(
       action as Parameters<typeof buildActionFilter>[0],
     );
@@ -429,8 +458,13 @@ export function applySpecialSummonFromZone(
   const dynamicMax = count?.maxFrom === "opponentFieldCount"
     ? Math.min(opponent.field.length, count.cap ?? 5)
     : Infinity;
+  // As in the runtime handler, a targetRef without a declared count summons
+  // every selected target that is still valid while Monster Zones remain.
+  // The ranking and any preference set the order, which also picks the ones
+  // that enter when zones run short (the runtime keeps the selection order).
+  const summonsEveryTarget = Boolean(action.targetRef) && action.count === undefined;
   const max = Math.min(
-    pickCountForAction(action, 1),
+    summonsEveryTarget ? Infinity : pickCountForAction(action, 1),
     dynamicMax,
     candidates.length,
     5 - (targetPlayer.field || []).length,
@@ -454,7 +488,7 @@ export function applySpecialSummonFromZone(
   }
   if (preferred === null) return fail();
   const chosen: SimulatedCardState[] = [];
-  for (const card of preferred ?? ranked) {
+  for (const card of summonsEveryTarget ? [...(preferred ?? ranked), ...candidates] : preferred ?? ranked) {
     if (chosen.length >= max) break;
     if (!candidates.includes(card) || chosen.includes(card)) continue;
     if (action.distinctNames && chosen.some(other => other.name === card.name)) continue;
@@ -476,7 +510,8 @@ export function applySpecialSummonFromZone(
         !canSimulatedProcedureEnterField(card, targetPlayer, otherPlayer, [])) return;
     const position = chooseSpecialSummonPosition(card, {
       ...action, position: action.position === "any" ? "choice" : action.position || "choice",
-    }, state, targetPlayer, options);
+    }, state, targetPlayer, options,
+    contextualPosition ? resolveContextualPositionPreference(action, card, options) : null);
     if (findCardZone(sourceOwner, card) !== fromZone ||
         !canSimSpecialSummon(card, targetPlayer) || !canSimulatedProcedureEnterField(card, targetPlayer, otherPlayer, []) ||
         (action.requireSource && (!sourceInConfiguredZone(card) || !isSimulatedSourcePresenceValid(options, self)))) return;
@@ -534,6 +569,33 @@ export function applySpecialSummonFromZone(
   return;
 }
 
+/**
+ * Revives the first target through the zone-summon transaction and binds it to
+ * the source. As in the runtime handler, the action context's position
+ * preference is not read and the links are written after the summon's events.
+ */
+export function applyCallOfHauntedSummonAndBind(
+  ctx: SimulatedActionHandlerContext<"call_of_haunted_summon_and_bind">,
+): boolean | typeof STOP_SIMULATION {
+  const { action, targets, options } = ctx;
+  const source = options.sourceCard;
+  const target = targets[0];
+  if (!source || source.boundMonsterTarget || target?.cardKind !== "monster") return false;
+  const summonAction: ActionOf<"special_summon_from_zone"> = {
+    type: "special_summon_from_zone", zone: "graveyard", sourceOwner: "any", count: 1, targetRef: action.targetRef,
+    ...(action.position ? { position: action.position } : {}),
+  };
+  const summonOptions: SimulatedActionOptions = { ...options };
+  const result = resolveSpecialSummonFromZone({ ...ctx, action: summonAction, targets: [target], options: summonOptions },
+    { contextualPosition: false });
+  if (result === STOP_SIMULATION) return result;
+  const summoned = summonOptions.lastSpecialSummonedCard;
+  if (!summoned) return false;
+  summoned.boundTrapSource = source;
+  source.boundMonsterTarget = summoned;
+  return true;
+}
+
 /** Activation-snapshot limits feed the existing zone-summon transaction. */
 export function applySpecialSummonFromDeckWithCounterLimit(
   ctx: SimulatedActionHandlerContext<"special_summon_from_deck_with_counter_limit">,
@@ -567,8 +629,8 @@ export function applySpecialSummonFromDeckWithCounterLimit(
   };
   const summonOptions: SimulatedActionOptions = { ...options, chooseSpecialSummonCards: (cards, input) =>
     options.chooseSpecialSummonCards ? options.chooseSpecialSummonCards(cards, input) : [best] };
-  const result = applySpecialSummonFromZone({ ...ctx, action: summonAction,
-    options: summonOptions });
+  const result = resolveSpecialSummonFromZone({ ...ctx, action: summonAction,
+    options: summonOptions }, { contextualPosition: false });
   if (result === STOP_SIMULATION) return result;
   if (summonOptions.lastSpecialSummonedCard && action.sendSourceToGraveAfter && findCardZone(self, source)) {
     ctx.applySimulatedActions({ actions: [{ type: "move", player: "self", targetRef: "self", to: "graveyard" }],
@@ -756,20 +818,10 @@ export function simulateSynchroSummon(
 
 export function applySearchThenOptionalSpecialSummonFromHand(
   ctx: SimulatedActionHandlerContext<"search_then_optional_special_summon_from_hand">,
-): void {
-  const {
-    action,
-    targets,
-    selections,
-    state,
-    selfId,
-    options,
-    self,
-    opponent,
-    applySimulatedActions,
-  } = ctx;
+): void | typeof STOP_SIMULATION {
+  const { action, state, selfId, options, self, opponent } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
-  const candidates = getActionCandidates(targetPlayer, action, "deck");
+  const candidates = getActionCandidates(targetPlayer, action, "deck", options);
   const searched = chooseRankedCards(
     candidates,
     "benefit",
@@ -779,50 +831,41 @@ export function applySearchThenOptionalSpecialSummonFromHand(
     options,
   )[0];
   if (!searched) return;
+  const fromZone = findCardZone(targetPlayer, searched);
+  const wasFaceupBeforeMove = searched.isFacedown !== true;
   removeCardFromZones(targetPlayer, searched);
   appendSimulatedZoneCard(targetPlayer.hand, searched);
+  options.lastAddedToHandCards = [searched];
+  options.lastAddedToHandCard = searched;
+  if (options.actionContext && typeof options.actionContext === "object") {
+    options.actionContext.lastAddedToHandCards = [searched];
+    options.actionContext.lastAddedToHandCard = searched;
+  }
+  emitSimulatedMove(searched, state, targetPlayer, targetPlayer, fromZone, wasFaceupBeforeMove, false, options);
 
+  // As in the runtime, the follow-up reads the board left by the search.
   const canSummon =
     hasOpenMonsterZone(targetPlayer) &&
-    canSimSpecialSummon(searched, targetPlayer) &&
     evaluateSimulatedConditions(action.summonCondition, {
       state,
       selfId,
       options,
-    });
+    }) &&
+    (action.optional === false || aiConfirmsFollowupSummon());
   if (!canSummon) return;
 
-  removeCardFromZones(targetPlayer, searched);
-  applySummonState(
-    searched,
-    action as SimulatedSummonStateAction,
-    state,
-    targetPlayer,
-    ({
-      ...options,
-      action,
-    } as SimulatedActionOptions),
-  );
-  appendSimulatedFieldCard(targetPlayer.field, searched);
-  recordCompletedSimulatedSummon(state, { card: searched, player: targetPlayer, method: "special" });
-  options.onAfterSpecialSummon?.({
-    state,
-    player: targetPlayer,
-    card: searched,
-    action,
-    fromZone: "hand",
-    sourceCard: options.sourceCard,
-  });
-  emitSimulatedAfterSpecialSummon({
-    options,
-    state,
-    player: targetPlayer,
-    card: searched,
-    action,
-    fromZone: "hand",
-    sourceCard: options.sourceCard,
-  });
-  return;
+  // The label is exclusive so a decision planned for another step of the
+  // effect is never consumed here; only monsters reach the runtime commit.
+  const summonAction: ActionOf<"special_summon_from_zone"> & { contextLabel: string } = {
+    type: "special_summon_from_zone", zone: "hand", count: 1,
+    contextLabel: `${options.effect?.id || action.type}:followup_summon`,
+    filters: { cardKind: "monster" },
+    ...(action.player ? { player: action.player } : {}),
+    ...(action.position ? { position: action.position } : {}),
+    ...(action.restrictAttackThisTurn || action.cannotAttackThisTurn ? { cannotAttackThisTurn: true } : {}),
+  };
+  return resolveSpecialSummonFromZone({ ...ctx, action: summonAction,
+    options: { ...options, chooseSpecialSummonCards: () => [searched] } }, { contextualPosition: false });
 }
 
 export function applySpecialSummonFromHandWithCost(
@@ -1209,13 +1252,16 @@ export function applyConditionalSummonFromHand(
     applySimulatedActions,
   } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
+  const chosen = targets[0];
+  // As in the runtime handler, only a chosen card still in the Hand can be
+  // summoned; the Hand is checked before the condition and the free zones.
+  if (!chosen || !targetPlayer.hand?.includes(chosen)) return;
   if ((targetPlayer.field || []).length >= 5) return;
   if (
     action.condition &&
     !evaluateSimulatedConditions(action.condition, { state, selfId, options })
   ) return;
-  const chosen = targets[0];
-  if (chosen && canSimSpecialSummon(chosen, targetPlayer)) {
+  if (canSimSpecialSummon(chosen, targetPlayer)) {
     removeCardFromZones(targetPlayer, chosen);
     applySummonState(
       chosen,
@@ -1223,6 +1269,7 @@ export function applyConditionalSummonFromHand(
       state,
       targetPlayer,
       options,
+      resolveContextualPositionPreference(action, chosen, options),
     );
     appendSimulatedFieldCard(targetPlayer.field, chosen);
     recordCompletedSimulatedSummon(state, { card: chosen, player: targetPlayer, method: "special" });

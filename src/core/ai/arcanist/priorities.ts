@@ -144,7 +144,7 @@ function evaluateTeraPositionPlan(tera: StrategyCard, analysis: Analysis = {}) {
   const best = preferredPlans[0] || null;
   if (!best) return { ok: false as const, reason: "no useful Tera target" };
 
-  const targetNames = preferredPlans.map((plan) => plan.target.name);
+  const targetNames = preferredPlans.map((plan) => plan.target.name).filter((name) => name !== undefined);
   const targetInstanceIds = preferredPlans
     .map((plan) => getCardInstanceId(plan.target))
     .filter((id) => id !== null);
@@ -643,7 +643,8 @@ function getHighestValueOpponentNames(analysis: Analysis = {}) {
     .slice()
     .sort((a, b) => evaluateArcanistCardValue(b, analysis) - evaluateArcanistCardValue(a, analysis))
     .slice(0, 3)
-    .map((card) => card.name);
+    .map((card) => card.name)
+    .filter((name) => name !== undefined);
 }
 
 function getCardInstanceId(card: StrategyCard | null | undefined) {

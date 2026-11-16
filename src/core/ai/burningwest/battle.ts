@@ -495,6 +495,8 @@ export function applyBurningWestSimulatedBattleRewards({
 
 function targetThreat(card: ReadCard | null | undefined) {
   if (!card) return 0;
+  // A face-down target's stats, Level and type are hidden: only its public battle estimate counts.
+  if (card.isFacedown) return getBattleStatForAttackTarget(card);
   return (
     Math.max(getEffectiveAtk(card), getEffectiveDef(card)) +
     Number(card.level || 0) * 120 +
@@ -541,11 +543,12 @@ export function scoreBurningWestBattleAttackCandidate({
           entry.destroyedBy === "effect",
       ),
   );
+  // Only the opponent's LP is known here: its healing is no damage to the bot.
   const inferredDamage =
     !hasSummary &&
     Number.isFinite(Number(opponent?.lp)) &&
     Number.isFinite(Number(opponentLpAfter))
-      ? Number(opponent!.lp) - Number(opponentLpAfter)
+      ? Math.max(0, Number(opponent!.lp) - Number(opponentLpAfter))
       : 0;
   const summaryDamage = Number(summary?.damage || 0);
   const battleDamage = hasSummary ? summaryDamage : inferredDamage;

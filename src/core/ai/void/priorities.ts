@@ -1,5 +1,5 @@
 import type { AIStrategyBotPort } from "../../contracts/ai.js";
-import type { AiStateShape, SimulatedCardState } from "../../contracts/aiState.js";
+import type { AiStateShape, SimulatedCardState, SimulatedPlayerState } from "../../contracts/aiState.js";
 import type { GameCard } from "../../contracts/cards.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
 import type { NormalSummonPlayerReadView, NormalSummonGameReadView } from "../../contracts/player.js";
@@ -38,6 +38,7 @@ import {
   rankFinisherPlans,
 } from "../common/finisherPlans.js";
 import { assessSummonEntry } from "../common/summonAssessment.js";
+import { checkSimulatedAscension } from "../common/ascensionPlanning.js";
 
 const SEALING_PROTECTED_TARGET_IDS = new Set([
   VOID_IDS.ARCTURUS,
@@ -690,6 +691,38 @@ function hasCardId(cards: StrategyCard[] = [], id: number) {
   return (cards || []).some((card) => card?.id === id);
 }
 
+function isPlanningPlayer(player: Player | null | undefined): player is Player & SimulatedPlayerState {
+  return !!player && typeof player.id === "string" && typeof player.lp === "number" &&
+    [player.hand, player.field, player.deck, player.graveyard, player.banished, player.extraDeck, player.spellTrap]
+      .every(Array.isArray);
+}
+
+function isPlanningAscensionNode(
+  game: Game | null,
+): game is Game & Pick<AiStateShape, "turnCounter" | "bot" | "player"> {
+  return game?._isPerspectiveState === true && typeof game.turnCounter === "number" &&
+    isPlanningPlayer(game.bot) && isPlanningPlayer(game.player);
+}
+
+/**
+ * Phase 2.3 L13b: a planning node has no engine. Its own copy answers the
+ * runtime Ascension rule (material, field age and Duel history) for the node's
+ * player, as the node's Ascension simulation does; anywhere else the check
+ * stays optimistic.
+ */
+function checkNodeAscension(game: Game | null, bot: Player, materialId: number, ascensionId: number) {
+  if (!isPlanningAscensionNode(game) || game.bot !== bot) return true;
+  const node: Pick<AiStateShape, "turnCounter" | "materialDuelStats" | "bot" | "player"> = game;
+  const material = node.bot.field.find(
+    (card) => card?.id === materialId && card.cardKind === "monster",
+  );
+  const ascensionCard = node.bot.extraDeck.find(
+    (card) => card?.id === ascensionId,
+  );
+  return !!material && !!ascensionCard &&
+    checkSimulatedAscension(node, material, ascensionCard).ok;
+}
+
 function canUseAscensionFinisher(game: Game | null, bot: Player, materialId: number, ascensionId: number) {
   const realGame = game?._gameRef || game;
   const material = (bot?.field || []).find(
@@ -703,7 +736,7 @@ function canUseAscensionFinisher(game: Game | null, bot: Player, materialId: num
     typeof realGame?.canUseAsAscensionMaterial !== "function" ||
     typeof realGame?.checkAscensionRequirements !== "function"
   ) {
-    return true;
+    return checkNodeAscension(game, bot, materialId, ascensionId);
   }
   return (
     realGame.canUseAsAscensionMaterial(bot, material)?.ok !== false &&

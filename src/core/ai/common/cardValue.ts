@@ -1,11 +1,10 @@
 import { getEffectiveAtk } from "./cardStats.js";
-import { getActivePiercingMultiplier } from "../../game/combat/availability.js";
+import { getActivePiercingMultiplier, getBaseAttackLimit } from "../../game/combat/availability.js";
 import type { CardAction } from "../../contracts/actions.js";
 
 interface MultiAttackCardView {
   attackLimitThisTurn?: number | null;
   extraAttacks?: number;
-  equipExtraAttacks?: number;
   multiAttackLimit?: number;
   dynamicExtraAttacks?: {
     source?: string;
@@ -170,26 +169,13 @@ export function getCardArchetypes(
 }
 
 // Resolves attacks available in a Battle Phase, including dynamic passive count.
+// Phase 2.3 L18: this is the runtime's base limit; without an owner no Graveyard is read.
 export function getMaxAttacks(
   card: MultiAttackCardView | null | undefined,
   owner: MultiAttackOwnerView | null = null,
 ): number {
   if (!card) return 1;
-  if (
-    card.attackLimitThisTurn !== undefined &&
-    card.attackLimitThisTurn !== null &&
-    Number.isFinite(Number(card.attackLimitThisTurn))
-  ) {
-    return Math.max(0, Math.floor(Number(card.attackLimitThisTurn)));
-  }
-  let extra = (card.extraAttacks || 0) + (card.equipExtraAttacks || 0);
-  if (card.dynamicExtraAttacks?.source === "graveyard_count" && owner) {
-    const dea = card.dynamicExtraAttacks;
-    extra = (owner.graveyard || []).filter(
-      (c) => c && c.name === dea.name
-    ).length;
-  }
-  return 1 + extra;
+  return getBaseAttackLimit(card, owner ? owner.graveyard || [] : null);
 }
 
 export function hasArchetype(

@@ -64,7 +64,7 @@ test("GameTree follows registered Shadow-Heart Imp into Gecko summon and Deck se
   assert.deepEqual(input, before);
 });
 
-test("GameTree follows registered Arcanist Apprentice search and preserves its actor usage flag", () => {
+test("GameTree follows registered Arcanist Apprentice search and records its once-per-turn usage", () => {
   const input = simulationState({
     turn: "bot", phase: "main1", turnCounter: 2,
     bot: {
@@ -81,8 +81,9 @@ test("GameTree follows registered Arcanist Apprentice search and preserves its a
   assert.deepEqual(next.player?.hand?.map(card => card.name), ["Grimoire of the Apprentice Arcanist"]);
   assert.equal(next.player?.deck?.length, 0);
   assert.equal(next.player?.summonCount, 1);
-  const actors = record(record(next)._gameTreeActors);
-  assert.equal(record(actors.bot)._simArcanistApprenticeSearchUsed, true);
+  const ledger = record(record(next)._simOncePerTurn).bot;
+  assert.ok(ledger instanceof Map);
+  assert.equal(ledger.get("arcanist_apprentice_search_spell"), 1);
   assert.equal(record(next)._simArcanistApprenticeSearchUsed, undefined);
   assert.equal(result.score, 3.5 * 0.85 ** 3 * 0.85 ** 2);
   assert.deepEqual(input, before);

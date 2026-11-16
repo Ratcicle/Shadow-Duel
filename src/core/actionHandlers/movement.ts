@@ -21,6 +21,7 @@ import {
   getUI,
   resolveTargetCards,
   selectCardsFromZone,
+  selectResolutionCards,
 } from "./shared.js";
 
 type ReturnToHandAction = ActionOf<"return_to_hand"> & {
@@ -232,7 +233,7 @@ async function bounceAndSummonCard(
   }
 
   // Determine position
-  let position = action.position || "choice";
+  const actionPosition = action.position || "choice";
   const directPreferences =
     ctx.actionContext && typeof ctx.actionContext === "object"
       ? Reflect.get(ctx.actionContext, "specialSummonPositions")
@@ -255,12 +256,20 @@ async function bounceAndSummonCard(
     target?.name && byNamePreferences && typeof byNamePreferences === "object"
       ? Reflect.get(byNamePreferences, target.name)
       : null;
-  if (byName === "attack" || byName === "defense") {
-    position = byName;
-  }
-  if (position === "choice") {
-    position = await engine.chooseSpecialSummonPosition!(target, player);
-  }
+  const plannedPosition = byName === "attack" || byName === "defense" ? byName : null;
+  const forcedPosition =
+    actionPosition === "attack" || actionPosition === "defense" ? actionPosition : null;
+  // For the AI, a forced position is not a choice and asks for no decision.
+  // A free one is its recorded position decision, which its planned position
+  // only answers live: the plan never crosses the replay boundary, so it
+  // cannot decide whether playback asks.
+  const position = isAI(player)
+    ? forcedPosition ?? await engine.chooseSpecialSummonPosition!(target, player, {
+        position: "choice",
+        preferredPosition: plannedPosition,
+      })
+    : plannedPosition ?? forcedPosition ??
+      await engine.chooseSpecialSummonPosition!(target, player);
 
   const moveResult =
     typeof game.moveCard === "function"
@@ -486,32 +495,47 @@ export async function handleBounceAndSummon(
     return false;
   }
 
-  // Bot auto-selection (highest ATK)
+  // The bot's pick (its strategy, else highest ATK) is a recorded decision;
+  // declining every candidate is recorded as a pass.
   if (isAI(player)) {
-    const evaluation = player.strategy?.evaluateRecruitCandidate?.(
-      validTargets,
-      {
-        game,
-        player,
-        source,
-        action,
+    const picked = await selectResolutionCards({
+      game,
+      player,
+      cards: validTargets,
+      requirementId: "bounce_and_summon_target",
+      min: 1,
+      max: 1,
+      locate: card => ({ player, zone: "hand", index: player.hand.indexOf(card) }),
+      resolveAI: () => {
+        const evaluation = player.strategy?.evaluateRecruitCandidate?.(
+          validTargets,
+          {
+            game,
+            player,
+            source,
+            action,
+          },
+        );
+        if (evaluation?.blockedAll) return null;
+        const strategicChoice =
+          evaluation?.best && validTargets.includes(evaluation.best)
+            ? evaluation.best
+            : null;
+        return [
+          strategicChoice ||
+            validTargets.reduce((top, c) => {
+              const cAtk = c.atk || 0;
+              const topAtk = top.atk || 0;
+              return cAtk >= topAtk ? c : top;
+            }, validTargets[0]!), // The filtered candidate list was checked non-empty above.
+        ];
       },
-    );
-    const strategicChoice =
-      evaluation?.best && validTargets.includes(evaluation.best)
-        ? evaluation.best
-        : null;
-    if (evaluation?.blockedAll) {
+    });
+    const best = picked?.[0];
+    if (!best || !validTargets.includes(best)) {
       getUI(game)?.log("No strategically valid monster to summon.");
       return false;
     }
-    const best =
-      strategicChoice ||
-      validTargets.reduce((top, c) => {
-        const cAtk = c.atk || 0;
-        const topAtk = top.atk || 0;
-        return cAtk >= topAtk ? c : top;
-      }, validTargets[0]!); // The filtered candidate list was checked non-empty above.
 
     return await bounceAndSummonCard(source, best, player, action, engine, ctx);
   }

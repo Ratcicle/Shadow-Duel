@@ -7,6 +7,7 @@ import type {
   ResolvedTargetMap,
 } from "../../contracts/actionRuntime.js";
 import type { ActionOf } from "../../contracts/actions.js";
+import type { ReplayMode } from "../../contracts/game.js";
 
 interface CombatRuntimeCard extends ActionRuntimeCard {
   cannotAttackUntilTurn?: number;
@@ -17,6 +18,7 @@ interface CombatGame extends ActionRuntimeGamePort {
   turn: "player" | "bot";
   phase: string;
   aiActionDelayMs?: number;
+  replayMode?: ReplayMode;
   isDisposed?(): boolean;
   canStartAction?(options: {
     actor: AiActor;
@@ -46,7 +48,12 @@ type AiActor = ActionRuntimePlayer & {
  */
 
 function scheduleAiMoveAfterPaint(game: CombatGame, actor: AiActor): void {
-  if (!isAI(actor) || game.gameOver || typeof actor?.makeMove !== "function") {
+  if (
+    !isAI(actor) ||
+    game.replayMode === "playback" ||
+    game.gameOver ||
+    typeof actor?.makeMove !== "function"
+  ) {
     return;
   }
 
@@ -62,6 +69,7 @@ function scheduleAiMoveAfterPaint(game: CombatGame, actor: AiActor): void {
     if (
       game.gameOver ||
       game.isDisposed?.() ||
+      game.replayMode === "playback" ||
       game.turn !== expectedTurn ||
       game.phase !== expectedPhase
     ) {

@@ -2,8 +2,11 @@ import fs from "node:fs";
 import Bot from "../src/core/Bot.js";
 import BotArena from "../src/core/BotArena.js";
 import Game from "../src/core/Game.js";
-import { replayCanonicalDuel } from "../src/core/game/replay/driver.js";
-import type { ReplayDriverGamePort } from "../src/core/contracts/replay.js";
+import { validateCanonicalReplay } from "../src/core/game/replay/canonical.js";
+import {
+  createHeadlessPlaybackGame,
+  replayCanonicalDuel,
+} from "../src/core/game/replay/driver.js";
 import type {
   ArenaCompletionStats,
   ArenaDuelResult,
@@ -209,8 +212,9 @@ function compactStrategicReport(report: StrategicReport | null) {
 }
 
 // --check-replays: every Arena duel records a canonical replay, which then
-// plays back in a fresh Game with the same controllers (a bot in each seat).
-// A divergence means some live path is not captured as a command or decision.
+// plays back strictly: a fresh Game whose seats keep only the recorded
+// controllers, without strategies. A divergence, or a seat that is consulted,
+// means some live path is not captured as a command or decision.
 function createReplayCapturingGame(captured: Game[]) {
   return class ReplayCapturingGame extends Game {
     constructor(gameOptions: ConstructorParameters<typeof Game>[0] = {}) {
@@ -224,7 +228,7 @@ function createReplayCapturingGame(captured: Game[]) {
   };
 }
 
-async function checkArenaReplays(games: readonly Game[], seat1: string, seat2: string) {
+async function checkArenaReplays(games: readonly Game[]) {
   const results: ReplayCheckResult[] = [];
   for (const [index, game] of games.entries()) {
     const duelNumber = index + 1;
@@ -233,27 +237,21 @@ async function checkArenaReplays(games: readonly Game[], seat1: string, seat2: s
       results.push({ duelNumber, ok: false, commands: 0, decisions: "0/0", message: "no replay recorded" });
       continue;
     }
-    const replay: unknown = JSON.parse(JSON.stringify(exported));
-    const first = new Bot(seat1);
-    const second = new Bot(seat2);
-    first.id = "player";
-    const playback = new Game({ replayMode: "playback", captureReplay: false, opponentOverride: second });
-    // Seats are wired as BotArena wires them.
-    playback.player = first;
-    playback.player.game = playback;
-    playback.bot.game = playback;
-    playback.disablePresentationDelays = true;
-    playback.phaseDelayMs = 0;
+    const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(exported)));
+    // The driver's own strict Game; kept here to report the decision cursor.
+    const playback = createHeadlessPlaybackGame(replay);
     const decisions = () => `${playback.decisionBroker.replayCursor}/${exported.decisions.length}`;
     try {
-      // The concrete Game provides the driver's port, as its own headless Game does.
-      const result = await replayCanonicalDuel(replay, { game: playback as ReplayDriverGamePort });
+      const result = await replayCanonicalDuel(replay, { game: playback });
       results.push({ duelNumber, ok: true, commands: result.commands, decisions: decisions(), message: null });
     } catch (error) {
       results.push({ duelNumber, ok: false, commands: exported.commands.length, decisions: decisions(),
         message: error instanceof Error ? error.message : String(error) });
     } finally {
-      playback.dispose("smoke-replay-check");
+      // The replay port exposes only zero-argument disposal; the concrete
+      // Game also accepts this diagnostic reason.
+      const disposable: { dispose?(reason?: string): void } = playback;
+      disposable.dispose?.("smoke-replay-check");
     }
   }
   return results;
@@ -286,7 +284,7 @@ async function runMatchup(matchup: string, options: SmokeOptions) {
   // Let commands still settling after the Arena stops polling finish first.
   if (options.checkReplays) await new Promise(resolve => setTimeout(resolve, 200));
   const replayCheck = options.checkReplays
-    ? await checkArenaReplays(capturedGames, seat1, seat2)
+    ? await checkArenaReplays(capturedGames)
     : undefined;
   if (replayCheck?.some(result => !result.ok)) process.exitCode = 1;
   return {

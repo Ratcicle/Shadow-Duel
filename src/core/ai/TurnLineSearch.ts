@@ -1,9 +1,17 @@
-import { appendSimulatedZoneCard } from "./common/zones.js";
-import { createPlanningCopy, hasPendingPassiveRestoration, projectRuntimeEffectUsage, projectRuntimeReplacementEffects } from "./common/planningCopy.js";
-import { PLANNING_PLAYER_FIELDS, PLANNING_STATE_FIELDS, PLANNING_ZONES } from "./common/stateFingerprint.js";
+import { moveCardToZone } from "./common/zones.js";
+import {
+  assertPublicPlanningProjection,
+  createPlanningCopy,
+  hasPendingPassiveRestoration,
+  projectRuntimeEffectUsage,
+  projectRuntimeReplacementEffects,
+  registerPublicOpponentProjection,
+} from "./common/planningCopy.js";
+import { PLANNING_PLAYER_FIELDS, PLANNING_STATE_FIELDS } from "./common/stateFingerprint.js";
 import { applySimulatedFieldSpellBattleDrawRewards, isSimulatedMainPhaseActionSupported } from "./common/simulation.js";
 import { hasSimulatedProtection } from "./common/simulatedActions/lifecycle.js";
 import { replaceSimulatedBattleDestruction } from "./common/simulatedActions/destruction.js";
+import { getOriginalOwner } from "./common/simulatedActions/movement.js";
 import {
   clearSimulatedDamageCalculationBuffs,
   clearSimulatedEndOfDamageStepBuffs,
@@ -26,12 +34,17 @@ import {
   selectTributeIndicesByValue,
 } from "../game/summon/tributeValue.js";
 import { canUseNormalSummonForCard } from "../Player.js";
-import { withPlanningExecutionContext } from "./common/planningExecution.js";
+import { runWithUnknownLocationGuard, withPlanningExecutionContext } from "./common/planningExecution.js";
 import { createPlanningOwnerPolicy } from "./common/planningOwner.js";
 import { withoutLiveGameReference } from "./common/gameTreeSimulation.js";
 import type { GameTreeModels, PlanningModel } from "../contracts/aiPlanning.js";
 
-import { getCounterAttackLockReason, isFieldPresenceSummonAttackRestricted } from "../game/combat/availability.js";
+import {
+  getBaseAttackLimit,
+  getCounterAttackLockReason,
+  hasExplicitAttackLimitThisTurn,
+  isFieldPresenceSummonAttackRestricted,
+} from "../game/combat/availability.js";
 import { cardMatchesFilter } from "./common/cardFilters.js";
 import type {
   AIAction,
@@ -42,6 +55,7 @@ import type {
   AIPlanningContext,
   AIPlanningProfile,
   AITributeRequirement,
+  PublicProjectionGuardSink,
   SimulatedBattleAction,
   TurnLineSearchOptions,
   TurnLineSearchResult,
@@ -73,7 +87,6 @@ type PlannerCard = SimulatedCardState & {
   storedEffects?: PlannerBlueprintEntry[];
 };
 type PlannerPlayer = SimulatedPlayerState;
-type PlannerCardInput = NonNullable<AiPlayerInput["hand"]>[number];
 type PlannerPlayerInput = AiPlayerInput & { name?: string };
 
 interface LegacyAltTributeView {
@@ -132,6 +145,8 @@ type PlanningGameInput = Omit<AiStateInput, "player" | "bot" | "opponent"> & {
   temporaryEventEffects?: readonly TemporaryBattleEffectView[];
   temporaryControlEffects?: readonly SimulatedTemporaryControlEffect[];
   _simTemporaryControlCounter?: number;
+  /** The Arena's tracker on a live duel; it keeps the public-projection guard's tally. */
+  _arenaTracker?: PublicProjectionGuardSink | null;
 };
 
 interface DestroyedCardSummary {
@@ -213,6 +228,8 @@ export interface BattleCandidateScoreInput {
   game: PlanningState;
   bot: PlannerPlayer;
   opponent: PlannerPlayer;
+  /** The node this attack starts from; simState, game, bot and opponent are after it. */
+  preBattleState: PlanningState;
   lethalNow: boolean;
   attackerSurvived: boolean;
   targetSurvived: boolean;
@@ -535,24 +552,8 @@ function clonePlanningState(
     : perspectiveBot || game?.bot || game?.player;
 
   const copy = createPlanningCopy();
-  if (publicOpponent && opponent) {
-    // Register before copying either participant: links to the same hidden card
-    // must resolve to the same opaque projection, never to a second full copy.
-    const hide = (card: PlannerCardInput | null | undefined, monster = false) => {
-      if (!card) return;
-      const projection: PlannerCardInput & { _simUnknownCard: true } = { _simUnknownCard: true };
-      copy.copyFields(card, projection, ["instanceId", "fieldPresenceId", "fieldSlot", "isFacedown", "position", "controller", "originalOwner"]);
-      if (monster) projection.cardKind = "monster";
-      copy.registerCardProjection(card, projection);
-    };
-    for (const zone of ["hand", "deck", "extraDeck"] as const) {
-      for (const card of opponent[zone] || []) hide(card);
-    }
-    for (const card of opponent.field || []) if (card?.isFacedown) hide(card, true);
-    for (const card of opponent.spellTrap || []) if (card?.isFacedown) hide(card);
-    if (opponent.fieldSpell?.isFacedown) hide(opponent.fieldSpell);
-    for (const card of opponent.banished || []) if (card?.isFacedown) hide(card);
-  }
+  // Registered before either participant is copied, so links reuse the opaque projection.
+  if (publicOpponent && opponent) registerPublicOpponentProjection(copy, opponent);
   const state = {
     player: clonePlayerState(opponent || game?.player, copy),
     bot: clonePlayerState(sourceBot, copy),
@@ -747,33 +748,32 @@ function simulatePlanningAction(
 ): PlanningState {
   if (typeof strategy?.simulateMainPhaseAction === "function") {
     if (models) {
-      const unknownLocations = () => {
-        const locations = new Map<PlannerCard, string>();
-        for (const player of [state.bot, state.player]) {
-          for (const zone of PLANNING_ZONES) {
-            for (const card of player[zone]) if (card._simUnknownCard) {
-              locations.set(card, `${player.id}:${zone}:${card.isFacedown === true}`);
-            }
-          }
-          if (player.fieldSpell?._simUnknownCard) {
-            locations.set(player.fieldSpell, `${player.id}:fieldSpell:${player.fieldSpell.isFacedown === true}`);
-          }
-        }
-        return locations;
-      };
-      const before = unknownLocations();
-      withoutLiveGameReference(state, () => withPlanningExecutionContext(state,
+      runWithUnknownLocationGuard(state, () => withoutLiveGameReference(state, () => withPlanningExecutionContext(state,
         (_state, owner) => createPlanningOwnerPolicy(state, owner, models),
-        () => strategy.simulateMainPhaseAction?.(state, action)));
-      const after = unknownLocations();
-      if ([...before].some(([card, location]) => after.get(card) !== location)) {
-        state._simRequiresReplan = true;
-      }
+        () => strategy.simulateMainPhaseAction?.(state, action))));
     } else {
       strategy.simulateMainPhaseAction(state, action);
     }
   }
   return state;
+}
+
+/**
+ * Runs a strategy call that reads search nodes. With planning models (the
+ * live decision, phase 2.3 L13b), the call never reaches the live game through
+ * a node's `_gameRef`, as the node's simulation already does; the fixture path
+ * without models keeps the reference. The reference returns when the call
+ * ends, so a node copied afterwards still points at the duel, not at a node.
+ */
+type NodeStrategyCall = <Result>(states: readonly PlanningState[], call: () => Result) => Result;
+
+function withoutLiveGameReferences<Result>(states: readonly PlanningState[], call: () => Result): Result {
+  const [state, ...others] = states;
+  return state ? withoutLiveGameReference(state, () => withoutLiveGameReferences(others, call)) : call();
+}
+
+function createNodeStrategyCall(models: ReadonlyMap<string, PlanningModel> | null): NodeStrategyCall {
+  return models ? withoutLiveGameReferences : (_states, call) => call();
 }
 
 function evaluateBasePlanningScore(
@@ -887,30 +887,19 @@ function isBattleReadyPlannerAttacker(
 }
 
 function getPlannerMaxAttacks(
-  card: PlannerCard | null | undefined,
+  card: PlannerCard,
   state: PlanningState,
 ): number {
-  if (
-    card?.attackLimitThisTurn !== undefined &&
-    card?.attackLimitThisTurn !== null &&
-    Number.isFinite(Number(card.attackLimitThisTurn))
-  ) {
-    return Math.max(0, Math.floor(Number(card.attackLimitThisTurn)));
-  }
-  let extra = Number(card?.extraAttacks || 0);
-  if (card?.dynamicExtraAttacks?.source === "graveyard_count") {
-    const config = card.dynamicExtraAttacks;
-    extra = (state?.bot?.graveyard || []).filter(
-      (entry) => entry?.name === config.name,
-    ).length;
-    extra -= 1;
-  }
-  if (card?.canAttackAllOpponentMonstersThisTurn) {
+  // Phase 2.3 L18: the runtime's base limit. The second attack and the attack
+  // on every monster stay with this caller, as they do in the runtime.
+  const baseLimit = getBaseAttackLimit(card, state?.bot?.graveyard || []);
+  if (hasExplicitAttackLimitThisTurn(card)) return baseLimit;
+  if (card.canAttackAllOpponentMonstersThisTurn) {
     return Math.max(1, Number(card.multiAttackLimit || 1));
   }
   const secondAttack =
-    card?.canMakeSecondAttackThisTurn && !card?.secondAttackUsedThisTurn ? 1 : 0;
-  return Math.max(1, 1 + Math.max(0, extra) + secondAttack);
+    card.canMakeSecondAttackThisTurn && !card.secondAttackUsedThisTurn ? 1 : 0;
+  return baseLimit + secondAttack;
 }
 
 function canPlannerAttackerStillAttack(
@@ -924,26 +913,6 @@ function canPlannerAttackerStillAttack(
     [...opponent.field, ...opponent.spellTrap, ...(opponent.fieldSpell ? [opponent.fieldSpell] : [])], state.turnCounter, state.bot.id)) return false;
   const used = Number(card.attacksUsedThisTurn || 0);
   return used < getPlannerMaxAttacks(card, state);
-}
-
-function removeFromZone(
-  zone: PlannerCard[],
-  card: PlannerCard | null | undefined,
-): boolean {
-  if (!Array.isArray(zone) || !card) return false;
-  const index = zone.indexOf(card);
-  if (index < 0) return false;
-  zone.splice(index, 1);
-  return true;
-}
-
-function pushToGraveyard(
-  player: PlannerPlayer | null | undefined,
-  card: PlannerCard | null | undefined,
-): void {
-  if (!player || !card) return;
-  if (!Array.isArray(player.graveyard)) player.graveyard = [];
-  appendSimulatedZoneCard(player.graveyard, card);
 }
 
 function sameCardIdentity(
@@ -985,56 +954,34 @@ function sameBattlePairCard(
   );
 }
 
-function detachEquipsForDestroyedMonster(
-  player: PlannerPlayer | null | undefined,
-  monster: PlannerCard | null | undefined,
-): PlannerCard[] {
-  if (!player || !monster) return [];
-  const detached: PlannerCard[] = [];
-  const hostEquips = Array.isArray(monster.equips) ? monster.equips : [];
-  hostEquips.forEach((equip) => {
-    if (equip) detached.push(equip);
-  });
-  monster.equips = [];
-
-  if (Array.isArray(player.spellTrap)) {
-    for (let index = player.spellTrap.length - 1; index >= 0; index -= 1) {
-      const card = player.spellTrap[index];
-      if (!card) continue;
-      if (sameCardIdentity(card.equippedTo, monster)) {
-        detached.push(card);
-        player.spellTrap.splice(index, 1);
-      }
-    }
-  }
-
-  detached.forEach((equip) => {
-    equip.equippedTo = null;
-    pushToGraveyard(player, equip);
-  });
-  return detached;
-}
-
+// Same generic move as destroySimulatedCard: the monster and the equips held on
+// either side go to their owners' Graveyards, field-exit statuses reset,
+// destination replacement applies and auras are refreshed. As in the runtime
+// destroyCard move, no effect owner is passed, so only banish protection not
+// limited to the opponent's effects can refuse it.
 function destroyPlannerMonster(
-  player: PlannerPlayer | null | undefined,
+  state: PlanningState,
+  controller: PlannerPlayer | null | undefined,
   monster: PlannerCard | null | undefined,
+  movedByEffect: boolean,
 ): boolean {
-  if (!player || !monster) return false;
-  if (!removeFromZone(player.field, monster)) return false;
-  detachEquipsForDestroyedMonster(player, monster);
-  pushToGraveyard(player, monster);
-  return true;
+  if (!controller || !monster || !controller.field?.includes(monster)) return false;
+  return moveCardToZone(
+    getOriginalOwner(state, monster, controller),
+    monster,
+    "graveyard",
+    controller,
+    { state, movedByEffect },
+  );
 }
 
-function recordDestroyedCard(
-  summary: PlannerBattleSummary,
-  card: PlannerCard | null | undefined,
+// Captured before the move, because leaving the field resets statuses.
+function captureDestroyedCard(
+  card: PlannerCard,
   owner: string,
   destroyedBy = "battle",
-): void {
-  if (!summary || !card) return;
-  summary.destroyedNames.push(card.name || "card");
-  summary.destroyedCards.push({
+): DestroyedCardSummary {
+  return {
     card,
     position: card.position || null,
     id: card.id,
@@ -1050,7 +997,16 @@ function recordDestroyedCard(
     def: card.def || 0,
     baseAtk: card.baseAtk ?? card.originalAtk ?? card.atk ?? 0,
     destroyedBy,
-  });
+  };
+}
+
+// Published only after the move: a refused move is not a destruction.
+function recordDestroyedCard(
+  summary: PlannerBattleSummary,
+  destroyed: DestroyedCardSummary,
+): void {
+  summary.destroyedNames.push(destroyed.name || "card");
+  summary.destroyedCards.push(destroyed);
 }
 
 function getSimTurnCounter(turnCounter: unknown): number {
@@ -1252,8 +1208,9 @@ function resolveSimulatedBattlePairEffects(
       continue;
     }
 
-    recordDestroyedCard(summary, affected, "opponent", "effect");
-    destroyPlannerMonster(opponent, affected);
+    const destroyed = captureDestroyedCard(affected, "opponent", "effect");
+    if (!destroyPlannerMonster(state, opponent, affected, true)) continue;
+    recordDestroyedCard(summary, destroyed);
     summary.rewardNames.push(
       `${entry.sourceName || "battle pair effect"} destroyed ${affected.name || "target"}`,
     );
@@ -1362,8 +1319,10 @@ function applySimulatedBattle(
       summary.rewardNames.push(`${replacement.name} protected battle`);
       return false;
     }
-    recordDestroyedCard(summary, card, ownerLabel, "battle");
-    return destroyPlannerMonster(owner, card);
+    const destroyed = captureDestroyedCard(card, ownerLabel, "battle");
+    if (!destroyPlannerMonster(state, owner, card, false)) return false;
+    recordDestroyedCard(summary, destroyed);
+    return true;
   };
 
   if (!target) {
@@ -1459,11 +1418,12 @@ function buildPlannerBattlePlans(state: PlanningState): PlannerBattlePlan[] {
 function chooseBestSingleSimulatedBattle(
   state: PlanningState,
   strategy: TurnLineStrategy,
-  options: TurnLineRuntimeOptions = {},
+  options: TurnLineRuntimeOptions,
+  inNode: NodeStrategyCall,
 ): PlannerBattleChoice | null {
   const plans = buildPlannerBattlePlans(state);
   if (plans.length === 0) return null;
-  const baseScore = evaluateBasePlanningScore(state, strategy, options);
+  const baseScore = inNode([state], () => evaluateBasePlanningScore(state, strategy, options));
   let best: PlannerBattleChoice | null = null;
 
   plans.forEach((plan) => {
@@ -1473,12 +1433,13 @@ function chooseBestSingleSimulatedBattle(
       : null;
     const wasSecondAttack =
       Number(originalAttacker?.attacksUsedThisTurn || 0) > 0;
+    // Copied outside the node scope, so the copy's _gameRef stays the duel's.
     const candidateState = clonePlanningState(state, strategy);
     const candidateAttacker = candidateState.bot.field[plan.attackerIndex];
     const candidateTarget = Number.isInteger(plan.targetIndex)
       ? candidateState.player.field[plan.targetIndex!]
       : null;
-    const summary = applySimulatedBattle(candidateState, plan, strategy, options);
+    const summary = inNode([candidateState], () => applySimulatedBattle(candidateState, plan, strategy, options));
     if (!summary || candidateState._simUnsupportedActions?.length) return;
     const destroyedOpponent = summary.destroyedNames.filter(
       (_name, index) => summary.destroyedCards[index]?.owner === "opponent",
@@ -1486,7 +1447,7 @@ function chooseBestSingleSimulatedBattle(
     const destroyedSelf = summary.destroyedNames.filter(
       (_name, index) => summary.destroyedCards[index]?.owner === "self",
     ).length;
-    const scoreAfter = evaluateBasePlanningScore(candidateState, strategy, options);
+    const scoreAfter = inNode([candidateState], () => evaluateBasePlanningScore(candidateState, strategy, options));
     let score = scoreAfter - baseScore;
     if ((candidateState.player?.lp || 0) <= 0) score += 100;
     score += Math.max(0, summary.damage || 0) / 450;
@@ -1500,7 +1461,7 @@ function chooseBestSingleSimulatedBattle(
       const targetAfter = candidateTarget &&
         candidateState.player.field.includes(candidateTarget)
         ? candidateTarget : null;
-      const hookDelta = strategy.scoreBattleAttackCandidate({
+      const hookDelta = inNode([candidateState, state], () => strategy.scoreBattleAttackCandidate?.({
         attacker: attackerAfter || originalAttacker,
         target: originalTarget,
         baseDelta: scoreAfter - baseScore,
@@ -1508,12 +1469,13 @@ function chooseBestSingleSimulatedBattle(
         game: candidateState,
         bot: candidateState.bot,
         opponent: candidateState.player,
+        preBattleState: state,
         lethalNow: (candidateState.player?.lp || 0) <= 0,
         attackerSurvived: Boolean(attackerAfter),
         targetSurvived: Boolean(targetAfter),
         isSecondAttack: wasSecondAttack,
         summary,
-      });
+      }));
       if (Number.isFinite(hookDelta)) score += hookDelta as number;
     }
     if (score <= 0 && destroyedOpponent === 0 && summary.damage <= 0) return;
@@ -1568,7 +1530,8 @@ function aggregateBattleSummaries(
 function chooseBestSimulatedBattle(
   state: PlanningState,
   strategy: TurnLineStrategy,
-  options: TurnLineRuntimeOptions = {},
+  options: TurnLineRuntimeOptions,
+  inNode: NodeStrategyCall,
 ): PlannerBattleChoice | null {
   const limit = normalizeBattleStepLimit(options);
   let currentState = state;
@@ -1577,7 +1540,7 @@ function chooseBestSimulatedBattle(
   const steps: PlannerBattleSummary[] = [];
 
   for (let stepIndex = 0; stepIndex < limit; stepIndex += 1) {
-    const next = chooseBestSingleSimulatedBattle(currentState, strategy, options);
+    const next = chooseBestSingleSimulatedBattle(currentState, strategy, options, inNode);
     if (!next) break;
     if (!firstPlan) firstPlan = next.plan;
     steps.push(next.summary);
@@ -1599,7 +1562,8 @@ function tryMainBattleMain2Bridge(
   state: PlanningState,
   sequence: AIPlannedAction[],
   strategy: TurnLineStrategy,
-  options: TurnLineRuntimeOptions = {},
+  options: TurnLineRuntimeOptions,
+  inNode: NodeStrategyCall,
 ): { state: PlanningState; action: PlannerBattleSummary; score: number } | null {
   if (state._simUnsupportedActions?.length || state._simRequiresReplan) return null;
   if (!isMainBattleMain2Mode(options)) return null;
@@ -1607,7 +1571,7 @@ function tryMainBattleMain2Bridge(
   if (!isMain1Phase(state?.phase)) return null;
   if (!Array.isArray(sequence)) return null;
 
-  const battle = chooseBestSimulatedBattle(state, strategy, options);
+  const battle = chooseBestSimulatedBattle(state, strategy, options, inNode);
   if (!battle) return null;
   battle.state.phase = "main2";
   battle.state._simPlanningBattleDone = true;
@@ -1697,7 +1661,13 @@ export async function turnLineSearch(
   const seenStates = new Set<string>();
   const configuredModels = strategy.bot?.getGameTreeModels?.();
   const models = configuredModels ? new Map(configuredModels.actors) : null;
+  const inNode = createNodeStrategyCall(models);
   const root = clonePlanningState(game, strategy, models !== null);
+  // Phase 2.3 E2: the guard of the opaque projection only counts, into the Arena's tracker.
+  const guardSink = game._arenaTracker;
+  if (models !== null && guardSink?.recordPublicProjectionGuard) {
+    guardSink.recordPublicProjectionGuard(root.bot.id, "turnLineSearch", assertPublicPlanningProjection(root, root.bot.id));
+  }
   seenStates.add(getPlanningStateHash(root));
 
   const search = async (
@@ -1705,8 +1675,8 @@ export async function turnLineSearch(
     depth: number,
     sequence: AIPlannedAction[] = [],
   ): Promise<SearchBranch> => {
-    const terminalEval = () =>
-      evaluatePlanningTerminal(currentState, strategy, options, sequence, root);
+    const terminalEval = () => inNode([currentState, root], () =>
+      evaluatePlanningTerminal(currentState, strategy, options, sequence, root));
 
     if (depth >= maxDepth || nodesEvaluated >= nodeBudget || currentState._simRequiresReplan) {
       const terminal = terminalEval();
@@ -1724,7 +1694,7 @@ export async function turnLineSearch(
 
     // Reserve the phase alternative before Main actions can exhaust the shared
     // budget. Its terminal score is complete even when Main2 cannot be expanded.
-    const bridge = tryMainBattleMain2Bridge(currentState, sequence, strategy, options);
+    const bridge = tryMainBattleMain2Bridge(currentState, sequence, strategy, options, inNode);
     let bridgeBranch: SearchBranch | null = null;
     let bridgeHash: string | null = null;
     if (bridge) {
@@ -1734,9 +1704,9 @@ export async function turnLineSearch(
       } else {
         nodesEvaluated += 1;
         const bridgeSequence = [...sequence, bridge.action];
-        const terminal = evaluatePlanningTerminal(
+        const terminal = inNode([bridge.state, root], () => evaluatePlanningTerminal(
           bridge.state, strategy, options, bridgeSequence, root,
-        );
+        ));
         bridgeBranch = {
           action: bridge.action,
           sequence: bridgeSequence,
@@ -1751,14 +1721,15 @@ export async function turnLineSearch(
       }
     }
 
-    let candidates = getCandidatesForDepth(currentState, strategy, depth, options);
+    let candidates = inNode([currentState], () => getCandidatesForDepth(currentState, strategy, depth, options));
     const hadCandidates = candidates.length > 0;
 
     candidates = candidates.slice().sort((a, b) => (b.priority || 0) - (a.priority || 0));
     if (candidates.length > 0 && typeof strategy.selectPlanningCandidates === "function") {
       const selectionLimit = Math.max(1, Math.min(beamWidth, candidateLimit, candidates.length));
       const legalCandidates = new Set(candidates);
-      const selected = strategy.selectPlanningCandidates(candidates, currentState, selectionLimit);
+      const selected = inNode([currentState], () =>
+        strategy.selectPlanningCandidates?.(candidates, currentState, selectionLimit));
       candidates = [...new Set(selected)].filter(action => legalCandidates.has(action)).slice(0, selectionLimit);
     } else {
       candidates = candidates.slice(0, Math.max(1, candidateLimit));

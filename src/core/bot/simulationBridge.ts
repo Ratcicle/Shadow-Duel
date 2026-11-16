@@ -12,7 +12,12 @@ import type {
   SimulationGameState,
   SimulatedTemporaryControlEffect,
 } from "../contracts/aiState.js";
-import { createPlanningCopy, projectRuntimeEffectUsage, projectRuntimeReplacementEffects } from "../ai/common/planningCopy.js";
+import {
+  createPlanningCopy,
+  projectRuntimeEffectUsage,
+  projectRuntimeReplacementEffects,
+  registerPublicOpponentProjection,
+} from "../ai/common/planningCopy.js";
 import { PLANNING_PLAYER_FIELDS, PLANNING_STATE_FIELDS } from "../ai/common/stateFingerprint.js";
 
 interface SimulationBotPort extends AIStrategyBotPort {
@@ -50,9 +55,26 @@ export function simulateBotSpellEffect(
   return bot.strategy.simulateSpellEffect(state, card);
 }
 
+export interface BotCloneOptions {
+  /**
+   * Copy the opponent through its public projection: its hidden cards (Hand,
+   * Deck, Extra Deck and face-down cards) become opaque projections (the
+   * battle loop's copies, phase 2.3 L12). Off by default, so the copy keeps
+   * the opponent's full information; every live decision must turn it on.
+   */
+  publicOpponent?: boolean;
+}
+
+/**
+ * The bot's copy of a game for simulation. By default it keeps the opponent's
+ * full information, hidden cards included, as fixtures and simulations of a
+ * known state need. A consumer deciding on the live duel passes
+ * `publicOpponent: true`, as the battle loop does (phase 2.3 L12).
+ */
 export function cloneBotGameState(
   bot: SimulationBotPort,
   game: BotCloneGamePort,
+  options: BotCloneOptions = {},
 ): BotPerspectiveGameState {
   const copy = createPlanningCopy();
   const clonePlayer = (p: CloneablePlayerInput): SimulatedPlayerState => {
@@ -76,6 +98,8 @@ export function cloneBotGameState(
     return player;
   };
   const opponent = bot.resolveOpponent(game) || game.player;
+  // Registered before either participant is copied, so links reuse the opaque projection.
+  if (options.publicOpponent && opponent !== bot) registerPublicOpponentProjection(copy, opponent);
 
   const state = {
     player: clonePlayer(opponent),

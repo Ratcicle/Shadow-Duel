@@ -261,7 +261,7 @@ test("311 removes the two activation counters even when negated and leaves recov
   const recovered = make(304);
   const state = simulationState({ ...activeState(), bot: { spellTrap: [source], graveyard: [recovered] } });
   applyGenericSimulatedMainPhaseAction(state, { type: "spellTrapEffect", cardId: 311, zoneIndex: 0 });
-  assert.equal(source.counters.get("ink"), 0);
+  assert.equal(source.counters.has("ink"), false);
   assert.ok(state.bot.graveyard.includes(recovered));
   assert.equal(state.bot.hand.length, 0);
 });

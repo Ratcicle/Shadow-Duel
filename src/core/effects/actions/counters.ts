@@ -1,6 +1,8 @@
 import {
+  aiSelectionDecisionRequest,
   buildFieldSelectionCandidates as buildSharedFieldSelectionCandidates,
   getUI as getSharedUI,
+  isSelectionKey,
   requestResolutionOption,
   resolutionChoiceContext,
   resolveFieldScopeCards as resolveSharedFieldScopeCards,
@@ -926,13 +928,27 @@ async function selectCounterPaymentCards(
   if (!game || !player) return [];
 
   if (entries.length === 0) return [];
-  if (entries.length === 1 || isAI(player)) {
+  if (entries.length === 1) {
     return chooseGreedyCounterEntries(entries, amount);
   }
 
   const candidates = decorateCounterEntries(game, entries);
   const requirementId = action.requirementId || "counter_payment";
   const maxSelect = Math.min(entries.length, amount);
+  if (isAI(player)) {
+    // The bot pays greedily in collection order, as a recorded cost decision.
+    const greedyKeys = () => chooseGreedyCounterEntries(entries, amount)
+      .map(card => candidates.find(candidate => candidate.cardRef === card)?.key)
+      .filter(isSelectionKey);
+    if (!game.requestDecision) return chooseGreedyCounterEntries(entries, amount);
+    const decided = await game.requestDecision({
+      ...aiSelectionDecisionRequest(player, "cost", [{ id: requirementId, candidates }]),
+      resolveAI: () => ({ [requirementId]: greedyKeys() }),
+    });
+    return (decided?.[requirementId] || [])
+      .map(key => candidates.find(candidate => candidate.key === key)?.cardRef)
+      .filter((card): card is ActionRuntimeCard => card !== undefined);
+  }
   const selectionContract = {
     kind: "cost",
     message:

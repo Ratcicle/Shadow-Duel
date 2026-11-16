@@ -2,12 +2,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  BACKROW_REACTION_SEVERITY,
   COMPARISON_SCHEMA,
   COMPARISON_SCHEMA_VERSION,
   DUELS_FILE,
+  FAILED_MARK_PREFIX,
   GUARD_COUNTERS,
   GUARD_FLOOR,
   HEADER_FILE,
+  INVARIANCE_FILE,
+  INVARIANCE_ROOTS,
   JOURNAL_FILE,
   RUN_END_FILE,
   SEATS,
@@ -23,6 +27,7 @@ import {
   deterministicDigest,
   jsonValue,
   parseDuelRecord,
+  parseInvarianceRecord,
   parseRunEnd,
   parseRunHeader,
   planCases,
@@ -34,11 +39,15 @@ import {
   type DuelRecordV1,
   type GuardCounterName,
   type GuardPeaks,
+  type InvarianceCaseRecord,
+  type InvarianceGuardTally,
+  type InvarianceRoot,
   type JsonValue,
   type RunConfig,
   type RunEnd,
   type RunHeader,
   type RunIdentity,
+  type Seat,
 } from "./benchmark/schema.js";
 import {
   DRAW_POINTS,
@@ -167,6 +176,8 @@ export interface ValidationReport {
   /** Cases refused by the effective profile and delay checks (config_drift). */
   configDrift: Array<{ caseId: string; message: string | null }>;
   crossCheckFailures: Array<{ caseId: string; diffs: CrossCheckDiff[] }>;
+  /** Seats whose severities without FAILED_MARK_PREFIX do not add up to planning.mismatches. */
+  severitySumViolations: Array<{ caseId: string; seat: Seat; mismatches: number; severities: number }>;
   mathRandomCases: string[];
   identityChangedDuringRun: boolean | null;
 }
@@ -233,7 +244,10 @@ export interface PresetDiagnostics {
     rate: Interval | null;
     rateExcludingNotExecuted: Interval | null;
   };
+  /** Severities of the divergences; they add up to divergence.mismatches. */
   mismatchBySeverity: Counter;
+  /** FAILED_MARK_PREFIX keys: marks on failed executions, outside the divergences. */
+  failureMarks: Counter;
   mismatchByPath: Counter;
   terminations: Counter;
   unsupported: { tlsBranches: number; tlsByFamily: Counter; tlsByMarker: Counter; beamGreedyByFamily: Counter; beamGreedyByMarker: Counter };
@@ -249,6 +263,41 @@ export interface Defect {
   caseId: string;
   kind: string;
   detail: string;
+}
+
+export interface InvarianceRootSummary {
+  checked: number;
+  vacuous: number;
+  /** Checked comparisons left out of the gate: the rerun on the real state did not reproduce the live decision. */
+  nonReproducible: number;
+  actionDiff: number;
+  scoreDiff: number;
+  liveActionDiff: number;
+  liveScoreDiff: number;
+  errors: number;
+  restoreFailures: number;
+  /**
+   * Over the reproduced comparisons (checked − nonReproducible). ok: actionDiff = scoreDiff = 0;
+   * diff: some comparison differed; unchecked: nothing reproduced to compare.
+   */
+  gate: "ok" | "diff" | "unchecked";
+  /** Seats of each preset whose root was checked. */
+  byPreset: Record<string, { checked: number; nonReproducible: number; actionDiff: number; scoreDiff: number }>;
+  errorLabels: Counter;
+}
+
+/** Hidden-information invariance control, read from INVARIANCE_FILE when the run carries it. */
+export interface InvarianceSummary {
+  file: string;
+  /** Records of the run with a side line. */
+  cases: number;
+  records: number;
+  /** Records of the run without a side line (a lost worker never writes one). */
+  missing: string[];
+  roots: Record<InvarianceRoot, InvarianceRootSummary>;
+  /** Public-projection guard of the live roots, by search root; it only counts (phase 2.3, E2). */
+  guard: Record<string, InvarianceGuardTally>;
+  consoleLabels: Counter;
 }
 
 export interface BenchmarkSummary {
@@ -297,6 +346,8 @@ export interface BenchmarkSummary {
     duelMs: Distribution;
     decisionLatencyMs: Record<string, Distribution>;
   } | null;
+  /** Present only when the run directory has INVARIANCE_FILE. */
+  invariance?: InvarianceSummary;
 }
 
 // ── Validation ─────────────────────────────────────────────────────────────
@@ -311,6 +362,11 @@ function plannedCases(header: RunHeader): BenchmarkCase[] {
 
 function guardLimits(config: RunConfig): Record<GuardCounterName, number> {
   return { decisions: config.stallGuard.decisionsPerTurn, actions: config.stallGuard.actionsPerTurn, progress: config.stallGuard.progressPerTurn };
+}
+
+/** A mismatchBySeverity key that marks a failed comparison; it never counts as a divergence. */
+function isFailureMark(key: string): boolean {
+  return key.startsWith(FAILED_MARK_PREFIX);
 }
 
 function validate(run: LoadedRun, allowIncomplete: boolean): ValidationReport {
@@ -389,12 +445,20 @@ function validate(run: LoadedRun, allowIncomplete: boolean): ValidationReport {
     .map(record => ({ caseId: record.caseId, message: record.outcome.message }));
   const crossCheckFailures = records.filter(record => record.crossCheck.status === "failed")
     .map(record => ({ caseId: record.caseId, diffs: record.crossCheck.diffs }));
+  const severitySumViolations = records.flatMap(record => SEATS.flatMap(seat => {
+    const planning = record.seatMetrics?.[seat].planning;
+    if (!planning) return [];
+    const severities = Object.entries(planning.mismatchBySeverity)
+      .reduce((sum, [key, count]) => isFailureMark(key) ? sum : sum + count, 0);
+    return severities === planning.mismatches ? [] : [{ caseId: record.caseId, seat, mismatches: planning.mismatches, severities }];
+  }));
   const mathRandomCases = records.filter(record => record.diag.mathRandomCalls > 0).map(record => record.caseId);
   const identityChangedDuringRun = run.runEnd ? run.runEnd.identityChangedDuringRun : null;
   const duplicates = run.source === "duels" ? run.duplicates : [];
   const ok = (allowIncomplete || missing.length === 0) && !duplicates.length && !seedMismatches.length &&
     !startAlternation.violations.length && !rngSymmetryViolations.length && !beamProfileViolations.length &&
-    !configDrift.length && !crossCheckFailures.length && !mathRandomCases.length && identityChangedDuringRun !== true;
+    !configDrift.length && !crossCheckFailures.length && !severitySumViolations.length && !mathRandomCases.length &&
+    identityChangedDuringRun !== true;
   return {
     ok,
     plannedCases: planned.length,
@@ -408,6 +472,7 @@ function validate(run: LoadedRun, allowIncomplete: boolean): ValidationReport {
     beamProfileViolations,
     configDrift,
     crossCheckFailures,
+    severitySumViolations,
     mathRandomCases,
     identityChangedDuringRun,
   };
@@ -504,7 +569,7 @@ function emptyDiagnostics(): PresetDiagnostics {
     duels: 0,
     turns: distribution([]),
     divergence: { comparisons: 0, mismatches: 0, failedNotExecuted: 0, failedExecutedRejected: 0, rate: null, rateExcludingNotExecuted: null },
-    mismatchBySeverity: {}, mismatchByPath: {}, terminations: {},
+    mismatchBySeverity: {}, failureMarks: {}, mismatchByPath: {}, terminations: {},
     unsupported: { tlsBranches: 0, tlsByFamily: {}, tlsByMarker: {}, beamGreedyByFamily: {}, beamGreedyByMarker: {} },
     failedActions: { attempts: 0, failed: 0, blocked: 0, byClass: {}, byCode: {}, blockedByCode: {} },
     nodes: { tls: 0, searches: 0, tlsPerSearch: null, beamGreedySimulations: 0, beamGreedySimulationsPerDecision: null },
@@ -531,7 +596,9 @@ function presetDiagnostics(preset: string, records: readonly DuelRecordV1[]): Pr
       result.divergence.mismatches += planning.mismatches;
       result.divergence.failedNotExecuted += planning.failed.notExecuted;
       result.divergence.failedExecutedRejected += planning.failed.executedRejected;
-      mergeCounter(result.mismatchBySeverity, planning.mismatchBySeverity);
+      for (const [key, count] of Object.entries(planning.mismatchBySeverity)) {
+        increment(isFailureMark(key) ? result.failureMarks : result.mismatchBySeverity, key, count);
+      }
       mergeCounter(result.mismatchByPath, planning.mismatchByPath);
       mergeCounter(result.terminations, planning.terminations);
       result.unsupported.tlsBranches += metrics.unsupported.tlsBranches;
@@ -562,7 +629,7 @@ function presetDiagnostics(preset: string, records: readonly DuelRecordV1[]): Pr
     divergence.comparisons - divergence.failedNotExecuted));
   result.nodes.tlsPerSearch = roundOrNull(ratio(result.nodes.tls, result.nodes.searches), 3);
   result.nodes.beamGreedySimulationsPerDecision = roundOrNull(ratio(result.nodes.beamGreedySimulations, result.decisions.mainPhase), 3);
-  for (const key of ["mismatchBySeverity", "mismatchByPath", "terminations", "mainPhaseExits", "plannerProfiles"] as const) {
+  for (const key of ["mismatchBySeverity", "failureMarks", "mismatchByPath", "terminations", "mainPhaseExits", "plannerProfiles"] as const) {
     result[key] = sortedCounter(result[key]);
   }
   for (const key of ["tlsByFamily", "tlsByMarker", "beamGreedyByFamily", "beamGreedyByMarker"] as const) {
@@ -759,6 +826,164 @@ export function computeSummary(run: LoadedRun, options: SummaryOptions = {}): Be
   return summary;
 }
 
+// ── Invariance control ─────────────────────────────────────────────────────
+
+/** Side lines by case; a resumed case keeps its last line, and a line cut by an interruption is dropped. */
+export function readInvarianceFile(file: string): Map<string, InvarianceCaseRecord> {
+  const text = fs.readFileSync(file, "utf8");
+  const complete = text.endsWith("\n") ? text : text.slice(0, text.lastIndexOf("\n") + 1);
+  const records = new Map<string, InvarianceCaseRecord>();
+  complete.split("\n").forEach((line, index) => {
+    if (!line) return;
+    let value: unknown;
+    try {
+      value = JSON.parse(line);
+    } catch {
+      throw new AnalysisInputError(`${INVARIANCE_FILE}:${index + 1} não é JSON válido.`);
+    }
+    const record = parseInvarianceRecord(value, `${INVARIANCE_FILE}:${index + 1}`);
+    records.set(record.caseId, record);
+  });
+  return records;
+}
+
+function emptyInvarianceRootSummary(): InvarianceRootSummary {
+  return {
+    checked: 0, vacuous: 0, nonReproducible: 0, actionDiff: 0, scoreDiff: 0, liveActionDiff: 0, liveScoreDiff: 0, errors: 0,
+    restoreFailures: 0, gate: "unchecked", byPreset: {}, errorLabels: {},
+  };
+}
+
+export function summarizeInvariance(file: string, sides: ReadonlyMap<string, InvarianceCaseRecord>,
+  records: readonly DuelRecordV1[]): InvarianceSummary {
+  const roots: Record<InvarianceRoot, InvarianceRootSummary> = {
+    ascension: emptyInvarianceRootSummary(),
+    generation: emptyInvarianceRootSummary(),
+    p2: emptyInvarianceRootSummary(),
+    profile: emptyInvarianceRootSummary(),
+    turnLineSearch: emptyInvarianceRootSummary(),
+    beam: emptyInvarianceRootSummary(),
+    greedy: emptyInvarianceRootSummary(),
+    attack: emptyInvarianceRootSummary(),
+  };
+  const consoleLabels: Counter = {};
+  const guard: Record<string, InvarianceGuardTally> = {};
+  const missing: string[] = [];
+  let cases = 0;
+  for (const record of records) {
+    const side = sides.get(record.caseId);
+    if (!side) {
+      missing.push(record.caseId);
+      continue;
+    }
+    cases += 1;
+    for (const seat of SEATS) {
+      const sideSeat = side.seats[seat];
+      mergeCounter(consoleLabels, sideSeat.consoleLabels);
+      for (const [root, tally] of Object.entries(sideSeat.guard)) {
+        const target = guard[root] ??= { roots: 0, projections: 0, fields: {}, tolerated: {}, unprojected: {} };
+        target.roots += tally.roots;
+        target.projections += tally.projections;
+        mergeCounter(target.fields, tally.fields);
+        mergeCounter(target.tolerated, tally.tolerated);
+        mergeCounter(target.unprojected, tally.unprojected);
+      }
+      for (const root of INVARIANCE_ROOTS) {
+        const tally = sideSeat.roots[root];
+        const target = roots[root];
+        target.checked += tally.checked;
+        target.vacuous += tally.vacuous;
+        target.nonReproducible += tally.nonReproducible;
+        target.actionDiff += tally.actionDiff;
+        target.scoreDiff += tally.scoreDiff;
+        target.liveActionDiff += tally.liveActionDiff;
+        target.liveScoreDiff += tally.liveScoreDiff;
+        target.errors += tally.errors;
+        target.restoreFailures += tally.restoreFailures;
+        mergeCounter(target.errorLabels, tally.errorLabels);
+        if (!tally.checked) continue;
+        const preset = target.byPreset[sideSeat.preset] ??= { checked: 0, nonReproducible: 0, actionDiff: 0, scoreDiff: 0 };
+        preset.checked += tally.checked;
+        preset.nonReproducible += tally.nonReproducible;
+        preset.actionDiff += tally.actionDiff;
+        preset.scoreDiff += tally.scoreDiff;
+      }
+    }
+  }
+  for (const root of INVARIANCE_ROOTS) {
+    const summary = roots[root];
+    summary.gate = summary.checked === summary.nonReproducible ? "unchecked"
+      : summary.actionDiff || summary.scoreDiff ? "diff" : "ok";
+    summary.errorLabels = sortedCounter(summary.errorLabels);
+    summary.byPreset = Object.fromEntries(Object.keys(summary.byPreset).sort(compareCodeUnits)
+      .flatMap(preset => { const entry = summary.byPreset[preset]; return entry ? [[preset, entry]] : []; }));
+  }
+  const sortedGuard: Record<string, InvarianceGuardTally> = {};
+  for (const root of Object.keys(guard).sort(compareCodeUnits)) {
+    const tally = guard[root];
+    if (tally) {
+      sortedGuard[root] = { ...tally, fields: sortedCounter(tally.fields), tolerated: sortedCounter(tally.tolerated),
+        unprojected: sortedCounter(tally.unprojected) };
+    }
+  }
+  return { file, cases, records: records.length, missing, roots, guard: sortedGuard, consoleLabels: sortedCounter(consoleLabels) };
+}
+
+const INVARIANCE_GATE_LABELS: Record<InvarianceRootSummary["gate"], string> = {
+  ok: "ok",
+  diff: "diferenças",
+  unchecked: "sem comparações reproduzidas",
+};
+
+function invarianceMarkdown(invariance: InvarianceSummary): string[] {
+  const lines = ["", "## Controle de invariância a informação oculta", "",
+    "Execução diagnóstica (`--invariance-control`): as reexecuções podem perturbar o duelo, por isso ela nunca mede força. " +
+      "Cada raiz viva roda de novo sobre o estado real e com a informação oculta do oponente trocada: mão e Deck rotacionados " +
+      "e cada carta virada para baixo trocada por uma carta do Deck do mesmo tipo, com os campos públicos de colocação preservados " +
+      "em cada posição e, no campo, também o estado público da presença (versão, turnos e contadores). As duas reexecuções partem " +
+      "do cache de targeting vazio. Portão por raiz: actionDiff = scoreDiff = 0 nas comparações reproduzidas, em que a reexecução " +
+      "sobre o estado real repete a ação e o score da decisão viva, que usou o cache do duelo. As não reproduzidas ficam fora do " +
+      "portão: nelas a diferença da troca não separa a informação oculta do estado carregado entre chamadas. A raiz generation é " +
+      "a geração de candidatos da Main Phase, a lista que todas as buscas da decisão recebem: actionDiff compara as ações e a " +
+      "ordem como a execução as consumiria (a identidade da ação no runtime, com fonte e escolhas por instância e os valores " +
+      "das preferências de alvo e de custo, e as decisões da ativação), e scoreDiff, a prioridade de cada ação. A raiz ascension " +
+      "é o atalho de Ascensão automática, que roda antes da geração: actionDiff compara o material (pelo índice no campo), a " +
+      "carta de Ascensão (pela instância) e a posição, ou a ausência da escolha. A raiz profile é o perfil de planejamento e o " +
+      "portão do planejador, resolvidos depois da geração: actionDiff compara os campos do perfil que o controlador lê " +
+      "(enabled, mode, beamWidth, maxDepth, nodeBudget, candidateLimit, turnMode, battleStepLimit e allowEarlyStop) e se a " +
+      "decisão roda o TurnLineSearch, sem os textos de motivo. Essas duas raízes não têm score. Cada escolha é descrita no " +
+      "estado que a produziu, a trocada antes da restauração. Limites do controle: os ganchos de resolução, as respostas de " +
+      "Chain e as escolhas feitas na execução de uma ação (como os tributos) não são reexecutados, e a troca não alcança o " +
+      "Extra Deck nem as cartas banidas viradas para baixo do oponente.", "",
+    `- Arquivo lateral: ${invariance.cases} de ${invariance.records} registros` +
+      `${invariance.missing.length ? `; sem linha lateral: ${invariance.missing.slice(0, 10).join(", ")}${invariance.missing.length > 10 ? ` (+${invariance.missing.length - 10})` : ""}` : ""}.`, "",
+    "| Raiz | Verificadas | Sem troca | Não reproduzidas | actionDiff | scoreDiff | Portão | Reexecução ≠ viva (ação/score) | Erros | Falhas de restauração | Presets com diferença (ação/score) |",
+    "| --- | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: | ---: | --- |"];
+  for (const root of INVARIANCE_ROOTS) {
+    const summary = invariance.roots[root];
+    const presets = Object.entries(summary.byPreset).filter(([, entry]) => entry.actionDiff || entry.scoreDiff)
+      .map(([preset, entry]) => `${preset} ${entry.actionDiff}/${entry.scoreDiff} de ${entry.checked - entry.nonReproducible}`);
+    lines.push(`| ${root} | ${summary.checked} | ${summary.vacuous} | ${summary.nonReproducible} | ${summary.actionDiff} | ` +
+      `${summary.scoreDiff} | ${INVARIANCE_GATE_LABELS[summary.gate]} | ${summary.liveActionDiff}/${summary.liveScoreDiff} | ` +
+      `${summary.errors} | ${summary.restoreFailures} | ${cell(presets.join("; ") || "—")} |`);
+  }
+  const errors = INVARIANCE_ROOTS.filter(root => Object.keys(invariance.roots[root].errorLabels).length)
+    .map(root => `${root} (${counterText(invariance.roots[root].errorLabels, 3)})`);
+  lines.push("", `- Erros das reexecuções: ${errors.length ? errors.join("; ") : "nenhum"}.`,
+    `- Console das reexecuções (fora dos diagnósticos do registro): ${counterText(invariance.consoleLabels, 4)}.`, "",
+    "Guarda da projeção pública nas raízes vivas (só conta, E2): disparos são campos fora da allowlist nas projeções opacas; " +
+      "tolerados são campos da allowlist além da colocação pública, um canal conhecido; e cartas ocultas do oponente sem projeção.", "",
+    "| Raiz | Raízes | Projeções | Disparos por campo | Tolerados por campo | Cartas ocultas sem projeção |",
+    "| --- | ---: | ---: | --- | --- | --- |");
+  const guardRoots = Object.entries(invariance.guard);
+  if (!guardRoots.length) lines.push("| — | 0 | 0 | — | — | — |");
+  for (const [root, tally] of guardRoots) {
+    lines.push(`| ${cell(root)} | ${tally.roots} | ${tally.projections} | ${cell(counterText(tally.fields, 8))} | ` +
+      `${cell(counterText(tally.tolerated, 4))} | ${cell(counterText(tally.unprojected, 6))} |`);
+  }
+  return lines;
+}
+
 // ── Markdown ───────────────────────────────────────────────────────────────
 
 function cell(value: string | number | null): string {
@@ -817,6 +1042,7 @@ export function renderSummaryMarkdown(summary: BenchmarkSummary): string {
     `- configDigest \`${summary.configDigest}\`; identityDigest \`${summary.identityDigest}\`; deterministicDigest \`${summary.deterministicDigest}\`.`,
     `- Elegível a baseline: ${yesNo(summary.baselineEligible)}${summary.baselineBlockers.length ? ` (${summary.baselineBlockers.join(", ")})` : ""}.` +
       `${summary.provisional ? " Resultado provisório." : ""}`,
+    ...(config.invarianceControl ? ["- Controle de invariância a informação oculta ligado: execução diagnóstica, nunca medição de força."] : []),
     `- Convenção do placar: vitória vale 1, empate (PV iguais no limite de turnos) vale ${drawPointsText("pt-BR")}; ` +
       `p = (V + ${drawPointsText("pt-BR")}·E)/n, com intervalo de Wilson de 95% sobre o placar fracionário. Erros e timeouts ficam fora de toda taxa (D4).`, "",
     "## Sanidade", "",
@@ -832,6 +1058,7 @@ export function renderSummaryMarkdown(summary: BenchmarkSummary): string {
     `| Perfil de beam | ${validation.beamProfileViolations.length ? `${validation.beamProfileViolations.length} divergências` : "ok"} |`,
     `| Perfil e delays efetivos | ${validation.configDrift.length ? `${validation.configDrift.length} casos com deriva` : "ok"} |`,
     `| Cross-check com o DuelTracker | ${validation.crossCheckFailures.length ? `${validation.crossCheckFailures.length} falhas` : "ok"} |`,
+    `| Severidades somam as divergências | ${validation.severitySumViolations.length ? `${validation.severitySumViolations.length} assentos com outra soma` : "ok"} |`,
     `| Math.random no duelo | ${validation.mathRandomCases.length ? `${validation.mathRandomCases.length} casos` : "0"} |`,
     `| Identidade estável | ${validation.identityChangedDuringRun === null ? "não verificada" : validation.identityChangedDuringRun ? "mudou" : "ok"} |`,
     "",
@@ -844,11 +1071,14 @@ export function renderSummaryMarkdown(summary: BenchmarkSummary): string {
     ...validation.beamProfileViolations.map(entry => `beam: ${entry.caseId} (${entry.beam}, esperado ${entry.expected})`),
     ...validation.configDrift.map(entry => `deriva de configuração: ${entry.caseId} (${entry.message ?? "—"})`),
     ...validation.crossCheckFailures.map(entry => `cross-check: ${entry.caseId} (${entry.diffs.map(diff => `${diff.seat}.${diff.field} ${diff.observer}≠${diff.tracker}`).join(", ")})`),
+    ...validation.severitySumViolations.map(entry => `severidades: ${entry.caseId} ${entry.seat} (soma ${entry.severities} ≠ ${entry.mismatches} divergências)`),
     ...validation.mathRandomCases.map(caseId => `Math.random: ${caseId}`),
   ];
   if (violations.length) lines.push(...violations.map(entry => `- ${entry}`), "");
+  const invarianceLines = summary.invariance ? [...invarianceMarkdown(summary.invariance), ""] : [];
   if (!summary.outcomes) {
-    lines.push("A sanidade reprovou: as métricas não foram calculadas (use --allow-sanity-failures para um resumo provisório).", "");
+    lines.push("A sanidade reprovou: as métricas não foram calculadas (use --allow-sanity-failures para um resumo provisório).", "",
+      ...invarianceLines);
     return lines.join("\n");
   }
   const outcomes = summary.outcomes;
@@ -906,14 +1136,22 @@ export function renderSummaryMarkdown(summary: BenchmarkSummary): string {
       `${numberText(diagnostics.nodes.beamGreedySimulationsPerDecision)} | ${diagnostics.decisions.mainPhase} (${diagnostics.decisions.measured}) | ` +
       `${diagnostics.guardPeaks.decisions}/${diagnostics.guardPeaks.actions}/${diagnostics.guardPeaks.progress} |`);
   }
-  lines.push("", "| Preset | Motivos de divergência | Caminhos dos diffs | Branches não suportados (TLS, por família) | Falhas por classe | Saídas da Main Phase | Perfis do planner |",
-    "| --- | --- | --- | --- | --- | --- | --- |");
+  lines.push("", "Os motivos e as reações de backrow do oponente somam as divergências. Uma reação de backrow é a divergência só no oponente " +
+      "em que uma carta virada para baixo da backrow dele saiu da zona ou foi revelada.", "",
+    "| Preset | Motivos de divergência | Reações de backrow do oponente | Caminhos dos diffs | Branches não suportados (TLS, por família) | Falhas por classe | Saídas da Main Phase | Perfis do planner |",
+    "| --- | --- | ---: | --- | --- | --- | --- | --- |");
   for (const [preset, diagnostics] of Object.entries(summary.diagnostics?.byPreset ?? {})) {
     if (!diagnostics.duels) continue;
-    lines.push(`| ${cell(preset)} | ${cell(counterText(diagnostics.mismatchBySeverity))} | ${cell(counterText(diagnostics.mismatchByPath, 4))} | ` +
+    const { [BACKROW_REACTION_SEVERITY]: backrowReactions = 0, ...otherSeverities } = diagnostics.mismatchBySeverity;
+    lines.push(`| ${cell(preset)} | ${cell(counterText(otherSeverities))} | ${backrowReactions} | ${cell(counterText(diagnostics.mismatchByPath, 4))} | ` +
       `${cell(counterText(diagnostics.unsupported.tlsByFamily))} | ${cell(counterText(diagnostics.failedActions.byClass))} | ` +
       `${cell(counterText(diagnostics.mainPhaseExits))} | ${cell(counterText(diagnostics.plannerProfiles, 3))} |`);
   }
+  const failureMarks = Object.entries(summary.diagnostics?.byPreset ?? {})
+    .filter(([, diagnostics]) => diagnostics.duels && Object.keys(diagnostics.failureMarks).length)
+    .map(([preset, diagnostics]) => `${preset} (${counterText(diagnostics.failureMarks)})`);
+  lines.push("", `Marcas em falhas de execução (prefixo \`${FAILED_MARK_PREFIX}\`, fora da soma das divergências): ` +
+    `${failureMarks.length ? failureMarks.join("; ") : "nenhuma"}.`);
   const presetMetrics = summary.presetMetrics;
   if (presetMetrics && (presetMetrics["techzero-combo"] || presetMetrics.lethal)) {
     lines.push("", "## Métricas opcionais por preset", "");
@@ -959,7 +1197,7 @@ export function renderSummaryMarkdown(summary: BenchmarkSummary): string {
       if (latency.count) lines.push(`| ${cell(preset)} | ${latency.count} | ${numberText(latency.mean)} | ${numberText(latency.p50)} | ${numberText(latency.p95)} | ${numberText(latency.max)} |`);
     }
   }
-  lines.push("");
+  lines.push(...invarianceLines, "");
   return lines.join("\n");
 }
 
@@ -980,7 +1218,7 @@ function assertOutput(file: string, inputs: readonly string[]): string {
 }
 
 function runInputs(dir: string): string[] {
-  return [HEADER_FILE, DUELS_FILE, JOURNAL_FILE, RUN_END_FILE].map(name => path.join(path.resolve(dir), name));
+  return [HEADER_FILE, DUELS_FILE, JOURNAL_FILE, RUN_END_FILE, INVARIANCE_FILE].map(name => path.join(path.resolve(dir), name));
 }
 
 function writeOutputs(outputs: ReadonlyArray<[string, string]>): void {
@@ -1016,6 +1254,9 @@ export interface SummarizeRunResult {
 export function summarizeRun(dir: string, options: SummarizeRunOptions = {}): SummarizeRunResult {
   const run = loadRun(dir, options.allowIncomplete === true);
   const summary = computeSummary(run, options);
+  // Only a run with the invariance control has the side file; without it the summary is unchanged.
+  const invarianceFile = path.join(run.dir, INVARIANCE_FILE);
+  if (fs.existsSync(invarianceFile)) summary.invariance = summarizeInvariance(INVARIANCE_FILE, readInvarianceFile(invarianceFile), run.records);
   const markdown = renderSummaryMarkdown(summary);
   const inputs = runInputs(dir);
   const jsonFile = assertOutput(options.json ?? path.join(run.dir, SUMMARY_JSON_FILE), inputs);

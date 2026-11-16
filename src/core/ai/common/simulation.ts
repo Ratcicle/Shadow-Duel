@@ -5,7 +5,8 @@ import { expireFaceupDeclaredValues, restoreFaceupStatuses } from "../../Card.js
 import { expireEffectNegation } from "../../effects/negation.js";
 import { expireLevelModifications } from "../../effects/actions/stats.js";
 import type { SimulatedEquipHostExitBinding } from "./zones.js";
-import { hasEquipHostExitProof, matchesEquipHostExitSourcePresence } from "../../effects/triggers/collectors/shared.js";
+import { hasEquipHostExitProof, matchesAfterSummonTrigger, matchesEquipHostExitSourcePresence } from "../../effects/triggers/collectors/shared.js";
+import { canTriggerAfterSummonFromHand } from "../../effects/triggers/collectors/afterSummon.js";
 import { getImmediateEventEffectValidationError, isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
 import { captureProcedureTriggerConditions } from "../../effects/conditions/runtime.js";
 import { matchesCardFilter, type RuntimeCardFilter } from "../../effects/filters/cardFilters.js";
@@ -20,7 +21,7 @@ import { getGraveyardBanishBurnEntries } from "./simulatedActions/destruction.js
 import { collectProcedureCounterSources, getCounterValue, setCounterValue } from "./counters.js";
 import { prepareSimulatedFieldCounterPayment } from "./simulatedActions/counters.js";
 import { getBaseLpCost } from "../../effects/costs/lpCost.js";
-import { resolveActionPlayer, resolveSimulatedLpCost } from "./simulatedActions/shared.js";
+import { chooseSpecialSummonPosition, resolveActionPlayer, resolveSimulatedLpCost } from "./simulatedActions/shared.js";
 import { resolveTargetsForAction, captureSimulatedReferences, captureSimulatedSourceSnapshot, isSimulatedReferencePresenceValid, isSimulatedSourcePresenceValid, areRequiredContextualReferencesValid, recordCompletedSimulatedSummon } from "./simulatedActions/shared.js";
 import { buildEventReferenceContext } from "../../effects/targeting/references.js";
 import { appendSimulatedZoneCard } from "./zones.js";
@@ -49,7 +50,7 @@ import { processSimulatedDelayedActions, cleanupSimulatedEndTurn, cleanupExpired
 import { getAvailableFieldSlots } from "../../game/zones/placement.js";
 import { canActivateTrap } from "../../game/spellTrap/verification.js";
 import { resolvePerspectiveSlotForPlayer } from "./perspective.js";
-import { resolvePlanningOwnerPolicy } from "./planningExecution.js";
+import { resolvePlanningExecutionState, resolvePlanningOwnerPolicy } from "./planningExecution.js";
 import type {
   SimulatedActionContextData,
   SimulatedActionOptions,
@@ -160,7 +161,6 @@ interface SimulatedSelectionOptionsInput
     | "chooseSpecialSummonPosition"
   > {
   archetype?: string | null;
-  preferDefense?: boolean;
   changedCard?: SimulatedCardState | null;
   actionContext?: SimulatedSelectionActionContext;
   activationContext?: AIActivationContext | null | undefined;
@@ -280,7 +280,6 @@ interface SimulatedEventStrategyCapabilities {
 
 interface BuiltSimulatedSelectionOptions extends SimulatedActionOptions {
   archetype?: string | null;
-  preferDefense?: boolean;
   specialSummonPositions?: object;
 }
 
@@ -295,7 +294,6 @@ interface SimulatedEventDispatchOptions
   > {
   activationContext?: AIActivationContext | null | undefined;
   archetype?: string | null;
-  preferDefense?: boolean;
   maxSimulatedEventDepth?: number;
   strategy?: unknown;
   rankSearchCandidates?: unknown;
@@ -531,7 +529,6 @@ function buildSelectionOptions(
   return {
     ...options,
     archetype: options.archetype,
-    preferDefense: options.preferDefense,
     actionContext,
     activationContext: activationContext as SimulatedActionOptions["activationContext"],
     targetPreferences:
@@ -1300,6 +1297,10 @@ function matchesSimulatedEventEffect(
   }
 
   if (eventName === "after_summon") {
+    // Runtime collector rule: a card in the Hand answers only through
+    // `self_in_hand` or a nested `conditional_summon_from_hand`. Temporary
+    // registrations are collected apart, without this gate.
+    if (!isTemporaryRegistration && sourceZone === "hand" && !canTriggerAfterSummonFromHand(effect)) return false;
     if (effect.triggerPlayer === "self" && eventRole !== "self") return false;
     if (effect.triggerPlayer === "opponent" && eventRole !== "opponent") return false;
     if (effect.requireSelfAsSummoned === true && sourceCard !== eventCard) {
@@ -1316,6 +1317,16 @@ function matchesSimulatedEventEffect(
     if (summonFrom && payload.fromZone && !matchesZoneFilter(payload.fromZone, summonFrom)) {
       return false;
     }
+    // Runtime `condition` gate (`self_in_hand` and `triggerArchetype`): the
+    // shared after_summon predicate reads it after the gates above and before
+    // `conditions`. Only `condition` is handed over, since the gates above
+    // already mirror the other fields. Temporary registrations skip it, as in
+    // the runtime.
+    const condition = effect.condition;
+    if (!isTemporaryRegistration && condition && !matchesAfterSummonTrigger({ condition }, {
+      sourceCard, owner: sourceEntry.player, summonedCard: eventCard, summoner: eventPlayer,
+      method: payload.method, fromZone: payload.fromZone, sourceZone, phase: state.phase,
+    })) return false;
   }
 
   if (eventName === "lp_change") {
@@ -1476,6 +1487,17 @@ function hasRequiredSimSelections(
   });
 }
 
+/**
+ * A trigger reads only the position preferences its owner's strategy built for
+ * it. The runtime starts its context clean, so those of the effect that caused
+ * the event do not reach it; this key overwrites any inherited value. Without a
+ * planning policy a temporary event effect gets an empty strategy context, so it
+ * reads no preference at all, unlike the runtime.
+ */
+function ownSummonPositions(strategyActionContext: SimulatedSelectionActionContext | undefined) {
+  return { specialSummonPositions: strategyActionContext?.specialSummonPositions };
+}
+
 function buildSimEventActionContext(
   eventName: string,
   payload: SimulatedEventPayloadView = {},
@@ -1621,7 +1643,8 @@ function withResolutionCompletions(state: SimulatedRuntimeState, queue: Simulate
 
 /** Plans committed within the current simulated trigger opportunity; never persistent state. */
 export function getSimulatedPendingEffectPlans(state: object): readonly SimulatedPendingEffectPlan[] {
-  return simulatedPendingEffectPlans.get(state) || [];
+  // A planning owner view reads the plans of the simulated state behind it.
+  return simulatedPendingEffectPlans.get(state) || simulatedPendingEffectPlans.get(resolvePlanningExecutionState(state)) || [];
 }
 
 function resolveQueuedSimulatedTriggers(state: SimulatedRuntimeState, queue: SimulatedQueuedTrigger[],
@@ -1913,6 +1936,7 @@ function dispatchSimulatedEvent(
         const actionContext = buildSimEventActionContext(eventName, payload, {
           ...(ownerOptions.actionContext || {}),
           ...(strategyContext.actionContext || {}),
+          ...ownSummonPositions(strategyContext.actionContext),
           player: sourceEntry.player,
           opponent: sourceEntry.opponent,
           ...(eventOwner ? { eventPlayer: eventOwner } : {}),
@@ -2095,6 +2119,7 @@ function dispatchSimulatedEvent(
     const actionContext = buildSimEventActionContext(eventName, payload, {
       ...(ownerOptions.actionContext || {}),
       ...(strategyContext.actionContext || {}),
+      ...ownSummonPositions(strategyContext.actionContext),
       player: owner,
       opponent: getOtherSimPlayer(state, owner),
     });
@@ -2786,13 +2811,16 @@ export function applyGenericSimulatedMainPhaseAction<
       for (const tribute of tributeCards) {
         const wasFaceupBeforeMove = tribute.isFacedown !== true;
         const effectsNegatedAtFieldExit = tribute.effectsNegated === true;
+        const receipt: { value: import("./zones.js").SimulatedMoveReceipt | null } = { value: null };
         if (!player.field.includes(tribute) ||
-            !moveCardToZone(player, tribute, "graveyard", player, { state })) {
+            !moveCardToZone(player, tribute, "graveyard", player, { state,
+              ...(tributeOptions.emitSimulatedEvent ? { emitSimulatedEvent: tributeOptions.emitSimulatedEvent } : {}),
+              onMoveCommitted: result => { receipt.value = result; } })) {
           tributeCostComplete = false;
           break;
         }
         emitSimulatedMove(tribute, state, player, player, "field", wasFaceupBeforeMove,
-          effectsNegatedAtFieldExit, tributeOptions, "tribute_summon_cost", false);
+          effectsNegatedAtFieldExit, tributeOptions, "tribute_summon_cost", false, receipt.value);
       }
       if (!tributeCostComplete) {
         resolveDeferredEvents(deferredTributeEvents);
@@ -3286,7 +3314,6 @@ export function applyGenericSimulatedMainPhaseAction<
         selfId: options.selfId || "bot",
         options: {
           ...selectionOptions,
-          preferDefense: !targetPreference,
           targetPreference,
           opponentField: state.player?.field || [],
           opponentLp: state.player?.lp || 0,
@@ -3433,13 +3460,17 @@ export function applyGenericSimulatedMainPhaseAction<
       if (!ascensionCard) break;
       if (!checkSimulatedAscension(state, material, ascensionCard).ok) break;
       if (!canSimulatedSpecialSummon(ascensionCard, player, "ascension", "extraDeck")) break;
-      player.field.splice(materialIndex, 1);
-      appendSimulatedZoneCard(player.graveyard, material);
+      // As in the runtime, a position left free goes through the chooser, and
+      // that happens before the material is paid.
+      const position = chooseSpecialSummonPosition(ascensionCard, {
+        position: action.position || ascensionCard.ascension?.position || "choice",
+      }, state, player, selectionOptions);
+      // Runtime pays the material through moveCard: the field-exit cleanup
+      // retires its aura contributions and sends attached equips along.
+      if (!moveCardToZone(player, material, "graveyard", player, { state })) break;
       if (extraIndex >= 0) player.extraDeck.splice(extraIndex, 1);
       const summoned = Object.assign(ascensionCard, {
-        position:
-          (action.position || ascensionCard.ascension?.position ||
-            "attack") as NonNullable<SimulatedCardState["position"]>,
+        position,
         isFacedown: false,
         hasAttacked: false,
         attacksUsedThisTurn: 0,
@@ -3562,5 +3593,9 @@ export function applyGenericSimulatedMainPhaseAction<
       break;
   }
 
+  // The runtime board update after a player's action reconciles every
+  // continuous producer, stat auras and then status passives; position
+  // changes, flips and summons above may not reach a refresh.
+  refreshSimulatedFieldAuras(state);
   return state;
 }

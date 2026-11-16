@@ -298,15 +298,17 @@ for (const actor of ["player", "bot"] as const) {
 
   test(`Kaiser uses the levels of cards actually recycled including Synchros (${actor})`, t => {
     const { bot, botGame, make } = scenario(t, actor);
-    const raptor = make(505), catapult = make(502), kaiser = make(513);
+    const raptor = make(505), catapult = make(502), kaiser = make(513), slasher = make(510);
     placeFieldCards(bot.field, raptor, catapult);
     bot.extraDeck.push(kaiser);
-    bot.graveyard.push(make(510));
+    bot.graveyard.push(slasher);
     const state = bot.cloneGameState(botGame);
     applyGenericSimulatedMainPhaseAction(state, { type: "synchro", synchroInstanceId: kaiser.instanceId,
       materialInstanceIds: [raptor.instanceId, catapult.instanceId], position: "attack" }, {
       enableSimulatedEvents: true,
       shouldActivateEffect: ({effect}) => effect.id === "tech_zero_turbocharge_kaiser_synchro_recycle_buff",
+      strategy: { buildActivationContextForEffect: () => ({ decisions: { selections: {
+        tech_zero_turbocharge_kaiser_recycle_targets: [raptor.instanceId, catapult.instanceId, slasher.instanceId] } } }) },
     });
     assert.equal(required(state.bot.field.find(card => card.id === 513)).atk, 3100);
     assert.equal(state.bot.deck.length, 2);

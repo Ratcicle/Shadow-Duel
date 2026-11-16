@@ -467,6 +467,8 @@ export interface TemporaryEventEffect {
 export interface TriggerGamePort {
   /** Trigger confirmations outside the SEGOC are recorded broker choices. */
   requestDecision?: DecisionBrokerPort["requestDecision"];
+  /** An AI controller's activation choice is recorded where it is collected. */
+  decisionBroker?: Pick<DecisionBrokerPort, "requestDecisionSync"> | null;
   materialDuelStats?: MaterialDuelStats;
   player: TriggerRuntimePlayer;
   bot: TriggerRuntimePlayer;

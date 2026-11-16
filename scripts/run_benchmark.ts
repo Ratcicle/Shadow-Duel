@@ -16,6 +16,8 @@ import {
   DUELS_FILE,
   DUEL_RECORD_VERSION,
   HEADER_FILE,
+  INVARIANCE_FILE,
+  INVARIANCE_SWAP_RULE,
   JOURNAL_FILE,
   LOGS_DIRECTORY,
   PLANNER_MODES,
@@ -42,6 +44,7 @@ import {
   parseBenchmarkCase,
   parseDuelRecord,
   parseEnvironmentDescription,
+  parseInvarianceRecord,
   parseRunConfig,
   parseRunHeader,
   recordLine,
@@ -59,6 +62,7 @@ import {
   type DuelRecordV1,
   type EnvironmentDescription,
   type GuardLimits,
+  type InvarianceCaseRecord,
   type JsonValue,
   type PlannerMode,
   type PlannerModeSource,
@@ -119,6 +123,8 @@ interface RunOptions {
   plannerModeSource: PlannerModeSource;
   presetMetrics: PresetMetricId[];
   strategyOverrides: Record<string, string>;
+  /** --invariance-control: hidden-information reruns of every live root (diagnostic only, phase 2.3 L09). */
+  invarianceControl: boolean;
   allowDirty: boolean;
   workers: number;
   order: RunOrder;
@@ -127,7 +133,7 @@ interface RunOptions {
   dryRun: boolean;
 }
 
-const BOOLEAN_FLAGS: ReadonlySet<string> = new Set(["--dry-run", "--allow-dirty", "--guard-observe"]);
+const BOOLEAN_FLAGS: ReadonlySet<string> = new Set(["--dry-run", "--allow-dirty", "--guard-observe", "--invariance-control"]);
 const VALUE_FLAGS: ReadonlySet<string> = new Set([
   "--seeds", "--seed-base", "--presets", "--cases", "--profile", "--max-turns", "--timeout-ms", "--guard-decisions",
   "--guard-actions", "--guard-progress", "--planner-mode", "--planner-turn-mode", "--planner-mode-source",
@@ -240,6 +246,7 @@ export function parseRunArgs(argv: readonly string[]): RunOptions {
     plannerModeSource: choice(value("--planner-mode-source") ?? "arena", PLANNER_MODE_SOURCES, "--planner-mode-source"),
     presetMetrics,
     strategyOverrides: overrides,
+    invarianceControl: flags.has("--invariance-control"),
     allowDirty: flags.has("--allow-dirty"),
     workers: integerOption("--workers", defaultWorkers()),
     order: choice(value("--order") ?? "forward", ["forward", "reverse"] as const, "--order"),
@@ -389,6 +396,8 @@ function buildConfig(options: RunOptions, environment: EnvironmentDescription): 
     presetMetrics: PRESET_METRIC_IDS.filter(id => options.presetMetrics.includes(id)),
     strategyOverrides: sortedRecord(options.strategyOverrides),
     caseFilter: options.cases,
+    // Off, the key is absent: configDigest and the runId stay those of a run without the flag.
+    ...(options.invarianceControl ? { invarianceControl: { swap: INVARIANCE_SWAP_RULE } } : {}),
   };
   return { config, cases };
 }
@@ -414,6 +423,7 @@ function optionsFromHeader(header: RunHeader, workers: number, order: RunOrder):
     plannerModeSource: config.planner.modeSource,
     presetMetrics: [...config.presetMetrics],
     strategyOverrides: { ...config.strategyOverrides },
+    invarianceControl: config.invarianceControl !== undefined,
     allowDirty: header.identity.dirty,
     workers,
     order,
@@ -474,8 +484,16 @@ interface FatalReply {
   detail: string;
 }
 
+/** A case result; `invariance` comes only from a run with the invariance control. */
+interface ResultReply {
+  type: "result";
+  record: DuelRecordV1;
+  log: string;
+  invariance: InvarianceCaseRecord | null;
+}
+
 type WorkerReply =
-  | { type: "result"; record: DuelRecordV1; log: string }
+  | ResultReply
   | { type: "description"; description: EnvironmentDescription }
   | FatalReply;
 
@@ -483,7 +501,12 @@ function parseWorkerReply(value: unknown): WorkerReply {
   const message = object(value, "worker message");
   switch (message.type) {
     case "result":
-      return { type: "result", record: parseDuelRecord(message.record, "worker record"), log: string(message.log, "worker log", true) };
+      return {
+        type: "result",
+        record: parseDuelRecord(message.record, "worker record"),
+        log: string(message.log, "worker log", true),
+        invariance: message.invariance === undefined ? null : parseInvarianceRecord(message.invariance, "worker invariance"),
+      };
     case "description":
       return { type: "description", description: parseEnvironmentDescription(message.description) };
     case "fatal":
@@ -588,6 +611,8 @@ interface PoolOptions {
   config: RunConfig;
   workers: number;
   journalFile: string;
+  /** Side file of the invariance control; null when the run does not carry it. */
+  invarianceFile: string | null;
   logsDirectory: string;
   onRecord(record: DuelRecordV1): void;
   progressBase: number;
@@ -614,7 +639,9 @@ function runPool(options: PoolOptions): Promise<PoolOutcome> {
     let settled = false;
     const startedAt = performance.now();
 
-    const append = (record: DuelRecordV1, entry: BenchmarkCase, logText: string) => {
+    const append = (record: DuelRecordV1, entry: BenchmarkCase, logText: string, invariance: InvarianceCaseRecord | null = null) => {
+      // Before the journal line: a resumed case may repeat its side line, and readers keep the last one.
+      if (options.invarianceFile && invariance) fs.appendFileSync(options.invarianceFile, `${canonicalJson(invariance)}\n`, "utf8");
       fs.writeSync(fd, recordLine(record));
       fs.fsyncSync(fd);
       if (logText.trim()) {
@@ -665,7 +692,7 @@ function runPool(options: PoolOptions): Promise<PoolOutcome> {
       const child = forkWorker("--worker");
       running.add(child);
       const stderr: Buffer[] = [];
-      let reply: { record: DuelRecordV1; log: string } | null = null;
+      let reply: ResultReply | null = null;
       // `failure` may enter the record (first line only); `failureDetail` only reaches logs/.
       let failure: string | null = null;
       let failureDetail: string | null = null;
@@ -680,7 +707,10 @@ function runPool(options: PoolOptions): Promise<PoolOutcome> {
           const message = parseWorkerReply(value);
           if (message.type === "result") {
             if (!recordMatchesCase(message.record, entry)) throw new RunnerError(`o worker devolveu um registro de ${message.record.caseId}`);
-            reply = { record: message.record, log: message.log };
+            if (message.invariance && message.invariance.caseId !== entry.caseId) {
+              throw new RunnerError(`o worker devolveu o controle de invariância de ${message.invariance.caseId}`);
+            }
+            reply = message;
           } else if (message.type === "fatal") {
             failure = message.message;
             failureDetail = message.detail;
@@ -698,14 +728,14 @@ function runPool(options: PoolOptions): Promise<PoolOutcome> {
           return;
         }
         const residual = Buffer.concat(stderr).toString("utf8");
-        const result: { record: DuelRecordV1; log: string } | null = reply;
+        const result: ResultReply | null = reply;
         if (result) {
           const logText = [result.log, residual ? `--- stderr ---\n${residual}` : ""].filter(Boolean).join("\n");
           if (!anyResult) {
             anyResult = true;
             for (const held of heldLost.splice(0)) append(held.record, held.entry, held.logText);
           }
-          append(result.record, entry, logText);
+          append(result.record, entry, logText, result.invariance);
         } else {
           const reason = watchdogFired
             ? `Worker encerrado pelo watchdog após ${options.config.timeoutMs + WATCHDOG_GRACE_MS} ms.`
@@ -816,6 +846,7 @@ async function runCommand(argv: readonly string[]): Promise<number> {
     config,
     workers: effective.workers,
     journalFile,
+    invarianceFile: config.invarianceControl === undefined ? null : path.join(outDir, INVARIANCE_FILE),
     logsDirectory: path.join(outDir, LOGS_DIRECTORY),
     onRecord: record => { done.set(record.caseId, record); },
     progressBase: cases.length - pending.length,
@@ -1374,8 +1405,10 @@ async function caseWorker(): Promise<void> {
     workerMs: round(performance.now(), 0),
     partial,
   });
+  // The control's tallies travel beside the record, never inside it.
+  const invariance = game?.observer.invarianceRecord(entry) ?? null;
   game?.dispose("benchmark_case_end");
-  sendAndExit({ type: "result", record, log: capture.rawLines.join("\n") });
+  sendAndExit({ type: "result", record, log: capture.rawLines.join("\n"), ...(invariance ? { invariance } : {}) });
 }
 
 // ── Entry point ────────────────────────────────────────────────────────────

@@ -73,9 +73,16 @@ interface ControlCardCondition {
   readonly zone?: ZoneInput;
 }
 
+/** Player view read by the Extra Deck to Hand rule; the simulation shares it. */
+interface ExtraDeckToHandContext {
+  readonly player?: {
+    readonly fieldSpell?: { readonly name?: string | null | undefined } | null | undefined;
+  } | null | undefined;
+}
+
 function checkControlCardCondition(
   condition: ControlCardCondition | null | undefined,
-  ctx: EffectContext,
+  ctx: ExtraDeckToHandContext,
 ): boolean {
   if (!condition || condition.type !== "control_card") return false;
 
@@ -92,9 +99,9 @@ function checkControlCardCondition(
   return Array.isArray(zone) && zone.some((card) => card?.name === cardName);
 }
 
-function shouldAllowExtraDeckMonsterToHand(
-  action: MoveAction,
-  ctx: EffectContext,
+export function shouldAllowExtraDeckMonsterToHand(
+  action: Pick<MoveAction, "allowExtraDeckMonsterToHand" | "allowExtraDeckMonsterToHandIf">,
+  ctx: ExtraDeckToHandContext,
 ): boolean {
   if (action.allowExtraDeckMonsterToHand === true) return true;
   if (action.allowExtraDeckMonsterToHandIf) {

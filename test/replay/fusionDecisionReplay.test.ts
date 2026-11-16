@@ -196,7 +196,8 @@ for (const seat of ["player", "bot"] as const) {
       const { game, replay, fusion, used } = await recordFusion(t, seat, mode);
       assert.deepEqual(replay.commands.map(command => command.type), ["set_phase", "activate_card"]);
       assert.deepEqual(replay.decisions.map(decision => decision.kind),
-        ["field_placement", "fusion_select", ...(mode === "unique" ? [] : mode === "human-retry" ? ["fusion_materials", "fusion_materials"] : ["fusion_materials"]), "choice", "field_placement"]);
+        ["field_placement", "fusion_select", ...(mode === "unique" ? [] : mode === "human-retry" ? ["fusion_materials", "fusion_materials"] : ["fusion_materials"]), "choice", "field_placement",
+          ...(mode === "human" || mode === "human-retry" || mode === "destination" ? [] : ["trigger_activation"])]);
       assert.deepEqual(replay.decisions.find(decision => decision.kind === "fusion_select")?.value,
         { selections: { fusion_choice: [{ duelCardId: fusion.duelCardId, cardId: fusion.id, effectId: null, candidateKey: null, key: null }] } });
       if (mode !== "unique") assert.deepEqual([...replay.decisions].reverse().find(decision => decision.kind === "fusion_materials")?.value,

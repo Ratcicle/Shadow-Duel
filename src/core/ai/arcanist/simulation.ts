@@ -1,6 +1,8 @@
 // Arcanist simulation policy and compatibility hooks; execution delegates to shared primitives.
 import type ArcanistStrategy from "../ArcanistStrategy.js";
 import { refreshSimulatedFieldAuras } from "../common/zones.js";
+import { getPerspectivePlayers } from "../common/perspective.js";
+import { normalizeCount, selectRuntimeOptionalCount } from "../common/targetSelection.js";
 import { isPlanningActionPresenceCurrent, resolvePlanningSourceIndex } from "../common/actionIdentity.js";
 import { applySimulatedActions } from "../common/simulatedActions/index.js";
 import { storeSimulatedBlueprintAfterResolution } from "../common/simulatedActions/flow.js";
@@ -14,8 +16,8 @@ import {
   emitSimulatedCardEquipped, emitSimulatedEffectActivated,
 } from "../common/simulation.js";
 import {
-  getCardInstanceId, getSimStateSignature, pushToZone, removeFromZone,
-  useSimOpt as useSimOptBucket,
+  canUseSimulatedEffectUsage, getCardInstanceId, getSimStateSignature,
+  markSimulatedEffectUsage, pushToZone, removeFromZone,
 } from "../common/simStateUtils.js";
 import { ARCANIST_NAMES, getInkCounters, isArcanistMonster, isArcanistSpell } from "./knowledge.js";
 import { evaluateArcanistCardValue } from "./scoring.js";
@@ -67,10 +69,6 @@ function bestPreferredCard<Card extends StrategyCard>(candidates: Card[] = [], p
       };
       return score(b, idB) - score(a, idA);
     })[0];
-}
-
-function useSimOpt(state: AiStateShape, key: string) {
-  return useSimOptBucket(state, key, "_simArcanistOptUsed");
 }
 
 export function getActivationTargetPreferences(action: PreferenceAction): TargetPreferences {
@@ -154,9 +152,13 @@ export function simulateArcanistAfterSummon(this: ArcanistStrategy, { state, act
     if (newCard.isFacedown) return;
 
     if (newCard?.name === ARCANIST_NAMES.APPRENTICE) {
-      if (state._simArcanistApprenticeSearchUsed) return;
+      const effect = newCard.effects?.find(entry => entry.id === "arcanist_apprentice_search_spell");
+      if (!effect) return;
       const candidates = (player.deck || []).filter(isArcanistSpell);
       if (candidates.length === 0) return;
+      // Like the runtime, the search reads the turn's actual usage: the runtime
+      // usage projected into the planning copy plus this line's own uses.
+      if (!canUseSimulatedEffectUsage(state, effect, newCard, player.id, true)) return;
       const ranked = this.rankSearchCandidates(
         candidates,
         {
@@ -174,9 +176,9 @@ export function simulateArcanistAfterSummon(this: ArcanistStrategy, { state, act
       );
       const chosen = ranked?.[0] || candidates[0];
       if (!chosen) return;
+      markSimulatedEffectUsage(state, effect, newCard, player.id, true);
       removeFromZone(player, "deck", chosen);
       pushToZone(player, "hand", chosen);
-      state._simArcanistApprenticeSearchUsed = true;
       return;
     }
 
@@ -189,9 +191,19 @@ export function simulateArcanistAfterSummon(this: ArcanistStrategy, { state, act
 
 
 export function simulateMasterOfMirrorsNormalSummon(this: ArcanistStrategy, state: SimulatedRuntimeState, player: SimulatedPlayerState, source: SimulatedCardState, action: AIAction) {
-    if (!useSimOpt(state, "master_mirrors_arcanist_shuffle_draw")) return;
+    // The declared trigger supplies its once-per-turn usage, and its target the
+    // range the runtime selects from.
+    const effect = source.effects?.find(entry => entry.id === "master_mirrors_arcanist_shuffle_draw");
+    const target = effect?.targets?.find(entry => entry.id === "master_mirrors_arcanist_spell_targets");
+    if (!effect || !target) return;
+    const count = normalizeCount(target.count, 1);
     const candidates = (player.graveyard || []).filter(isArcanistSpell);
-    if (candidates.length === 0) return;
+    // Like the runtime collector, the trigger needs the declared minimum of
+    // targets and the turn's remaining usage (the runtime usage projected into
+    // the planning copy plus this line's own uses) before it spends that usage.
+    if (candidates.length < count.min ||
+        !canUseSimulatedEffectUsage(state, effect, source, player.id, true)) return;
+    markSimulatedEffectUsage(state, effect, source, player.id, true);
     const preference =
       getActivationTargetPreferences(action).master_mirrors_arcanist_spell_targets || {};
     const ordered =
@@ -204,14 +216,20 @@ export function simulateMasterOfMirrorsNormalSummon(this: ArcanistStrategy, stat
         },
         { game: state, player, source, action },
       ) || candidates;
-    const chosen = ordered
+    const ranked = ordered
       .slice()
       .sort((a, b) => {
         const preferredA = (preference.preferredNames || []).includes(a?.name!) ? 1 : 0;
         const preferredB = (preference.preferredNames || []).includes(b?.name!) ? 1 : 0;
         return preferredB - preferredA;
-      })
-      .slice(0, Math.min(3, ordered.length));
+      });
+    // Take as many Spells as the runtime AutoSelector takes for the bot from
+    // the declared range (they return to the owner's Deck, a benefit); the
+    // name preference above only orders them.
+    const selfId = player === state.player ? "player" : "bot";
+    const { opponent } = getPerspectivePlayers(state, selfId);
+    const chosen = ranked.slice(0, selectRuntimeOptionalCount(target, ranked,
+      count, player, opponent, "benefit"));
     for (const card of chosen) {
       removeFromZone(player, "graveyard", card);
       pushToZone(player, "deck", card);
@@ -220,7 +238,7 @@ export function simulateMasterOfMirrorsNormalSummon(this: ArcanistStrategy, stat
     // until the real effect reveals the card instead of predicting its identity.
     applySimulatedActions({
       state,
-      selfId: player === state.player ? "player" : "bot",
+      selfId,
       actions: [
         { type: "shuffle_deck", player: "self" },
         { type: "draw", player: "self", amount: 1 },

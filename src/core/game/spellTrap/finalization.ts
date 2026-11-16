@@ -1,4 +1,8 @@
-import { expireFaceupDeclaredValues, restoreFaceupStatuses } from "../../Card.js";
+import {
+  expireFaceupDeclaredValues,
+  getCardLocationVersion,
+  restoreFaceupStatuses,
+} from "../../Card.js";
 import { expireEffectNegation } from "../../effects/negation.js";
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/game/spellTrap/finalization.js
@@ -19,7 +23,8 @@ import type { CanonicalZone } from "../../contracts/zones.js";
 type SpellTrapActivationZone = "spellTrap" | "fieldSpell";
 type RuntimeCardInstanceId = string | number | null;
 
-interface SpellTrapFinalizationOverride {
+/** The destination a resolved effect chose for its own Spell/Trap source. */
+export interface SpellTrapFinalizationOverride {
   type: "set_source" | "default";
   sourceCardId?: number | null;
   sourceInstanceId?: string | number | null;
@@ -28,6 +33,8 @@ interface SpellTrapFinalizationOverride {
   reason?: string | null;
   ownerId?: string | null;
   activationZone?: SpellTrapActivationZone;
+  /** The source's location when the finalization was deferred. */
+  sourceLocationVersion?: number;
 }
 
 type FinalizableCard = GameCard & {
@@ -147,8 +154,16 @@ function storePendingSpellTrapFinalization(
     ...override,
     ownerId: owner.id || card.owner || null,
     activationZone: activationZone || "spellTrap",
+    sourceLocationVersion: getCardLocationVersion(card),
   };
   return true;
+}
+
+/** What a Spell/Trap's pending finalization still waits for, if one is pending. */
+export function getPendingSpellTrapFinalizationDeferral(
+  card: FinalizableCard | null | undefined,
+): string | null {
+  return card?.pendingSpellTrapFinalization?.deferUntil || null;
 }
 
 interface EquipFinalizationCard {
@@ -205,8 +220,9 @@ async function applyDefaultSpellTrapFinalization(
     awaitEvents: true,
     deferCardToGraveTriggerResolution: activationContext.chainId != null,
   });
-  const occurrence = moveResult.deferredCardToGraveTriggerPackage?.occurrence;
-  if (occurrence) game.queueTriggerOccurrence?.(occurrence);
+  for (const triggerPackage of moveResult.deferredCardToGraveTriggerPackages || []) {
+    if (triggerPackage.occurrence) game.queueTriggerOccurrence?.(triggerPackage.occurrence);
+  }
   game.updateBoard?.();
   return true;
 }
@@ -320,7 +336,13 @@ export async function resolvePendingSpellTrapFinalization(
 
   delete card.pendingSpellTrapFinalization;
 
-  if (!owner.spellTrap?.includes?.(card)) {
+  // Phase 2.3 L25b: as the Chain's own finalization, only the permanence that
+  // deferred it receives it; a source that left its zone already has one.
+  if (
+    !owner.spellTrap?.includes?.(card) ||
+    (pending.sourceLocationVersion !== undefined &&
+      getCardLocationVersion(card) !== pending.sourceLocationVersion)
+  ) {
     return false;
   }
 

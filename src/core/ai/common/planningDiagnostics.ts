@@ -159,7 +159,10 @@ function summarizeCounters(card: PlanningDiagnosticCardInput): string[] {
       : typeof counters === "object"
         ? Object.entries(counters)
         : [];
+  // The runtime deletes a counter that reaches zero (Card.removeCounter): a
+  // zero entry describes the same card as an absent one.
   return entries
+    .filter(([, value]) => value !== 0)
     .map(([key, value]) => `${key}:${value}`)
     .sort();
 }
@@ -589,8 +592,42 @@ function comparePlayer(
   compareField(`${prefix}.deckSize`, expected.deckSize, actual.deckSize, diffs, "hand_deck_mismatch");
 }
 
+const BACKROW_ZONES = ["spellTrap", "fieldSpell"] as const;
+
+function backrowCards(
+  player: Partial<PlanningPlayerSummary> | undefined,
+  zone: (typeof BACKROW_ZONES)[number],
+): PlanningCardSummary[] {
+  const cards = player?.[zone];
+  if (Array.isArray(cards)) return cards;
+  return cards ? [cards] : [];
+}
+
+/**
+ * A card the plan still expected face down in the opponent's backrow (Spell &
+ * Trap or Field Zone) left that zone or was revealed in the actual state: the
+ * opponent responded with it, which the planner does not model. Reads only the
+ * instance and the face of each card, both kept by the public mask.
+ */
+export function opponentBackrowReacted(
+  expected: PlanningStateSummary | null | undefined,
+  actual: PlanningStateSummary | null | undefined,
+): boolean {
+  if (!expected || !actual) return false;
+  return BACKROW_ZONES.some((zone) => {
+    const stillHidden = backrowCards(actual.opponent, zone).filter((card) => card.faceDown);
+    return backrowCards(expected.opponent, zone).some((card) =>
+      card.faceDown &&
+      card.instanceId !== null &&
+      !stillHidden.some((other) => other.instanceId === card.instanceId)
+    );
+  });
+}
+
 function classifyDiff(
-  diffs: readonly PlanningSummaryDiff[] = [],
+  diffs: readonly PlanningSummaryDiff[],
+  expected: PlanningStateSummary,
+  actual: PlanningStateSummary,
 ): PlanningDiffSeverity {
   if (!diffs.length) return "none";
   if (diffs.every((diff) => diff.severity === "minor")) return "minor";
@@ -599,7 +636,11 @@ function classifyDiff(
     meaningful.length > 0 &&
     meaningful.every((diff) => String(diff.path || "").startsWith("opponent."))
   ) {
-    return "opponent_reaction_mismatch";
+    // Only the opponent diverged: a response from its face-down backrow is kept
+    // apart from every other opponent-only difference.
+    return opponentBackrowReacted(expected, actual)
+      ? "opponent_backrow_reaction"
+      : "opponent_state_mismatch";
   }
   const firstMeaningful = meaningful[0];
   if (firstMeaningful?.severity) return firstMeaningful.severity;
@@ -633,7 +674,7 @@ export function diffPlanningSummaries(
   compareField("turn", expected.turn, actual.turn, diffs, "minor");
   comparePlayer("bot", expected.bot, actual.bot, diffs);
   comparePlayer("opponent", expected.opponent, actual.opponent, diffs);
-  const severity = classifyDiff(diffs);
+  const severity = classifyDiff(diffs, expected, actual);
   return {
     matched: severity === "none" || severity === "minor",
     severity,

@@ -1,4 +1,5 @@
 import { expireFaceupDeclaredValues, restoreFaceupStatuses } from "../../Card.js";
+import { isAI } from "../../Player.js";
 import { clearEffectNegation, expireEffectNegation } from "../../effects/negation.js";
 import { clearLevelModifications, expireLevelModifications, expireFaceupStatBuffs, clearPermanentStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
 import {
@@ -25,11 +26,13 @@ import type {
   SpecialSummonProcedure,
 } from "../../contracts/cards.js";
 import type {
+  DeferredCardToGraveTriggerPackage,
   FullGameHost,
   FieldTransferMoveCardOptions,
   LegacyMoveCardOptions,
   LegacySourceMoveCardOptions,
   MaybePromise,
+  MoveCardActionContext,
   MoveCardOptions,
   MoveCardResult,
   PreparedSummon,
@@ -57,7 +60,11 @@ import {
 import type { SummonMethod, SummonOrigin } from "../../contracts/summon.js";
 import type { ChainSourceZone } from "../../contracts/chainRuntime.js";
 import type { ActionRuntimeCard } from "../../contracts/actionRuntime.js";
-import type { EventCardPresenceSnapshot, EventEquipHostExitBinding } from "../../contracts/events.js";
+import type {
+  EventCardPresenceSnapshot,
+  EventEquipHostExitBinding,
+  EventTriggerOccurrence,
+} from "../../contracts/events.js";
 import { captureEventCardPresence } from "./ownership.js";
 import { reportEngineFault } from "../devTools/faults.js";
 import { captureReplacementPresence, formatReplacementText, replacementPresenceIsCurrent } from "../effects/destructionReplacement.js";
@@ -84,6 +91,19 @@ interface MovementOptions
   skipSendToGraveActionReplacement?: boolean;
   skipSendToGraveReplacement?: boolean;
   equipBindingsAtFieldExit?: readonly EventEquipHostExitBinding[];
+  /**
+   * Internal: the events of an immediate field exit with Equip cleanup. A move
+   * that receives this list collects its card_to_grave and card_moved triggers
+   * into it, and the exit resolves them all as one trigger opportunity.
+   */
+  simultaneousExitEvents?: SimultaneousExitEvent[];
+}
+
+/** One event of an immediate field exit, collected for the exit's single SEGOC. */
+interface SimultaneousExitEvent {
+  eventName: "card_to_grave" | "card_moved";
+  payload: object;
+  occurrence: EventTriggerOccurrence;
 }
 
 type MutableEquipHostExitBinding = Omit<EventEquipHostExitBinding, "equip" | "equipController" | "equipAfterCleanup"> & {
@@ -188,11 +208,24 @@ type MovementHost = Omit<
     payload: unknown,
     options?: unknown,
   ): Promise<MovementEventResult>;
+  /** Resolves an immediate field exit's events as one trigger opportunity. */
+  resolveEventEntries?(
+    eventName: SimultaneousExitEvent["eventName"],
+    payload: object,
+    entries: null,
+    options: { occurrences: EventTriggerOccurrence[] },
+  ): Promise<MovementEventResult>;
+  queueTriggerOccurrence?(occurrence: EventTriggerOccurrence): unknown;
   updateBoard(): MaybePromise<unknown>;
   waitForBoardPresentation?(): Promise<unknown>;
   waitForPresentationDelay?(delayMs: number): Promise<unknown>;
   queueCardAnimation?(intent: ZoneMoveAnimationIntent): void;
-  cleanupTokenReferences(card: GameCard, owner: GamePlayer, bindings?: MutableEquipHostExitBinding[]): Promise<void>;
+  cleanupTokenReferences(
+    card: GameCard,
+    owner: GamePlayer,
+    bindings?: MutableEquipHostExitBinding[],
+    equipCleanup?: EquipHostExitCleanup,
+  ): Promise<void>;
   finishSummonTransaction?(
     transaction: SummonTransaction,
     result?: SummonExecutionResult,
@@ -237,6 +270,7 @@ interface MovementEventResult {
   needsSelection?: boolean;
   selectionContract?: unknown;
   collectedOnly?: boolean;
+  occurrence?: EventTriggerOccurrence | null;
   entries?: unknown[];
   reason?: string | null;
 }
@@ -354,6 +388,105 @@ function retainLocatedSourceZone(
 }
 
 /**
+ * What an Equip cleanup inherits from its host's field exit: the same atomic
+ * event group, action and Chain context, and card_to_grave deferral, so the
+ * Equip's triggers join the host's trigger opportunity. Packages collected
+ * under deferral are appended in event order for the host's caller; an
+ * immediate exit instead collects the Equip's events into its own list.
+ */
+interface EquipHostExitCleanup {
+  atomicGroupId: string | number | null;
+  actionContext: MoveCardActionContext | null;
+  chainId: number | null;
+  linkId: number | null;
+  deferCardToGraveTriggerResolution: boolean;
+  deferredPackages: DeferredCardToGraveTriggerPackage[];
+  simultaneousExitEvents: SimultaneousExitEvent[] | null;
+}
+
+function createEquipHostExitCleanup(
+  hostOptions: MovementOptions,
+  atomicGroupId: string | number | null,
+  deferredPackages: DeferredCardToGraveTriggerPackage[] = [],
+  simultaneousExitEvents: SimultaneousExitEvent[] | null = null,
+): EquipHostExitCleanup {
+  return {
+    atomicGroupId,
+    actionContext: hostOptions.actionContext || null,
+    chainId: hostOptions.chainId ?? null,
+    linkId: hostOptions.linkId ?? null,
+    deferCardToGraveTriggerResolution:
+      hostOptions.deferCardToGraveTriggerResolution === true,
+    deferredPackages,
+    simultaneousExitEvents,
+  };
+}
+
+/** Send one detached Equip Spell to the GY as part of its host's field exit. */
+async function sendEquipToGraveyardAfterHostExit(
+  game: MovementHost,
+  equip: GameCard,
+  equipOwner: GamePlayer,
+  cleanup: EquipHostExitCleanup,
+): Promise<MoveCardResult> {
+  const result = await game.moveCard(equip, equipOwner, "graveyard", {
+    fromZone: "spellTrap",
+    contextLabel: "equipped_host_left_field",
+    atomicGroupId: cleanup.atomicGroupId,
+    actionContext: cleanup.actionContext,
+    chainId: cleanup.chainId,
+    linkId: cleanup.linkId,
+    // Awaiting never resolves the Equip's triggers during the host's exit:
+    // deferral and an immediate exit collect them, and a deferred context
+    // queues them.
+    awaitCardToGraveEvent: true,
+    deferCardToGraveTriggerResolution: cleanup.deferCardToGraveTriggerResolution,
+    ...(cleanup.simultaneousExitEvents
+      ? { simultaneousExitEvents: cleanup.simultaneousExitEvents }
+      : {}),
+  });
+  cleanup.deferredPackages.push(...(result.deferredCardToGraveTriggerPackages || []));
+  return result;
+}
+
+/** The contexts in which resolveEvent queues trigger occurrences instead of resolving them. */
+function triggerResolutionIsDeferred(game: MovementHost): boolean {
+  return game.afterResolutionActivation != null ||
+    game.chainSystem?.isChainResolving?.() === true ||
+    game.chainSystem?.isPreparingActivation === true ||
+    game.chainSystem?.isChainWindowOpen?.() === true ||
+    Number(game.summonProcedureDepth || 0) > 0 ||
+    Number(game.damageStepProcedureDepth || 0) > 0;
+}
+
+/**
+ * Resolve the events of one immediate field exit (the host's card_to_grave
+ * and card_moved and those of its Equip cleanup) as a single trigger
+ * opportunity, as a deferred context does after its Chain.
+ */
+async function resolveSimultaneousExitEvents(
+  game: MovementHost,
+  events: readonly SimultaneousExitEvent[],
+): Promise<MovementEventResult | null> {
+  const [first] = events;
+  if (!first) return null;
+  const occurrences = events.map(event => event.occurrence);
+  if (triggerResolutionIsDeferred(game)) {
+    for (const occurrence of occurrences) game.queueTriggerOccurrence?.(occurrence);
+    return null;
+  }
+  return (await game.resolveEventEntries?.(first.eventName, first.payload, null, { occurrences })) || null;
+}
+
+function withDeferredCardToGravePackages(
+  result: MoveCardResult,
+  packages: readonly DeferredCardToGraveTriggerPackage[],
+): MoveCardResult {
+  if (packages.length > 0) result.deferredCardToGraveTriggerPackages = packages.slice();
+  return result;
+}
+
+/**
  * Zone movement - card movement between zones with side effects.
  * Extracted from Game.js as part of B.4 modularization.
  */
@@ -369,6 +502,7 @@ export async function cleanupTokenReferences(
   token: GameCard | null | undefined,
   tokenOwner: GamePlayer,
   bindings: MutableEquipHostExitBinding[] = [],
+  equipCleanup: EquipHostExitCleanup = createEquipHostExitCleanup({}, null),
 ) {
   if (!token) return;
   this.effectEngine.clearFieldPresenceId?.(token);
@@ -399,10 +533,7 @@ export async function cleanupTokenReferences(
     equip.grantsCrescentShieldGuard = false;
 
     // Move equip to graveyard - refs already cleared, so equip's cleanup block will be skipped
-    const result = await this.moveCard(equip, owner, "graveyard", {
-      fromZone: "spellTrap",
-      contextLabel: "equipped_host_left_field",
-    });
+    const result = await sendEquipToGraveyardAfterHostExit(this, equip, owner, equipCleanup);
     const binding = bindings.find(entry => entry.equip === equip);
     if (binding) binding.equipAfterCleanup = result.destinationPresence || null;
   }
@@ -790,7 +921,7 @@ async function emitCardMovedEvent(
     ? Object.freeze(options.equipBindingsAtFieldExit.map(binding => Object.freeze({ ...binding })))
     : null;
 
-  const eventResult = game.emit?.("card_moved", {
+  const cardMovedPayload = {
     timingRelevance: options.timingRelevance || "semantic" as const,
     card,
     fromZone,
@@ -821,27 +952,25 @@ async function emitCardMovedEvent(
         ? options.wasFaceupBeforeMove
         : card.isFacedown !== true,
     actionContext: options.actionContext || null,
-  });
+  };
+  const exitEvents = options.simultaneousExitEvents || null;
+  const eventResult = game.emit?.(
+    "card_moved",
+    cardMovedPayload,
+    exitEvents ? { collectTriggersOnly: true } : undefined,
+  );
 
-  if (
-    eventResult &&
-    typeof eventResult.then === "function" &&
-    (options.awaitEvents === true || options.awaitCardMovedEvent === true)
-  ) {
-    return await eventResult;
+  if (exitEvents && eventResult && typeof eventResult.then === "function") {
+    // Collected only: the immediate field exit resolves it with its other events.
+    const collected = await eventResult;
+    if (collected?.collectedOnly && collected.occurrence) {
+      exitEvents.push({ eventName: "card_moved", payload: cardMovedPayload, occurrence: collected.occurrence });
+    }
+    return collected;
   }
 
-  if (eventResult && typeof eventResult.then === "function") {
-    // Side branch only: callers that await the returned promise still see a
-    // strict-mode rejection, but a detached one is never unhandled.
-    eventResult.then(undefined, (error: unknown) =>
-      reportEngineFault(game, "detached_event_emit", error, {
-        details: { eventName: "card_moved", card: card.name },
-        rethrow: false,
-      }),
-    );
-  }
-  return eventResult || null;
+  // card_moved is always awaited; a rejection propagates to the caller.
+  return await eventResult;
 }
 
 function buildZoneMoveAnimationIntent(
@@ -1651,11 +1780,12 @@ async function trySendToGraveActionReplacement(
       });
       const targetName = getCardDisplayName(card) || card.name;
       const sourceName = getCardDisplayName(sourceCard) || sourceCard.name;
-      // Automatic replacements keep their semantics (no prompt; the AI strategy
-      // may still decline). Optional ones are a recorded broker decision.
-      const confirmed = replacement.auto === true
-        ? await aiAllowsReplacement()
-        : await requestOptionalConfirmation(
+      // Automatic replacements keep their semantics: no prompt, and the AI
+      // strategy may still decline. Optional ones, and an AI controller's
+      // answer to an automatic one, are a recorded broker decision, so
+      // playback never consults the strategy.
+      const confirmed = replacement.auto !== true
+        ? await requestOptionalConfirmation(
           game,
           sourceOwner,
           async () => (await game.ui?.showConfirmPrompt?.(
@@ -1665,7 +1795,16 @@ async function trySendToGraveActionReplacement(
           )) ?? false,
           aiAllowsReplacement,
           resolutionChoiceContext(game, sourceCard, effect.id),
-        );
+        )
+        : isAI(sourceOwner)
+          ? await requestOptionalConfirmation(
+            game,
+            sourceOwner,
+            () => true,
+            aiAllowsReplacement,
+            resolutionChoiceContext(game, sourceCard, effect.id),
+          )
+          : await aiAllowsReplacement();
       if (!confirmed) continue;
 
       // The decision may yield while the board changes: the moving card and
@@ -2734,7 +2873,27 @@ export async function moveCardInternal(
     equip: GameCard;
     equipOwner: GamePlayer;
   }> = [];
-  const flushPendingAttachedEquipCleanup = async () => {
+  // card_to_grave packages this movement collects under deferral, in event order.
+  const deferredCardToGravePackages: DeferredCardToGraveTriggerPackage[] = [];
+  // An immediate field exit with Equip cleanup collects its own events and
+  // those of its Equips, then resolves them as one trigger opportunity, as a
+  // deferred context does after its Chain. A move inside that exit adds its
+  // events to the exit's list.
+  const ownsSimultaneousExitEvents =
+    !options.simultaneousExitEvents &&
+    options.deferCardToGraveTriggerResolution !== true &&
+    equipBindingsAtFieldExit.length > 0 &&
+    !triggerResolutionIsDeferred(this);
+  const simultaneousExitEvents: SimultaneousExitEvent[] | null =
+    options.simultaneousExitEvents || (ownsSimultaneousExitEvents ? [] : null);
+  const exitEventOptions = simultaneousExitEvents ? { simultaneousExitEvents } : {};
+  const resolveOwnedSimultaneousExitEvents = async () =>
+    ownsSimultaneousExitEvents && simultaneousExitEvents
+      ? await duringCurrentDuel(resolveSimultaneousExitEvents(this, simultaneousExitEvents))
+      : null;
+  const flushPendingAttachedEquipCleanup = async (
+    equipCleanup: EquipHostExitCleanup,
+  ) => {
     if (pendingAttachedEquipCleanup.length === 0) return;
     const pending = pendingAttachedEquipCleanup;
     pendingAttachedEquipCleanup = [];
@@ -2743,10 +2902,9 @@ export async function moveCardInternal(
       try {
         const equipZone = this.getZone(equipOwner, "spellTrap") || [];
         if (equipZone.includes(equip)) {
-          const result = await duringCurrentDuel(this.moveCard(equip, equipOwner, "graveyard", {
-            fromZone: "spellTrap",
-            contextLabel: "equipped_host_left_field",
-          }));
+          const result = await duringCurrentDuel(
+            sendEquipToGraveyardAfterHostExit(this, equip, equipOwner, equipCleanup),
+          );
           const binding = equipBindingsAtFieldExit.find(entry => entry.equip === equip);
           if (binding) binding.equipAfterCleanup = result.destinationPresence || null;
         }
@@ -2770,9 +2928,24 @@ export async function moveCardInternal(
     queueZoneMoveAnimation(this, cardAnimationIntent, toZone);
     const locationVersion = recordCardLocationChange(this, card, fromOwner, null, fromZone, "removed", options);
     const destinationPresence = captureEventCardPresence(card, null, "removed");
+    // Allocated before the cleanup so the token's Equips share its exit event group.
+    const tokenAtomicGroupId =
+      options.atomicGroupId ||
+      this.chainSystem?.allocateAtomicEventGroupId?.() ||
+      null;
 
     // Clean up any references that might point to this token
-    await duringCurrentDuel(this.cleanupTokenReferences(card, fromOwner, equipBindingsAtFieldExit));
+    await duringCurrentDuel(this.cleanupTokenReferences(
+      card,
+      fromOwner,
+      equipBindingsAtFieldExit,
+      createEquipHostExitCleanup(
+        options,
+        tokenAtomicGroupId,
+        deferredCardToGravePackages,
+        simultaneousExitEvents,
+      ),
+    ));
 
     // Log the removal
     this.ui.log(`${card.name} (Token) was removed from the game.`);
@@ -2783,13 +2956,28 @@ export async function moveCardInternal(
       equipBindingsAtFieldExit,
       wasFaceupBeforeMove,
       contextLabel: options.contextLabel || "token_removed",
+      atomicGroupId: tokenAtomicGroupId,
+      ...exitEventOptions,
     }));
 
     // Update board to reflect removal
     this.updateBoard();
+    const tokenExitResult = await resolveOwnedSimultaneousExitEvents();
 
     // Return success with tokenRemoved flag - token is NOT added to any zone
-    return { success: true, tokenRemoved: true, fromZone, toZone: null, destinationPresence };
+    return withDeferredCardToGravePackages(
+      {
+        success: true,
+        tokenRemoved: true,
+        fromZone,
+        toZone: null,
+        destinationPresence,
+        ...(tokenExitResult?.needsSelection && tokenExitResult.selectionContract
+          ? { needsSelection: true, selectionContract: tokenExitResult.selectionContract }
+          : {}),
+      },
+      deferredCardToGravePackages,
+    );
   }
 
   if (card.owner !== fromOwner.id) {
@@ -3203,7 +3391,19 @@ export async function moveCardInternal(
         throw new Error("DEV_ZONE_MUTATION_FAIL");
       }
       queueZoneMoveAnimation(this, cardAnimationIntent, "extraDeck");
-      await duringCurrentDuel(flushPendingAttachedEquipCleanup());
+      // Allocated before the cleanup so the Equips share this exit's event group.
+      const extraDeckAtomicGroupId =
+        options.atomicGroupId ||
+        this.chainSystem?.allocateAtomicEventGroupId?.() ||
+        null;
+      await duringCurrentDuel(flushPendingAttachedEquipCleanup(
+        createEquipHostExitCleanup(
+          options,
+          extraDeckAtomicGroupId,
+          deferredCardToGravePackages,
+          simultaneousExitEvents,
+        ),
+      ));
       await duringCurrentDuel(emitCardMovedEvent(
         this,
         card,
@@ -3215,10 +3415,23 @@ export async function moveCardInternal(
           ...options,
           wasFaceupBeforeMove,
           effectsNegatedAtFieldExit,
+          atomicGroupId: extraDeckAtomicGroupId,
+          ...exitEventOptions,
         },
       ));
+      const extraDeckExitResult = await resolveOwnedSimultaneousExitEvents();
       await duringCurrentDuel(flushPendingBoundDestruction());
-      return { success: true, fromZone, toZone: "extraDeck" };
+      return withDeferredCardToGravePackages(
+        {
+          success: true,
+          fromZone,
+          toZone: "extraDeck",
+          ...(extraDeckExitResult?.needsSelection && extraDeckExitResult.selectionContract
+            ? { needsSelection: true, selectionContract: extraDeckExitResult.selectionContract }
+            : {}),
+        },
+        deferredCardToGravePackages,
+      );
     }
   }
 
@@ -3517,11 +3730,20 @@ export async function moveCardInternal(
 
     try {
       this.updateBoard?.();
+      // card_to_grave is awaited unless the caller explicitly detaches it.
+      const awaitCardToGrave =
+        deferCardToGraveTriggers ||
+        options.awaitEvents === true ||
+        options.awaitCardToGraveEvent !== false;
+      // Under deferral the caller owns the package; an immediate field exit
+      // collects it for its single trigger opportunity.
+      const exitCollectsCardToGrave =
+        !deferCardToGraveTriggers && simultaneousExitEvents != null && awaitCardToGrave;
+      const collectCardToGraveTriggers =
+        deferCardToGraveTriggers || exitCollectsCardToGrave;
       if (
         options.presentBeforeCardToGraveEvent !== false &&
-        (options.awaitEvents === true ||
-          options.awaitCardToGraveEvent === true ||
-          deferCardToGraveTriggers) &&
+        awaitCardToGrave &&
         typeof this.waitForPresentationDelay === "function"
       ) {
         const configuredDelayMs = options.graveyardPresentationDelayMs;
@@ -3573,14 +3795,22 @@ export async function moveCardInternal(
       const cardToGraveEvent = this.emit(
         "card_to_grave",
         cardToGravePayload,
-        deferCardToGraveTriggers ? { collectTriggersOnly: true } : undefined,
+        collectCardToGraveTriggers ? { collectTriggersOnly: true } : undefined,
       );
-      if (
-        deferCardToGraveTriggers ||
-        options.awaitEvents === true ||
-        options.awaitCardToGraveEvent === true
-      ) {
+      if (simultaneousExitEvents && exitCollectsCardToGrave) {
+        const collected = await duringCurrentDuel(cardToGraveEvent);
+        if (collected?.collectedOnly && collected.occurrence) {
+          simultaneousExitEvents.push({
+            eventName: "card_to_grave",
+            payload: cardToGravePayload,
+            occurrence: collected.occurrence,
+          });
+        }
+      } else if (awaitCardToGrave) {
         cardToGraveResult = await duringCurrentDuel(cardToGraveEvent);
+        if (cardToGraveResult?.collectedOnly) {
+          deferredCardToGravePackages.push(cardToGraveResult);
+        }
       } else {
         Promise.resolve(cardToGraveEvent).catch((error: unknown) =>
           reportEngineFault(this, "detached_event_emit", error, {
@@ -3598,7 +3828,14 @@ export async function moveCardInternal(
   }
 
   // Limpar cache de targeting após mover cartas (estado do jogo mudou)
-  await duringCurrentDuel(flushPendingAttachedEquipCleanup());
+  await duringCurrentDuel(flushPendingAttachedEquipCleanup(
+    createEquipHostExitCleanup(
+      options,
+      atomicGroupId,
+      deferredCardToGravePackages,
+      simultaneousExitEvents,
+    ),
+  ));
 
   if (this.effectEngine?.clearTargetingCache) {
     this.effectEngine.clearTargetingCache();
@@ -3618,12 +3855,15 @@ export async function moveCardInternal(
       effectsNegatedAtFieldExit,
       equipBindingsAtFieldExit,
       atomicGroupId,
+      ...exitEventOptions,
     },
   ));
 
   if (this.effectEngine?.clearTargetingCache) {
     this.effectEngine.clearTargetingCache();
   }
+
+  const exitEventsResult = await resolveOwnedSimultaneousExitEvents();
 
   await duringCurrentDuel(flushPendingBoundDestruction());
 
@@ -3654,12 +3894,17 @@ export async function moveCardInternal(
     result.needsSelection = true;
     result.selectionContract = cardToGraveResult.selectionContract;
   }
+  if (exitEventsResult?.needsSelection && exitEventsResult.selectionContract) {
+    result.needsSelection = true;
+    result.selectionContract = exitEventsResult.selectionContract;
+  }
   if (cardToGraveResult?.collectedOnly) {
     result.deferredCardToGraveTriggerPackage = cardToGraveResult;
     result.deferredCardToGraveEntries = Array.isArray(cardToGraveResult.entries)
       ? cardToGraveResult.entries
       : [];
   }
+  withDeferredCardToGravePackages(result, deferredCardToGravePackages);
   if (summonAttemptResult?.ownsTransaction && summonAttemptResult.transaction) {
     this.finishSummonTransaction?.(summonAttemptResult.transaction, result);
   }

@@ -21,12 +21,15 @@ import type {
 } from "../contracts/chainRuntime.js";
 import type { ActivationSimulationState } from "../chain/legality.js";
 import type { AiPlayerInput } from "../contracts/aiState.js";
+import type { CanonicalZone } from "../contracts/zones.js";
 interface AwarenessCard {
   name?: string | null | undefined;
   cardKind?: string | null | undefined;
   subtype?: string | null;
   effects?: readonly ChainEffect[];
   spellSpeed?: number;
+  isFacedown?: boolean | undefined;
+  _simUnknownCard?: boolean | undefined;
 }
 type AwarenessPlayer = AiPlayerInput | ChainPlayer;
 type SafetyRecommendation = "safe" | "caution" | "risky" | "very_risky";
@@ -111,6 +114,19 @@ const DAMAGE_BLOCKING_ACTIONS = new Set([
   "prevent_battle_damage",
   "reduce_damage",
 ]);
+/** The opponent's zones a query reads: every activation zone but its hidden Hand. */
+const PUBLIC_ACTIVATION_ZONES = [
+  "field",
+  "spellTrap",
+  "fieldSpell",
+  "graveyard",
+  "banished",
+] as const satisfies readonly CanonicalZone[];
+
+/** A face-down card or an opaque projection: only its placement is known. */
+function isUnknownCard(card: AwarenessCard | null | undefined): boolean {
+  return card?.isFacedown === true || card?._simUnknownCard === true;
+}
 
 function walkedActions(actions: readonly CardAction[] | undefined): ActionTypeView[] {
   return walkActionList(actions).visits
@@ -180,7 +196,7 @@ export function analyzeSpellSpeed(
 export function analyzeDefensiveTrap(
   card: AwarenessCard | null | undefined,
 ): DefensiveTrapAnalysis {
-  if (!card || card.cardKind !== "trap") {
+  if (!card || isUnknownCard(card) || card.cardKind !== "trap") {
     return { isDefensiveTrap: false, blocking: [], strength: "weak" };
   }
 
@@ -297,20 +313,21 @@ export function detectChainableOpponentCards(
   };
   let legalCandidates: readonly ChainActivationCandidateView[] = [];
   if (typeof gameState?.chainSystem?.getActivatableCardsInChain === "function") {
-    legalCandidates = gameState.chainSystem.getActivatableCardsInChain(
-      opponentPlayer as ChainPlayer,
-      context,
-    );
+    legalCandidates = gameState.chainSystem
+      .getActivatableCardsInChain(opponentPlayer as ChainPlayer, context)
+      .filter((candidate) => candidate.sourceZone !== "hand" && !isUnknownCard(candidate.card));
   } else {
     const query = buildActivationQuery({
       state: gameState as ActivationSimulationState,
       player: opponentPlayer as ChainPlayer,
       context,
+      sourceZones: PUBLIC_ACTIVATION_ZONES,
     });
     legalCandidates = listLegalActivationCandidates(
       query,
       createSimulationLegalityAdapter(gameState as ActivationSimulationState, {
         effectCheck: ({ card, effect }) => {
+          if (isUnknownCard(card)) return false;
           const spellSpeed = getEffectSpellSpeed(effect, card);
           const responseContexts = Array.isArray(effect.canRespondTo)
             ? effect.canRespondTo

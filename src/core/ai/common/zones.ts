@@ -1,4 +1,5 @@
 import { emitSimulatedMove } from "./simulatedActions/movement.js";
+import { destroySimulatedCard } from "./simulatedActions/destruction.js";
 import { retireTrackedDamageStepBuffsForCard } from "../../game/combat/damageStep.js";
 import type { SimulatedActionOptions, SimulatedRuntimeState } from "./simulatedActions/shared.js";
 import { restoreFaceupStatuses } from "../../Card.js";
@@ -9,9 +10,10 @@ import { restoreFieldExitStatuses, restoreTemporaryStatuses } from "../../Card.j
 import { cardHasArchetype, cardMatchesFilter } from "./cardFilters.js";
 import { countTurnCardActivations } from "../../game/events/activationHistory.js";
 import { getCounterValue } from "./counters.js";
+import { evaluateSimulatedConditions } from "./simulatedConditions.js";
 import type { RuntimePassive } from "../../effects/passives/passiveBuffs.js";
 import { clearLevelModifications, clearPermanentStatBuffs, expireFaceupStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
-import { clearPassiveBuffsForCard, getModeledPassiveContributions, pruneModeledPassiveContributions, registerModeledPassiveContribution, applyPassiveBuffValue, getFieldAuraBuffKey, getFieldCounterStatAuraBuffKey, getEquippedCounterBuffKey, getEquippedFieldCounterBuffKeys, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
+import { clearPassiveBuffsForCard, getModeledPassiveContributions, pruneModeledPassiveContributions, registerModeledPassiveContribution, applyPassiveBuffValue, getFieldAuraBuffKey, getFieldCounterStatAuraBuffKey, getEquippedCounterBuffKey, getEquippedFieldCounterBuffKeys, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, isActiveEquipInZone, isBattleIndestructibleGrantedByEquip, refreshEquipBattleIndestructible } from "../../effects/passives/passiveBuffs.js";
 import {
   assignAutomaticFieldSlot,
   clearFieldSlot,
@@ -137,7 +139,7 @@ export function refreshSimulatedFieldPresenceTypeSummonBuffs(state: SimulatedFie
   }
 }
 
-/** Continuous stat producers reconcile the same contributions as a live clone. */
+/** Continuous stat and status producers reconcile the same contributions as a live clone. */
 export function refreshSimulatedFieldAuras(state: Pick<AiStateShape, "bot" | "player"> &
   Partial<Pick<AiStateShape, "turnCounter" | "cardActivationHistory">>): void {
   const field = [...state.player.field, ...state.bot.field];
@@ -316,6 +318,62 @@ export function refreshSimulatedFieldAuras(state: Pick<AiStateShape, "bot" | "pl
   for (const card of cards) {
     for (const key of stale.get(card) || []) applyPassiveBuffValue(card, key, 0);
     pruneModeledPassiveContributions(card);
+  }
+  refreshSimulatedPassiveStatuses(state);
+}
+
+/** An Equip that protects `card` is attached to it from a Spell & Trap Zone, as in the runtime. */
+function isSimulatedEquipAttached(
+  state: Pick<AiStateShape, "bot" | "player">,
+  equip: SimulatedCardState,
+  card: SimulatedCardState,
+): boolean {
+  return [state.player, state.bot].some(owner => isActiveEquipInZone(equip, card, getZoneCards(owner, "spellTrap")));
+}
+
+/**
+ * Status passives follow the runtime producer on each update: a face-down or
+ * negated source loses its status; otherwise its position or its declared
+ * condition decides it. A rule restricted to another zone is left untouched.
+ * As in the runtime, battle protection from an active Equip stays (user rule
+ * D12, 15/10/2026), and a monster without its own rule takes it only from its
+ * Equips.
+ */
+export function refreshSimulatedPassiveStatuses(state: Pick<AiStateShape, "bot" | "player">): void {
+  const ownBattleProtectionRules = new Set<SimulatedCardState>();
+  for (const owner of [state.player, state.bot]) {
+    const selfId = owner === state.bot ? "bot" : "player";
+    const sources = [...getZoneCards(owner, "field"), ...getZoneCards(owner, "spellTrap"), ...getZoneCards(owner, "fieldSpell")];
+    for (const source of sources) {
+      source.effects?.forEach((effect) => {
+        if (effect.timing !== "passive" || !("passive" in effect) || !effect.passive) return;
+        const passive = effect.passive;
+        if (passive.type !== "position_status" && passive.type !== "conditional_status") return;
+        let active: boolean;
+        if (source.isFacedown === true) active = false;
+        else if (effect.requireZone && findCardZone(owner, source) !== effect.requireZone) return;
+        else if (source.effectsNegated === true) active = false;
+        else if (passive.type === "position_status") {
+          active = (source.position || "attack") === (passive.activePosition || "defense");
+        } else {
+          active = evaluateSimulatedConditions(passive.conditions || passive.condition || null,
+            { state, selfId, sourceCard: source });
+        }
+        const statusName = passive.status || "battleIndestructible";
+        if (statusName === "battleIndestructible") ownBattleProtectionRules.add(source);
+        const shouldHave = active || (statusName === "battleIndestructible" &&
+          isBattleIndestructibleGrantedByEquip(source, equip => isSimulatedEquipAttached(state, equip, source)));
+        const present = Boolean(Reflect.get(source, statusName));
+        if (shouldHave && !present) Reflect.set(source, statusName, true);
+        else if (!shouldHave && present) Reflect.deleteProperty(source, statusName);
+      });
+    }
+  }
+  for (const owner of [state.player, state.bot]) {
+    for (const card of getZoneCards(owner, "field")) {
+      if (ownBattleProtectionRules.has(card)) continue;
+      refreshEquipBattleIndestructible(card, equip => isSimulatedEquipAttached(state, equip, card));
+    }
   }
 }
 
@@ -522,8 +580,18 @@ export interface SimulatedMoveOptions {
 export interface SimulatedMoveReceipt {
   readonly destinationPresence: EventCardPresenceSnapshot;
   readonly equipBindingsAtFieldExit: readonly SimulatedEquipHostExitBinding[];
+  /** Destroys what this move unbound. Whoever reads the receipt runs it right after publishing the move's card_moved. */
+  readonly settleBoundDestructions: () => void;
 }
 export type SimulatedEquipHostExitBinding = EventEquipHostExitBinding<SimulatedCardState, SimulatedPlayerState>;
+
+interface SimulatedBoundDestruction {
+  readonly target: SimulatedCardState;
+  readonly source: SimulatedCardState;
+  readonly zone: "field" | "spellTrap";
+  /** A surviving source is read again after the move's events; a departing one only before its exit cleanup. */
+  readonly checkActiveSource: boolean;
+}
 
 interface ReadMoveOptions {
   requireDestination?: boolean;
@@ -608,6 +676,66 @@ function resolveSimulatedMove(
   return { fromZone, toZone };
 }
 
+/**
+ * A Trap and its bound monster unbind when either one leaves, with both links
+ * cleared at once. As in the runtime move, a departing monster takes the Trap
+ * only while it is active, and a departing continuous Trap takes the monster
+ * only if the Trap itself was active: this must run before its exit cleanup.
+ */
+function unbindDepartingCard(
+  card: SimulatedCardState,
+  fromZone: SimulatedZone | null,
+  toZone: SimulatedZone | "removed",
+  holders: readonly SimulatedPlayerState[],
+): SimulatedBoundDestruction[] {
+  const isActive = (entry: SimulatedCardState) => entry.isFacedown !== true && entry.effectsNegated !== true;
+  // An opaque projection of a face-down monster has no link of its own; the public Trap still names it.
+  const trap = fromZone === "field" && toZone !== "field" && card.cardKind === "monster"
+    ? card.boundTrapSource ?? holders.flatMap(holder => getZoneCards(holder, "spellTrap")).find(entry => entry.boundMonsterTarget === card)
+    : null;
+  if (trap) {
+    if (trap.boundMonsterTarget === card) trap.boundMonsterTarget = null;
+    if (card.boundTrapSource) card.boundTrapSource = null;
+    return isActive(trap) && holders.some(holder => getZoneCards(holder, "spellTrap").includes(trap))
+      ? [{ target: trap, source: trap, zone: "spellTrap", checkActiveSource: true }] : [];
+  }
+  if (fromZone === "spellTrap" && toZone !== "spellTrap" && card.cardKind === "trap" &&
+      card.subtype === "continuous" && card.boundMonsterTarget) {
+    const monster = card.boundMonsterTarget;
+    card.boundMonsterTarget = null;
+    if (monster.boundTrapSource === card) monster.boundTrapSource = null;
+    return isActive(card) ? [{ target: monster, source: card, zone: "field", checkActiveSource: false }] : [];
+  }
+  return [];
+}
+
+/** A preflight projection carries only the two players; the destruction rules read the rest. */
+function isFullSimulatedState(state: NonNullable<SimulatedMoveOptions["state"]>): state is SimulatedRuntimeState {
+  return "turnCounter" in state;
+}
+
+/** Runs once, after the unbinding move's events, which may already have moved the target. */
+function settleBoundDestructions(
+  pending: SimulatedBoundDestruction[],
+  holders: readonly SimulatedPlayerState[],
+  options: SimulatedMoveOptions,
+): void {
+  for (const { target, source, zone, checkActiveSource } of pending.splice(0)) {
+    const owner = holders.find(holder => getZoneCards(holder, zone).includes(target));
+    if (!owner || (checkActiveSource && (source.isFacedown === true || source.effectsNegated === true))) continue;
+    const sourcePlayer = holders.find(holder => holder.id === source.owner) ?? owner;
+    const { state } = options;
+    if (state && isFullSimulatedState(state)) {
+      destroySimulatedCard(target, owner, sourcePlayer, state, { sourceCard: source,
+        ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}) });
+    } else {
+      // A move without the full state has no emitter either: the card only moves, as its equips do.
+      moveCardToZone(holders.find(holder => holder.id === target.originalOwner) ?? owner, target, "graveyard", owner,
+        { movedByEffect: true, sourceCard: source, sourcePlayer, ...(state ? { state } : {}) });
+    }
+  }
+}
+
 /** Read-only preflight; a rejected departure must not consume materials or statuses. */
 export function canMoveCardToZone(
   player: AiPlayerInput | null | undefined,
@@ -635,9 +763,11 @@ export function moveCardToZone(
     equipAfterCleanup: EventCardPresenceSnapshot | null;
   }> = [];
   const attachedEquips: Array<{ equip: SimulatedCardState; holder: SimulatedPlayerState }> = [];
+  const holders = options.state ? [options.state.player, options.state.bot] : [sourcePlayer, player];
+  const boundDestructions = unbindDepartingCard(card, fromZone, toZone, holders);
   if (fromZone === "field" && toZone !== "field") {
     const hostBeforeExit = captureEventCardPresence(card, sourcePlayer.id, fromZone);
-    for (const holder of options.state ? [options.state.player, options.state.bot] : [sourcePlayer, player]) {
+    for (const holder of holders) {
       for (const equip of holder.spellTrap || []) {
         if (attachedEquips.some(entry => entry.equip === equip) || equip.cardKind !== "spell" || equip.subtype !== "equip" ||
             (equip.equippedTo !== card && equip.equipTarget !== card)) continue;
@@ -721,7 +851,8 @@ export function moveCardToZone(
   const finishCommittedMove = () => {
     if (toZone !== "removed") card.owner = card.controller = player.id;
     const receipt = { destinationPresence: captureEventCardPresence(card, toZone === "removed" ? null : player.id, toZone),
-      equipBindingsAtFieldExit: equipBindings };
+      equipBindingsAtFieldExit: equipBindings,
+      settleBoundDestructions: () => settleBoundDestructions(boundDestructions, holders, options) };
     options.onMoveCommitted?.(receipt);
     for (const { equip, holder } of attachedEquips) {
       const destination = options.state ? [options.state.player, options.state.bot].find(owner => owner.id === equip.originalOwner) || holder : holder;
@@ -740,10 +871,13 @@ export function moveCardToZone(
         contextLabel: "equipped_host_left_field", movedByEffect: false };
       if (presence.zone === "graveyard") options.emitSimulatedEvent?.("card_to_grave", payload);
       options.emitSimulatedEvent?.("card_moved", payload);
+      cleanupReceipt.value.settleBoundDestructions();
     }
     for (const binding of equipBindings) Object.freeze(binding);
     Object.freeze(equipBindings);
     if (options.state) refreshSimulatedFieldAuras(options.state);
+    // A caller reading the receipt publishes this move's events and settles after them.
+    if (!options.onMoveCommitted) receipt.settleBoundDestructions();
   };
   if (toZone === "removed") {
     finishCommittedMove();

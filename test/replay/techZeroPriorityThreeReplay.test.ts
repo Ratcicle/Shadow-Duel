@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { CANONICAL_REPLAY_ENGINE_VERSION, type ReplayDriverGamePort, type SerializableValue } from "../../src/core/contracts/replay.js";
 import type { DecisionMadeEventPayload } from "../../src/core/contracts/events.js";
-import type { DecisionKind, DecisionRequest, DecisionResult } from "../../src/core/contracts/decisions.js";
+import type { DecisionKind, DecisionRequest, DecisionResult, SyncDecisionRequest } from "../../src/core/contracts/decisions.js";
 import type { SelectionResult } from "../../src/core/contracts/selection.js";
 import { createCanonicalStateSnapshot, hashCanonicalGameState, isReplayEvent, serializeReplayEventPayload, validateCanonicalReplay } from "../../src/core/game/replay/canonical.js";
 import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
@@ -17,7 +17,7 @@ type Direction = "attack" | "defense";
 function install(game: RuntimeGame, seat: Seat, controller: "human" | "ai", direction: Direction, destroyed: boolean) {
   let ready = false;
   const observed = { events: [] as { event: string; payload: SerializableValue }[], decisions: [] as DecisionMadeEventPayload[],
-    requests: [] as { kind: string; actorId: string | null; candidateKeys: unknown[]; context: unknown; resultCandidateKeys: unknown[] | null; pass: boolean }[],
+    requests: [] as { kind: string; actorId: string | null; candidateKeys: unknown[]; context: unknown; resultCandidateKeys: unknown[] | null; pass: boolean; value?: unknown }[],
     stages: [] as { timing: string | null; atk: number; hash: string; snapshot: ReturnType<typeof createCanonicalStateSnapshot> }[], targeted: 0 };
   const candidateKey = (candidate: unknown): unknown => candidate && typeof candidate === "object"
     ? Reflect.get(candidate, "candidateKey") ?? Reflect.get(candidate, "key") ?? Reflect.get(candidate, "candidateId") ?? Reflect.get(candidate, "id") ?? null : null;
@@ -33,6 +33,14 @@ function install(game: RuntimeGame, seat: Seat, controller: "human" | "ai", dire
     return result;
   }
   game.decisionBroker.requestDecision = observeRequest;
+  const requestSync = game.decisionBroker.requestDecisionSync.bind(game.decisionBroker);
+  game.decisionBroker.requestDecisionSync = <Kind extends DecisionKind>(input: SyncDecisionRequest<Kind>): DecisionResult<Kind> => {
+    const result = requestSync(input);
+    if (ready) observed.requests.push({ kind: input.kind, actorId: input.actor?.id ?? input.actorId ?? null,
+      candidateKeys: (input.candidates || []).map(candidateKey), context: structuredClone(input.contextSnapshot ?? null),
+      resultCandidateKeys: null, pass: result == null, value: structuredClone(input.serializeResult ? input.serializeResult(result) : null) });
+    return result;
+  };
   const record = game.recordReplayEvent.bind(game);
   game.recordReplayEvent = (event, payload) => {
     if (ready && isReplayEvent(event)) observed.events.push({ event, payload: serializeReplayEventPayload(game, payload) ?? null });
@@ -123,7 +131,7 @@ for (const seat of ["player", "bot"] as const) for (const controller of ["human"
       assert.deepEqual(reproduced.requests, captured.requests, "compare actual broker request candidates and returned choices across EN/PT");
       assert.equal(captured.requests.length, replay.decisions.length);
       assert.deepEqual(captured.requests.map(request => ({ kind: request.kind, actorId: request.actorId,
-        candidateKeys: request.candidateKeys, context: request.context, value: { orderedCandidateKeys: request.resultCandidateKeys } })),
+        candidateKeys: request.candidateKeys, context: request.context, value: "value" in request ? request.value : { orderedCandidateKeys: request.resultCandidateKeys } })),
       replay.decisions.map(decision => ({ kind: decision.kind, actorId: decision.actorId,
         candidateKeys: decision.candidateKeys, context: decision.context, value: decision.value })));
       assert.deepEqual(reproduced.decisions, [], "the replay broker consumes recorded decisions without emitting fresh live decisions");

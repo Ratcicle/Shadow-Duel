@@ -1,4 +1,4 @@
-import type { SimulatedCardState, SimulatedPlayerState } from "../../contracts/aiState.js";
+import type { AiStateShape, SimulatedCardState, SimulatedPlayerState } from "../../contracts/aiState.js";
 import { PLANNING_ZONES } from "./stateFingerprint.js";
 import type {
   SimulatedOwnerPolicy,
@@ -26,6 +26,11 @@ export function registerPlanningExecutionView(
   sourceState: SimulatedRuntimeState,
 ): void {
   if (view !== sourceState) executionViews.set(view, executionViews.get(sourceState) || sourceState);
+}
+
+/** The simulated state behind a planning owner view (the state itself otherwise). */
+export function resolvePlanningExecutionState(state: object): object {
+  return executionViews.get(state) || state;
 }
 
 export function hasPlanningExecutionContext(state: object): boolean {
@@ -65,4 +70,35 @@ export function resolvePlanningOwnerPolicy(
 ): SimulatedOwnerPolicy | null | undefined {
   const source = executionResolvers.has(state) ? state : executionViews.get(state) || state;
   return executionResolvers.get(source)?.(source, owner);
+}
+
+function collectUnknownCardLocations(
+  state: Pick<AiStateShape, "bot" | "player">,
+): Map<SimulatedCardState, string> {
+  const locations = new Map<SimulatedCardState, string>();
+  for (const player of [state.bot, state.player]) {
+    for (const zone of PLANNING_ZONES) {
+      for (const card of player[zone]) if (card._simUnknownCard) {
+        locations.set(card, `${player.id}:${zone}:${card.isFacedown === true}`);
+      }
+    }
+    if (player.fieldSpell?._simUnknownCard) {
+      locations.set(player.fieldSpell, `${player.id}:fieldSpell:${player.fieldSpell.isFacedown === true}`);
+    }
+  }
+  return locations;
+}
+
+/** Requests a replan when an opaque card moves or changes face: the real card is unknown. */
+export function runWithUnknownLocationGuard<Result>(
+  state: Pick<AiStateShape, "bot" | "player" | "_simRequiresReplan">,
+  run: () => Result,
+): Result {
+  const before = collectUnknownCardLocations(state);
+  const result = run();
+  const after = collectUnknownCardLocations(state);
+  if ([...before].some(([card, location]) => after.get(card) !== location)) {
+    state._simRequiresReplan = true;
+  }
+  return result;
 }
