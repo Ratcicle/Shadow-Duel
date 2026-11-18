@@ -202,8 +202,10 @@ const PUBLIC_CARD_FILTER_FIELDS = new Set([
 export function cardMatchesFilter(
   card: FilterableCard | null | undefined,
   filter: AiCardFilter = {},
+  exitCounters?: Readonly<Record<string, number>>,
 ): boolean {
   if (!card) return false;
+  const counterValue = (type: string) => exitCounters ? exitCounters[type] ?? 0 : getCounterValue(card, type);
 
   const nested = filter.filters || {};
   const checks = [filter, nested];
@@ -212,7 +214,7 @@ export function cardMatchesFilter(
     if (!current) continue;
     if (current.requireFaceup && card.isFacedown) return false;
     if (current.minCounters !== undefined &&
-        getCounterValue(card, current.counterType || "default") < current.minCounters) return false;
+        counterValue(current.counterType || "default") < current.minCounters) return false;
     if (current.facedown === true && card.isFacedown !== true) return false;
     if (current.position && current.position !== "any" && card.position !== current.position) return false;
     if ("_simUnknownCard" in card && card._simUnknownCard &&

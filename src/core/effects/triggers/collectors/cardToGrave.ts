@@ -123,6 +123,7 @@ export async function collectCardToGraveTriggers(
         fromZone,
         toZone,
         contextLabel,
+        countersAtFieldExit: payload.countersAtFieldExit,
       })
     ) {
       if (devMode) {

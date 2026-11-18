@@ -1,6 +1,9 @@
 import {
+  captureCounterSnapshot,
+  clearCardCounters,
   expireFaceupDeclaredValues,
   getCardLocationVersion,
+  restoreCardCounters,
   restoreFaceupStatuses,
 } from "../../Card.js";
 import { expireEffectNegation } from "../../effects/negation.js";
@@ -89,6 +92,8 @@ interface CardActivationCommitInfo {
   zoneIndex: number | null;
   fromIndex: number;
   replacedFieldSpell: GameCard | null;
+  /** The replaced Field Spell's counters, restored if the activation rolls back. */
+  replacedFieldSpellCounters?: Readonly<Record<string, number>>;
 }
 
 interface FieldSpellTrapActivationSnapshot {
@@ -301,6 +306,7 @@ export function applySpellTrapFinalizationOverride(
 
   card.isFacedown = true;
   expireEffectNegation(card, "while_faceup");
+  clearCardCounters(card);
   restoreFaceupStatuses(card);
   expireFaceupDeclaredValues(card);
   card.fieldPresenceSummons = [];
@@ -420,6 +426,8 @@ export async function commitCardActivationFromHand(
   const isFieldSpell = card.subtype === "field";
   const activationZone = isFieldSpell ? "fieldSpell" : "spellTrap";
   const replacedFieldSpell = isFieldSpell ? player.fieldSpell : null;
+  // Sending the replaced Field Spell to the GY clears its counters (decision V4).
+  const replacedFieldSpellCounters = replacedFieldSpell ? captureCounterSnapshot(replacedFieldSpell) : undefined;
 
   // Check zone capacity
   if (!isFieldSpell && player.spellTrap.length >= 5) {
@@ -463,6 +471,7 @@ export async function commitCardActivationFromHand(
     zoneIndex,
     fromIndex: handIndex,
     replacedFieldSpell,
+    ...(replacedFieldSpellCounters ? { replacedFieldSpellCounters } : {}),
   };
 }
 
@@ -501,6 +510,8 @@ export async function rollbackSpellActivation(
     await this.moveCard(replacedFieldSpell, player, "fieldSpell", {
       fromZone: "graveyard",
     });
+    // The rollback undoes the engine, not a rule move: the counters come back.
+    if (player.fieldSpell === replacedFieldSpell) restoreCardCounters(replacedFieldSpell, commitInfo.replacedFieldSpellCounters);
   }
 
   this.updateBoard();

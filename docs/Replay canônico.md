@@ -212,7 +212,10 @@ Esses dados também participam dos snapshots de procedimentos e de referências.
   continuações de material de Sincro, contadores de contexto, de eventos e de
   IDs gerados, estatísticas de materiais e contagens de Invocação-Especial por
   tipo;
-- identidade, presença, posição, stats, contadores, vínculos e status das cartas;
+- identidade, presença, posição, stats, contadores, vínculos e status das cartas.
+  Contadores só existem em carta virada para cima nas zonas de campo; os
+  eventos de saída do campo levam os que a carta tinha ao sair
+  (`countersAtFieldExit` e `destroyedCountersAtFieldExit`);
 - características em vigor das cartas (`characteristics`), inclusive as
   reescritas por monstros-armadilha, Regulador e Fichas, e os registros de
   status restaurados no fim do turno e na saída do campo

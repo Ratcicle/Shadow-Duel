@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
-import Card from "../../src/core/Card.js";
+import Card, { captureCounterSnapshot } from "../../src/core/Card.js";
 import BloomrotStrategy from "../../src/core/ai/BloomrotStrategy.js";
 import { getCounterValue } from "../../src/core/ai/common/counters.js";
 import { createPlanningCopy } from "../../src/core/ai/common/planningCopy.js";
@@ -59,8 +59,10 @@ function scenario(t: TestContext, seat: "player" | "bot", id: 404 | 405) {
         opponent: state.player, options, attacker: defending ? simVictim : preparingSource,
         target: defending ? preparingSource : simVictim },
       "The actual TurnLineSearch hook includes state, physical owners and planning options beyond Bloomrot's legacy narrow projection"));
+    // The bridge records the counters the target had before the move clears them.
+    const countersAtFieldExit = captureCounterSnapshot(simVictim);
     const summary = { damage: 1100, destroyedCards: [{ ...simVictim, owner: "opponent", destroyedBy: "battle",
-      card: simVictim, position: simVictim.position }] };
+      card: simVictim, position: simVictim.position, ...(countersAtFieldExit ? { countersAtFieldExit } : {}) }] };
     const apply = () => strategy.applySimulatedBattleRewards(
       unsafeFixture<NonNullable<Parameters<typeof strategy.applySimulatedBattleRewards>[0]>>({ state, bot: state.bot,
         opponent: state.player, options, battlePlan: { attackerCard: simSource }, summary },

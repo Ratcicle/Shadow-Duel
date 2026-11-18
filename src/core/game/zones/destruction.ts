@@ -819,6 +819,10 @@ export async function destroyCard(
       const deferredPackages = moveResult.deferredCardToGraveTriggerPackages?.length
         ? { deferredCardToGraveTriggerPackages: moveResult.deferredCardToGraveTriggerPackages }
         : {};
+      // The battle_destroy payload reads the counters the card left the field with.
+      const exitCounters = "countersAtFieldExit" in moveResult && moveResult.countersAtFieldExit
+        ? { countersAtFieldExit: moveResult.countersAtFieldExit }
+        : {};
 
       if (moveResult.needsSelection) {
         return {
@@ -826,10 +830,11 @@ export async function destroyCard(
           needsSelection: true,
           selectionContract: moveResult.selectionContract,
           ...deferredPackages,
+          ...exitCounters,
         };
       }
 
-      return { destroyed: true, ...deferredPackages };
+      return { destroyed: true, ...deferredPackages, ...exitCounters };
     },
     {
       contextLabel: options.contextLabel || "destroyCard",

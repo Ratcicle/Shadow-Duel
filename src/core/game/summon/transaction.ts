@@ -1,5 +1,5 @@
 import { FAST_EFFECT_ORIGINS, FAST_EFFECT_STATES } from "../../contracts/chain.js";
-import { bumpCardLocationVersion } from "../../Card.js";
+import { bumpCardLocationVersion, captureCounterSnapshot, clearCardCounters } from "../../Card.js";
 import {
   hasChainFastEffectTransitionCapability,
   hasChainSourceMovementCapability,
@@ -591,6 +591,10 @@ async function finalizeFailedCommittedCard(
       card.isFacedown = false;
       const locationVersion = bumpCardLocationVersion(card);
       const fromZone = transaction.sourceAtStart?.zone || null;
+      // Decision V4: a card that leaves the field zones loses its counters.
+      const leftFieldZones = fromZone === "field" || fromZone === "spellTrap" || fromZone === "fieldSpell";
+      const countersAtFieldExit = leftFieldZones ? captureCounterSnapshot(card) : undefined;
+      if (leftFieldZones) clearCardCounters(card);
       const payload = {
         card,
         player: destinationOwner,
@@ -604,6 +608,7 @@ async function finalizeFailedCommittedCard(
         contextLabel: "failed_summon_transaction",
         summonId: transaction.summonId,
         wasDestroyed: false,
+        ...(countersAtFieldExit ? { countersAtFieldExit } : {}),
       };
       if (hasChainSourceMovementCapability(game.chainSystem)) {
         game.chainSystem.recordChainSourceMovement(toChainCard(card), {

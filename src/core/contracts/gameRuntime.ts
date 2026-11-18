@@ -23,7 +23,7 @@ import type {
   ReplayMode,
 } from "./game.js";
 import type { GamePlayer } from "./player.js";
-import type { EventCardPresenceSnapshot, TurnCardActivationHistory } from "./events.js";
+import type { CounterSnapshot, EventCardPresenceSnapshot, TurnCardActivationHistory } from "./events.js";
 import type {
   DamageStepId,
   DuelCardId,
@@ -105,6 +105,8 @@ export interface MoveCardResult {
   summonOrigin?: SummonOrigin | null;
   needsSelection?: boolean;
   selectionContract?: unknown;
+  /** Counters the card had when this move took it off the field (decision V4). */
+  countersAtFieldExit?: CounterSnapshot;
   /**
    * Only the moved card's own deferred package, without those of its Equip
    * cleanup. A deferring caller consumes `deferredCardToGraveTriggerPackages`.

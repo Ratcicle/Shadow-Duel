@@ -239,6 +239,8 @@ export function cardMatchesEventFilters(
     readonly sourceCard?: TriggerRuntimeCard | null;
     readonly contextLabel?: string | null;
     readonly equipHostExitBinding?: EventEquipHostExitBinding | null;
+    /** Counters the event card had when it left the field (decision V4). */
+    readonly countersAtFieldExit?: Readonly<Record<string, number>> | undefined;
   } = {},
 ): boolean {
   if (!filters || typeof filters !== "object") return true;
@@ -280,5 +282,7 @@ export function cardMatchesEventFilters(
   delete cardFilters.toZone;
   delete cardFilters.eventCardIsEquippedToSource;
 
-  return engine.cardMatchesFilters(eventCard, cardFilters);
+  return context.countersAtFieldExit
+    ? engine.cardMatchesFilters(eventCard, cardFilters, { counters: context.countersAtFieldExit })
+    : engine.cardMatchesFilters(eventCard, cardFilters);
 }

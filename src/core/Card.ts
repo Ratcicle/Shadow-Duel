@@ -250,6 +250,49 @@ export function restoreFaceupStatuses(card: unknown): boolean {
   return statuses.length > 0;
 }
 
+/**
+ * Decision V4 (16/11/2026): counters live only on a face-up card in a field
+ * zone. The counters a card had when it left the field, for the triggers and
+ * filters that read the card that left. Positive amounts only; undefined when
+ * the card had none. Accepts the runtime Map and the simulation's object.
+ */
+export function captureCounterSnapshot(card: unknown): Readonly<Record<string, number>> | undefined {
+  if (!isObjectValue(card)) return undefined;
+  const counters = readProperty(card, "counters");
+  const entries: Array<[string, number]> = counters instanceof Map
+    ? [...counters.entries()].map(([key, value]): [string, number] => [String(key), Number(value) || 0])
+    : isObjectValue(counters)
+      ? Object.entries(counters).map(([key, value]): [string, number] => [key, Number(value) || 0])
+      : [];
+  const positive = entries.filter(([, value]) => value > 0);
+  return positive.length ? Object.freeze(Object.fromEntries(positive)) : undefined;
+}
+
+/** Remove every counter silently: no counter_removed event, no log (decision V4). */
+export function clearCardCounters(card: unknown): boolean {
+  if (!isObjectValue(card)) return false;
+  const counters = readProperty(card, "counters");
+  if (counters instanceof Map) {
+    const had = counters.size > 0;
+    counters.clear();
+    return had;
+  }
+  if (!isObjectValue(counters)) return false;
+  const keys = Object.keys(counters);
+  for (const key of keys) Reflect.deleteProperty(counters, key);
+  return keys.length > 0;
+}
+
+/** Engine undo only (an activation rollback): put back a snapshot silently. */
+export function restoreCardCounters(card: unknown, snapshot: Readonly<Record<string, number>> | undefined): void {
+  if (!snapshot || !isObjectValue(card)) return;
+  const counters = readProperty(card, "counters");
+  for (const [key, value] of Object.entries(snapshot)) {
+    if (counters instanceof Map) counters.set(key, value);
+    else if (isObjectValue(counters)) Reflect.set(counters, key, value);
+  }
+}
+
 export function captureTrapMonsterOriginalState(
   card: unknown,
 ): TrapMonsterOriginalState | null {

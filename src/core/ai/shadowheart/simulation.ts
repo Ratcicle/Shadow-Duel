@@ -1,5 +1,6 @@
 
 import { appendSimulatedZoneCard } from "../common/zones.js";
+import { clearCardCounters } from "../../Card.js";
 import { appendSimulatedFieldCard, refreshSimulatedFieldAuras } from "../common/zones.js";
 // ---------------------------------------------------------------------------
 // src/core/ai/shadowheart/simulation.js
@@ -174,7 +175,11 @@ function defaultPlaceSpellCard(
 ): ShadowPlaceResult {
   const player = ensureZones(state.bot || {});
   if (card.subtype === "field") {
-    if (player.fieldSpell) appendSimulatedZoneCard(player.graveyard, player.fieldSpell);
+    if (player.fieldSpell) {
+      // The replaced Field Spell leaves the field and loses its counters (decision V4).
+      clearCardCounters(player.fieldSpell);
+      appendSimulatedZoneCard(player.graveyard, player.fieldSpell);
+    }
     player.fieldSpell = card;
     return { placed: true, zone: "fieldSpell" };
   }

@@ -6,7 +6,8 @@ import type { SimulatedActionOptions, SimulatedRuntimeState } from "../common/si
 import { emitSimulatedBattleDamage, emitSimulatedBattleDestroy } from "../common/simulation.js";
 import { findCardOwner } from "../common/zones.js";
 type BattleSummary = { damage?: number; destroyedCards?: Array<{ owner?: string; cardKind?: string | undefined;
-  card?: SimulatedCardState; destroyedBy?: string; position?: string | null }> };
+  card?: SimulatedCardState; destroyedBy?: string; position?: string | null;
+  countersAtFieldExit?: Readonly<Record<string, number>> | undefined }> };
 type BattleContext = { attacker?: BloomrotCard | null; target?: BloomrotCard | null; lethalNow?: boolean; attackerSurvived?: boolean; targetSurvived?: boolean; summary?: BattleSummary; opponent?: BloomrotPlayer; opponentLpAfter?: number; game?: BloomrotPlanningGame;
   state?: SimulatedRuntimeState; options?: SimulatedActionOptions; battlePlan?: { attackerCard?: BloomrotCard | null } };
 import {
@@ -241,6 +242,7 @@ export function applyBloomrotSimulatedBattleRewards({ state, battlePlan, summary
     if (!entry.card || (entry.destroyedBy && entry.destroyedBy !== "battle")) continue;
     emitSimulatedBattleDestroy(state, { attacker: source, destroyed: entry.card,
       destroyedOwner: entry.owner === "opponent" ? other : owner, destroyedPosition: entry.position || null,
+      ...(entry.countersAtFieldExit ? { destroyedCountersAtFieldExit: entry.countersAtFieldExit } : {}),
       battleDestroyer: source, recordNegatedBattleActivation: true }, rewardOptions, [source], effects);
   }
   return recipients.some((card, index) => getSporeCount(card) > before[index]!) ? ["Carrioncap battle spore reward"] : [];

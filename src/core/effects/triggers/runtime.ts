@@ -539,6 +539,7 @@ export interface TriggerCollectorHost {
   cardMatchesFilters(
     card: TriggerRuntimeCard | null | undefined,
     filters?: TriggerCardFilter | object,
+    overrides?: { readonly counters?: Readonly<Record<string, number>> | undefined },
   ): boolean;
   effectMatchesFilters?(
     effect: TriggerEffectLike | null,

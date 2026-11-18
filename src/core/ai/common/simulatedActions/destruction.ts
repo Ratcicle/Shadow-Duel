@@ -278,6 +278,7 @@ export function destroySimulatedCard(
     fromZone, toZone, wasFaceupBeforeMove,
     locationVersion: receipt.value?.destinationPresence.locationVersion ?? card.locationVersion ?? 0,
     ...(receipt.value?.equipBindingsAtFieldExit.length ? { equipBindingsAtFieldExit: receipt.value.equipBindingsAtFieldExit } : {}),
+    ...(receipt.value?.countersAtFieldExit ? { countersAtFieldExit: receipt.value.countersAtFieldExit } : {}),
     effectsNegatedAtFieldExit, wasDestroyed: true, destroyCause: "effect",
     destroySource: options.sourceCard || null, sourceCard: options.sourceCard || null,
     movedByEffect: true, actionContext: options.actionContext };

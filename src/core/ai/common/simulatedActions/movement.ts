@@ -1,4 +1,4 @@
-import { restoreFaceupStatuses } from "../../../Card.js";
+import { captureCounterSnapshot, clearCardCounters, restoreFaceupStatuses } from "../../../Card.js";
 import { refreshSimulatedFieldAuras } from "../zones.js";
 import type { SimulatedMoveReceipt } from "../zones.js";
 import { captureCostMarkerEvidence } from "../../../effects/costs/summonMarkers.js";
@@ -146,6 +146,7 @@ export function emitSimulatedMove(
     fromZone, toZone, movedByEffect, wasFaceupBeforeMove,
     locationVersion: receipt?.destinationPresence.locationVersion ?? card.locationVersion ?? 0,
     ...(receipt?.equipBindingsAtFieldExit.length ? { equipBindingsAtFieldExit: receipt.equipBindingsAtFieldExit } : {}),
+    ...(receipt?.countersAtFieldExit ? { countersAtFieldExit: receipt.countersAtFieldExit } : {}),
     effectsNegatedAtFieldExit,
     contextLabel: contextLabel || (card.isToken === true && fromZone === "field" && toZone === "removed" ? "token_removed" : null),
     sourceCard: options.sourceCard || null,
@@ -532,6 +533,9 @@ export function resolveSimulatedTemporaryControlEffects(
     ]);
     const wasFaceupBeforeMove = card.isFacedown !== true;
     const destinationZone = card.isToken ? "void" : card.banishWhenLeavesField ? "banished" : "graveyard";
+    // Decision V4: the monster leaves the field and loses its counters.
+    const countersAtFieldExit = captureCounterSnapshot(card);
+    clearCardCounters(card);
     removeCardFromZones(holder, card);
     clearSimulatedTemporaryControl(state, card);
     card.battlePositionLocked = false;
@@ -554,6 +558,7 @@ export function resolveSimulatedTemporaryControlEffects(
       destroyCause: "rule", destroySource: null, sourceCard: null,
       movedByEffect: false, wasFaceupBeforeMove,
       contextLabel: "temporary_control_return_no_space",
+      ...(countersAtFieldExit ? { countersAtFieldExit } : {}),
     };
     if (destinationZone === "graveyard") options.emitSimulatedEvent?.("card_to_grave", payload);
     options.emitSimulatedEvent?.("card_moved", payload);
@@ -562,14 +567,18 @@ export function resolveSimulatedTemporaryControlEffects(
       if (!equipHolder) continue;
       const equipOwner = getOriginalOwner(state, equip, equipHolder);
       const equipFromZone = findCardZone(equipHolder, equip);
+      const equipCountersAtFieldExit = captureCounterSnapshot(equip);
+      clearCardCounters(equip);
       removeCardFromZones(equipHolder, equip);
       const equipZone = equip.banishWhenLeavesField ? "banished" : "graveyard";
       appendSimulatedZoneCard(equipOwner[equipZone], equip);
       setSimulatedController(equip, equipOwner);
       equip.location = equipZone;
-      const equipPayload = { ...payload, card: equip, player: equipOwner,
+      const { countersAtFieldExit: _hostCounters, ...hostPayload } = payload;
+      const equipPayload = { ...hostPayload, card: equip, player: equipOwner,
         fromPlayer: equipHolder, toPlayer: equipOwner, fromZone: equipFromZone,
-        toZone: equipZone, contextLabel: "equip_target_left_field" };
+        toZone: equipZone, contextLabel: "equip_target_left_field",
+        ...(equipCountersAtFieldExit ? { countersAtFieldExit: equipCountersAtFieldExit } : {}) };
       if (equipZone === "graveyard") options.emitSimulatedEvent?.("card_to_grave", equipPayload);
       options.emitSimulatedEvent?.("card_moved", equipPayload);
     }

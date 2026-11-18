@@ -1,7 +1,7 @@
 import { addEffectNegation, clearEffectNegation, expireEffectNegation, normalizeNegationDuration as normalizeNegateEffectsDuration } from "../../../effects/negation.js";
 import { removeTrackedDamageStepBuffs, consumeTrackedDamageStepBuffs } from "../../../game/combat/damageStep.js";
 import { applyMove } from "./movement.js";
-import { expireFaceupDeclaredValues, restoreFaceupStatuses, trackFaceupStatus } from "../../../Card.js";
+import { clearCardCounters, expireFaceupDeclaredValues, restoreFaceupStatuses, trackFaceupStatus } from "../../../Card.js";
 import { applyLevelModification, expireLevelModifications, applyNamedStatChange } from "../../../effects/actions/stats.js";
 import { getCardEffectImmunity, isNonTargetingEffectReference } from "../../../effects/targeting/filters.js";
 import { getEffectiveAtk } from "../cardStats.js";
@@ -248,6 +248,8 @@ export function applySetFacedownDefense(
     const previousPosition = card.position || "attack";
     card.position = "defense";
     card.isFacedown = true;
+    // Same as the runtime handler (decision V4).
+    clearCardCounters(card);
     card.fieldPresenceSummons = [];
     expireFaceupStatBuffs(card);
     if (card.attackLimitDuration === "while_faceup") {

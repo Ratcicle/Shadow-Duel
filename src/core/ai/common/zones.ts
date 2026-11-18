@@ -6,7 +6,7 @@ import { restoreFaceupStatuses } from "../../Card.js";
 import { clearEffectNegation } from "../../effects/negation.js";
 import { captureEventCardPresence } from "../../game/zones/ownership.js";
 import type { EventCardPresenceSnapshot, EventEquipHostExitBinding } from "../../contracts/events.js";
-import { restoreFieldExitStatuses, restoreTemporaryStatuses } from "../../Card.js";
+import { captureCounterSnapshot, clearCardCounters, restoreFieldExitStatuses, restoreTemporaryStatuses } from "../../Card.js";
 import { cardHasArchetype, cardMatchesFilter } from "./cardFilters.js";
 import { countTurnCardActivations } from "../../game/events/activationHistory.js";
 import { getCounterValue } from "./counters.js";
@@ -593,6 +593,8 @@ export interface SimulatedMoveReceipt {
   readonly equipBindingsAtFieldExit: readonly SimulatedEquipHostExitBinding[];
   /** Destroys what this move unbound. Whoever reads the receipt runs it right after publishing the move's card_moved. */
   readonly settleBoundDestructions: () => void;
+  /** Counters the card had when this move took it off the field (decision V4). */
+  readonly countersAtFieldExit?: Readonly<Record<string, number>>;
 }
 export type SimulatedEquipHostExitBinding = EventEquipHostExitBinding<SimulatedCardState, SimulatedPlayerState>;
 
@@ -776,6 +778,10 @@ export function moveCardToZone(
   const attachedEquips: Array<{ equip: SimulatedCardState; holder: SimulatedPlayerState }> = [];
   const holders = options.state ? [options.state.player, options.state.bot] : [sourcePlayer, player];
   const boundDestructions = unbindDepartingCard(card, fromZone, toZone, holders);
+  // Decision V4, as the runtime moveCard: captured once, then cleared silently.
+  const leavesFieldZones = (fromZone === "field" || fromZone === "spellTrap" || fromZone === "fieldSpell") &&
+    toZone !== "field" && toZone !== "spellTrap" && toZone !== "fieldSpell";
+  const countersAtFieldExit = leavesFieldZones ? captureCounterSnapshot(card) : undefined;
   if (fromZone === "field" && toZone !== "field") {
     const hostBeforeExit = captureEventCardPresence(card, sourcePlayer.id, fromZone);
     for (const holder of holders) {
@@ -796,6 +802,7 @@ export function moveCardToZone(
       toZone !== "field" && toZone !== "spellTrap" && toZone !== "fieldSpell") {
     const field = options.state ? [...options.state.player.field, ...options.state.bot.field] : sourcePlayer.field;
     removeFieldAuraBuffContributions(card, field, field.indexOf(card));
+    clearCardCounters(card);
     if (card.state?.blueprintStorage) delete card.state.blueprintStorage;
     delete card.oncePerTurnUsageByName;
     card.oncePerTurnResetVersion = (card.oncePerTurnResetVersion || 0) + 1;
@@ -863,7 +870,8 @@ export function moveCardToZone(
     if (toZone !== "removed") card.owner = card.controller = player.id;
     const receipt = { destinationPresence: captureEventCardPresence(card, toZone === "removed" ? null : player.id, toZone),
       equipBindingsAtFieldExit: equipBindings,
-      settleBoundDestructions: () => settleBoundDestructions(boundDestructions, holders, options) };
+      settleBoundDestructions: () => settleBoundDestructions(boundDestructions, holders, options),
+      ...(countersAtFieldExit ? { countersAtFieldExit } : {}) };
     options.onMoveCommitted?.(receipt);
     for (const { equip, holder } of attachedEquips) {
       const destination = options.state ? [options.state.player, options.state.bot].find(owner => owner.id === equip.originalOwner) || holder : holder;
@@ -879,7 +887,8 @@ export function moveCardToZone(
       const payload = { card: equip, player: destination, fromPlayer: holder, toPlayer: destination,
         fromZone: "spellTrap", toZone: presence.zone, locationVersion: presence.locationVersion,
         wasFaceupBeforeMove: equipBindings.find(entry => entry.equip === equip)?.equipBeforeExit.faceUp === true,
-        contextLabel: "equipped_host_left_field", movedByEffect: false };
+        contextLabel: "equipped_host_left_field", movedByEffect: false,
+        ...(cleanupReceipt.value.countersAtFieldExit ? { countersAtFieldExit: cleanupReceipt.value.countersAtFieldExit } : {}) };
       if (presence.zone === "graveyard") options.emitSimulatedEvent?.("card_to_grave", payload);
       options.emitSimulatedEvent?.("card_moved", payload);
       cleanupReceipt.value.settleBoundDestructions();

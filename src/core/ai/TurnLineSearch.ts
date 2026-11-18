@@ -1,4 +1,5 @@
 import { moveCardToZone } from "./common/zones.js";
+import { captureCounterSnapshot } from "../Card.js";
 import {
   assertPublicPlanningProjection,
   createPlanningCopy,
@@ -165,6 +166,8 @@ interface DestroyedCardSummary {
   def: number;
   baseAtk: number;
   destroyedBy: string;
+  /** Counters it had before the move, which clears them (decision V4). */
+  countersAtFieldExit?: Readonly<Record<string, number>>;
 }
 
 interface LpGainSummary {
@@ -998,7 +1001,13 @@ function captureDestroyedCard(
     def: card.def || 0,
     baseAtk: card.baseAtk ?? card.originalAtk ?? card.atk ?? 0,
     destroyedBy,
+    ...countersSummary(card),
   };
+}
+
+function countersSummary(card: PlannerCard): { countersAtFieldExit?: Readonly<Record<string, number>> } {
+  const countersAtFieldExit = captureCounterSnapshot(card);
+  return countersAtFieldExit ? { countersAtFieldExit } : {};
 }
 
 // Published only after the move: a refused move is not a destruction.

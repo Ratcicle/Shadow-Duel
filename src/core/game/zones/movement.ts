@@ -5,6 +5,8 @@ import { clearLevelModifications, expireLevelModifications, expireFaceupStatBuff
 import {
   applyStatusesOnSummon,
   bumpCardLocationVersion,
+  captureCounterSnapshot,
+  clearCardCounters,
   restoreFieldExitStatuses,
   restoreTemporaryStatuses,
   restoreTrapMonsterOriginalState,
@@ -61,10 +63,14 @@ import type { SummonMethod, SummonOrigin } from "../../contracts/summon.js";
 import type { ChainSourceZone } from "../../contracts/chainRuntime.js";
 import type { ActionRuntimeCard } from "../../contracts/actionRuntime.js";
 import type {
+  CounterSnapshot,
   EventCardPresenceSnapshot,
   EventEquipHostExitBinding,
   EventTriggerOccurrence,
 } from "../../contracts/events.js";
+
+/** The zones where counters exist (decision V4). */
+const FIELD_ZONE_NAMES: ReadonlySet<string> = new Set(["field", "spellTrap", "fieldSpell"]);
 import { captureEventCardPresence } from "./ownership.js";
 import { reportEngineFault } from "../devTools/faults.js";
 import { captureReplacementPresence, formatReplacementText, replacementPresenceIsCurrent } from "../effects/destructionReplacement.js";
@@ -887,6 +893,7 @@ async function emitCardMovedEvent(
   fromZone: MovementEventZone,
   toZone: MovementEventZone,
   options: MovementOptions = {},
+  countersAtFieldExit?: CounterSnapshot,
 ) {
   if (!game || !card || !fromZone || !toZone || fromZone === toZone) {
     return null;
@@ -946,6 +953,7 @@ async function emitCardMovedEvent(
     wasDestroyed: options.wasDestroyed === true,
     effectsNegatedAtFieldExit: options.effectsNegatedAtFieldExit === true,
     ...(equipBindingsAtFieldExit ? { equipBindingsAtFieldExit } : {}),
+    ...(countersAtFieldExit ? { countersAtFieldExit } : {}),
     destroyCause: options.destroyCause || null,
     movedByEffect,
     wasFaceupBeforeMove:
@@ -1724,6 +1732,8 @@ async function trySendToGraveActionReplacement(
 
   // The send can only be replaced while the moving card keeps this presence.
   const targetPresence = captureReplacementPresence(card, location.owner);
+  // The replacing move clears the counters; the destruction still reports them.
+  const countersAtFieldExit = captureCounterSnapshot(card);
 
   for (const {
     sourceCard,
@@ -1834,11 +1844,18 @@ async function trySendToGraveActionReplacement(
       const logMessage = formatReplacementText(replacement.logMessage, targetName, sourceName);
       if (logMessage) game.ui?.log?.(logMessage);
       const finalLocation = findCardLocation(game, card, null);
-      return {
+      const replacedResult: {
+        replaced: true;
+        fromZone: typeof location.zone;
+        toZone: CanonicalZone;
+        countersAtFieldExit?: CounterSnapshot;
+      } = {
         replaced: true,
         fromZone: location.zone,
         toZone: finalLocation?.zone || "deck",
       };
+      if (countersAtFieldExit) replacedResult.countersAtFieldExit = countersAtFieldExit;
+      return replacedResult;
     }
   }
 
@@ -2508,12 +2525,14 @@ export async function moveCardInternal(
       destPlayer,
       options,
     ));
-    if (replacementResult?.replaced) {
+    if (replacementResult?.replaced && "fromZone" in replacementResult) {
       return {
         success: true,
         replaced: true,
         fromZone: replacementResult.fromZone || options.fromZone || null,
         toZone: replacementResult.toZone || "deck",
+        ...(replacementResult.countersAtFieldExit
+          ? { countersAtFieldExit: replacementResult.countersAtFieldExit } : {}),
       };
     }
   }
@@ -2827,6 +2846,10 @@ export async function moveCardInternal(
     wasFaceupBeforeMove &&
     card.effectsNegated !== true &&
     this.effectEngine?.isEffectNegated?.(card) !== true;
+  // Decision V4: a card leaving the field zones loses every counter; triggers
+  // and filters that read the card that left use what it had at that moment.
+  const leavesFieldZones = FIELD_ZONE_NAMES.has(fromZone) && !FIELD_ZONE_NAMES.has(toZone);
+  const countersAtFieldExit = leavesFieldZones ? captureCounterSnapshot(card) : undefined;
   const equipBindingsAtFieldExit: MutableEquipHostExitBinding[] = [];
   if (fromZone === "field" && toZone !== "field") {
     this.ensureDuelCardId?.(card);
@@ -2952,6 +2975,7 @@ export async function moveCardInternal(
 
     // Log the removal
     this.ui.log(`${card.name} (Token) was removed from the game.`);
+    clearCardCounters(card);
 
     await duringCurrentDuel(emitCardMovedEvent(this, card, fromOwner, null, fromZone, "removed", {
       ...options,
@@ -2961,7 +2985,7 @@ export async function moveCardInternal(
       contextLabel: options.contextLabel || "token_removed",
       atomicGroupId: tokenAtomicGroupId,
       ...exitEventOptions,
-    }));
+    }, countersAtFieldExit));
 
     // Update board to reflect removal
     this.updateBoard();
@@ -2975,6 +2999,7 @@ export async function moveCardInternal(
         fromZone,
         toZone: null,
         destinationPresence,
+        ...(countersAtFieldExit ? { countersAtFieldExit } : {}),
         ...(tokenExitResult?.needsSelection && tokenExitResult.selectionContract
           ? { needsSelection: true, selectionContract: tokenExitResult.selectionContract }
           : {}),
@@ -2996,6 +3021,7 @@ export async function moveCardInternal(
 
   if (options.isFacedown === true) {
     expireEffectNegation(card, "while_faceup");
+    clearCardCounters(card);
     restoreFaceupStatuses(card);
     expireFaceupDeclaredValues(card);
     expireFaceupStatBuffs(card);
@@ -3018,6 +3044,8 @@ export async function moveCardInternal(
     );
     cleanupDeclaredValuesWhenSourceLeavesActiveZone(card, fromZone, toZone);
   }
+
+  if (leavesFieldZones) clearCardCounters(card);
 
   const activeZones = ["field", "spellTrap", "fieldSpell"];
   if (
@@ -3238,6 +3266,7 @@ export async function moveCardInternal(
         wasFaceupBeforeMove,
         effectsNegatedAtFieldExit,
       },
+      countersAtFieldExit,
     ));
     return { success: true, fromZone, toZone };
   }
@@ -3427,6 +3456,7 @@ export async function moveCardInternal(
           atomicGroupId: extraDeckAtomicGroupId,
           ...exitEventOptions,
         },
+        countersAtFieldExit,
       ));
       const extraDeckExitResult = await resolveOwnedSimultaneousExitEvents();
       await duringCurrentDuel(flushPendingBoundDestruction());
@@ -3435,6 +3465,7 @@ export async function moveCardInternal(
           success: true,
           fromZone,
           toZone: "extraDeck",
+          ...(countersAtFieldExit ? { countersAtFieldExit } : {}),
           ...(extraDeckExitResult?.needsSelection && extraDeckExitResult.selectionContract
             ? { needsSelection: true, selectionContract: extraDeckExitResult.selectionContract }
             : {}),
@@ -3799,6 +3830,7 @@ export async function moveCardInternal(
         deferTargetPrecheck: deferCardToGraveTriggers,
         deferActivationChecks: deferCardToGraveTriggers && this.summonProcedureDepth > 0,
         effectsNegatedAtFieldExit,
+        ...(countersAtFieldExit ? { countersAtFieldExit } : {}),
         atomicGroupId,
       };
       const cardToGraveEvent = this.emit(
@@ -3866,6 +3898,7 @@ export async function moveCardInternal(
       atomicGroupId,
       ...exitEventOptions,
     },
+    countersAtFieldExit,
   ));
 
   if (this.effectEngine?.clearTargetingCache) {
@@ -3888,6 +3921,7 @@ export async function moveCardInternal(
       summonAttemptResult?.transaction?.summonId ??
       null,
     summonOrigin: summonOrigin || options.summonOrigin || null,
+    ...(countersAtFieldExit ? { countersAtFieldExit } : {}),
   };
   if (
     afterSummonResult?.needsSelection &&
