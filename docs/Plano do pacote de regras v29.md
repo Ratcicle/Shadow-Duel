@@ -45,6 +45,8 @@ Um commit por lote na branch, medido no commit limpo, como na 2.3. Depois de cad
 
 | Lote | Commit | Medição | Resultado |
 | --- | --- | --- | --- |
+| R0 | `41a4f85` (medição) e `d3dd498` (golden) | N = 5 (`canonical-41a4f85-21712b08`, com `--workers 4`) contra a v2 com `--expect-identical --allow-config-diff seeds.count,seeds.values,matrix.plannedCases,matrix.caseListSha256`; controles; sondas "antes" | Ambiente igual ao da v2 (Node v24.21.0, lockfile `8a2b9093…`, banco `a11dc8c4`). 405/405 iguais à v2, 0 erros e 0 defeitos; `deterministicDigest` `308b3ad3…`. Controles (`controlsDigest` `645b2409…`, corpus `d4c2a4a9…`) idênticos aos da v2. Envelope v28 congelado em `.cache/plan29-work/R0/v28-fixture.json`; ferramenta de diff por registro em `.cache/plan29-tools/recdiff.cjs`. Sonda "antes" (`.cache/plan29-work/R0/rules_probe.mts`, 21 confrontos × 3 duelos, seed 4242): 1 Equip negado mantendo o bônus (Crescent Shield 165); 0 saídas de Equip com vínculo negado; 0 custos ou ganhos de PV com fonte negada (260 reduções com fonte ativa); 102 saídas do campo com contadores, 95 cartas fora do campo e 1 virada para baixo com contadores, 59 ativações de 405, 407 e 408; 21 saídas com a cláusula de banir e 0 recusas `banish_protected`. Teste alterado com aval: o passo histórico v28 em `test/replay/canonicalReplay.test.ts` |
+| R1 | `feac1f8` | N = 5 (`canonical-feac1f8-21712b08`) contra R0, com diff por registro e alcance `techzero`; controles contra R0; invariância N = 1; ponte N = 2 contra a v2-ponte nos casos comuns; smoke com `--check-replays` | 0 erros e 0 defeitos; `deterministicDigest` `b0b3eb99…`. 404/405 iguais ao R0, 0 fora do alcance, 0 viradas e sem novidades. O caso mudado, `shadowheart:techzero:1`, tem o mesmo vencedor, turnos e PV: no turno 8 a Plasma Phoenix leva o bot à Final Singularity, que nega a Shadow-Heart Shield, e o Shadow-Heart Warlord cai de 2.800/2.400 para 2.300/1.900. A divergência entre o plano e a execução ganha `opponent.field` e `opponent.spellTrap`, porque o plano previa só o primeiro passo; o lado do bot já divergia antes. Controles idênticos aos do R0. Invariância (`336fd44e…`) igual à da v2, todas as raízes em ação 0 / score 0. Ponte (`5c14bd69…`): 161/162 iguais, 0 fora do alcance; só o mesmo caso muda `repeatedStates`. Smoke: 12/12 replays sem divergência. Sonda dirigida (`.cache/plan29-work/R1/probe_equip_cycle.mts`): 113, 456 e 165 equipados, negados, sem negação, negados de novo e enviados ao Cemitério dão os mesmos stats no runtime e na simulação, nos dois assentos, e o hospedeiro nunca fica abaixo da base; a sonda de L25c mostra 1.300/1.200 depois da negação. `npm test` com 8.046 aprovados e 8 pulados; typecheck, auditorias, `validate:actions`, `check:actions-doc` e build ok. Teste alterado com aval: `RULE_FIELD_MUTATIONS` |
 
 ## Política
 
@@ -79,18 +81,18 @@ Um commit por lote na branch, medido no commit limpo, como na 2.3. Depois de cad
 
 **Tarefas**
 
-- [ ] Identidade do ambiente contra `.cache/benchmark/2.3/v2/run-end.json` (Node v24.21.0, lockfile `8a2b9093…`, banco `a11dc8c4`).
-- [ ] R0 N = 5 no HEAD e `compare` contra a v2 com `--expect-identical --allow-config-diff seeds.count,seeds.values,matrix.plannedCases,matrix.caseListSha256`: os 405 casos em comum iguais.
-- [ ] Controles com `--compare-with .cache/benchmark/2.3/v2-controls`: idênticos. A invariância e a ponte "antes" são as da v2.
-- [ ] Congelar o fixture do envelope v28 em `.cache/plan29-work/R0/` (JSON completo, hashes `0a69cfa6`/`a196a87e`, envelope `2f912d05`, comprimento 33776).
-- [ ] Ferramenta de diff por registro (`duels.jsonl` sem `clock`, por `caseId`) em `.cache/plan29-tools/`, ao lado do teste do sinal.
-- [ ] Sondas "antes", fora do repositório, nos matchups de cada lote:
+- [x] Identidade do ambiente contra `.cache/benchmark/2.3/v2/run-end.json` (Node v24.21.0, lockfile `8a2b9093…`, banco `a11dc8c4`).
+- [x] R0 N = 5 no HEAD e `compare` contra a v2 com `--expect-identical --allow-config-diff seeds.count,seeds.values,matrix.plannedCases,matrix.caseListSha256`: os 405 casos em comum iguais.
+- [x] Controles com `--compare-with .cache/benchmark/2.3/v2-controls`: idênticos. A invariância e a ponte "antes" são as da v2.
+- [x] Congelar o fixture do envelope v28 em `.cache/plan29-work/R0/` (JSON completo, hashes `0a69cfa6`/`a196a87e`, envelope `2f912d05`, comprimento 33776).
+- [x] Ferramenta de diff por registro (`duels.jsonl` sem `clock`, por `caseId`) em `.cache/plan29-tools/`, ao lado do teste do sinal.
+- [x] Sondas "antes", fora do repositório, nos matchups de cada lote:
   - Equip com bônus fixo negado (R1);
   - Equip com vínculo negado saindo do campo (R2);
   - pagamento ou ganho de PV com fonte negada (R3);
   - cartas fora do campo ou viradas para baixo com contadores, e disparos de Carrioncap 405, Gravecap Widow 407 e Ancient Husk 408 (R4);
   - recusas `banish_protected` por redirecionamento e cartas presas no campo (R5).
-- [ ] Passo histórico v28 em `test/replay/canonicalReplay.test.ts`, com `engineVersion: "engine-rules-v28"` explícito e os valores congelados. É um acréscimo: hoje ele passa igual ao hash corrente. Qualquer lote que perturbe o fixture falha nele na hora.
+- [x] Passo histórico v28 em `test/replay/canonicalReplay.test.ts`, com `engineVersion: "engine-rules-v28"` explícito e os valores congelados. É um acréscimo: hoje ele passa igual ao hash corrente. Qualquer lote que perturbe o fixture falha nele na hora.
 
 **Teste alterado (aval)**
 
@@ -106,17 +108,17 @@ Um commit por lote na branch, medido no commit limpo, como na 2.3. Depois de cad
 
 **Tarefas**
 
-- [ ] `equipAtkBonus`/`equipDefBonus` continuam valendo "quantidade aplicada hoje ao hospedeiro". Dois campos opcionais novos, `equipAtkBonusSuspended`/`equipDefBonusSuspended`, guardam o que está retido enquanto o Equip está inativo. Os campos só existem num Equip com bônus retido.
-- [ ] Helper `refreshEquipStatBonus(equip, host, enabled)` em `src/core/effects/passives/passiveBuffs.ts`, ao lado de `refreshEquipExtraAttackBonus`.
+- [x] `equipAtkBonus`/`equipDefBonus` continuam valendo "quantidade aplicada hoje ao hospedeiro". Dois campos opcionais novos, `equipAtkBonusSuspended`/`equipDefBonusSuspended`, guardam o que está retido enquanto o Equip está inativo. Os campos só existem num Equip com bônus retido.
+- [x] Helper `refreshEquipStatBonus(equip, host, enabled)` em `src/core/effects/passives/passiveBuffs.ts`, ao lado de `refreshEquipExtraAttackBonus`.
   - Chamado no laço de Equip de `updatePassiveBuffs`, com o mesmo predicado dos ataques extras: hospedeiro em campo, Equip virado para cima e não negado.
   - Chamado também em `applyEquip`.
-- [ ] Limpeza dos campos retidos em todos os caminhos de saída e de reequipar:
+- [x] Limpeza dos campos retidos em todos os caminhos de saída e de reequipar:
   - runtime: `src/core/effects/actions/equip.ts:98-116` e `:169-178`, `src/core/game/zones/movement.ts:529-530`, `:3143-3151` e `:3261-3274`;
   - simulação: `attachSimulatedEquip` apaga os dois campos antes do bônus, e o laço de órfãos de `removeCardFromZones` (`src/core/ai/common/zones.ts:497-503`) também.
-- [ ] Simulação: a mesma chamada em `refreshSimulatedFieldAuras`, que roda depois de cada ação simulada. Não acrescentar chamada em `reconcileSimulatedNegationPassives`.
-- [ ] Contratos: os dois campos em `src/core/Card.ts`, `src/core/contracts/cards.ts` e `src/core/contracts/actionRuntime.ts`, sem inicializar no construtor.
-- [ ] Estado canônico: os dois campos entram em `statBookkeeping` só quando diferentes de zero, com validação opcional.
-- [ ] `isActiveEquipInZone`/`isActiveEquipForCard` não mudam: o Equip negado continua contando como equipado para `equippedWithFilters`.
+- [x] Simulação: a mesma chamada em `refreshSimulatedFieldAuras`, que roda depois de cada ação simulada. Não acrescentar chamada em `reconcileSimulatedNegationPassives`.
+- [x] Contratos: os dois campos em `src/core/Card.ts`, `src/core/contracts/cards.ts` e `src/core/contracts/actionRuntime.ts`, sem inicializar no construtor.
+- [x] Estado canônico: os dois campos entram em `statBookkeeping` só quando diferentes de zero, com validação opcional.
+- [x] `isActiveEquipInZone`/`isActiveEquipForCard` não mudam: o Equip negado continua contando como equipado para `equippedWithFilters`.
 
 **Regra adotada (reversível a pedido do diretor):** um efeito que remove aumentos de status (Shadow-Heart Arctroth) sobre um monstro com Equip negado não remove o bônus retido; ele volta inteiro se a negação acabar. É o que a engine já faz com o +500 DEF da Bloomrot Fungal Armor.
 
