@@ -8,6 +8,7 @@ import type {
   PassiveRuleDefinition,
 } from "../../contracts/effects.js";
 import type { RuntimeCardFilter } from "../filters/cardFilters.js";
+import { isLpCostReducerActive } from "../passives/passiveBuffs.js";
 
 interface ReductionRule
   extends Omit<PassiveRuleDefinition, "stackMode" | "appliesTo"> {
@@ -135,7 +136,8 @@ export function resolveLpCost(
 
         const allowFacedown =
           effect.allowFacedown === true || passive.allowFacedown === true;
-        if (!allowFacedown && card.isFacedown) continue;
+        // Decision V3: a negated reducer neither reduces nor spends a use.
+        if (!isLpCostReducerActive(card, allowFacedown)) continue;
         if (effect.requireFaceup === true && card.isFacedown) continue;
 
         const controllerId = card.controller || card.owner;

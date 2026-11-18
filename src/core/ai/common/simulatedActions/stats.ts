@@ -989,9 +989,8 @@ function reconcileSimulatedNegationPassives(
     // These rules read negation directly at use time.
     if (passiveType === "restrict_opponent_summon_turn_attack" || passiveType === "counter_attack_lock" || passiveType === "send_to_grave_replacement" ||
         passiveType === "conditional_protection" || passiveType === "field_archetype_aura_buff" || passiveType === "event_actions" ||
-        passiveType === "banish_protection" || passiveType === "conditional_unaffected_by_effects" || passiveType === "additional_normal_summon") return;
-    // These rules are read at use time; the runtime does not gate them on negation either.
-    if (passiveType === "lp_cost_reduction" || passiveType === "lp_gain_multiplier") return;
+        passiveType === "banish_protection" || passiveType === "conditional_unaffected_by_effects" || passiveType === "additional_normal_summon" ||
+        passiveType === "lp_cost_reduction" || passiveType === "lp_gain_multiplier") return;
     // Planning has no reader for this lock: it binds only the non-turn player
     // during its controller's Battle Phase.
     if (passiveType === "battle_phase_activation_lock") return;

@@ -678,7 +678,9 @@ Tipos suportados atualmente:
 
 - `lp_cost_reduction`: reduz custos de `pay_lp`; no card data, use `amount`,
   `appliesTo`, `actionTypes`, `sourceFilters` e `stackMode: "max"`. O runtime
-  reconhece aliases legados, mas eles não pertencem ao schema de autoria.
+  reconhece aliases legados, mas eles não pertencem ao schema de autoria. Com
+  a fonte negada, a redução não se aplica e não gasta uso; o custo usa o
+  estado da fonte no momento do pagamento.
 - `position_status`: aplica status enquanto a carta está em uma posição.
 - `conditional_status`: aplica status enquanto as condições declaradas passam.
 - `conditional_extra_attacks`: concede ataques adicionais enquanto as condições
@@ -742,7 +744,8 @@ Tipos suportados atualmente:
   pelo oponente no turno coberto.
 - `negate_opponent_battle_destruction_prevention`: neutraliza proteções do
   oponente contra destruição em batalha.
-- `lp_gain_multiplier`: multiplica ganhos de LP do jogador afetado.
+- `lp_gain_multiplier`: multiplica ganhos de LP do jogador afetado. O
+  multiplicador é lido no momento do ganho e não vale com a fonte negada.
 
 Campos comuns de buff aceitos no card data: `amountPerCard`, `stats`,
 `countOwners`, `cardKinds`, `includeSelf`, `requireFaceup`. Consulte

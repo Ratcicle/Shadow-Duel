@@ -395,6 +395,38 @@ export function isPassiveSourceActive(card: {
   return !!card && card.isFacedown !== true && card.effectsNegated !== true;
 }
 
+interface LpGainMultiplierSource {
+  readonly cardKind?: string | undefined;
+  readonly isFacedown?: boolean | undefined;
+  readonly effectsNegated?: boolean | undefined;
+  readonly effects?: readonly EffectDefinition[] | undefined;
+}
+
+/**
+ * Decision V3 (16/11/2026): the highest lp_gain_multiplier among a player's
+ * active monsters, read when the gain happens. A negated or face-down source
+ * does not apply. Runtime, simulation and the Bot's battle step share it.
+ */
+export function getLpGainMultiplier(field: readonly (LpGainMultiplierSource | null | undefined)[] | null | undefined): number {
+  let multiplier = 1;
+  for (const card of field || []) {
+    if (!card || card.cardKind !== "monster" || !isPassiveSourceActive(card)) continue;
+    for (const effect of card.effects || []) {
+      if (effect.timing !== "passive" || !("passive" in effect) || effect.passive?.type !== "lp_gain_multiplier") continue;
+      multiplier = Math.max(multiplier, Number(effect.passive.multiplier) || 1);
+    }
+  }
+  return multiplier;
+}
+
+/** An LP cost reducer applies only while its source is active; allowFacedown waives the face only. */
+export function isLpCostReducerActive(card: {
+  readonly isFacedown?: boolean | undefined;
+  readonly effectsNegated?: boolean | undefined;
+}, allowFacedown: boolean): boolean {
+  return isPassiveSourceActive(allowFacedown ? { effectsNegated: card.effectsNegated } : card);
+}
+
 interface BattleProtectionEquipView {
   readonly grantsBattleIndestructible?: boolean | null | undefined;
   readonly isFacedown?: boolean | undefined;

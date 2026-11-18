@@ -1,4 +1,5 @@
 import { getNormalTributeRequirement } from "./game/summon/tributeValue.js";
+import { getLpGainMultiplier } from "./effects/passives/passiveBuffs.js";
 import type { NormalSummonOptions } from "./contracts/player.js";
 import {
   cardDatabase,
@@ -987,8 +988,9 @@ export default class Player implements GamePlayer {
   }
 
   gainLP(amount: number, options: PlayerGainLpOptions = {}): void {
-    // Apply LP gain multiplier (for effects like Megashield Barbarias)
-    const multiplier = this.lpGainMultiplier || 1.0;
+    // The gain multiplier is read from the field when the gain happens
+    // (decision V3): a negated source does not apply.
+    const multiplier = getLpGainMultiplier(this.field);
     const adjustedAmount = Math.floor(amount * multiplier);
     if (!adjustedAmount || adjustedAmount <= 0) return;
     const before = this.lp;
@@ -1019,34 +1021,12 @@ export default class Player implements GamePlayer {
   }
 
   /**
-   * Calculate and update continuous passive effects from field cards
-   * Called by Game.updateBoard()
+   * Refresh the projection of continuous passive effects from field cards.
+   * Called by Game.updateBoard(). `lpGainMultiplier` is a projection kept in
+   * the canonical state; gainLP reads the rule from the field itself.
    */
   updatePassiveEffects(): void {
-    // Reset to defaults
-    this.lpGainMultiplier = 1.0;
-
-    // Check for LP gain multiplier passive effects on field monsters
-    // Generic implementation - no hardcoded card names
-    for (const card of this.field || []) {
-      if (!card || card.isFacedown || card.cardKind !== "monster") continue;
-
-      for (const effect of card.effects || []) {
-        const effectView = effect as EffectDefinition & PassiveEffectView;
-        if (!effect || effect.timing !== "passive" || !effectView.passive)
-          continue;
-
-        if (effectView.passive.type === "lp_gain_multiplier") {
-          const multiplier = Number(effectView.passive.multiplier) || 1.0;
-          // Apply the highest multiplier (stacking could be added later)
-          this.lpGainMultiplier = Math.max(this.lpGainMultiplier, multiplier);
-        }
-      }
-    }
-
-    // Future: Add more passive effects here
-    // Example: this.damageReduction = ...
-    // Example: this.extraDraws = ...
+    this.lpGainMultiplier = getLpGainMultiplier(this.field);
   }
 }
 
