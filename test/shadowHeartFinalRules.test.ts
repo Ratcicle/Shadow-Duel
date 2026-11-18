@@ -339,7 +339,7 @@ for (const seat of ["player", "bot"] as const) {
 
 for (const seat of ["player", "bot"] as const) {
   for (const negated of [false, true]) {
-    test(`The Shadow Heart destroys its host inside the awaited move (${seat}, ${negated ? "negated" : "active"})`, async t => {
+    test(`The Shadow Heart ${negated ? "leaves its host on the field when negated" : "destroys its host inside the awaited move"} (${seat})`, async t => {
       const { game, owner } = setup(t, seat);
       const equip = game.createCardForOwner(120, owner);
       const host = game.createCardForOwner(111, owner);
@@ -357,11 +357,12 @@ for (const seat of ["player", "bot"] as const) {
       const moved = await game.moveCard(equip, owner, "graveyard", { fromZone: "spellTrap" });
 
       assert.equal(moved && typeof moved === "object" ? moved.success : moved, true);
-      // Nothing is left running after the move: the host is already gone.
+      // Nothing is left running after the move.
       assert.equal(game.zoneOpDepth, 0);
-      assert.ok(owner.graveyard.includes(host), "the equipped monster is destroyed before the move resolves");
-      assert.equal(owner.field.includes(host), false);
-      assert.equal(logs.filter(message => message.includes("left the field")).length, 1);
+      // Decision V2: a negated Equip does not destroy its host when it leaves.
+      assert.equal(owner.graveyard.includes(host), !negated, "the equipped monster is destroyed before the move resolves only while the bond is active");
+      assert.equal(owner.field.includes(host), negated);
+      assert.equal(logs.filter(message => message.includes("left the field")).length, negated ? 0 : 1);
     });
   }
 }

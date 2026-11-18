@@ -2820,7 +2820,9 @@ export async function moveCardInternal(
     options,
   );
   const wasFaceupBeforeMove = card.isFacedown !== true;
-  // Capture before field-exit cleanup clears temporary negation.
+  // Capture before field-exit cleanup clears temporary negation. Both leave
+  // bonds read it: a Continuous Trap's bound monster and an Equip that
+  // destroys its host when it leaves the field (decision V2).
   const bindingEffectWasActive =
     wasFaceupBeforeMove &&
     card.effectsNegated !== true &&
@@ -3170,8 +3172,10 @@ export async function moveCardInternal(
       }
     }
 
-    // Generalized equip cleanup: if an equip card has destroyEquippedOnLeave, destroy the equipped monster
-    // Check for passive effect with id pattern or explicit flag on card
+    // Decision V2 (16/11/2026): the bond that destroys the host when this
+    // Equip leaves the field is a continuous effect of the Equip. It applies
+    // only if the Equip was face-up and not negated just before it left, and
+    // only when it leaves the field (a Spell & Trap to Spell & Trap move does not).
     const hasDestroyOnLeaveEffect = (card.effects || []).some(
       (e) =>
         e &&
@@ -3180,8 +3184,9 @@ export async function moveCardInternal(
         e.id.includes("destroy_on_leave"),
     );
     if (
-      (Reflect.get(card, "destroyEquippedOnLeave") === true ||
-        hasDestroyOnLeaveEffect) &&
+      bindingEffectWasActive &&
+      hasDestroyOnLeaveEffect &&
+      toZone !== "spellTrap" &&
       host
     ) {
       // Queued for the awaited flush after this move, never a detached promise.
