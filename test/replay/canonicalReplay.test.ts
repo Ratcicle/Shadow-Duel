@@ -312,6 +312,14 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   const replayResult = required(replay.result);
   assert.equal(replayResult.finalStateHash, "a196a87e");
   // Historical envelopes retain their exact version and declaration signature.
+  // engine-rules-v28: the envelope before the v29 rule package.
+  const beforeRulesV29 = structuredClone(replay);
+  beforeRulesV29.cardDatabaseSignature = "a11dc8c4";
+  required(beforeRulesV29.commands[0]).stateHash = "0a69cfa6";
+  required(beforeRulesV29.commands[1]).stateHash = "a196a87e";
+  required(beforeRulesV29.result).finalStateHash = "a196a87e";
+  assert.equal(hashCanonicalValue({ ...beforeRulesV29, engineVersion: "engine-rules-v28" }), "2f912d05");
+  assert.equal(JSON.stringify({ ...beforeRulesV29, engineVersion: "engine-rules-v28" }).length, 33776);
   // engine-rules-v27: the envelope before seat controllers, AI activation
   // plans and AI trigger choices were recorded.
   const beforeRecordedAiChoices = structuredClone(replay);
