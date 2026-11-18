@@ -310,6 +310,8 @@ function turnBasedBuffState(card: ReplayRuntimeCard): SerializableValue {
 }
 
 function cardStatBookkeeping(card: ReplayRuntimeCard): CanonicalCardStatBookkeepingSnapshot {
+  const suspendedAtk = numericValue(readProperty(card, "equipAtkBonusSuspended"));
+  const suspendedDef = numericValue(readProperty(card, "equipDefBonusSuspended"));
   return {
     tempAtkBoost: numericValue(readProperty(card, "tempAtkBoost")),
     tempDefBoost: numericValue(readProperty(card, "tempDefBoost")),
@@ -324,6 +326,9 @@ function cardStatBookkeeping(card: ReplayRuntimeCard): CanonicalCardStatBookkeep
     equipDefBonus: numericValue(readProperty(card, "equipDefBonus")),
     equipExtraAttacks: numericValue(readProperty(card, "equipExtraAttacks")),
     equipExtraAttacksApplied: numericValue(readProperty(card, "equipExtraAttacksApplied")),
+    // Emitted only while an Equip withholds its bonus, so other states keep their hash.
+    ...(suspendedAtk !== 0 ? { equipAtkBonusSuspended: suspendedAtk } : {}),
+    ...(suspendedDef !== 0 ? { equipDefBonusSuspended: suspendedDef } : {}),
   };
 }
 

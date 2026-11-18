@@ -416,6 +416,9 @@ export default class Card implements GameCard {
   declare equipDefBonus: number;
   declare equipExtraAttacks: number;
   declare equipExtraAttacksApplied?: number;
+  /** Fixed Equip bonus withheld while this Equip is negated or face-down. */
+  declare equipAtkBonusSuspended?: number;
+  declare equipDefBonusSuspended?: number;
   declare grantsBattleIndestructible: boolean;
   declare battleIndestructible: boolean;
   declare tempBattleIndestructible: boolean;

@@ -627,8 +627,9 @@ function getCardKey(card: PlannerCard | null | undefined): string {
     card.level ?? "no-level",
     card.tempAtkBoost || 0,
     card.tempDefBoost || 0,
-    card.equipAtkBonus || 0,
-    card.equipDefBonus || 0,
+    // A withheld Equip bonus (decision V1) only extends the key when present.
+    card.equipAtkBonusSuspended ? `${card.equipAtkBonus || 0}s${card.equipAtkBonusSuspended}` : card.equipAtkBonus || 0,
+    card.equipDefBonusSuspended ? `${card.equipDefBonus || 0}s${card.equipDefBonusSuspended}` : card.equipDefBonus || 0,
     card.hasAttacked ? "attacked" : "",
     card.cannotAttackThisTurn ? "cantAtk" : "",
     summarizeCounters(card),

@@ -13,6 +13,7 @@ import type { ConditionContext } from "../conditions/runtime.js";
 import type {
   CardDynamicBuffEntry,
   CardPassiveExtraAttackBonus,
+  CardPermanentBuffMap,
 } from "../../contracts/cards.js";
 import type {
   EffectDefinition,
@@ -489,6 +490,62 @@ export function refreshEquipExtraAttackBonus(
   host.extraAttacks = Math.max(0, Number(host.extraAttacks || 0) - previous + next);
   host.hasAttacked = Number(host.attacksUsedThisTurn || 0) >= 1 + host.extraAttacks;
   return true;
+}
+
+interface EquipStatBonusSource {
+  equipAtkBonus?: number | undefined;
+  equipDefBonus?: number | undefined;
+  equipAtkBonusSuspended?: number | undefined;
+  equipDefBonusSuspended?: number | undefined;
+}
+
+interface EquipStatBonusTarget {
+  atk?: number | undefined;
+  def?: number | undefined;
+  permanentBuffsBySource?: CardPermanentBuffMap | null | undefined;
+}
+
+const EQUIP_STAT_BONUS_KEYS = [
+  ["atk", "equipAtkBonus", "equipAtkBonusSuspended"],
+  ["def", "equipDefBonus", "equipDefBonusSuspended"],
+] as const;
+
+/**
+ * Decision V1 (16/11/2026): a negated or face-down Equip applies none of its
+ * effects. Its fixed ATK/DEF bonus is withheld while it is inactive and comes
+ * back when it is active again. `equipAtkBonus`/`equipDefBonus` keep meaning
+ * the amount currently included in the host's stats; the withheld amount only
+ * exists on an Equip that is withholding one.
+ */
+export function refreshEquipStatBonus(
+  equip: EquipStatBonusSource,
+  host: EquipStatBonusTarget,
+  enabled: boolean,
+): boolean {
+  let changed = false;
+  for (const [stat, appliedKey, suspendedKey] of EQUIP_STAT_BONUS_KEYS) {
+    if (typeof host[stat] !== "number") continue;
+    const applied = Number(equip[appliedKey] || 0);
+    const suspended = Number(equip[suspendedKey] || 0);
+    if (enabled && suspended !== 0) {
+      host[stat] = (host[stat] ?? 0) + suspended;
+      equip[appliedKey] = applied + suspended;
+      delete equip[suspendedKey];
+      changed = true;
+    } else if (!enabled && applied !== 0) {
+      removeTrackedStatChange(host, stat, applied);
+      equip[suspendedKey] = suspended + applied;
+      equip[appliedKey] = 0;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+/** Forget a withheld Equip bonus when the Equip detaches or leaves. */
+export function clearSuspendedEquipStatBonus(equip: EquipStatBonusSource): void {
+  delete equip.equipAtkBonusSuspended;
+  delete equip.equipDefBonusSuspended;
 }
 
 function clearPassiveBuffEntry(
@@ -997,9 +1054,12 @@ export function updatePassiveBuffs(this: PassiveHost) {
   for (const card of passiveSources) {
     if (card.cardKind === "spell" && card.subtype === "equip" && card.equippedTo) {
       const host = card.equippedTo as PassiveCard;
-      if (refreshEquipExtraAttackBonus(card, host,
-        fieldCards.includes(host) && card.isFacedown !== true &&
-        !passiveSourceEffectsAreNegated(this, card))) {
+      const equipActive = fieldCards.includes(host) && card.isFacedown !== true &&
+        !passiveSourceEffectsAreNegated(this, card);
+      if (refreshEquipExtraAttackBonus(card, host, equipActive)) {
+        updated = true;
+      }
+      if (refreshEquipStatBonus(card, host, equipActive)) {
         updated = true;
       }
     }

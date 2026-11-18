@@ -13,7 +13,7 @@ import { getCounterValue } from "./counters.js";
 import { evaluateSimulatedConditions } from "./simulatedConditions.js";
 import type { RuntimePassive } from "../../effects/passives/passiveBuffs.js";
 import { clearLevelModifications, clearPermanentStatBuffs, expireFaceupStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
-import { clearPassiveBuffsForCard, getModeledPassiveContributions, pruneModeledPassiveContributions, registerModeledPassiveContribution, applyPassiveBuffValue, getFieldAuraBuffKey, getFieldCounterStatAuraBuffKey, getEquippedCounterBuffKey, getEquippedFieldCounterBuffKeys, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, isActiveEquipInZone, isBattleIndestructibleGrantedByEquip, refreshEquipBattleIndestructible } from "../../effects/passives/passiveBuffs.js";
+import { clearPassiveBuffsForCard, getModeledPassiveContributions, pruneModeledPassiveContributions, registerModeledPassiveContribution, applyPassiveBuffValue, getFieldAuraBuffKey, getFieldCounterStatAuraBuffKey, getEquippedCounterBuffKey, getEquippedFieldCounterBuffKeys, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, isActiveEquipInZone, isBattleIndestructibleGrantedByEquip, refreshEquipBattleIndestructible, clearSuspendedEquipStatBonus, isPassiveSourceActive, refreshEquipStatBonus } from "../../effects/passives/passiveBuffs.js";
 import {
   assignAutomaticFieldSlot,
   clearFieldSlot,
@@ -158,6 +158,12 @@ export function refreshSimulatedFieldAuras(state: Pick<AiStateShape, "bot" | "pl
   for (const source of cards) {
     const owner = state.player.field.includes(source) || state.player.spellTrap.includes(source) ||
       state.player.fieldSpell === source ? state.player : state.bot;
+    // Decision V1: same gate as the runtime Equip loop of updatePassiveBuffs.
+    if (source.cardKind === "spell" && source.subtype === "equip" &&
+        source.equippedTo && typeof source.equippedTo === "object") {
+      const host = source.equippedTo as SimulatedCardState;
+      refreshEquipStatBonus(source, host, field.includes(host) && isPassiveSourceActive(source));
+    }
     source.effects?.forEach((effect, effectIndex) => {
       if (effect.timing !== "passive" || !("passive" in effect) || !effect.passive) return;
       if (effect.passive.type === "archetype_count_buff" ||
@@ -483,6 +489,7 @@ export function detachSimulatedEquip(
   equipCard.equipTarget = null;
   equipCard.equipAtkBonus = 0;
   equipCard.equipDefBonus = 0;
+  clearSuspendedEquipStatBonus(equipCard);
   equipCard.equipExtraAttacks = 0;
   equipCard.grantsBattleIndestructible = false;
   equipCard.grantsCrescentShieldGuard = false;
@@ -499,6 +506,7 @@ export function removeCardFromZones(
       if (!equip) return;
       equip.equippedTo = null;
       equip.equipTarget = null;
+      clearSuspendedEquipStatBonus(equip);
     });
   }
   const zones = [
@@ -538,6 +546,8 @@ export function attachSimulatedEquip(
   }
 
   detachSimulatedEquip(equipCard);
+  // detach returns early for an Equip without a host; clear here as the runtime does.
+  clearSuspendedEquipStatBonus(equipCard);
   equipCard.equippedTo = target;
   equipCard.equipTarget = target;
   if (!Array.isArray(target.equips)) target.equips = [];
@@ -551,6 +561,7 @@ export function attachSimulatedEquip(
     equipCard.equipDefBonus = action.defBonus!;
     target.def = (target.def || 0) + action.defBonus!;
   }
+  refreshEquipStatBonus(equipCard, target, isPassiveSourceActive(equipCard));
   if (Number.isFinite(action.extraAttacks as number) && action.extraAttacks !== 0) {
     equipCard.equipExtraAttacksApplied = 0;
     equipCard.equipExtraAttacks = action.extraAttacks!;

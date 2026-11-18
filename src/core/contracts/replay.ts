@@ -456,6 +456,9 @@ export interface CanonicalCardStatBookkeepingSnapshot {
   equipDefBonus: number;
   equipExtraAttacks: number;
   equipExtraAttacksApplied: number;
+  /** Present only while a negated or face-down Equip withholds its fixed bonus. */
+  equipAtkBonusSuspended?: number;
+  equipDefBonusSuspended?: number;
 }
 
 /**

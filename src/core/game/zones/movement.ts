@@ -11,7 +11,7 @@ import {
 } from "../../Card.js";
 import { SUMMON_MODES } from "../summon/transaction.js";
 import { retireDamageStepBuffsForCard } from "../combat/damageStep.js";
-import { getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus } from "../../effects/passives/passiveBuffs.js";
+import { clearSuspendedEquipStatBonus, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus } from "../../effects/passives/passiveBuffs.js";
 import { getAvailableFieldSlots, getFieldOccupants, isFieldSlot } from "./placement.js";
 import { checkpointZoneSnapshotAfterResponse } from "./snapshot.js";
 import type { FieldPlacementIntent } from "../../contracts/placement.js";
@@ -528,6 +528,7 @@ export async function cleanupTokenReferences(
     // Reset equip bonuses (they were applied to the token which is being removed)
     equip.equipAtkBonus = 0;
     equip.equipDefBonus = 0;
+    clearSuspendedEquipStatBonus(equip);
     equip.equipExtraAttacks = 0;
     equip.grantsBattleIndestructible = false;
     equip.grantsCrescentShieldGuard = false;
@@ -3138,7 +3139,9 @@ export async function moveCardInternal(
       }
     }
 
-    // Remove stat bonuses (clamp to 0 to prevent negative stats)
+    // Remove stat bonuses (clamp to 0 to prevent negative stats). Only the
+    // applied amount is in the host's stats; a withheld bonus is just dropped.
+    clearSuspendedEquipStatBonus(card);
     if (host) {
       if (typeof card.equipAtkBonus === "number" && card.equipAtkBonus !== 0) {
         removeTrackedStatChange(host, "atk", card.equipAtkBonus);
@@ -3272,6 +3275,7 @@ export async function moveCardInternal(
         removeTrackedStatChange(card, "def", equip.equipDefBonus);
         equip.equipDefBonus = 0;
       }
+      clearSuspendedEquipStatBonus(equip);
       refreshEquipExtraAttackBonus(equip, card, false);
       equip.equipExtraAttacks = 0;
       if (equip.grantsBattleIndestructible) {

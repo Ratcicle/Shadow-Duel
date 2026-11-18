@@ -710,6 +710,7 @@ const RULE_FIELD_MUTATIONS: readonly RuleFieldMutation[] = [
     ["suppressedDynamicBuffStatsByKey", { aura: { atk: 300 } }],
     ["temporarySuppressedDynamicBuffStatsByKey", { aura: { atk: 300 } }],
     ["equipAtkBonus", 500], ["equipDefBonus", 500], ["equipExtraAttacks", 1], ["equipExtraAttacksApplied", 1],
+    ["equipAtkBonusSuspended", 500], ["equipDefBonusSuspended", 500],
     ["grantsBattleIndestructible", true],
     ["effectMarkers", { marker: { key: "marker", sourceEffectId: "effect", createdOnTurn: 1 } }],
     ["pendingSpellTrapFinalization", { destination: "graveyard", ownerId: "player", activationZone: "spellTrap" }],

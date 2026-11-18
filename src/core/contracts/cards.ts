@@ -760,6 +760,8 @@ export interface GameCard {
   equipDefBonus: number;
   equipExtraAttacks: number;
   equipExtraAttacksApplied?: number;
+  equipAtkBonusSuspended?: number;
+  equipDefBonusSuspended?: number;
   grantsBattleIndestructible: boolean;
   battleIndestructible: boolean;
   tempBattleIndestructible: boolean;
