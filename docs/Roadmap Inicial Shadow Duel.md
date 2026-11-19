@@ -8,7 +8,7 @@ Este documento registra a direção geral de desenvolvimento do **Shadow Duel** 
 | --- | --- |
 | Estabilização pós-TypeScript | Concluída em 06/10/2026. |
 | Saneamento (fase 1.5) | Concluído em 10/10/2026: CI `Verify` verde como portão de `main` e do deploy, replay `engine-rules-v27`, determinismo de IA e Arena, bugs de engine e correções de UI/i18n. |
-| IAs atuais | Arquitetura e paridade (2.1), harness de benchmark (2.2) e limites conhecidos (2.3) concluídos. A 2.3 levou o replay a `engine-rules-v28` e fechou com a baseline v2. O pacote de regras v29 levou o replay a `engine-rules-v29` e fechou com a baseline v3, a referência da 2.4. Ajuste guiado por dados (2.4) ainda não iniciado. |
+| IAs atuais | Arquitetura e paridade (2.1), harness de benchmark (2.2) e limites conhecidos (2.3) concluídos. A 2.3 levou o replay a `engine-rules-v28` e fechou com a baseline v2. O pacote de regras v29 levou o replay a `engine-rules-v29` e fechou com a baseline v3, a referência da 2.4. Ajuste guiado por dados (2.4) em planejamento: diagnóstico da v3 e plano em [Plano da Fase 2.4](Plano%20da%20Fase%202.4.md), com as decisões D1–D14 aprovadas em 19/11/2026. As decisões de regra do diretor de 19/11/2026 (V9–V12) abrem a 2.4 com o pacote de regras v30, que fecha com a baseline v4. |
 | Carmim Real | Catálogo proposto, com decisões de regra em aberto; cartas e IA ainda não implementadas. |
 | Suporte adicional de Burning West e Bloomrot | Planejado; escopo e necessidade dependem do diagnóstico dos decks e das IAs. |
 | Gauntlet | Planejado, ainda não implementado. |
@@ -66,7 +66,7 @@ Os itens adiados estão na seção "Fora do escopo da fase 1.5" do plano. Os que
 
 ## 2. Aprimoramento das IAs atuais
 
-**Status:** 2.1 concluída em **07/10/2026**. 2.2 concluída em **11/10/2026**, com a baseline v1 registrada abaixo. 2.3 concluída em **16/11/2026**, com a baseline v2 registrada na sua seção. Pacote de regras v29 concluído em **19/11/2026**, com a baseline v3 registrada depois da v2. 2.4 ainda não iniciada.
+**Status:** 2.1 concluída em **07/10/2026**. 2.2 concluída em **11/10/2026**, com a baseline v1 registrada abaixo. 2.3 concluída em **16/11/2026**, com a baseline v2 registrada na sua seção. Pacote de regras v29 concluído em **19/11/2026**, com a baseline v3 registrada depois da v2. 2.4 planejada em **19/11/2026** ([plano](Plano%20da%20Fase%202.4.md), decisões D1–D14 aprovadas); começa pelo pacote de regras v30 (bloco R), ainda não iniciado.
 
 **Objetivo:** aproximar a qualidade dos bots antes de usar a Bot Arena como referência séria de balanceamento. Resultados de bot vs bot podem refletir a qualidade da IA, e não só a força real do deck. Por isso, a força relativa dos nove bots precisa ser medida com benchmarks reproduzíveis e intervalos de confiança.
 
@@ -84,7 +84,7 @@ Herdadas do [plano das IAs](Plano%20de%20Atualiza%C3%A7%C3%A3o%20das%20IAs.md), 
 - **Classificar cada lote antes de implementar:**
   - **Refatoração equivalente:** candidatos, prioridades, decisões por instância e linha escolhida ficam idênticos nos cenários caracterizados (corpus e controles).
   - **Correção de paridade:** primeiro a divergência contra o runtime é reproduzida. Depois a simulação ou a execução é corrigida e as mudanças de decisão resultantes são documentadas.
-  - **Ajuste de política:** pesos, prioridades e heurísticas. Só é aceito pela diferença medida no harness contra a baseline, com intervalo de Wilson.
+  - **Ajuste de política:** pesos, prioridades e heurísticas. Só é aceito pela diferença medida no harness contra a baseline. Desde a 2.4 (D2, aprovada em 19/11/2026), o aceite é o teste do sinal pareado pré-registrado num bloco de seeds de validação, com o intervalo de Wilson no relato; ajustes em código comum usam o desenho A/B por assento (D12). Detalhes na política de medição do [plano da 2.4](Plano%20da%20Fase%202.4.md).
   - As três classes nunca vão no mesmo lote.
 - **Nunca alterar pesos para compensar uma simulação errada.** O limite da 2.3 que afeta um caminho vem antes de qualquer ajuste desse caminho.
 - **Bugs de regra de engine são registrados à parte.** O trabalho de IA não autoriza mudar regras nem textos EN/PT de cartas.
@@ -374,7 +374,9 @@ As mudanças são o efeito acumulado das correções. A atribuição por lote es
 
 ### 2.4 Ajuste de qualidade guiado por dados
 
-Começa depois da baseline v3, medida no fechamento do pacote de regras v29, que passa a ser a referência dos ajustes. Para cada caminho, começa só depois de corrigidos os limites da 2.3 que o afetam. Cada lote é um ajuste de política, medido contra a baseline.
+**Plano:** [Plano da Fase 2.4](Plano%20da%20Fase%202.4.md) (19/11/2026). Traz o diagnóstico da v3 por preset e os achados transversais, o pacote de regras v30 (bloco R, com as decisões V9–V12 do diretor de 19/11/2026 e a baseline v4 como referência de medição), os blocos A–G (instrumento, resíduos, paridade fora da batalha, paridade de batalha, política por deck, política transversal e fechamento com a baseline v5), a política de medição com blocos de seeds de validação e de confirmação, e as decisões D1–D14, aprovadas pelo usuário em 19/11/2026 com as recomendações. A D2 troca o aceite por intervalo de Wilson das regras acima pelo teste do sinal pareado no bloco de validação.
+
+Começa depois da baseline v3, medida no fechamento do pacote de regras v29, que passa a ser a referência dos ajustes. Para cada caminho, começa só depois de corrigidos os limites da 2.3 que o afetam. Os ajustes de política são medidos contra a baseline; as paridades e refatorações que o diagnóstico mostrou necessárias vêm antes, em lotes próprios.
 
 Revisar principalmente:
 
@@ -424,7 +426,7 @@ Resíduos da 2.3 (detalhes, sondas e condições na seção "Fora do escopo da 2
   - o recálculo simulado de `negate_opponent_battle_destruction_prevention` com a fonte negada, visto na v3 num só caso;
   - a cura de batalha sem multiplicador em `battleProjection.ts` e `TurnLineSearch.ts`.
 - **Bugs de regra sem correção:**
-  - um gatilho obrigatório com plano exato inválido é perdido em silêncio;
+  - um gatilho obrigatório com plano exato inválido é perdido em silêncio (decidido em 19/11/2026, V12: cai no AutoSelector; pacote v30);
   - o gatilho do campo Shadow-Heart com `minLevel: 8` lê o Level depois da saída, e não o que a carta tinha ao sair (achado do R4);
   - a cláusula `banishWhenLeavesField` sobrevive a virar a carta para baixo; só a carta 27, fora dos presets, vira monstros para baixo;
   - latentes do R5, sem efeito observável hoje porque os dois protetores só protegem o próprio lado: a destruição dupla em batalha, a destruição por ATK/DEF zerado e as duas actions separadas do Glass Sovereign ficam fora da foto do início da operação.
@@ -617,7 +619,7 @@ A implementação deve ser feita **depois do Renderer Three.js**, para que esse 
 | --- | --- | --- |
 | 1 | Estabilização pós-TypeScript | Concluída |
 | 1.5 | Saneamento | Concluído |
-| 2 | IAs atuais | 2.1, 2.2 e 2.3 concluídas, pacote de regras v29 concluído, baselines v1, v2 e v3 registradas; 2.4 a iniciar |
+| 2 | IAs atuais | 2.1, 2.2 e 2.3 concluídas, pacote de regras v29 concluído, baselines v1, v2 e v3 registradas; 2.4 em planejamento |
 | 3 | Carmim Real | — |
 | 4 | Burning West + Bloomrot | — |
 | 5 | Modo Gauntlet | — |
