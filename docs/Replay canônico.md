@@ -212,7 +212,10 @@ Esses dados também participam dos snapshots de procedimentos e de referências.
   continuações de material de Sincro, contadores de contexto, de eventos e de
   IDs gerados, estatísticas de materiais e contagens de Invocação-Especial por
   tipo;
-- identidade, presença, posição, stats, contadores, vínculos e status das cartas;
+- identidade, presença, posição, stats, contadores, vínculos e status das cartas.
+  Contadores só existem em carta virada para cima nas zonas de campo; os
+  eventos de saída do campo levam os que a carta tinha ao sair
+  (`countersAtFieldExit` e `destroyedCountersAtFieldExit`);
 - características em vigor das cartas (`characteristics`), inclusive as
   reescritas por monstros-armadilha, Regulador e Fichas, e os registros de
   status restaurados no fim do turno e na saída do campo
@@ -224,8 +227,9 @@ Esses dados também participam dos snapshots de procedimentos e de referências.
   procedimento de Invocação;
 - base de reversão de stats (`statBookkeeping`): buffs temporários e por
   turno, stats originais e substituições, buffs dinâmicos e suas supressões
-  e bônus de equipamento. As chaves de origem dos buffs permanentes não
-  participam; só suas contribuições, ordenadas;
+  e bônus de equipamento. O bônus fixo que um equipamento negado ou virado
+  para baixo retém só aparece enquanto ele está retido. As chaves de origem
+  dos buffs permanentes não participam; só suas contribuições, ordenadas;
 - vínculos e registros das cartas (`bindings`): equipamentos, vínculos de
   monstro-armadilha, marcadores de efeito, finalização pendente de
   Magia/Armadilha, materiais de Ascensão e de Sincro (pela identidade do

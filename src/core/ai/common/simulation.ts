@@ -1,7 +1,7 @@
 import { checkSimulatedAscension } from "./ascensionPlanning.js";
 import { canActivateDuringDamageStep } from "../../game/spellTrap/quickSpellRules.js";
 import type { DamageStepTiming } from "../../contracts/effects.js";
-import { expireFaceupDeclaredValues, restoreFaceupStatuses } from "../../Card.js";
+import { captureCounterSnapshot, clearCardCounters, expireFaceupDeclaredValues, restoreFaceupStatuses } from "../../Card.js";
 import { expireEffectNegation } from "../../effects/negation.js";
 import { expireLevelModifications } from "../../effects/actions/stats.js";
 import type { SimulatedEquipHostExitBinding } from "./zones.js";
@@ -34,6 +34,7 @@ import {
 } from "../StrategyUtils.js";
 import {
   canMoveCardToZone,
+  captureSimulatedBanishProtection,
   findCardOwner,
   findCardZone,
   getZoneCards,
@@ -198,6 +199,9 @@ interface SimulatedEventPayloadView {
   battleDestroyers?: SimulatedCardState[];
   deferActivationChecks?: boolean;
   equipBindingsAtFieldExit?: readonly SimulatedEquipHostExitBinding[];
+  /** Counters the card had when it left the field (decision V4). */
+  countersAtFieldExit?: Readonly<Record<string, number>>;
+  destroyedCountersAtFieldExit?: Readonly<Record<string, number>>;
   locationVersion?: number;
   counterType?: string;
   amount?: number;
@@ -1233,7 +1237,8 @@ function matchesSimulatedEventEffect(
     if (effect.requireOwnMonsterArchetype && (destroyedRole !== "self" || destroyed.cardKind !== "monster" ||
         !destroyed.archetype?.includes(effect.requireOwnMonsterArchetype))) return false;
     const destroyedFilters = effect.destroyedCardFilters;
-    if (destroyedFilters && !matchesTargetFilters(destroyed, destroyedFilters, sourceCard, destroyedRole)) return false;
+    if (destroyedFilters && !matchesTargetFilters(destroyed, destroyedFilters, sourceCard, destroyedRole,
+      payload.destroyedCountersAtFieldExit)) return false;
     const positions = effect.requireDestroyedPosition;
     if (positions && !asArray(positions).includes(payload.destroyedPosition || destroyed.position)) return false;
   }
@@ -1375,7 +1380,8 @@ function matchesSimulatedEventEffect(
       !(usesExitProof || sourceCard.equippedTo === eventCard || sourceCard.equipTarget === eventCard)) return false;
   if (
     effect.eventCardFilters &&
-    !matchesTargetFilters(eventCard, effect.eventCardFilters, sourceCard, eventRole)
+    !matchesTargetFilters(eventCard, effect.eventCardFilters, sourceCard, eventRole,
+      eventName === "card_moved" || eventName === "card_to_grave" ? payload.countersAtFieldExit : undefined)
   ) {
     return false;
   }
@@ -2231,6 +2237,7 @@ export function applySimulatedFieldSpellBattleDrawRewards(
   state: SimulatedRuntimeState,
   battlePlan: { attackerIndex: number; attackerCard?: SimulatedCardState; destroyedCards?: readonly {
     owner: string; destroyedBy: string; card?: SimulatedCardState; position?: string | null;
+    countersAtFieldExit?: Readonly<Record<string, number>> | undefined;
   }[] },
 ): string[] {
   const source = state.bot.fieldSpell;
@@ -2245,7 +2252,8 @@ export function applySimulatedFieldSpellBattleDrawRewards(
     if (entry.destroyedBy !== "battle" || !entry.card) continue;
     emitSimulatedBattleDestroy(state, { attacker, destroyed: entry.card,
       destroyedOwner: entry.owner === "opponent" ? state.player : state.bot,
-      destroyedPosition: entry.position || null }, {}, [source], effects);
+      destroyedPosition: entry.position || null,
+      ...(entry.countersAtFieldExit ? { destroyedCountersAtFieldExit: entry.countersAtFieldExit } : {}) }, {}, [source], effects);
   }
   return state.bot.hand.length > handCount ? ["drawn card"] : [];
 }
@@ -2536,6 +2544,7 @@ function setSimulatedSpellTrapAfterResolution(
   }
   card.isFacedown = true;
   expireEffectNegation(card, "while_faceup");
+  clearCardCounters(card);
   restoreFaceupStatuses(card);
   expireFaceupDeclaredValues(card);
   expireLevelModifications(card, "while_faceup");
@@ -2703,11 +2712,15 @@ export function applyGenericSimulatedMainPhaseAction<
         selectionOptions.onSimulatedEvent?.(counterEvent.event, counterEvent.payload);
         deferredProcedureEvents.push(counterEvent);
       }
+      // P1, as the runtime transaction: the costs leave together.
+      const banishProtectionSnapshot = captureSimulatedBanishProtection(state, materials.length);
       for (const material of materials) {
         const fromZone = player.field.includes(material) ? "field" : "graveyard";
         const destinationPlayer = costDestinationPlayer(material);
         const wasFaceupBeforeMove = material.isFacedown !== true;
-        if (!moveCardToZone(destinationPlayer, material, destination, player, { state })) {
+        const countersAtFieldExit = fromZone === "field" ? captureCounterSnapshot(material) : undefined;
+        if (!moveCardToZone(destinationPlayer, material, destination, player, { state,
+          ...(banishProtectionSnapshot ? { banishProtectionSnapshot } : {}) })) {
           costComplete = false;
           break;
         }
@@ -2717,6 +2730,7 @@ export function applyGenericSimulatedMainPhaseAction<
           fromZone, toZone: destination,
           movedByEffect: false, wasFaceupBeforeMove,
           sourceCard: card, actionContext: selectionOptions.actionContext,
+          ...(countersAtFieldExit ? { countersAtFieldExit } : {}),
         } };
         // Each cost moves now; runtime holds its triggers until the summon ends.
         selectionOptions.onSimulatedEvent?.(costEvent.event, costEvent.payload);
@@ -2808,6 +2822,7 @@ export function applyGenericSimulatedMainPhaseAction<
         else for (const entry of events) selectionOptions.emitSimulatedEvent?.(entry.event, entry.payload);
       };
       let tributeCostComplete = true;
+      const banishProtectionSnapshot = captureSimulatedBanishProtection(state, tributeCards.length);
       for (const tribute of tributeCards) {
         const wasFaceupBeforeMove = tribute.isFacedown !== true;
         const effectsNegatedAtFieldExit = tribute.effectsNegated === true;
@@ -2815,6 +2830,7 @@ export function applyGenericSimulatedMainPhaseAction<
         if (!player.field.includes(tribute) ||
             !moveCardToZone(player, tribute, "graveyard", player, { state,
               ...(tributeOptions.emitSimulatedEvent ? { emitSimulatedEvent: tributeOptions.emitSimulatedEvent } : {}),
+              ...(banishProtectionSnapshot ? { banishProtectionSnapshot } : {}),
               onMoveCommitted: result => { receipt.value = result; } })) {
           tributeCostComplete = false;
           break;
@@ -2832,6 +2848,7 @@ export function applyGenericSimulatedMainPhaseAction<
       const summonPosition = action.position === "defense" ? "defense" : "attack";
       newCard.position = summonPosition;
       newCard.isFacedown = action.facedown === true || summonPosition === "defense";
+      if (newCard.isFacedown) clearCardCounters(newCard);
       newCard.hasAttacked = false;
       newCard.attacksUsedThisTurn = 0;
       newCard.lastSummonMethod = tributesNeeded > 0 ? "tribute" : "normal";
@@ -3153,6 +3170,7 @@ export function applyGenericSimulatedMainPhaseAction<
       if (getAvailableFieldSlots(player.spellTrap).length === 0) break;
       player.hand.splice(handIndex, 1);
       const setCard = { ...card, isFacedown: true };
+      clearCardCounters(setCard);
       if (typeof state.turnCounter === "number") {
         setCard.turnSetOn = state.turnCounter;
       }
@@ -3522,10 +3540,14 @@ export function applyGenericSimulatedMainPhaseAction<
       if (materials.length !== requiredCount) break;
       if ((player.field || []).length - materials.length + 1 > 5) break;
 
+      // P1: this stateless move reads only the holder's protections, taken before the first material.
+      const banishProtectionSnapshot = captureSimulatedBanishProtection(null, materials.length, player);
       for (const material of materials) {
         const fromZone = findCardZone(player, material) || "field";
         const wasFaceupBeforeMove = material.isFacedown !== true;
-        if (moveCardToZone(player, material, "graveyard")) {
+        const countersAtFieldExit = fromZone === "field" ? captureCounterSnapshot(material) : undefined;
+        if (moveCardToZone(player, material, "graveyard", player,
+          banishProtectionSnapshot ? { banishProtectionSnapshot } : {})) {
           updateSimulatedSentToGraveMaterialMarker({
             card: material,
             state,
@@ -3544,6 +3566,7 @@ export function applyGenericSimulatedMainPhaseAction<
             wasFaceupBeforeMove,
             sourceCard: extraDeckCard,
             actionContext: selectionOptions.actionContext,
+            ...(countersAtFieldExit ? { countersAtFieldExit } : {}),
           });
         }
       }

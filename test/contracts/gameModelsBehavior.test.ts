@@ -206,7 +206,21 @@ test("Player draw, damage and healing preserve current mutations and feedback", 
 
   player.takeDamage(1_500, { cause: "test" });
   assert.equal(player.lp, 6_500);
-  player.lpGainMultiplier = 1.5;
+  // The gain multiplier is read from the field when the gain happens.
+  const multiplierSource = new Card(
+    {
+      id: 9_901,
+      name: "Gain model",
+      cardKind: "monster",
+      atk: 0,
+      def: 0,
+      level: 4,
+      effects: [{ id: "gain_model_multiplier", timing: "passive", passive: { type: "lp_gain_multiplier", multiplier: 1.5 } }],
+    },
+    "player",
+  );
+  multiplierSource.isFacedown = false;
+  player.field.push(multiplierSource);
   player.gainLP(1_000, { cause: "test" });
   assert.equal(player.lp, 8_000);
   assert.equal(player.lpGainedThisTurn, 1_500);

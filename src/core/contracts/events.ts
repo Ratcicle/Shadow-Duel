@@ -291,7 +291,12 @@ export interface BattleDestroyEventPayload extends DamageStepEventPayload {
   destroyedOwner: EventPlayer;
   destroyedOwnerId?: string | null;
   destroyedPosition?: BattlePosition | null;
+  /** Counters the destroyed card had when it left the field (decision V4). */
+  destroyedCountersAtFieldExit?: CounterSnapshot;
 }
+
+/** Counters a card had when it left the field: its last known information. */
+export type CounterSnapshot = Readonly<Record<string, number>>;
 
 /** Immutable identity and physical presence captured at a movement commitment. */
 export interface EventCardPresenceSnapshot {
@@ -330,6 +335,8 @@ export interface CardMovedEventPayload extends EventPayloadBase {
   wasFaceupBeforeMove?: boolean;
   effectsNegatedAtFieldExit?: boolean;
   equipBindingsAtFieldExit?: readonly EventEquipHostExitBinding[];
+  /** Present only when the card left the field with counters (decision V4). */
+  countersAtFieldExit?: CounterSnapshot;
 }
 
 export interface CardToGraveEventPayload extends EventPayloadBase {
@@ -349,6 +356,8 @@ export interface CardToGraveEventPayload extends EventPayloadBase {
   deferTargetPrecheck?: boolean;
   deferActivationChecks?: boolean;
   effectsNegatedAtFieldExit?: boolean;
+  /** Present only when the card left the field with counters (decision V4). */
+  countersAtFieldExit?: CounterSnapshot;
 }
 
 export type CounterRemovedEventPayload = Omit<

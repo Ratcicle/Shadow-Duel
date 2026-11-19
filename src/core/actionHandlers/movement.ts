@@ -5,6 +5,7 @@
  */
 
 import { isAI } from "../Player.js";
+import { captureSimultaneousBanishProtection } from "../effects/passives/passiveBuffs.js";
 import { assignAutomaticFieldSlot, clearFieldSlot } from "../game/zones/placement.js";
 import type { ActionOf } from "../contracts/actions.js";
 import type {
@@ -106,6 +107,9 @@ export async function handleReturnToHand(
     targets[action.storeResultAs] = returnedCards;
   }
 
+  // P1: the targets return together; protection is read as it was before the first one.
+  const banishProtectionSnapshot = captureSimultaneousBanishProtection(
+    [game.player, game.bot], cards.length);
   for (const card of cards) {
     if (!card) continue;
 
@@ -129,6 +133,7 @@ export async function handleReturnToHand(
       effectId: ctx?.effect?.id || null,
       movedByEffect: true,
       awaitCardMovedEvent: true,
+      banishProtectionSnapshot,
     });
 
     if (
@@ -379,6 +384,8 @@ export async function handleShuffleOpponentFieldToDeck(
   }
 
   let movedCount = 0;
+  const banishProtectionSnapshot = captureSimultaneousBanishProtection(
+    [game.player, game.bot], toMove.length);
   for (const card of toMove) {
     const fromZone = findControlledCardZone(opponent, card);
     if (!fromZone) continue;
@@ -390,6 +397,7 @@ export async function handleShuffleOpponentFieldToDeck(
       effectId: ctx.effect?.id || null,
       movedByEffect: true,
       awaitCardMovedEvent: true,
+      banishProtectionSnapshot,
     });
 
     if (

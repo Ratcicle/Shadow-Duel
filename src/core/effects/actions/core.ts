@@ -6,7 +6,7 @@ import { cardMatchesKind, getCardComparableAttribute } from "../../Card.js";
 import { isAI } from "../../Player.js";
 import { resolveExactInstanceSelection } from "../../AutoSelector.js";
 import { getBaseLpCost } from "../costs/lpCost.js";
-import { getSendToGraveReplacementDestination } from "../passives/passiveBuffs.js";
+import { projectDepartureDestination } from "../passives/passiveBuffs.js";
 import { hasSynchroSummonPreviewCandidate } from "../../actionHandlers/summon/synchroEffects.js";
 import { mergeCanonicalSelections } from "../../game/selection/contract.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
@@ -1402,7 +1402,10 @@ function recordPreviewMoveCandidates(
     if (cards.length < (count.min ?? 1)) return;
     const destinations = new Map<PreviewZone, PreviewCard[]>();
     for (const card of cards) {
-      const zone = getSendToGraveReplacementDestination(card, owner, [engine.game.player, engine.game.bot]) || "graveyard";
+      // Decision V5: a forbidden redirect leaves the discard in the GY.
+      const zone = projectDepartureDestination({ card, holder: owner, fromZone: "hand", requestedZone: "graveyard",
+        players: [engine.game.player, engine.game.bot],
+        matchesFilters: (candidate, filters) => engine.cardMatchesFilters(candidate, filters) === true }).toZone;
       const candidates = destinations.get(zone) || [];
       candidates.push(card);
       destinations.set(zone, candidates);
@@ -1537,11 +1540,10 @@ function checkPreviewMoveTargetAvailability(
       if (entry.card.isToken && toZone !== "field") return false;
       if (action.type === "return_to_hand" &&
           ["fusion", "synchro", "ascension"].includes(entry.card.monsterType || "")) return false;
-      if (entry.zone === "field" && entry.card.banishWhenLeavesField && toZone !== "field" && toZone !== "banished") return false;
-      const redirect = toZone === "graveyard"
-        ? getSendToGraveReplacementDestination(entry.card, entry.owner, players)
-        : null;
-      return !redirect || redirect === toZone;
+      // Decision V5: a redirect forbidden by a protection keeps the requested destination.
+      return projectDepartureDestination({ card: entry.card, holder: entry.owner, fromZone: entry.zone,
+        requestedZone: toZone, players,
+        matchesFilters: (candidate, filters) => engine.cardMatchesFilters(candidate, filters) === true }).toZone === toZone;
     };
     const ref = action.targetRef;
     const definition = ref ? getEffectTargetDefinition(ctx, ref) : null;

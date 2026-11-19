@@ -175,6 +175,7 @@ export async function collectBattleDestroyTriggers(
             eventOwner: ctx.destroyedOwner,
             fromZone: "field",
             toZone: "graveyard",
+            countersAtFieldExit: payload.destroyedCountersAtFieldExit,
           })
         ) {
           debugTriggerLog(

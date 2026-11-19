@@ -6,7 +6,7 @@ import { replayCanonicalDuel } from "../../src/core/game/replay/driver.js";
 import { required, unsafeFixture } from "../helpers/fixtures.js";
 import { completeTestSelections, createRuntimeGame, placeFieldCards, type RuntimeGame } from "../helpers/game.js";
 
-type Scenario = "field-replacement" | "refused-bounce";
+type Scenario = "field-replacement" | "protected-bounce";
 function install(game: RuntimeGame, seat: "player" | "bot", scenario: Scenario) {
   const start = game.startWithDecks.bind(game);
   game.startWithDecks = async options => {
@@ -34,7 +34,7 @@ function install(game: RuntimeGame, seat: "player" | "bot", scenario: Scenario) 
   };
 }
 
-for (const scenario of ["field-replacement", "refused-bounce"] as const) {
+for (const scenario of ["field-replacement", "protected-bounce"] as const) {
   for (const seat of ["player", "bot"] as const) {
     test(`canonical movement replay (${scenario}/${seat})`, async t => {
       const live = createRuntimeGame({ laboratoryMode: true, laboratoryUseBot: false, captureReplay: true,
@@ -69,9 +69,10 @@ for (const scenario of ["field-replacement", "refused-bounce"] as const) {
         // Public activation may return the selection handoff; assert the resolved state.
         await activation;
         assert.ok(owner.hand.some(card => card.id === 351));
-        assert.ok(opponent.field.includes(target));
-        assert.equal(target.locationVersion, 0);
-        assert.equal(opponent.hand.includes(target), false);
+        // Decision V5: the forbidden leaves-the-field banish keeps the original destination.
+        assert.equal(opponent.field.includes(target), false);
+        assert.equal(target.locationVersion, 1);
+        assert.equal(opponent.hand.includes(target), true);
       }
       const replay = validateCanonicalReplay(JSON.parse(JSON.stringify(live.finalizeReplay({ reason: scenario }))));
       assert.equal(replay.engineVersion, CANONICAL_REPLAY_ENGINE_VERSION);

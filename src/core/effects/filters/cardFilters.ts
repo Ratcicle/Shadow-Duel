@@ -235,27 +235,41 @@ function cardMatchesSentToGraveMaterialFilter(
   return true;
 }
 
+/**
+ * Last known information for a card that has just left the field (decision
+ * V4): its counters at the moment it left, read in place of its live ones.
+ */
+export interface CardFilterOverrides {
+  readonly counters?: Readonly<Record<string, number>> | undefined;
+}
+
 export function cardMatchesFilters(
   this: void,
   card: FilterCard | null | undefined,
   filters?: Omit<RuntimeCardFilter, "equippedWithFilters"> & {
     equippedWithFilters?: never;
   },
+  overrides?: CardFilterOverrides,
 ): boolean;
 export function cardMatchesFilters(
   this: CardFilterHost,
   card: FilterCard | null | undefined,
   filters?: RuntimeCardFilter,
+  overrides?: CardFilterOverrides,
 ): boolean;
 export function cardMatchesFilters(
   this: CardFilterHost | void,
   card: FilterCard | null | undefined,
   filters: RuntimeCardFilter = {},
+  overrides: CardFilterOverrides = {},
 ): boolean {
+  const exitCounters = overrides.counters;
   return matchesCardFilter(card, filters, {
     turnCounter: this?.game?.turnCounter,
     getCounter: (candidate, type) =>
-      typeof candidate.getCounter === "function" ? candidate.getCounter(type) : 0,
+      exitCounters && candidate === card
+        ? exitCounters[type] ?? 0
+        : typeof candidate.getCounter === "function" ? candidate.getCounter(type) : 0,
     hasMatchingEquip: (candidate, equipFilters, requireFaceup) => {
       const equips = Array.isArray(candidate.equips) ? candidate.equips : [];
       // The overload accepting equippedWithFilters requires the EffectEngine receiver.

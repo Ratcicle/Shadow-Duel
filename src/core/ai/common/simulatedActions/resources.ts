@@ -1,4 +1,5 @@
 import { appendSimulatedZoneCard, getZoneCards } from "../zones.js";
+import { getLpGainMultiplier } from "../../../effects/passives/passiveBuffs.js";
 import { cardMatchesKind } from "../../../Card.js";
 import { resolveExactInstanceSelection } from "../../../AutoSelector.js";
 import { getEffectiveAtk } from "../cardStats.js";
@@ -210,13 +211,7 @@ export function applyHeal(
   const amount =
     (Number.isFinite(Number(action.amount)) ? Number(action.amount) : 0) +
     readSimContextNumber(action.amountFromContext, options);
-  const multiplier = (targetPlayer.field || []).reduce((highest, card) => {
-    if (card.isFacedown || card.cardKind !== "monster") return highest;
-    return (card.effects || []).reduce((value, effect) =>
-      effect.timing === "passive" && "passive" in effect && effect.passive?.type === "lp_gain_multiplier"
-        ? Math.max(value, Number(effect.passive.multiplier) || 1)
-        : value, highest);
-  }, 1);
+  const multiplier = getLpGainMultiplier(targetPlayer.field);
   const before = targetPlayer.lp;
   targetPlayer.lp += Math.floor(amount * multiplier);
   if (targetPlayer.lp > before) {

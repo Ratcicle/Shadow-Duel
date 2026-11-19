@@ -1,5 +1,7 @@
-import { restoreFaceupStatuses } from "../../../Card.js";
-import { refreshSimulatedFieldAuras } from "../zones.js";
+import { captureCounterSnapshot, clearCardCounters, restoreFaceupStatuses } from "../../../Card.js";
+import { captureSimulatedBanishProtection, refreshSimulatedFieldAuras } from "../zones.js";
+import { projectDepartureDestination } from "../../../effects/passives/passiveBuffs.js";
+import { cardMatchesFilter } from "../cardFilters.js";
 import type { SimulatedMoveReceipt } from "../zones.js";
 import { captureCostMarkerEvidence } from "../../../effects/costs/summonMarkers.js";
 import { shouldAllowExtraDeckMonsterToHand } from "../../../effects/actions/movement.js";
@@ -146,6 +148,7 @@ export function emitSimulatedMove(
     fromZone, toZone, movedByEffect, wasFaceupBeforeMove,
     locationVersion: receipt?.destinationPresence.locationVersion ?? card.locationVersion ?? 0,
     ...(receipt?.equipBindingsAtFieldExit.length ? { equipBindingsAtFieldExit: receipt.equipBindingsAtFieldExit } : {}),
+    ...(receipt?.countersAtFieldExit ? { countersAtFieldExit: receipt.countersAtFieldExit } : {}),
     effectsNegatedAtFieldExit,
     contextLabel: contextLabel || (card.isToken === true && fromZone === "field" && toZone === "removed" ? "token_removed" : null),
     sourceCard: options.sourceCard || null,
@@ -174,6 +177,8 @@ export function applyBanish(
     opponent,
     applySimulatedActions,
   } = ctx;
+  // P1, as the runtime: the targets are banished together.
+  const banishProtectionSnapshot = captureSimulatedBanishProtection(state, targets.length);
   targets.forEach((card) => {
     const owner = findCardOwner(state, card);
     if (!owner) return;
@@ -184,6 +189,7 @@ export function applyBanish(
     const effectsNegatedAtFieldExit = fromZone === "field" && card.effectsNegated === true;
     const receipt: { value: SimulatedMoveReceipt | null } = { value: null };
     if (moveCardToZone(destination, card, "banished", owner, { state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer: self,
+      ...(banishProtectionSnapshot ? { banishProtectionSnapshot } : {}),
       ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}), onMoveCommitted: result => { receipt.value = result; } })) {
       if (fromZone === "field") clearSimulatedTemporaryControl(state, card);
       emitSimulatedMove(card, state, owner, destination, fromZone, wasFaceupBeforeMove, effectsNegatedAtFieldExit, options, null, true, receipt.value);
@@ -215,6 +221,7 @@ export function applyReturnToHand(
     opponent,
     applySimulatedActions,
   } = ctx;
+  const banishProtectionSnapshot = captureSimulatedBanishProtection(state, targets.length);
   targets.forEach((card) => {
     const owner = findCardOwner(state, card);
     if (!owner) return;
@@ -225,6 +232,7 @@ export function applyReturnToHand(
       fromZone === "field" ? getOriginalOwner(state, card, owner) : owner;
     const receipt: { value: SimulatedMoveReceipt | null } = { value: null };
     if (moveCardToZone(destination, card, "hand", owner, { state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer: self,
+      ...(banishProtectionSnapshot ? { banishProtectionSnapshot } : {}),
       ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}), onMoveCommitted: result => { receipt.value = result; } })) {
       if (fromZone === "field") clearSimulatedTemporaryControl(state, card);
       emitSimulatedMove(card, state, owner, destination, fromZone, wasFaceupBeforeMove, effectsNegatedAtFieldExit, options, null, true, receipt.value);
@@ -340,6 +348,8 @@ export function applyMove(
   let moved = false;
   let movedLevelSum = 0;
   const movedCards: SimulatedCardState[] = [];
+  // P1, as the runtime: the targets move together.
+  const banishProtectionSnapshot = captureSimulatedBanishProtection(state, targetCards.length);
   for (const card of targetCards) {
     const evidence = payingCost ? captureCostMarkerEvidence(options.effect, action.targetRef || "self",
       filters => matchesTargetFilters(card, filters)) : [];
@@ -374,6 +384,7 @@ export function applyMove(
       ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}), onMoveCommitted: result => { receipt.value = result; },
       // The runtime's Extra Deck to Hand rule, read for the effect's controller at each move.
       allowExtraDeckMonsterToHand: shouldAllowExtraDeckMonsterToHand(action, { player: self }),
+      ...(banishProtectionSnapshot ? { banishProtectionSnapshot } : {}),
       requireDestination: payingCost && action.requireDestination === true })) {
       if (fromZone === "field" && to !== "field") clearSimulatedTemporaryControl(state, card);
       if (action.resetAttackFlags) {
@@ -531,7 +542,17 @@ export function resolveSimulatedTemporaryControlEffects(
         equip.equippedTo === card || equip.equipTarget === card),
     ]);
     const wasFaceupBeforeMove = card.isFacedown !== true;
-    const destinationZone = card.isToken ? "void" : card.banishWhenLeavesField ? "banished" : "graveyard";
+    // As the runtime's rule destruction: the departure projection decides the
+    // redirect (decision V5), and the leaves-the-field clause is consumed. A
+    // replacement into a zone other than the banished zone is not modeled here.
+    const departureZone = card.isToken ? null : projectDepartureDestination<SimulatedCardState, SimulatedPlayerState>({
+      card, holder, fromZone: "field", requestedZone: "graveyard", players, matchesFilters: cardMatchesFilter,
+    }).toZone;
+    const destinationZone = card.isToken ? "void" : departureZone === "banished" ? "banished" : "graveyard";
+    delete card.banishWhenLeavesField;
+    // Decision V4: the monster leaves the field and loses its counters.
+    const countersAtFieldExit = captureCounterSnapshot(card);
+    clearCardCounters(card);
     removeCardFromZones(holder, card);
     clearSimulatedTemporaryControl(state, card);
     card.battlePositionLocked = false;
@@ -554,6 +575,7 @@ export function resolveSimulatedTemporaryControlEffects(
       destroyCause: "rule", destroySource: null, sourceCard: null,
       movedByEffect: false, wasFaceupBeforeMove,
       contextLabel: "temporary_control_return_no_space",
+      ...(countersAtFieldExit ? { countersAtFieldExit } : {}),
     };
     if (destinationZone === "graveyard") options.emitSimulatedEvent?.("card_to_grave", payload);
     options.emitSimulatedEvent?.("card_moved", payload);
@@ -562,14 +584,18 @@ export function resolveSimulatedTemporaryControlEffects(
       if (!equipHolder) continue;
       const equipOwner = getOriginalOwner(state, equip, equipHolder);
       const equipFromZone = findCardZone(equipHolder, equip);
+      const equipCountersAtFieldExit = captureCounterSnapshot(equip);
+      clearCardCounters(equip);
       removeCardFromZones(equipHolder, equip);
       const equipZone = equip.banishWhenLeavesField ? "banished" : "graveyard";
       appendSimulatedZoneCard(equipOwner[equipZone], equip);
       setSimulatedController(equip, equipOwner);
       equip.location = equipZone;
-      const equipPayload = { ...payload, card: equip, player: equipOwner,
+      const { countersAtFieldExit: _hostCounters, ...hostPayload } = payload;
+      const equipPayload = { ...hostPayload, card: equip, player: equipOwner,
         fromPlayer: equipHolder, toPlayer: equipOwner, fromZone: equipFromZone,
-        toZone: equipZone, contextLabel: "equip_target_left_field" };
+        toZone: equipZone, contextLabel: "equip_target_left_field",
+        ...(equipCountersAtFieldExit ? { countersAtFieldExit: equipCountersAtFieldExit } : {}) };
       if (equipZone === "graveyard") options.emitSimulatedEvent?.("card_to_grave", equipPayload);
       options.emitSimulatedEvent?.("card_moved", equipPayload);
     }

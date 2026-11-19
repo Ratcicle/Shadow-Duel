@@ -14,7 +14,7 @@ import type {
 } from "./chainRuntime.js";
 import type { MaybePromise } from "./decisions.js";
 import type { DecisionBrokerPort } from "./decisions.js";
-import type { DamageStepTiming, EffectDefinition } from "./effects.js";
+import type { BanishProtectionSnapshot, DamageStepTiming, EffectDefinition } from "./effects.js";
 import type {
   DeterministicRandomPort,
   DeterministicRandomSeed,
@@ -23,7 +23,7 @@ import type {
   ReplayMode,
 } from "./game.js";
 import type { GamePlayer } from "./player.js";
-import type { EventCardPresenceSnapshot, TurnCardActivationHistory } from "./events.js";
+import type { CounterSnapshot, EventCardPresenceSnapshot, TurnCardActivationHistory } from "./events.js";
 import type {
   DamageStepId,
   DuelCardId,
@@ -105,6 +105,8 @@ export interface MoveCardResult {
   summonOrigin?: SummonOrigin | null;
   needsSelection?: boolean;
   selectionContract?: unknown;
+  /** Counters the card had when this move took it off the field (decision V4). */
+  countersAtFieldExit?: CounterSnapshot;
   /**
    * Only the moved card's own deferred package, without those of its Equip
    * cleanup. A deferring caller consumes `deferredCardToGraveTriggerPackages`.
@@ -218,6 +220,12 @@ export interface MoveCardOptions {
   graveyardPresentationDelayMs?: number;
   summonPresentationDelayMs?: number;
   synchroMaterialFollowups?: readonly SynchroMaterialFollowup[];
+  /**
+   * Internal, never serialized (P1): the banish protections captured when an
+   * operation that moves several cards together began. Every move of that
+   * operation reads protection from it instead of the live field.
+   */
+  banishProtectionSnapshot?: BanishProtectionSnapshot<GameCard, GamePlayer> | undefined;
 }
 
 export type RegularMoveDestinationZone = Exclude<CanonicalZone, "field">;
@@ -329,7 +337,18 @@ export interface SummonCostPayment {
   options?: MoveCardOptions;
   pay?: (
     transaction: SummonTransaction,
+    payment: SummonCostPaymentContext,
   ) => MaybePromise<MoveCardResult | boolean | null | undefined>;
+}
+
+/**
+ * What every cost of one summon transaction shares. The costs are paid one by
+ * one but leave together (Tributes, materials): P1 reads banish protection from
+ * the snapshot taken before the first payment. Internal, never serialized.
+ */
+export interface SummonCostPaymentContext {
+  /** Absent when the transaction pays a single cost, which reads the live field. */
+  readonly banishProtectionSnapshot?: BanishProtectionSnapshot<GameCard, GamePlayer>;
 }
 
 export interface SummonNegationOutcome {

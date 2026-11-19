@@ -68,6 +68,7 @@ export const PLANNING_CARD_FIELDS = [
   "altTribute", "tributeValue", "onBattleDestroy", "canAttackDirectlyThisTurn",
   "cannotAttackDirectly", "summonRestrict", "fieldLimit", "fieldPresenceRestriction",
   "extraDeckSummonProcedure", "handSummonProcedure", "equipAtkBonus", "equipDefBonus", "equipExtraAttacks", "equipExtraAttacksApplied",
+  "equipAtkBonusSuspended", "equipDefBonusSuspended",
   "grantsBattleIndestructible", "battleIndestructible", "tempBattleIndestructible",
   "battleDamageHealsControllerThisTurn", "preventsBattleDamageToController",
   "battleIndestructibleOncePerTurn", "battleIndestructibleOncePerTurnUsed",

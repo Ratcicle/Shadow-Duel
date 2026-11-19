@@ -26,7 +26,7 @@ export const CANONICAL_REPLAY_SCHEMA_VERSION = 2 as const;
  * Change only when existing replay interpretation becomes incompatible.
  * Card definition changes are tracked separately by cardDatabaseSignature.
  */
-export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v28" as const;
+export const CANONICAL_REPLAY_ENGINE_VERSION = "engine-rules-v29" as const;
 
 export type SerializablePrimitive = string | number | boolean | null;
 
@@ -456,6 +456,9 @@ export interface CanonicalCardStatBookkeepingSnapshot {
   equipDefBonus: number;
   equipExtraAttacks: number;
   equipExtraAttacksApplied: number;
+  /** Present only while a negated or face-down Equip withholds its fixed bonus. */
+  equipAtkBonusSuspended?: number;
+  equipDefBonusSuspended?: number;
 }
 
 /**

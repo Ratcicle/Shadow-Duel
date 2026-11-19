@@ -324,6 +324,8 @@ export interface GameTreeSimulatedPlayerState extends SimulatedPlayerState {
 /** Read-only input projection accepted before a clone establishes brands. */
 export interface AiCardInput {
   banishWhenLeavesField?: GameCard["banishWhenLeavesField"];
+  /** Read by the banish-redirect projection: the clause is its original owner's (decision V5). */
+  originalOwner?: GameCard["originalOwner"];
   owner?: GameCard["owner"];
   description?: GameCard["description"];
   subtype?: GameCard["subtype"];

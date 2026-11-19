@@ -391,6 +391,8 @@ export function matchesTargetFilters<Target extends object>(
   target: Target = {} as Target,
   sourceCard?: TargetableCard | null,
   ownerRole: TargetOwnerRole | null = null,
+  /** Counters the card had when it left the field: its last known information (decision V4). */
+  exitCounters?: Readonly<Record<string, number>>,
 ): boolean {
   if (!card) return false;
   if (
@@ -409,6 +411,7 @@ export function matchesTargetFilters<Target extends object>(
         { ...target, ...entry, anyOf: undefined },
         sourceCard,
         ownerRole,
+        exitCounters,
       )
     );
   }
@@ -446,7 +449,7 @@ export function matchesTargetFilters<Target extends object>(
     targetFromContext: _targetFromContext,
     ...filters
   } = target as AiTargetFilter;
-  return cardMatchesFilter(card as FilterableCard, filters as AiCardFilter);
+  return cardMatchesFilter(card as FilterableCard, filters as AiCardFilter, exitCounters);
 }
 
 function inferTargetIntent(action: ActionIntentView | null | undefined): TargetIntent {

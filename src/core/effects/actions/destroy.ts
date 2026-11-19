@@ -11,6 +11,7 @@ import type {
 import type { ActionOf, CardAction } from "../../contracts/actions.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
 import { requestOptionalConfirmation, resolutionChoiceContext } from "../../actionHandlers/shared.js";
+import { captureSimultaneousBanishProtection } from "../passives/passiveBuffs.js";
 
 interface DestroyRuntimeCard extends ActionRuntimeCard {
   permanentBuffsBySource?: Record<string, { atk?: number }>;
@@ -139,6 +140,9 @@ export async function applyDestroy(
 ): Promise<boolean> {
   const targetCards = resolveContextTargetCards(action, ctx, targets);
   let destroyedAny = false;
+  // P1: the targets are destroyed together, so protection is read as it was before the first one.
+  const banishProtectionSnapshot = captureSimultaneousBanishProtection(
+    [this.game?.player, this.game?.bot], targetCards.length);
 
   for (const card of targetCards) {
     if (!this.game?.destroyCard) continue;
@@ -147,6 +151,7 @@ export async function applyDestroy(
       cause: "effect",
       sourceCard: ctx?.source || null,
       opponent: ctx?.opponent || null,
+      banishProtectionSnapshot,
     });
 
     if (result?.destroyed) {
@@ -383,6 +388,8 @@ export async function applyDestroyAllOthersAndDraw(
 
   // Count how many we're destroying
   let destroyedCount = 0;
+  const banishProtectionSnapshot = captureSimultaneousBanishProtection(
+    [this.game?.player, this.game?.bot], othersToDestroy.length);
 
   // Destroy all collected monsters
   for (const card of othersToDestroy) {
@@ -391,6 +398,7 @@ export async function applyDestroyAllOthersAndDraw(
       cause: "effect",
       sourceCard,
       opponent: ctx?.opponent || null,
+      banishProtectionSnapshot,
     });
     if (result?.destroyed) {
       destroyedCount += 1;
@@ -481,6 +489,8 @@ export async function applyDestroyOtherDragonsAndBuff(
   });
 
   let destroyedCount = 0;
+  const banishProtectionSnapshot = captureSimultaneousBanishProtection(
+    [this.game?.player, this.game?.bot], othersToDestroy.length);
 
   for (const card of othersToDestroy) {
     if (!this.game?.destroyCard) continue;
@@ -488,6 +498,7 @@ export async function applyDestroyOtherDragonsAndBuff(
       cause: "effect",
       sourceCard,
       opponent: ctx?.opponent || null,
+      banishProtectionSnapshot,
     });
     if (result?.destroyed) {
       destroyedCount += 1;
@@ -590,11 +601,14 @@ export async function applyMirrorForceDestroy(
 
   // Destruir todos os monstros em Attack Position (com substituição de destruição)
   const sourceCard = ctx.source || ctx.card || null;
+  const banishProtectionSnapshot = captureSimultaneousBanishProtection(
+    [game.player, game.bot], attackPositionMonsters.length);
   for (const monster of attackPositionMonsters) {
     await game.destroyCard(monster, {
       cause: "effect",
       sourceCard,
       opponent: player,
+      banishProtectionSnapshot,
     });
   }
 

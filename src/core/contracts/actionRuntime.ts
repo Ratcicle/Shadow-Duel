@@ -140,6 +140,8 @@ export interface ActionRuntimeCard {
   tempDefBoost?: number;
   equipAtkBonus?: number;
   equipDefBonus?: number;
+  equipAtkBonusSuspended?: number;
+  equipDefBonusSuspended?: number;
   attackLimitThisTurn?: number | null;
   attackLimitDuration?: string | number | null;
   canAttackAllOpponentMonstersThisTurn?: boolean;

@@ -8,6 +8,7 @@ import {
 import { isAI } from "../../Player.js";
 import { DAMAGE_STEP_TIMINGS } from "../../contracts/effects.js";
 import type { CardAction } from "../../contracts/actions.js";
+import type { CounterSnapshot } from "../../contracts/events.js";
 import type {
   ChainOperationResult,
   ChainRuntimePort,
@@ -64,6 +65,7 @@ interface DamageStepUiPort {
 
 interface DamageStepDestroyResult {
   destroyed?: boolean;
+  countersAtFieldExit?: CounterSnapshot;
 }
 
 interface BattleDestructionContext {
@@ -1336,6 +1338,8 @@ async function finalizeBattleDestruction(
           destroyedOwner: entry.owner,
           destroyedOwnerId: entry.owner?.id || entry.card.owner,
           destroyedPosition: entry.position,
+          // Last known information: the counters it had when it left the field.
+          ...(result.countersAtFieldExit ? { destroyedCountersAtFieldExit: result.countersAtFieldExit } : {}),
         });
       }
       transaction.nextDestructionIndex += 1;

@@ -8,7 +8,7 @@ Este documento registra a direção geral de desenvolvimento do **Shadow Duel** 
 | --- | --- |
 | Estabilização pós-TypeScript | Concluída em 06/10/2026. |
 | Saneamento (fase 1.5) | Concluído em 10/10/2026: CI `Verify` verde como portão de `main` e do deploy, replay `engine-rules-v27`, determinismo de IA e Arena, bugs de engine e correções de UI/i18n. |
-| IAs atuais | Arquitetura e paridade (2.1), harness de benchmark (2.2) e limites conhecidos (2.3) concluídos. A 2.3 levou o replay a `engine-rules-v28` e fechou com a baseline v2, a referência da 2.4. Ajuste guiado por dados (2.4) ainda não iniciado. |
+| IAs atuais | Arquitetura e paridade (2.1), harness de benchmark (2.2) e limites conhecidos (2.3) concluídos. A 2.3 levou o replay a `engine-rules-v28` e fechou com a baseline v2. O pacote de regras v29 levou o replay a `engine-rules-v29` e fechou com a baseline v3, a referência da 2.4. Ajuste guiado por dados (2.4) ainda não iniciado. |
 | Carmim Real | Catálogo proposto, com decisões de regra em aberto; cartas e IA ainda não implementadas. |
 | Suporte adicional de Burning West e Bloomrot | Planejado; escopo e necessidade dependem do diagnóstico dos decks e das IAs. |
 | Gauntlet | Planejado, ainda não implementado. |
@@ -66,7 +66,7 @@ Os itens adiados estão na seção "Fora do escopo da fase 1.5" do plano. Os que
 
 ## 2. Aprimoramento das IAs atuais
 
-**Status:** 2.1 concluída em **07/10/2026**. 2.2 concluída em **11/10/2026**, com a baseline v1 registrada abaixo. 2.3 concluída em **16/11/2026**, com a baseline v2 registrada na sua seção. 2.4 ainda não iniciada.
+**Status:** 2.1 concluída em **07/10/2026**. 2.2 concluída em **11/10/2026**, com a baseline v1 registrada abaixo. 2.3 concluída em **16/11/2026**, com a baseline v2 registrada na sua seção. Pacote de regras v29 concluído em **19/11/2026**, com a baseline v3 registrada depois da v2. 2.4 ainda não iniciada.
 
 **Objetivo:** aproximar a qualidade dos bots antes de usar a Bot Arena como referência séria de balanceamento. Resultados de bot vs bot podem refletir a qualidade da IA, e não só a força real do deck. Por isso, a força relativa dos nove bots precisa ser medida com benchmarks reproduzíveis e intervalos de confiança.
 
@@ -328,9 +328,53 @@ O pacote de replay (L23–L26) termina num único bump `engine-rules-v28` (L27, 
 
 As mudanças são o efeito acumulado das correções. A atribuição por lote está na cadeia N = 5 do plano.
 
+**Pacote de regras v29** (19/11/2026). Implementa as decisões de regra do diretor criativo de 16/11/2026, que seguem o Yu-Gi-Oh oficial em tudo, menos no "uma vez por turno" por cópia (detalhes, lotes e medições no [plano do pacote](Plano%20do%20pacote%20de%20regras%20v29.md)):
+
+- **V1:** um Equip negado não aplica nenhum dos seus efeitos, inclusive o bônus fixo de ATK/DEF, que volta quando a negação acaba (R1).
+- **V2:** a The Shadow Heart negada no instante em que sai do campo não destrói o monstro equipado (R2).
+- **V3:** `lp_cost_reduction` e `lp_gain_multiplier` não valem com a fonte negada, no runtime e na simulação (R3).
+- **V4:** uma carta perde os contadores ao sair do campo e ao ser virada para baixo, em silêncio; os gatilhos leem o que ela tinha ao sair (R4).
+- **V5:** o banimento por redirecionamento é efeito de quem controla o redirecionamento; proibido, a carta vai ao destino original. Em operações com várias cartas, a proteção vale pela foto do início da operação (R5).
+- **V6 e V7:** o OPT por cópia continua liberado só quando a carta sai do campo, e os contadores de uma carta negada ficam.
+- **Replay:** um único bump `engine-rules-v29` (R6). Os replays v28 salvos deixam de carregar depois do merge.
+
+**Baseline v3** (19/11/2026), a referência da 2.4. A v2 fica como histórico.
+
+- **Execução:** `canonical-6639f6a-0e7dbbda`, com `--workers 4`.
+- **Identidade:** commit `6639f6a`, árvore limpa, `engine-rules-v29`, banco de cartas `a11dc8c4` (o mesmo da v2).
+- **Digests:** `configDigest` `0e7dbbda…`, a mesma configuração efetiva da v2; `deterministicDigest` `f9fb91817b889eabb234305cbc8aa181fd16212974edb7f433c4e0a2c29edb5d`.
+- **Duelos:** 1.620 válidos (N = 20), 0 erros. 1.619 foram decididos por PV zerado; `luminarch:luminarch:1` chegou ao limite de turnos, como na v2, com 100 × 800 PV.
+- **Sanidade:** todos os portões passaram.
+- **Quem começa:** vence 53,7% [51,1%; 56,2%].
+- **Defeitos:** 0.
+- **Guarda de stall:** picos de 150/66/108 e nenhum disparo.
+- **Controles no mesmo commit:**
+  - corpus `d4c2a4a9…`, 108 casos sem falhas;
+  - `controlsDigest` `79e3a070…`. Contra a v2, só `bloomrot:techzero` muda, com o mesmo vencedor e os mesmos turnos.
+- **Controle de invariância** (N = 1): `deterministicDigest` `480b1c5c…`. Todas as raízes têm ação 0 e score 0.
+- **Ponte N = 5 de referência para a 2.4:** `canonical-6639f6a-45173ff3`, com `deterministicDigest` `52fa6cb4…`. Teve 405 válidos, 0 erros e 0 defeitos; um duelo chegou ao limite de turnos. Contra a ponte da v2, 402 casos com o mesmo resultado e 3 viradas, todas com Bloomrot. Não é elegível a baseline, por causa do override do planner.
+- **Contra a v2:** `compare` com `--allow-identity-change engineVersion`, sem diferenças de configuração.
+  - Nenhum preset tem diferença significativa.
+  - Dos 1.620 casos, 1.600 têm o mesmo resultado e 20 viradas.
+  - O teste do sinal pareado não acusa nenhum preset. O menor p é o do Miragebound: 0,22, com 5 viradas a favor e 1 contra.
+  - Os 246 casos diferentes estão todos em confrontos com um preset alcançado pelas regras novas; os confrontos só entre Void, Miragebound e Burning West saem idênticos.
+  - A única novidade é o marcador `add_status:passive_recalculation:negate_opponent_battle_destruction_prevention`, de um só caso (`techzero:shadowheart:18`): a trajetória nova leva o Tech-Zero a negar a Shadow-Heart Devastation Dragon no planejamento, uma lacuna da simulação anterior ao pacote. Os branches não suportados do Tech-Zero sobem de 955 para 1.400: 75 desse marcador e o resto da escolha exata do Development Lab, já marcada antes.
+
+| Preset | v2 (n = 320) [IC 95%] | v3 (n = 320) [IC 95%] | Δ |
+| --- | --- | --- | ---: |
+| Dragon | 82,5% [78,0%; 86,3%] | 82,5% [78,0%; 86,3%] | 0,0 |
+| Tech-Zero | 78,1% [73,3%; 82,3%] | 78,4% [73,6%; 82,6%] | +0,3 |
+| Miragebound | 66,9% [61,5%; 71,8%] | 68,1% [62,8%; 73,0%] | +1,3 |
+| Void | 40,3% [35,1%; 45,8%] | 40,6% [35,4%; 46,1%] | +0,3 |
+| Shadow-Heart | 40,0% [34,8%; 45,5%] | 39,7% [34,5%; 45,1%] | −0,3 |
+| Luminarch | 39,7% [34,5%; 45,1%] | 39,1% [33,9%; 44,5%] | −0,6 |
+| Arcanist | 39,7% [34,5%; 45,1%] | 40,0% [34,8%; 45,5%] | +0,3 |
+| Bloomrot | 37,8% [32,7%; 43,2%] | 36,6% [31,5%; 42,0%] | −1,3 |
+| Burning West | 25,0% [20,6%; 30,0%] | 25,0% [20,6%; 30,0%] | 0,0 |
+
 ### 2.4 Ajuste de qualidade guiado por dados
 
-Começa depois da baseline v2, medida no fechamento da 2.3, que passa a ser a referência dos ajustes. Para cada caminho, começa só depois de corrigidos os limites da 2.3 que o afetam. Cada lote é um ajuste de política, medido contra a baseline.
+Começa depois da baseline v3, medida no fechamento do pacote de regras v29, que passa a ser a referência dos ajustes. Para cada caminho, começa só depois de corrigidos os limites da 2.3 que o afetam. Cada lote é um ajuste de política, medido contra a baseline.
 
 Revisar principalmente:
 
@@ -370,19 +414,20 @@ Resíduos da 2.3 (detalhes, sondas e condições na seção "Fora do escopo da 2
 - **Harness:** a métrica `lethal` sempre zero e as falhas sem código dependem da certificação de letal sob incerteza e de códigos de falha em `src/`.
 - **Triagem antes de cada caminho:**
   - O plano lista divergências latentes ou raras entre simulação e runtime.
-  - Antes do primeiro lote de cada caminho, uma sonda conta as ocorrências nos matchups desse caminho, com N = 5 e a configuração da v2.
+  - Antes do primeiro lote de cada caminho, uma sonda conta as ocorrências nos matchups desse caminho, com N = 5 e a configuração da v3.
   - Uma única divergência reabre o item como lote de paridade, antes do ajuste.
   - Entre os itens pesados estão a posição de Fusão da IA (pesa na divergência do Void), as `costPreferences` que vazam nos triggers simulados e as proteções de batalha passivas que a ponte não lê.
 - **Replay:** `replayCanonicalDuel` com `options.game` ainda não confere os assentos contra `setup.controllers`. Impor a checagem é decisão pendente e não exige bump.
-- **Decisões de regra para o diretor criativo:**
-  - a Shadow-Heart Shield negada mantém o bônus de +500 ATK/DEF;
-  - se o banimento por `banishWhenLeavesField` conta como banido por efeito do oponente;
-  - o `destroy_on_leave` da The Shadow Heart vale com a carta negada;
-  - contadores permanecem quando o monstro sai do campo;
-  - o OPT por cópia continua gasto depois de virar a carta para baixo e para cima.
-- **Bugs de regra sem correção na 2.3:**
+- **Decisões de regra:** tomadas pelo diretor criativo em 16/11/2026 e implementadas no pacote de regras v29 (V1–V5). O OPT por cópia fica como está (V6).
+- **Triagem do pacote v29** (detalhes na seção "Fora do escopo do pacote" do [plano do pacote](Plano%20do%20pacote%20de%20regras%20v29.md)):
+  - a simulação da IA não modela o vínculo de destruição ao sair da The Shadow Heart;
+  - o recálculo simulado de `negate_opponent_battle_destruction_prevention` com a fonte negada, visto na v3 num só caso;
+  - a cura de batalha sem multiplicador em `battleProjection.ts` e `TurnLineSearch.ts`.
+- **Bugs de regra sem correção:**
   - um gatilho obrigatório com plano exato inválido é perdido em silêncio;
-  - `lp_cost_reduction` e `lp_gain_multiplier` valem com a fonte negada. A correção muda runtime e simulação juntos.
+  - o gatilho do campo Shadow-Heart com `minLevel: 8` lê o Level depois da saída, e não o que a carta tinha ao sair (achado do R4);
+  - a cláusula `banishWhenLeavesField` sobrevive a virar a carta para baixo; só a carta 27, fora dos presets, vira monstros para baixo;
+  - latentes do R5, sem efeito observável hoje porque os dois protetores só protegem o próprio lado: a destruição dupla em batalha, a destruição por ATK/DEF zerado e as duas actions separadas do Glass Sovereign ficam fora da foto do início da operação.
 
 O backlog técnico da 2.3 (código morto, handlers simulados sem exposição, latentes sem carta, captura de replay no harness) fica no plano e entra como refatoração equivalente, sem prioridade sobre a 2.4.
 
@@ -572,7 +617,7 @@ A implementação deve ser feita **depois do Renderer Three.js**, para que esse 
 | --- | --- | --- |
 | 1 | Estabilização pós-TypeScript | Concluída |
 | 1.5 | Saneamento | Concluído |
-| 2 | IAs atuais | 2.1, 2.2 e 2.3 concluídas, baselines v1 e v2 registradas; 2.4 a iniciar |
+| 2 | IAs atuais | 2.1, 2.2 e 2.3 concluídas, pacote de regras v29 concluído, baselines v1, v2 e v3 registradas; 2.4 a iniciar |
 | 3 | Carmim Real | — |
 | 4 | Burning West + Bloomrot | — |
 | 5 | Modo Gauntlet | — |
@@ -592,7 +637,7 @@ Exemplo de organização da etapa concluída:
 
 Organização prevista para a próxima etapa:
 
-**Projeto principal:** aprimoramento das IAs (2.4, medida contra a baseline v2)  
+**Projeto principal:** aprimoramento das IAs (2.4, medida contra a baseline v3)  
 **Projeto paralelo:** preparação final do Carmim Real
 
 A meta é sempre terminar cada fase com um **Shadow Duel mais estável, completo e jogável**, evitando vários sistemas grandes incompletos ao mesmo tempo.

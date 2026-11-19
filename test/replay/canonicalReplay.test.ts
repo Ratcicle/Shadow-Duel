@@ -312,6 +312,14 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   const replayResult = required(replay.result);
   assert.equal(replayResult.finalStateHash, "a196a87e");
   // Historical envelopes retain their exact version and declaration signature.
+  // engine-rules-v28: the envelope before the v29 rule package.
+  const beforeRulesV29 = structuredClone(replay);
+  beforeRulesV29.cardDatabaseSignature = "a11dc8c4";
+  required(beforeRulesV29.commands[0]).stateHash = "0a69cfa6";
+  required(beforeRulesV29.commands[1]).stateHash = "a196a87e";
+  required(beforeRulesV29.result).finalStateHash = "a196a87e";
+  assert.equal(hashCanonicalValue({ ...beforeRulesV29, engineVersion: "engine-rules-v28" }), "2f912d05");
+  assert.equal(JSON.stringify({ ...beforeRulesV29, engineVersion: "engine-rules-v28" }).length, 33776);
   // engine-rules-v27: the envelope before seat controllers, AI activation
   // plans and AI trigger choices were recorded.
   const beforeRecordedAiChoices = structuredClone(replay);
@@ -389,7 +397,7 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "f60cba87", engineVersion: "engine-rules-v22" }), "b1bbca51");
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "7e5d54cb", engineVersion: "engine-rules-v23" }), "7bfe1e4a");
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "feeb687b", engineVersion: "engine-rules-v23" }), "6b0653a2");
-  assert.equal(hashCanonicalValue(replay), "2f912d05");
+  assert.equal(hashCanonicalValue(replay), "8d70aef2");
   assert.equal(JSON.stringify(replay).length, 33776);
 
   const result = await replayCanonicalDuel(replay);
@@ -702,6 +710,7 @@ const RULE_FIELD_MUTATIONS: readonly RuleFieldMutation[] = [
     ["suppressedDynamicBuffStatsByKey", { aura: { atk: 300 } }],
     ["temporarySuppressedDynamicBuffStatsByKey", { aura: { atk: 300 } }],
     ["equipAtkBonus", 500], ["equipDefBonus", 500], ["equipExtraAttacks", 1], ["equipExtraAttacksApplied", 1],
+    ["equipAtkBonusSuspended", 500], ["equipDefBonusSuspended", 500],
     ["grantsBattleIndestructible", true],
     ["effectMarkers", { marker: { key: "marker", sourceEffectId: "effect", createdOnTurn: 1 } }],
     ["pendingSpellTrapFinalization", { destination: "graveyard", ownerId: "player", activationZone: "spellTrap" }],

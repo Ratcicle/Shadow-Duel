@@ -5,13 +5,21 @@ import { clearLevelModifications, expireLevelModifications, expireFaceupStatBuff
 import {
   applyStatusesOnSummon,
   bumpCardLocationVersion,
+  captureCounterSnapshot,
+  clearCardCounters,
   restoreFieldExitStatuses,
   restoreTemporaryStatuses,
   restoreTrapMonsterOriginalState,
 } from "../../Card.js";
 import { SUMMON_MODES } from "../summon/transaction.js";
 import { retireDamageStepBuffsForCard } from "../combat/damageStep.js";
-import { getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus } from "../../effects/passives/passiveBuffs.js";
+import {
+  captureBanishProtectionSnapshot,
+  clearSuspendedEquipStatBonus,
+  findBanishProtection,
+  projectDepartureDestination,
+  refreshEquipExtraAttackBonus,
+} from "../../effects/passives/passiveBuffs.js";
 import { getAvailableFieldSlots, getFieldOccupants, isFieldSlot } from "./placement.js";
 import { checkpointZoneSnapshotAfterResponse } from "./snapshot.js";
 import type { FieldPlacementIntent } from "../../contracts/placement.js";
@@ -61,10 +69,14 @@ import type { SummonMethod, SummonOrigin } from "../../contracts/summon.js";
 import type { ChainSourceZone } from "../../contracts/chainRuntime.js";
 import type { ActionRuntimeCard } from "../../contracts/actionRuntime.js";
 import type {
+  CounterSnapshot,
   EventCardPresenceSnapshot,
   EventEquipHostExitBinding,
   EventTriggerOccurrence,
 } from "../../contracts/events.js";
+
+/** The zones where counters exist (decision V4). */
+const FIELD_ZONE_NAMES: ReadonlySet<string> = new Set(["field", "spellTrap", "fieldSpell"]);
 import { captureEventCardPresence } from "./ownership.js";
 import { reportEngineFault } from "../devTools/faults.js";
 import { captureReplacementPresence, formatReplacementText, replacementPresenceIsCurrent } from "../effects/destructionReplacement.js";
@@ -75,7 +87,6 @@ import type { CardAction } from "../../contracts/actions.js";
 import type {
   CardFilter,
   EffectDefinition,
-  PassiveRuleDefinition,
   ReplacementEffectBehavior,
 } from "../../contracts/effects.js";
 
@@ -292,34 +303,6 @@ interface RuntimeCardFilter extends CardFilter {
   cardIds?: readonly number[];
 }
 
-type BanishProtectionScope = Omit<CardFilter, "owner"> & {
-  owner?: "self" | "opponent" | "any" | "both";
-  zone?: CanonicalZone;
-  zones?: readonly CanonicalZone[];
-  excludeSelf?: boolean;
-  filters?: CardFilter;
-};
-
-type BanishProtectionPassive = Omit<
-  PassiveRuleDefinition,
-  "protectFrom" | "targetScope" | "targetOwner"
-> & {
-  protectFrom?:
-    | "any"
-    | "all"
-    | "effects"
-    | "card_effects"
-    | "opponent_effects"
-    | "opponent_card_effects"
-    | "self_effects"
-    | "own_effects";
-  targetScope?: BanishProtectionScope;
-  targetOwner?: "self" | "opponent" | "any" | "both";
-  zones?: readonly CanonicalZone[];
-  zone?: CanonicalZone;
-  excludeSelf?: boolean;
-};
-
 interface RuntimeReplacementEffect extends ReplacementEffectBehavior {
   targetMustNotBeSource?: boolean;
   excludeSource?: boolean;
@@ -528,6 +511,7 @@ export async function cleanupTokenReferences(
     // Reset equip bonuses (they were applied to the token which is being removed)
     equip.equipAtkBonus = 0;
     equip.equipDefBonus = 0;
+    clearSuspendedEquipStatBonus(equip);
     equip.equipExtraAttacks = 0;
     equip.grantsBattleIndestructible = false;
     equip.grantsCrescentShieldGuard = false;
@@ -886,6 +870,7 @@ async function emitCardMovedEvent(
   fromZone: MovementEventZone,
   toZone: MovementEventZone,
   options: MovementOptions = {},
+  countersAtFieldExit?: CounterSnapshot,
 ) {
   if (!game || !card || !fromZone || !toZone || fromZone === toZone) {
     return null;
@@ -945,6 +930,7 @@ async function emitCardMovedEvent(
     wasDestroyed: options.wasDestroyed === true,
     effectsNegatedAtFieldExit: options.effectsNegatedAtFieldExit === true,
     ...(equipBindingsAtFieldExit ? { equipBindingsAtFieldExit } : {}),
+    ...(countersAtFieldExit ? { countersAtFieldExit } : {}),
     destroyCause: options.destroyCause || null,
     movedByEffect,
     wasFaceupBeforeMove:
@@ -1253,13 +1239,6 @@ function findCardLocation(
   return null;
 }
 
-function samePlayerRef(
-  left: GamePlayer | null | undefined,
-  right: GamePlayer | null | undefined,
-): boolean {
-  return !!left && !!right && (left === right || left.id === right.id);
-}
-
 function resolvePlayerRef(
   game: MovementHost,
   ref: GamePlayer | GameCard | string | null | undefined,
@@ -1297,66 +1276,35 @@ function resolveEffectSourceOwner(
   );
 }
 
-function banishProtectionSourceMatches(
+function matchesRuntimeBanishProtectionFilters(
   game: MovementHost,
-  passive: BanishProtectionPassive,
-  protectedOwner: GamePlayer,
-  options: MovementOptions = {},
-): boolean {
-  const protectFrom = passive?.protectFrom || null;
-  if (!protectFrom || protectFrom === "any" || protectFrom === "all") {
-    return true;
-  }
-
-  const movedByEffect =
-    options.movedByEffect === true ||
-    Boolean(options.sourceCard || options.source || options.effectId);
-  if (protectFrom === "effects" || protectFrom === "card_effects") {
-    return movedByEffect;
-  }
-
-  const sourceOwner = resolveEffectSourceOwner(game, options);
-  if (!sourceOwner) return false;
-
-  if (
-    protectFrom === "opponent_effects" ||
-    protectFrom === "opponent_card_effects"
-  ) {
-    if (!movedByEffect) return false;
-    const opponent =
-      typeof game?.getOpponent === "function"
-        ? game.getOpponent(protectedOwner)
-        : null;
-    return samePlayerRef(sourceOwner, opponent);
-  }
-
-  if (protectFrom === "self_effects" || protectFrom === "own_effects") {
-    if (!movedByEffect) return false;
-    return samePlayerRef(sourceOwner, protectedOwner);
-  }
-
-  return true;
+): (card: GameCard, filters: CardFilter) => boolean {
+  return (card, filters) => game.effectEngine?.cardMatchesFilters?.(card, filters) === true;
 }
 
 /**
- * Look for any face-up card on the field whose passive `send_to_grave_replacement`
- * effect matches a card being sent to the graveyard owned by `fromOwner`.
- * Returns the redirect zone name (typically "banished") or null.
- *
- * This implements Macro Cosmos-style replacements (e.g. Galaxy Extreme Dragon's
- * "any card sent to opponent's Graveyard is banished instead").
- *
- * @param {import('../../Game.js').default} game
- * @param card - card being moved to the graveyard
- * @param fromOwner - owner of the card before the move
- * @returns {string|null}
+ * Decision V5: where a departing card goes and to whom a redirect's banish is
+ * attributed, through the projection shared with the cost pre-checks and the
+ * simulation. Read while the card is still in its zone; nothing is mutated.
  */
-function findSendToGraveReplacementTarget(
+function projectRuntimeDeparture(
   game: MovementHost,
   card: GameCard,
-  fromOwner: GamePlayer,
-): CanonicalZone | null {
-  return getSendToGraveReplacementDestination(card, fromOwner, [game.player, game.bot]);
+  holder: GamePlayer,
+  fromZone: CanonicalZone,
+  requestedZone: CanonicalZone,
+  options: MovementOptions,
+) {
+  return projectDepartureDestination<GameCard, GamePlayer>({
+    card,
+    holder,
+    fromZone,
+    requestedZone,
+    players: [game.player, game.bot],
+    skipSendToGraveReplacement: options.skipSendToGraveReplacement === true,
+    matchesFilters: matchesRuntimeBanishProtectionFilters(game),
+    banishProtectionSnapshot: options.banishProtectionSnapshot,
+  });
 }
 
 function asArray<Value>(
@@ -1367,118 +1315,24 @@ function asArray<Value>(
   return Array.isArray(value) ? Array.from(value) : [value as Value];
 }
 
-function buildBanishProtectionFilters(
-  passive: BanishProtectionPassive = {} as BanishProtectionPassive,
-): RuntimeCardFilter {
-  const scope = passive.targetScope || {};
-  const filters: RuntimeCardFilter = {
-    ...(scope.filters || passive.filters || {}),
-  };
-  const keys: readonly (keyof RuntimeCardFilter)[] = [
-    "cardKind",
-    "cardName",
-    "name",
-    "cardId",
-    "cardIds",
-    "subtype",
-    "monsterType",
-    "type",
-    "archetype",
-    "level",
-    "levelOp",
-    "minLevel",
-    "maxLevel",
-    "requireFaceup",
-    "isToken",
-    "isTuner",
-  ];
-  for (const key of keys) {
-    const scopeValue = Reflect.get(scope, key);
-    const value =
-      key === "type" ? scopeValue : (scopeValue ?? Reflect.get(passive, key));
-    if (value !== undefined && Reflect.get(filters, key) === undefined) {
-      Reflect.set(filters, key, value);
-    }
-  }
-  return filters;
-}
-
-function banishProtectionAppliesToCard(
+/** A direct banish is attributed to the move's own source; its refusal keeps the card in place. */
+function findDirectBanishProtection(
   game: MovementHost,
   card: GameCard,
-  cardOwner: GamePlayer,
+  holder: GamePlayer,
   cardZone: CanonicalZone,
   options: MovementOptions = {},
 ) {
-  if (!game || !card || !cardOwner) return null;
-
-  const sourceOwners = [game.player, game.bot].filter(Boolean);
-  for (const sourceOwner of sourceOwners) {
-    const sources = [
-      ...(sourceOwner.field || []),
-      ...(sourceOwner.spellTrap || []),
-      sourceOwner.fieldSpell,
-    ].filter(Boolean);
-
-    for (const sourceCard of sources) {
-      if (!sourceCard || sourceCard.isFacedown) continue;
-      if (game.effectEngine?.isEffectNegated?.(sourceCard)) continue;
-
-      const sourceZone =
-        game.findCardZone?.(sourceOwner, sourceCard) ||
-        findCardLocation(game, sourceCard)?.zone ||
-        null;
-      const effects = Array.isArray(sourceCard.effects)
-        ? sourceCard.effects
-        : [];
-      for (const effect of effects) {
-        if (!effect || effect.timing !== "passive") continue;
-        const passive = effect.passive || {};
-        if (passive.type !== "banish_protection") continue;
-        if (effect.requireZone && effect.requireZone !== sourceZone) continue;
-        if (
-          (effect.requireFaceup === true || passive.requireFaceup === true) &&
-          sourceCard.isFacedown
-        ) {
-          continue;
-        }
-        if (!banishProtectionSourceMatches(game, passive, cardOwner, options)) {
-          continue;
-        }
-
-        const scope = passive.targetScope || {};
-        const ownerRule = scope.owner || passive.targetOwner || "self";
-        if (ownerRule !== "any" && ownerRule !== "both") {
-          const expectedOwner =
-            ownerRule === "opponent"
-              ? game.getOpponent?.(sourceOwner)
-              : sourceOwner;
-          if (expectedOwner !== cardOwner) continue;
-        }
-
-        const zones = asArray(
-          scope.zones ?? scope.zone ?? passive.zones ?? passive.zone,
-          ["field"],
-        );
-        if (!zones.includes(cardZone)) continue;
-        if ((scope.excludeSelf || passive.excludeSelf) && card === sourceCard) {
-          continue;
-        }
-
-        const filters = buildBanishProtectionFilters(passive);
-        if (
-          Object.keys(filters).length > 0 &&
-          !game.effectEngine?.cardMatchesFilters?.(card, filters)
-        ) {
-          continue;
-        }
-
-        return { sourceCard, effect, passive };
-      }
-    }
-  }
-
-  return null;
+  if (!game || !card || !holder) return null;
+  const byEffect =
+    options.movedByEffect === true ||
+    Boolean(options.sourceCard || options.source || options.effectId);
+  const snapshot = options.banishProtectionSnapshot ??
+    captureBanishProtectionSnapshot<GameCard, GamePlayer>([game.player, game.bot]);
+  return findBanishProtection(snapshot, card, holder, cardZone, {
+    byEffect,
+    controllerId: resolveEffectSourceOwner(game, options)?.id ?? null,
+  }, matchesRuntimeBanishProtectionFilters(game));
 }
 
 function getSendToGraveReplacementSources(game: MovementHost) {
@@ -1723,6 +1577,8 @@ async function trySendToGraveActionReplacement(
 
   // The send can only be replaced while the moving card keeps this presence.
   const targetPresence = captureReplacementPresence(card, location.owner);
+  // The replacing move clears the counters; the destruction still reports them.
+  const countersAtFieldExit = captureCounterSnapshot(card);
 
   for (const {
     sourceCard,
@@ -1833,11 +1689,18 @@ async function trySendToGraveActionReplacement(
       const logMessage = formatReplacementText(replacement.logMessage, targetName, sourceName);
       if (logMessage) game.ui?.log?.(logMessage);
       const finalLocation = findCardLocation(game, card, null);
-      return {
+      const replacedResult: {
+        replaced: true;
+        fromZone: typeof location.zone;
+        toZone: CanonicalZone;
+        countersAtFieldExit?: CounterSnapshot;
+      } = {
         replaced: true,
         fromZone: location.zone,
         toZone: finalLocation?.zone || "deck",
       };
+      if (countersAtFieldExit) replacedResult.countersAtFieldExit = countersAtFieldExit;
+      return replacedResult;
     }
   }
 
@@ -2507,12 +2370,14 @@ export async function moveCardInternal(
       destPlayer,
       options,
     ));
-    if (replacementResult?.replaced) {
+    if (replacementResult?.replaced && "fromZone" in replacementResult) {
       return {
         success: true,
         replaced: true,
         fromZone: replacementResult.fromZone || options.fromZone || null,
         toZone: replacementResult.toZone || "deck",
+        ...(replacementResult.countersAtFieldExit
+          ? { countersAtFieldExit: replacementResult.countersAtFieldExit } : {}),
       };
     }
   }
@@ -2522,32 +2387,13 @@ export async function moveCardInternal(
     card,
     isCanonicalZone(options.fromZone) ? options.fromZone : null,
   );
+  // Decision V5: decide the departure once, while the card is still in its
+  // zone, so a protector that protects itself is still seen. A direct banish
+  // keeps its refusal; a redirect forbidden by a protection is not applied.
+  let plannedDeparture: ReturnType<typeof projectRuntimeDeparture> | null = null;
   if (initialLocation) {
-    let projectedToZone = toZone;
-    if (
-      projectedToZone === "graveyard" &&
-      !card.isToken &&
-      options?.skipSendToGraveReplacement !== true
-    ) {
-      const redirectTarget = findSendToGraveReplacementTarget(
-        this,
-        card,
-        initialLocation.owner,
-      );
-      if (redirectTarget) {
-        projectedToZone = redirectTarget;
-      }
-    }
-    if (
-      initialLocation.zone === "field" &&
-      projectedToZone !== "field" &&
-      card.banishWhenLeavesField === true &&
-      !card.isToken
-    ) {
-      projectedToZone = "banished";
-    }
-    if (projectedToZone === "banished") {
-      const protection = banishProtectionAppliesToCard(
+    if (toZone === "banished") {
+      const protection = findDirectBanishProtection(
         this,
         card,
         initialLocation.owner,
@@ -2556,10 +2402,19 @@ export async function moveCardInternal(
       );
       if (protection) {
         this.ui?.log?.(
-          `${card.name} cannot be banished while ${protection.sourceCard.name} is face-up.`,
+          `${card.name} cannot be banished while ${protection.source.name} is face-up.`,
         );
         return { success: false, reason: "banish_protected" };
       }
+    } else {
+      plannedDeparture = projectRuntimeDeparture(
+        this,
+        card,
+        initialLocation.owner,
+        initialLocation.zone,
+        toZone,
+        options,
+      );
     }
   }
 
@@ -2721,35 +2576,38 @@ export async function moveCardInternal(
     }
   };
 
-  // Send-to-graveyard replacement (e.g. Galaxy Extreme Dragon): if any face-up
-  // card on the field has a `passive: { type: "send_to_grave_replacement" }`
-  // matching this transfer, redirect the card to its owner's banished zone.
+  // Apply the departure decided before the card left its zone. A move that was
+  // not located up front decides it now, from the zone it was removed from.
   // Tokens never get redirected — they leave play entirely (handled below).
   let destArrRedirected: GameCard[] | null = null;
-  if (
-    toZone === "graveyard" &&
-    !card.isToken &&
-    options?.skipSendToGraveReplacement !== true
-  ) {
-    const redirectTarget = findSendToGraveReplacementTarget(
-      this,
-      card,
-      fromOwner,
+  const departure = initialLocation
+    ? plannedDeparture
+    : toZone !== "banished" && isCanonicalZone(fromZone)
+      ? projectRuntimeDeparture(this, card, fromOwner, fromZone, toZone, options)
+      : null;
+  for (const forbidden of departure?.forbidden || []) {
+    this.ui?.log?.(
+      `${card.name} cannot be banished while ${forbidden.protection.source.name} is face-up; it goes to its original destination.`,
     );
-    if (redirectTarget && redirectTarget !== "graveyard") {
-      destPlayer = fromOwner;
-      toZone = redirectTarget;
-      destArrRedirected = this.getZone(destPlayer, toZone);
-      if (!Array.isArray(destArrRedirected)) {
-        destArrRedirected = null;
-      } else {
-        this.ui?.log?.(
-          `${card.name} is banished instead of being sent to the Graveyard.`,
-        );
-      }
+  }
+  const appliedRedirect = departure?.applied || null;
+  if (appliedRedirect) {
+    destPlayer = fromOwner;
+    toZone = appliedRedirect.zone;
+    destArrRedirected = this.getZone(destPlayer, toZone);
+    if (!Array.isArray(destArrRedirected)) {
+      destArrRedirected = null;
+    } else if (appliedRedirect.kind === "send_to_grave_replacement") {
+      // Send-to-graveyard replacement (e.g. Galaxy Extreme Dragon).
+      this.ui?.log?.(
+        `${card.name} is banished instead of being sent to the Graveyard.`,
+      );
+    } else {
+      this.ui?.log?.(`${card.name} is banished as it leaves the field.`);
     }
   }
 
+  // The clause is consumed by any field exit, also when its banish was forbidden.
   if (
     fromZone === "field" &&
     toZone !== "field" &&
@@ -2757,26 +2615,16 @@ export async function moveCardInternal(
     !card.isToken
   ) {
     delete card.banishWhenLeavesField;
-    if (toZone !== "banished") {
-      destPlayer = fromOwner;
-      toZone = "banished";
-      destArrRedirected = this.getZone(destPlayer, toZone);
-      if (!Array.isArray(destArrRedirected)) {
-        destArrRedirected = null;
-      } else {
-        this.ui?.log?.(`${card.name} is banished as it leaves the field.`);
-      }
-    }
   }
 
-  if (toZone === "banished") {
+  if (toZone === "banished" && !appliedRedirect && !initialLocation) {
     const protection = isCanonicalZone(fromZone)
-      ? banishProtectionAppliesToCard(this, card, fromOwner, fromZone, options)
+      ? findDirectBanishProtection(this, card, fromOwner, fromZone, options)
       : null;
     if (protection) {
       restoreRemovedCardToSourceZone();
       this.ui?.log?.(
-        `${card.name} cannot be banished while ${protection.sourceCard.name} is face-up.`,
+        `${card.name} cannot be banished while ${protection.source.name} is face-up.`,
       );
       return { success: false, reason: "banish_protected" };
     }
@@ -2819,11 +2667,17 @@ export async function moveCardInternal(
     options,
   );
   const wasFaceupBeforeMove = card.isFacedown !== true;
-  // Capture before field-exit cleanup clears temporary negation.
+  // Capture before field-exit cleanup clears temporary negation. Both leave
+  // bonds read it: a Continuous Trap's bound monster and an Equip that
+  // destroys its host when it leaves the field (decision V2).
   const bindingEffectWasActive =
     wasFaceupBeforeMove &&
     card.effectsNegated !== true &&
     this.effectEngine?.isEffectNegated?.(card) !== true;
+  // Decision V4: a card leaving the field zones loses every counter; triggers
+  // and filters that read the card that left use what it had at that moment.
+  const leavesFieldZones = FIELD_ZONE_NAMES.has(fromZone) && !FIELD_ZONE_NAMES.has(toZone);
+  const countersAtFieldExit = leavesFieldZones ? captureCounterSnapshot(card) : undefined;
   const equipBindingsAtFieldExit: MutableEquipHostExitBinding[] = [];
   if (fromZone === "field" && toZone !== "field") {
     this.ensureDuelCardId?.(card);
@@ -2949,6 +2803,7 @@ export async function moveCardInternal(
 
     // Log the removal
     this.ui.log(`${card.name} (Token) was removed from the game.`);
+    clearCardCounters(card);
 
     await duringCurrentDuel(emitCardMovedEvent(this, card, fromOwner, null, fromZone, "removed", {
       ...options,
@@ -2958,7 +2813,7 @@ export async function moveCardInternal(
       contextLabel: options.contextLabel || "token_removed",
       atomicGroupId: tokenAtomicGroupId,
       ...exitEventOptions,
-    }));
+    }, countersAtFieldExit));
 
     // Update board to reflect removal
     this.updateBoard();
@@ -2972,6 +2827,7 @@ export async function moveCardInternal(
         fromZone,
         toZone: null,
         destinationPresence,
+        ...(countersAtFieldExit ? { countersAtFieldExit } : {}),
         ...(tokenExitResult?.needsSelection && tokenExitResult.selectionContract
           ? { needsSelection: true, selectionContract: tokenExitResult.selectionContract }
           : {}),
@@ -2993,6 +2849,7 @@ export async function moveCardInternal(
 
   if (options.isFacedown === true) {
     expireEffectNegation(card, "while_faceup");
+    clearCardCounters(card);
     restoreFaceupStatuses(card);
     expireFaceupDeclaredValues(card);
     expireFaceupStatBuffs(card);
@@ -3015,6 +2872,8 @@ export async function moveCardInternal(
     );
     cleanupDeclaredValuesWhenSourceLeavesActiveZone(card, fromZone, toZone);
   }
+
+  if (leavesFieldZones) clearCardCounters(card);
 
   const activeZones = ["field", "spellTrap", "fieldSpell"];
   if (
@@ -3138,7 +2997,9 @@ export async function moveCardInternal(
       }
     }
 
-    // Remove stat bonuses (clamp to 0 to prevent negative stats)
+    // Remove stat bonuses (clamp to 0 to prevent negative stats). Only the
+    // applied amount is in the host's stats; a withheld bonus is just dropped.
+    clearSuspendedEquipStatBonus(card);
     if (host) {
       if (typeof card.equipAtkBonus === "number" && card.equipAtkBonus !== 0) {
         removeTrackedStatChange(host, "atk", card.equipAtkBonus);
@@ -3167,8 +3028,10 @@ export async function moveCardInternal(
       }
     }
 
-    // Generalized equip cleanup: if an equip card has destroyEquippedOnLeave, destroy the equipped monster
-    // Check for passive effect with id pattern or explicit flag on card
+    // Decision V2 (16/11/2026): the bond that destroys the host when this
+    // Equip leaves the field is a continuous effect of the Equip. It applies
+    // only if the Equip was face-up and not negated just before it left, and
+    // only when it leaves the field (a Spell & Trap to Spell & Trap move does not).
     const hasDestroyOnLeaveEffect = (card.effects || []).some(
       (e) =>
         e &&
@@ -3177,8 +3040,9 @@ export async function moveCardInternal(
         e.id.includes("destroy_on_leave"),
     );
     if (
-      (Reflect.get(card, "destroyEquippedOnLeave") === true ||
-        hasDestroyOnLeaveEffect) &&
+      bindingEffectWasActive &&
+      hasDestroyOnLeaveEffect &&
+      toZone !== "spellTrap" &&
       host
     ) {
       // Queued for the awaited flush after this move, never a detached promise.
@@ -3230,6 +3094,7 @@ export async function moveCardInternal(
         wasFaceupBeforeMove,
         effectsNegatedAtFieldExit,
       },
+      countersAtFieldExit,
     ));
     return { success: true, fromZone, toZone };
   }
@@ -3272,6 +3137,7 @@ export async function moveCardInternal(
         removeTrackedStatChange(card, "def", equip.equipDefBonus);
         equip.equipDefBonus = 0;
       }
+      clearSuspendedEquipStatBonus(equip);
       refreshEquipExtraAttackBonus(equip, card, false);
       equip.equipExtraAttacks = 0;
       if (equip.grantsBattleIndestructible) {
@@ -3418,6 +3284,7 @@ export async function moveCardInternal(
           atomicGroupId: extraDeckAtomicGroupId,
           ...exitEventOptions,
         },
+        countersAtFieldExit,
       ));
       const extraDeckExitResult = await resolveOwnedSimultaneousExitEvents();
       await duringCurrentDuel(flushPendingBoundDestruction());
@@ -3426,6 +3293,7 @@ export async function moveCardInternal(
           success: true,
           fromZone,
           toZone: "extraDeck",
+          ...(countersAtFieldExit ? { countersAtFieldExit } : {}),
           ...(extraDeckExitResult?.needsSelection && extraDeckExitResult.selectionContract
             ? { needsSelection: true, selectionContract: extraDeckExitResult.selectionContract }
             : {}),
@@ -3790,6 +3658,7 @@ export async function moveCardInternal(
         deferTargetPrecheck: deferCardToGraveTriggers,
         deferActivationChecks: deferCardToGraveTriggers && this.summonProcedureDepth > 0,
         effectsNegatedAtFieldExit,
+        ...(countersAtFieldExit ? { countersAtFieldExit } : {}),
         atomicGroupId,
       };
       const cardToGraveEvent = this.emit(
@@ -3857,6 +3726,7 @@ export async function moveCardInternal(
       atomicGroupId,
       ...exitEventOptions,
     },
+    countersAtFieldExit,
   ));
 
   if (this.effectEngine?.clearTargetingCache) {
@@ -3879,6 +3749,7 @@ export async function moveCardInternal(
       summonAttemptResult?.transaction?.summonId ??
       null,
     summonOrigin: summonOrigin || options.summonOrigin || null,
+    ...(countersAtFieldExit ? { countersAtFieldExit } : {}),
   };
   if (
     afterSummonResult?.needsSelection &&

@@ -7,7 +7,7 @@ import { consumeTrackedDamageStepBuffs } from "../game/combat/damageStep.js";
  */
 
 import { isAI } from "../Player.js";
-import { expireFaceupDeclaredValues, restoreFaceupStatuses, trackFaceupStatus } from "../Card.js";
+import { clearCardCounters, expireFaceupDeclaredValues, restoreFaceupStatuses, trackFaceupStatus } from "../Card.js";
 import { isNonTargetingEffectReference } from "../effects/targeting/filters.js";
 import { applyLevelModification, expireLevelModifications, applyNamedStatChange, expireFaceupStatBuffs, removeTrackedStatChange } from "../effects/actions/stats.js";
 import { suppressTemporaryDynamicStatIncreasesForDebuff } from "../effects/passives/passiveBuffs.js";
@@ -2245,6 +2245,8 @@ export async function handleSetFacedownDefense(
     const previousPosition = card.position;
     card.position = "defense";
     card.isFacedown = true;
+    // Counters exist only on face-up cards (decision V4); cleared silently.
+    clearCardCounters(card);
     card.fieldPresenceSummons = [];
     expireFaceupStatBuffs(card);
     if (card.attackLimitDuration === "while_faceup") {

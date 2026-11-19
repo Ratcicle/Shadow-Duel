@@ -10,11 +10,18 @@ import type {
 } from "../../contracts/actionRuntime.js";
 import type { ActionOf } from "../../contracts/actions.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
-import { refreshEquipExtraAttackBonus } from "../passives/passiveBuffs.js";
+import {
+  clearSuspendedEquipStatBonus,
+  isPassiveSourceActive,
+  refreshEquipExtraAttackBonus,
+  refreshEquipStatBonus,
+} from "../passives/passiveBuffs.js";
 
 interface EquipRuntimeCard extends ActionRuntimeCard {
   equipAtkBonus?: number;
   equipDefBonus?: number;
+  equipAtkBonusSuspended?: number;
+  equipDefBonusSuspended?: number;
   equipExtraAttacks?: number;
   equipExtraAttacksApplied?: number;
   grantsBattleIndestructible?: boolean;
@@ -114,6 +121,7 @@ export async function applyEquip(
 
     equipCard.equipAtkBonus = 0;
     equipCard.equipDefBonus = 0;
+    clearSuspendedEquipStatBonus(equipCard);
     equipCard.equipExtraAttacks = 0;
     equipCard.grantsBattleIndestructible = false;
     equipCard.grantsCrescentShieldGuard = false;
@@ -167,15 +175,20 @@ export async function applyEquip(
   }
 
   if (typeof action.atkBonus === "number") {
+    // The new grant replaces a bonus withheld while the Equip was inactive.
+    delete equipCard.equipAtkBonusSuspended;
     const previousBonus = equipCard.equipAtkBonus || 0;
     equipCard.equipAtkBonus = action.atkBonus;
     target.atk = (target.atk ?? 0) + action.atkBonus - previousBonus;
   }
   if (typeof action.defBonus === "number") {
+    delete equipCard.equipDefBonusSuspended;
     const previousBonus = equipCard.equipDefBonus || 0;
     equipCard.equipDefBonus = action.defBonus;
     target.def = (target.def ?? 0) + action.defBonus - previousBonus;
   }
+  // A negated or face-down Equip withholds its fixed bonus (decision V1).
+  refreshEquipStatBonus(equipCard, target, isPassiveSourceActive(equipCard));
   if (typeof action.extraAttacks === "number") {
     // Preserve the previous applied amount before replacing the configured grant.
     equipCard.equipExtraAttacksApplied ??= equipCard.equipExtraAttacks || 0;

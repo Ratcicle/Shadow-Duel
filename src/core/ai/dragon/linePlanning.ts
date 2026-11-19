@@ -47,7 +47,7 @@ export interface DragonPlanningAction {
 }
 
 interface DragonMilestone { label?: string; name?: string; reason?: string; score?: number; detail?: unknown; }
-interface DragonBattleSummary { damage?: number; destroyedCards?: Array<DragonCard & { owner?: string; card?: DragonCard; destroyedBy?: string }> }
+interface DragonBattleSummary { damage?: number; destroyedCards?: Array<DragonCard & { owner?: string; card?: DragonCard; destroyedBy?: string; countersAtFieldExit?: Readonly<Record<string, number>> | undefined }> }
 export interface DragonLineContext extends DragonPolicyContext {
   initialState?: DragonGame | null;
   finalState?: DragonGame | null;
@@ -1055,6 +1055,7 @@ export function applyDragonSimulatedBattleRewards(context: DragonLineContext = {
     const counters = getCounterCount(state.bot.fieldSpell, "dragon_peak");
     emitSimulatedBattleDestroy(state, { attacker: destroyer, destroyed, destroyedOwner: owner,
       destroyedPosition: entry.position || null, battleDestroyer: destroyer,
+      ...(entry.countersAtFieldExit ? { destroyedCountersAtFieldExit: entry.countersAtFieldExit } : {}),
       recordNegatedBattleActivation: true }, context.options || {}, sources, effects);
     if (getCounterCount(state.bot.fieldSpell, "dragon_peak") > counters) rewards.add("Jagged Peak counter");
     if (state.bot.lp > ownLp) {

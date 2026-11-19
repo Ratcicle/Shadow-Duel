@@ -678,7 +678,9 @@ Tipos suportados atualmente:
 
 - `lp_cost_reduction`: reduz custos de `pay_lp`; no card data, use `amount`,
   `appliesTo`, `actionTypes`, `sourceFilters` e `stackMode: "max"`. O runtime
-  reconhece aliases legados, mas eles não pertencem ao schema de autoria.
+  reconhece aliases legados, mas eles não pertencem ao schema de autoria. Com
+  a fonte negada, a redução não se aplica e não gasta uso; o custo usa o
+  estado da fonte no momento do pagamento.
 - `position_status`: aplica status enquanto a carta está em uma posição.
 - `conditional_status`: aplica status enquanto as condições declaradas passam.
 - `conditional_extra_attacks`: concede ataques adicionais enquanto as condições
@@ -731,18 +733,32 @@ Tipos suportados atualmente:
   comparação de stats declarada for satisfeita.
 - `activation_negation_protection`: impede que ativações cobertas pelo escopo
   sejam negadas.
-- `banish_protection`: impede que cards em `targetScope` sejam movidos para
-  `banished`; use `excludeSelf: true` quando a própria fonte não deve ser
-  protegida.
+- `banish_protection`: impede que cards em `targetScope` sejam banidos; use
+  `excludeSelf: true` quando a própria fonte não deve ser protegida. Um
+  banimento direto proibido é recusado e a carta fica onde está. Num
+  redirecionamento (`send_to_grave_replacement` ou a cláusula
+  `banishWhenLeavesField`), a carta segue ao destino original (Cemitério, mão,
+  Deck ou Extra Deck) e continua contando como destruída quando foi destruída.
+  `protectFrom: "opponent_effects"` compara com quem controla o
+  redirecionamento: na substituição, o controlador da fonte; na cláusula, o
+  dono original da carta. Numa operação que move várias cartas juntas
+  (materiais, Tributos, destruição ou retorno de vários alvos), a proteção é a
+  do início da operação: um protetor que sai junto ainda protege as outras.
+  Como a cláusula é atribuída ao dono original, `statusesOnSummon` com
+  `banishWhenLeavesField` só aceita invocar cartas das próprias zonas; a
+  validação do banco recusa as outras formas. Um efeito que marque uma carta
+  de outro dono original exige um campo serializado próprio.
 - `send_to_grave_replacement`: substitui um envio ao Cemitério pelo destino
-  declarativo configurado.
+  declarativo configurado. A proteção contra banimento só é consultada quando
+  esse destino é `banished`.
 - `counter_attack_lock`: restringe ataques conforme counters e escopo declarados.
 - `battle_phase_activation_lock`: restringe ativações durante a Battle Phase.
 - `restrict_opponent_summon_turn_attack`: impede ataques de monstros Invocados
   pelo oponente no turno coberto.
 - `negate_opponent_battle_destruction_prevention`: neutraliza proteções do
   oponente contra destruição em batalha.
-- `lp_gain_multiplier`: multiplica ganhos de LP do jogador afetado.
+- `lp_gain_multiplier`: multiplica ganhos de LP do jogador afetado. O
+  multiplicador é lido no momento do ganho e não vale com a fonte negada.
 
 Campos comuns de buff aceitos no card data: `amountPerCard`, `stats`,
 `countOwners`, `cardKinds`, `includeSelf`, `requireFaceup`. Consulte

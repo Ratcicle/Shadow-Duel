@@ -13,6 +13,7 @@
 import { getCardLocationVersion } from "../../Card.js";
 import type { CardProtectionEffect, GameCard } from "../../contracts/cards.js";
 import type {
+  BanishProtectionSnapshot,
   CardFilter,
   EffectCondition,
   EffectDefinition,
@@ -110,6 +111,8 @@ interface DestructionOptions {
   atomicGroupId?: string | number | null;
   contextLabel?: string;
   actionContext?: unknown;
+  /** Internal (P1): the protections of the operation that destroys several cards together. */
+  banishProtectionSnapshot?: BanishProtectionSnapshot<GameCard, GamePlayer> | undefined;
 }
 
 interface BattleProtectionContext {
@@ -173,6 +176,7 @@ interface DestructionHost {
       atomicGroupId: string | number | null;
       contextLabel: string;
       actionContext: unknown;
+      banishProtectionSnapshot?: BanishProtectionSnapshot<GameCard, GamePlayer> | undefined;
     },
   ): MaybePromise<MoveCardResult>;
   recordMaterialDestroyedOpponentMonster(
@@ -806,6 +810,8 @@ export async function destroyCard(
         atomicGroupId: options.atomicGroupId || null,
         contextLabel: options.contextLabel || "destroyCard",
         actionContext: options.actionContext || null,
+        ...(options.banishProtectionSnapshot
+          ? { banishProtectionSnapshot: options.banishProtectionSnapshot } : {}),
       });
 
       if (!moveResult || moveResult.success === false) {
@@ -819,6 +825,10 @@ export async function destroyCard(
       const deferredPackages = moveResult.deferredCardToGraveTriggerPackages?.length
         ? { deferredCardToGraveTriggerPackages: moveResult.deferredCardToGraveTriggerPackages }
         : {};
+      // The battle_destroy payload reads the counters the card left the field with.
+      const exitCounters = "countersAtFieldExit" in moveResult && moveResult.countersAtFieldExit
+        ? { countersAtFieldExit: moveResult.countersAtFieldExit }
+        : {};
 
       if (moveResult.needsSelection) {
         return {
@@ -826,10 +836,11 @@ export async function destroyCard(
           needsSelection: true,
           selectionContract: moveResult.selectionContract,
           ...deferredPackages,
+          ...exitCounters,
         };
       }
 
-      return { destroyed: true, ...deferredPackages };
+      return { destroyed: true, ...deferredPackages, ...exitCounters };
     },
     {
       contextLabel: options.contextLabel || "destroyCard",

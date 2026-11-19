@@ -1,4 +1,5 @@
 import { moveCardToZone } from "./common/zones.js";
+import { captureCounterSnapshot } from "../Card.js";
 import {
   assertPublicPlanningProjection,
   createPlanningCopy,
@@ -165,6 +166,8 @@ interface DestroyedCardSummary {
   def: number;
   baseAtk: number;
   destroyedBy: string;
+  /** Counters it had before the move, which clears them (decision V4). */
+  countersAtFieldExit?: Readonly<Record<string, number>>;
 }
 
 interface LpGainSummary {
@@ -627,8 +630,9 @@ function getCardKey(card: PlannerCard | null | undefined): string {
     card.level ?? "no-level",
     card.tempAtkBoost || 0,
     card.tempDefBoost || 0,
-    card.equipAtkBonus || 0,
-    card.equipDefBonus || 0,
+    // A withheld Equip bonus (decision V1) only extends the key when present.
+    card.equipAtkBonusSuspended ? `${card.equipAtkBonus || 0}s${card.equipAtkBonusSuspended}` : card.equipAtkBonus || 0,
+    card.equipDefBonusSuspended ? `${card.equipDefBonus || 0}s${card.equipDefBonusSuspended}` : card.equipDefBonus || 0,
     card.hasAttacked ? "attacked" : "",
     card.cannotAttackThisTurn ? "cantAtk" : "",
     summarizeCounters(card),
@@ -957,8 +961,8 @@ function sameBattlePairCard(
 // Same generic move as destroySimulatedCard: the monster and the equips held on
 // either side go to their owners' Graveyards, field-exit statuses reset,
 // destination replacement applies and auras are refreshed. As in the runtime
-// destroyCard move, no effect owner is passed, so only banish protection not
-// limited to the opponent's effects can refuse it.
+// destroyCard move, banish protection never refuses it (decision V5): a
+// forbidden redirect leaves the monster in its owner's Graveyard.
 function destroyPlannerMonster(
   state: PlanningState,
   controller: PlannerPlayer | null | undefined,
@@ -997,7 +1001,13 @@ function captureDestroyedCard(
     def: card.def || 0,
     baseAtk: card.baseAtk ?? card.originalAtk ?? card.atk ?? 0,
     destroyedBy,
+    ...countersSummary(card),
   };
+}
+
+function countersSummary(card: PlannerCard): { countersAtFieldExit?: Readonly<Record<string, number>> } {
+  const countersAtFieldExit = captureCounterSnapshot(card);
+  return countersAtFieldExit ? { countersAtFieldExit } : {};
 }
 
 // Published only after the move: a refused move is not a destruction.

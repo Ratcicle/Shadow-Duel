@@ -1158,10 +1158,12 @@ export async function performSynchroSummon(
       fromZone: "field",
       toZone: "graveyard",
       kind: "synchro_material",
-      pay: async () => {
+      pay: async (_transaction, payment) => {
         const moveResult = await this.moveCard(material, player, "graveyard", {
           fromZone: "field",
           contextLabel: "synchro_material",
+          ...(payment.banishProtectionSnapshot
+            ? { banishProtectionSnapshot: payment.banishProtectionSnapshot } : {}),
           awaitCardToGraveEvent: true,
           awaitCardMovedEvent: true,
           deferCardToGraveTriggerResolution: true,

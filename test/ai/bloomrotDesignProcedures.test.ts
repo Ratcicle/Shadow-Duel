@@ -49,7 +49,8 @@ for (const [id, payment] of [[402, 0], [404, 2], [407, 3], [408, 4]] as const) {
     assert.equal(strategy.getPositionChangeActions(state, state.bot, state.player).some(action => action.cardId === id), false,
       "a projected Special Summon cannot change position in the same turn");
     const recipient = required([...state.player.field, ...state.player.graveyard].find(card => card.name === "Procedure counter recipient"));
-    assert.equal(getCounterValue(recipient, "spore"), 4 + (id === 404 ? 1 : 0));
+    // 407 destroys the marked recipient, which loses its counters on leaving the field.
+    assert.equal(getCounterValue(recipient, "spore"), id === 407 ? 0 : 4 + (id === 404 ? 1 : 0));
     assert.equal(state.bot.hand.length, initialHand - 1);
     assert.equal(state.bot.summonCount ?? 0, 0, "special procedures do not spend the Normal Summon");
     assert.deepEqual(state._simUnsupportedActions ?? [], []);

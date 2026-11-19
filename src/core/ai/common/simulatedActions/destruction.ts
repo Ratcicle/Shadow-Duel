@@ -1,5 +1,5 @@
-import { appendSimulatedZoneCard } from "../zones.js";
-import type { SimulatedMoveReceipt } from "../zones.js";
+import { appendSimulatedZoneCard, captureSimulatedBanishProtection } from "../zones.js";
+import type { SimulatedBanishProtectionSnapshot, SimulatedMoveReceipt } from "../zones.js";
 import { emitSimulatedMove, getOriginalOwner, setSimulatedController } from "./movement.js";
 import { applySimulatedEffectDamage } from "./resources.js";
 import { applySimulatedActions } from "./index.js";
@@ -237,6 +237,8 @@ export function destroySimulatedCard(
   sourcePlayer: SimulatedPlayerState,
   state: SimulatedRuntimeState,
   options: SimulatedActionOptions,
+  /** P1: the protections of an operation that destroys several cards together. */
+  banishProtectionSnapshot?: SimulatedBanishProtectionSnapshot,
 ): boolean {
   const fromZone = findCardZone(owner, card);
   if (!fromZone) return false;
@@ -265,6 +267,7 @@ export function destroySimulatedCard(
   if (!moveCardToZone(destination, card, "graveyard", owner, {
     state, movedByEffect: true, sourceCard: options.sourceCard || null, sourcePlayer,
     ...(options.emitSimulatedEvent ? { emitSimulatedEvent: options.emitSimulatedEvent } : {}),
+    ...(banishProtectionSnapshot ? { banishProtectionSnapshot } : {}),
     onMoveCommitted: result => { receipt.value = result; },
   })) return false;
   // Without a receipt the card did not move (same-zone shortcut): as in the runtime, it counts as destroyed and publishes nothing.
@@ -278,6 +281,7 @@ export function destroySimulatedCard(
     fromZone, toZone, wasFaceupBeforeMove,
     locationVersion: receipt.value?.destinationPresence.locationVersion ?? card.locationVersion ?? 0,
     ...(receipt.value?.equipBindingsAtFieldExit.length ? { equipBindingsAtFieldExit: receipt.value.equipBindingsAtFieldExit } : {}),
+    ...(receipt.value?.countersAtFieldExit ? { countersAtFieldExit: receipt.value.countersAtFieldExit } : {}),
     effectsNegatedAtFieldExit, wasDestroyed: true, destroyCause: "effect",
     destroySource: options.sourceCard || null, sourceCard: options.sourceCard || null,
     movedByEffect: true, actionContext: options.actionContext };
@@ -339,10 +343,12 @@ export function applyDestroy(
     opponent,
     applySimulatedActions,
   } = ctx;
+  // P1, as the runtime: the targets are destroyed together.
+  const banishProtectionSnapshot = captureSimulatedBanishProtection(state, targets.length);
   targets.forEach((card) => {
     const owner = findCardOwner(state, card);
     if (!owner) return;
-    destroySimulatedCard(card, owner, self, state, options);
+    destroySimulatedCard(card, owner, self, state, options, banishProtectionSnapshot);
   });
   return;
 }
@@ -358,8 +364,9 @@ export function applyDestroyOtherDragonsAndBuff(
   const candidates = self.field.filter(card => card !== source && card.cardKind === "monster" &&
     (Array.isArray(card.types) ? card.types.includes(typeName) : card.type === typeName));
   let destroyed = 0;
+  const banishProtectionSnapshot = captureSimulatedBanishProtection(state, candidates.length);
   for (const card of candidates) {
-    if (destroySimulatedCard(card, self, self, state, options)) destroyed++;
+    if (destroySimulatedCard(card, self, self, state, options, banishProtectionSnapshot)) destroyed++;
   }
   const perCard = typeof action.atkPerDestroyed === "number" && Number.isFinite(action.atkPerDestroyed)
     ? action.atkPerDestroyed : 200;
@@ -393,6 +400,8 @@ export function applyDestroyAndDamageByTargetAtk(
   const entries = (Array.isArray(action.entries) ? action.entries : []) as
     readonly DestroyDamageEntry[];
   const successful: Array<{ owner: SimulatedPlayerState; damagePlayer: string; multiplier: number; atk: number }> = [];
+  const banishProtectionSnapshot = captureSimulatedBanishProtection(state, entries.reduce((count, entry) =>
+    count + resolveTargetsForAction(entry, selections, options, opponent).length, 0));
   for (const entry of entries) {
     const entryTargets = resolveTargetsForAction(
       entry,
@@ -404,7 +413,7 @@ export function applyDestroyAndDamageByTargetAtk(
       const owner = findCardOwner(state, card);
       if (!owner) continue;
       const atk = getEffectiveAtk(card);
-      if (destroySimulatedCard(card, owner, self, state, options)) successful.push({ owner,
+      if (destroySimulatedCard(card, owner, self, state, options, banishProtectionSnapshot)) successful.push({ owner,
         damagePlayer: entry.damagePlayer || "owner", multiplier: entry.multiplier ?? 1, atk });
     }
   }
@@ -475,13 +484,14 @@ export function applyDestroyTargetedCards(
   const presences = selected.map(card => ({ card, owner: findCardOwner(state, card),
     zone: findCardZone(opponent, card), version: card.locationVersion || 0, controller: card.controller ?? opponent.id }));
   let nonImmune = 0;
+  const banishProtectionSnapshot = captureSimulatedBanishProtection(state, presences.length);
   for (const entry of presences) {
     if (optional && (findCardOwner(state, entry.card) !== entry.owner || findCardZone(opponent, entry.card) !== entry.zone ||
       (entry.card.locationVersion || 0) !== entry.version || (entry.card.controller ?? opponent.id) !== entry.controller)) continue;
     if (getCardEffectImmunity({ game: { player: state.player, bot: state.bot, turnCounter: state.turnCounter } },
       entry.card, self, { sourceCard: options.sourceCard || null }).immune) continue;
     nonImmune++;
-    destroySimulatedCard(entry.card, opponent, self, state, options);
+    destroySimulatedCard(entry.card, opponent, self, state, options, banishProtectionSnapshot);
   }
   return optional || nonImmune > 0;
 }
@@ -572,11 +582,12 @@ export function applyDestroyCardsByScope(
   const scope = (action.targetScope || {}) as LegacyActionTargetScope;
   const entries = resolveScopedCards(scope, self, opponent);
   let destroyedCount = 0;
+  const banishProtectionSnapshot = captureSimulatedBanishProtection(ctx.state, entries.length);
 
   entries.forEach(({ card, owner }) => {
     const actualOwner = owner || findCardOwner(ctx.state, card);
     if (!actualOwner) return;
-    if (destroySimulatedCard(card, actualOwner, self, ctx.state, ctx.options)) {
+    if (destroySimulatedCard(card, actualOwner, self, ctx.state, ctx.options, banishProtectionSnapshot)) {
       destroyedCount += 1;
     }
   });

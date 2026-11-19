@@ -1,7 +1,7 @@
 import { addEffectNegation, clearEffectNegation, expireEffectNegation, normalizeNegationDuration as normalizeNegateEffectsDuration } from "../../../effects/negation.js";
 import { removeTrackedDamageStepBuffs, consumeTrackedDamageStepBuffs } from "../../../game/combat/damageStep.js";
 import { applyMove } from "./movement.js";
-import { expireFaceupDeclaredValues, restoreFaceupStatuses, trackFaceupStatus } from "../../../Card.js";
+import { clearCardCounters, expireFaceupDeclaredValues, restoreFaceupStatuses, trackFaceupStatus } from "../../../Card.js";
 import { applyLevelModification, expireLevelModifications, applyNamedStatChange } from "../../../effects/actions/stats.js";
 import { getCardEffectImmunity, isNonTargetingEffectReference } from "../../../effects/targeting/filters.js";
 import { getEffectiveAtk } from "../cardStats.js";
@@ -248,6 +248,8 @@ export function applySetFacedownDefense(
     const previousPosition = card.position || "attack";
     card.position = "defense";
     card.isFacedown = true;
+    // Same as the runtime handler (decision V4).
+    clearCardCounters(card);
     card.fieldPresenceSummons = [];
     expireFaceupStatBuffs(card);
     if (card.attackLimitDuration === "while_faceup") {
@@ -989,9 +991,8 @@ function reconcileSimulatedNegationPassives(
     // These rules read negation directly at use time.
     if (passiveType === "restrict_opponent_summon_turn_attack" || passiveType === "counter_attack_lock" || passiveType === "send_to_grave_replacement" ||
         passiveType === "conditional_protection" || passiveType === "field_archetype_aura_buff" || passiveType === "event_actions" ||
-        passiveType === "banish_protection" || passiveType === "conditional_unaffected_by_effects" || passiveType === "additional_normal_summon") return;
-    // These rules are read at use time; the runtime does not gate them on negation either.
-    if (passiveType === "lp_cost_reduction" || passiveType === "lp_gain_multiplier") return;
+        passiveType === "banish_protection" || passiveType === "conditional_unaffected_by_effects" || passiveType === "additional_normal_summon" ||
+        passiveType === "lp_cost_reduction" || passiveType === "lp_gain_multiplier") return;
     // Planning has no reader for this lock: it binds only the non-turn player
     // during its controller's Battle Phase.
     if (passiveType === "battle_phase_activation_lock") return;

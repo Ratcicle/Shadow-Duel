@@ -891,6 +891,9 @@ function validateCardSnapshot(value: unknown, path: string, onField = false): vo
   ]) {
     requireFiniteNumber(read(stats, key), `${path}.statBookkeeping.${key}`);
   }
+  for (const key of ["equipAtkBonusSuspended", "equipDefBonusSuspended"]) {
+    if (hasOwn(stats, key)) requireFiniteNumber(read(stats, key), `${path}.statBookkeeping.${key}`);
+  }
   for (const key of ["originalAtk", "originalDef"]) {
     if (read(stats, key) !== null) requireFiniteNumber(read(stats, key), `${path}.statBookkeeping.${key}`);
   }

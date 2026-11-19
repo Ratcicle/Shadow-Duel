@@ -530,6 +530,23 @@ export interface PassiveRuleDefinition {
   readonly typeName?: MonsterRace;
 }
 
+/** One banish_protection source that was active when a snapshot was taken. */
+export interface BanishProtectionSnapshotSource<Card = object, Player = object> {
+  readonly source: Card;
+  readonly controller: Player;
+  readonly zone: "field" | "spellTrap" | "fieldSpell";
+  readonly passive: PassiveRuleDefinition;
+}
+
+/**
+ * Internal and never serialized (P1, 18/11/2026): the banish protections active
+ * when an operation that moves several cards together began. Its moves stay
+ * one by one, and every one of them reads protection from this snapshot.
+ */
+export interface BanishProtectionSnapshot<Card = object, Player = object> {
+  readonly sources: readonly BanishProtectionSnapshotSource<Card, Player>[];
+}
+
 export interface ReplacementEffectBehavior {
   readonly type: "destruction" | "send_to_grave";
   readonly auto?: boolean;

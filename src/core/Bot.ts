@@ -1,5 +1,6 @@
 ﻿import { moveCardToZone } from "./ai/common/zones.js";
 import Player from "./Player.js";
+import { getLpGainMultiplier } from "./effects/passives/passiveBuffs.js";
 import { getStrategyFor } from "./ai/StrategyRegistry.js";
 import { createGameTreeModels } from "./ai/PlanningStrategies.js";
 import { botLogger } from "./BotLogger.js";
@@ -66,7 +67,7 @@ import type { GamePlayer } from "./contracts/player.js";
 /** One simulated battle's LP change: LP stop at 0, and a heal follows the player's gain multiplier. */
 function applySimulatedBattleDamage(player: SimulatedPlayerState, damage: number): void {
   player.lp = damage < 0
-    ? player.lp + Math.floor(-damage * (player.lpGainMultiplier || 1))
+    ? player.lp + Math.floor(-damage * getLpGainMultiplier(player.field))
     : Math.max(0, player.lp - damage);
 }
 

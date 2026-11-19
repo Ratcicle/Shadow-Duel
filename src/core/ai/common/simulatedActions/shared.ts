@@ -1,4 +1,5 @@
 import { addEffectNegation, normalizeNegationDuration as normalizeNegateEffectsDuration } from "../../../effects/negation.js";
+import { isLpCostReducerActive } from "../../../effects/passives/passiveBuffs.js";
 import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../simStateUtils.js";
 import type { SimulatedUsageCard, SimulatedUsageState } from "../simStateUtils.js";
 import { projectRuntimeCardEffectUsage } from "../planningCopy.js";
@@ -702,11 +703,8 @@ export function resolveSimulatedLpCost<Card extends LpQuoteCard, Player extends 
         const passive = effect.passive;
         if (!passive || passive.type !== "lp_cost_reduction") return;
         if (effect.requireFaceup === true && card.isFacedown) return;
-        if (
-          card.isFacedown &&
-          effect.allowFacedown !== true &&
-          passive.allowFacedown !== true
-        ) {
+        // Same gate as the runtime (decision V3): a negated reducer does not apply.
+        if (!isLpCostReducerActive(card, effect.allowFacedown === true || passive.allowFacedown === true)) {
           return;
         }
 

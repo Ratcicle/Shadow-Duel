@@ -284,6 +284,7 @@ export async function collectCardMovedTriggers(
         toZone,
         sourceCard,
         ...(binding ? { equipHostExitBinding: binding } : {}),
+        countersAtFieldExit: payload.countersAtFieldExit,
       })
     ) {
       return;
