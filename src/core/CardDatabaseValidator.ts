@@ -70,6 +70,7 @@ import {
   validateActionShape,
 } from "./actionHandlers/actionCatalog.js";
 import { walkEffectActions } from "./actionHandlers/actionWalker.js";
+import { getActionEventPresenceRequirement } from "./contracts/actions.js";
 import {
   DAMAGE_STEP_TIMINGS,
   DUEL_EVENT_NAMES,
@@ -1150,6 +1151,51 @@ export function validateCardDatabase() {
           )
           .filter((type) => typeof type === "string"),
       );
+      // Event presence requirements (V9) gate collection on top-level
+      // resolution actions only; anywhere else they would be skipped.
+      for (const visit of actionWalk.visits) {
+        const visitType = (visit.action as { readonly type?: unknown } | null)
+          ?.type;
+        const requirement =
+          typeof visitType === "string"
+            ? getActionEventPresenceRequirement(visitType)
+            : null;
+        if (!requirement) continue;
+        if (visit.container !== "actions" || visit.depth !== 0) {
+          errors.push(
+            formatIssue(
+              card,
+              `Action "${String(visitType)}" requires event participants and must be a top-level resolution action.`,
+              effectIndex,
+              null,
+            ),
+          );
+        } else if (
+          effect.timing !== "on_event" ||
+          typeof effect.event !== "string" ||
+          !(requirement.events as readonly string[]).includes(effect.event)
+        ) {
+          errors.push(
+            formatIssue(
+              card,
+              `Action "${String(visitType)}" requires an on_event trigger on ${requirement.events.join(" or ")}.`,
+              effectIndex,
+              null,
+            ),
+          );
+        } else if (card.cardKind === "trap") {
+          // Trap on_event effects activate through Chain windows, whose
+          // contexts do not carry the battle participants this gate reads.
+          errors.push(
+            formatIssue(
+              card,
+              `Action "${String(visitType)}" requires event participants that Trap Chain windows do not carry.`,
+              effectIndex,
+              null,
+            ),
+          );
+        }
+      }
       const responseContexts = new Set(
         Array.isArray(effect.canRespondTo)
           ? effect.canRespondTo

@@ -536,6 +536,11 @@ export interface TriggerCollectorHost {
     card: TriggerRuntimeCard,
   ): TriggerZone;
   getOwnerByCard(card: TriggerRuntimeCard): TriggerRuntimePlayer | null;
+  /** The resolution's immunity rule, read by event presence requirements. */
+  checkImmunity?(
+    card: TriggerRuntimeCard,
+    sourcePlayer: TriggerRuntimePlayer,
+  ): { readonly immune: boolean };
   cardMatchesFilters(
     card: TriggerRuntimeCard | null | undefined,
     filters?: TriggerCardFilter | object,

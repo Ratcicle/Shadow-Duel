@@ -25,6 +25,39 @@ export type ActionOf<Type extends ActionType> = ActionByType[Type];
 
 export type CardAction = ActionByType[ActionType];
 
+/**
+ * Event participants an action needs present on the field for its trigger to
+ * be collected at all (decision V9, 19/11/2026). Declared per action type, so
+ * every card using the action follows the same rule without card data.
+ */
+export interface ActionEventPresenceRequirement {
+  /**
+   * The monster that declared the attack in this battle must still be on the
+   * field, in the presence it battled in, controlled by this side relative to
+   * the trigger owner, and affectable by the trigger owner's effects.
+   */
+  readonly battleAttacker: "opponent" | "self";
+  /** Events that carry the battle participants this requirement reads. */
+  readonly events: readonly ("battle_destroy" | "attack_declared" | "battle_damage" | "damage_step")[];
+}
+
+export const ACTION_EVENT_PRESENCE_REQUIREMENTS = Object.freeze({
+  destroy_attacker_on_archetype_destruction: Object.freeze({
+    battleAttacker: "opponent",
+    events: Object.freeze(["battle_destroy"] as const),
+  }),
+} as const satisfies Readonly<Partial<Record<ActionType, ActionEventPresenceRequirement>>>);
+
+/** The presence requirement one action type declares, if any. */
+export function getActionEventPresenceRequirement(
+  type: string | null | undefined,
+): ActionEventPresenceRequirement | null {
+  if (!type || !Object.hasOwn(ACTION_EVENT_PRESENCE_REQUIREMENTS, type)) return null;
+  const table: Readonly<Partial<Record<string, ActionEventPresenceRequirement>>> =
+    ACTION_EVENT_PRESENCE_REQUIREMENTS;
+  return table[type] ?? null;
+}
+
 export type ActionCategory =
   | "resources"
   | "movement"

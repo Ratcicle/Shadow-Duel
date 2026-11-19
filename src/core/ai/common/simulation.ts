@@ -5,7 +5,8 @@ import { captureCounterSnapshot, clearCardCounters, expireFaceupDeclaredValues, 
 import { expireEffectNegation } from "../../effects/negation.js";
 import { expireLevelModifications } from "../../effects/actions/stats.js";
 import type { SimulatedEquipHostExitBinding } from "./zones.js";
-import { hasEquipHostExitProof, matchesAfterSummonTrigger, matchesEquipHostExitSourcePresence } from "../../effects/triggers/collectors/shared.js";
+import { getEffectEventPresenceRequirement, hasEquipHostExitProof, matchesAfterSummonTrigger, matchesEquipHostExitSourcePresence, matchesEventPresenceRequirement } from "../../effects/triggers/collectors/shared.js";
+import { getCardEffectImmunity } from "../../effects/targeting/filters.js";
 import { canTriggerAfterSummonFromHand } from "../../effects/triggers/collectors/afterSummon.js";
 import { getImmediateEventEffectValidationError, isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
 import { captureProcedureTriggerConditions } from "../../effects/conditions/runtime.js";
@@ -190,6 +191,9 @@ interface SimulatedEventPayloadView {
   defender?: SimulatedCardState | null;
   attackerOwner?: SimulatedPlayerState | null;
   defenderOwner?: SimulatedPlayerState | null;
+  /** The monster that declared the attack; battle_destroy names the destroyer `attacker`. */
+  battleAttacker?: SimulatedCardState | null;
+  battleAttackerLocationVersion?: number;
   /** Scoped battle bridges publish negated triggers, then suppress their actions. */
   recordNegatedBattleActivation?: boolean;
   destroyed?: SimulatedCardState | null;
@@ -1123,6 +1127,34 @@ function simEffectForEventCard(
   };
 }
 
+/**
+ * Simulated mirror of the runtime event presence gate (decision V9). Producers
+ * that do not publish `battleAttacker` close the gate on battle_destroy.
+ */
+function matchesSimulatedEventPresence(
+  state: SimulatedRuntimeState,
+  eventName: string,
+  payload: SimulatedEventPayloadView,
+  effect: EffectDefinition,
+  owner: SimulatedPlayerState | null | undefined,
+): boolean {
+  const requirement = getEffectEventPresenceRequirement(effect);
+  if (!requirement) return true;
+  if (!owner) return false;
+  const fromBattleAttacker = payload.battleAttacker != null;
+  const attacker = payload.battleAttacker ?? (eventName === "battle_destroy" ? null : payload.attacker ?? null);
+  const attackerOwner = attacker ? findCardOwner(state, attacker) : null;
+  const zone = attacker && attackerOwner ? findCardZone(attackerOwner, attacker) : null;
+  return matchesEventPresenceRequirement(requirement, {
+    eventName,
+    attacker: { found: !!zone, locationVersion: attacker?.locationVersion, controllerId: attackerOwner?.id ?? null, zone },
+    expectedLocationVersion: fromBattleAttacker ? payload.battleAttackerLocationVersion : undefined,
+    triggerOwnerId: owner.id,
+    attackerImmune: () => !!attacker && getCardEffectImmunity({ game: { player: state.player, bot: state.bot,
+      turnCounter: state.turnCounter } }, attacker, owner).immune,
+  });
+}
+
 function matchesSimulatedEventEffect(
   state: SimulatedRuntimeState,
   eventName: string,
@@ -1242,6 +1274,7 @@ function matchesSimulatedEventEffect(
     const positions = effect.requireDestroyedPosition;
     if (positions && !asArray(positions).includes(payload.destroyedPosition || destroyed.position)) return false;
   }
+  if (!matchesSimulatedEventPresence(state, eventName, payload, effect, sourceEntry.player)) return false;
 
   if (eventName === "card_equipped") {
     if (!payload.equipCard || !payload.target) return false;
@@ -1921,6 +1954,7 @@ function dispatchSimulatedEvent(
       let preparedTrigger: { triggerOptions: BuiltSimulatedSelectionOptions; selections: ReturnType<typeof selectSimulatedTargets> } | null = null;
       const prepareActivation = (): boolean => {
         if (capturedConditions?.check().ok === false) return false;
+        if (!matchesSimulatedEventPresence(state, eventName, payload, effect, sourceEntry.player)) return false;
         if (effect.triggerRequirement === "optional" && ownerOptions.shouldActivateEffect?.({
           sourceCard, effect, player: sourceEntry.player, state,
         }) === false) return false;
@@ -2016,6 +2050,9 @@ function dispatchSimulatedEvent(
         if (!frozenSourceIsCurrent() ||
           !canUseSimulatedEffect(state, effect, sourceCard, sourceEntry.player.id, true)) return false;
         if (deferActivationChecks && !prepareActivation()) return false;
+        // Like the runtime's activation recheck, presence is read again (V9).
+        if (!deferActivationChecks &&
+          !matchesSimulatedEventPresence(state, eventName, payload, effect, sourceEntry.player)) return false;
         if (!preparedTrigger || !areRequiredContextualReferencesValid(preparedTrigger.triggerOptions, sourceEntry.player,
             sourceEntry.opponent || state[selfId === "player" ? "bot" : "player"])) return false;
         markSimulatedEffectUsed(state, effect, sourceCard, sourceEntry.player.id, true);

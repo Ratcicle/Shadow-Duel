@@ -10,7 +10,7 @@ import type { ActionRuntimeGamePort } from "../../contracts/actionRuntime.js";
 import type { TriggerActivationDecisionResult } from "../../contracts/decisions.js";
 
 type TriggerConfirmationGame = Pick<ActionRuntimeGamePort, "requestDecision">;
-import { findTriggerSourceLocation, isTriggerSourceLegal, matchesEquipHostExitSourcePresence } from "./collectors/shared.js";
+import { findTriggerSourceLocation, getEffectEventPresenceRequirement, isTriggerSourceLegal, matchesEquipHostExitSourcePresence, matchesEventPresenceRequirement } from "./collectors/shared.js";
 import type { CardAction } from "../../contracts/actions.js";
 import type { RawSelectionRequirement } from "../../contracts/selection.js";
 import type {
@@ -530,6 +530,40 @@ function bindMovedSourceToEvent<Snapshot extends { locationVersion: number } | n
   return { ...snapshot, locationVersion: eventLocationVersion };
 }
 
+/**
+ * Event presence gate of an effect's top-level actions (decision V9). The
+ * battle_destroy payload names the destroyer `attacker`, so there only the
+ * monster that declared the attack counts. Immunity follows the resolution's
+ * rule, so a collected trigger and its handler never disagree. A lost
+ * presence never returns, but immunity can, so a deferred emission reads
+ * only position and the opportunity reads immunity too.
+ */
+function matchesTriggerEventPresence(
+  host: TriggerCollectorHost,
+  effect: TriggerEffectLike,
+  owner: TriggerRuntimePlayer,
+  ctx: TriggerContext | null | undefined,
+  { readImmunity }: { readonly readImmunity: boolean },
+): boolean {
+  const requirement = getEffectEventPresenceRequirement(effect);
+  if (!requirement) return true;
+  const fromBattleAttacker = ctx?.battleAttacker != null;
+  const attacker = ctx?.battleAttacker ?? (effect.event === "battle_destroy" ? null : ctx?.attacker ?? null);
+  const location = attacker ? findTriggerSourceLocation(host, attacker, owner) : null;
+  return matchesEventPresenceRequirement(requirement, {
+    eventName: effect.event,
+    attacker: {
+      found: !!attacker && !!location?.zone,
+      locationVersion: attacker?.locationVersion,
+      controllerId: location?.zone ? location.player.id : null,
+      zone: location?.zone ?? null,
+    },
+    expectedLocationVersion: fromBattleAttacker ? ctx?.battleAttackerLocationVersion : undefined,
+    triggerOwnerId: owner.id,
+    attackerImmune: () => readImmunity && !!attacker && host.checkImmunity?.(attacker, owner).immune === true,
+  });
+}
+
 export function buildTriggerEntry(
   this: TriggerCollectorHost,
   options: BuildTriggerEntryOptions = {},
@@ -561,6 +595,10 @@ export function buildTriggerEntry(
     if (!matchesEquipHostExitSourcePresence(sourceCard, effect, equipHostExitBinding, physical.player.id, physical.zone)) return null;
   }
   if (!isTriggerSourceLegal(sourceCard, effect, sourceZone, equipHostExitBinding)) return null;
+  // A participant the action will affect is state, like capacity: it is read
+  // at emission and again when a deferred entry is materialized (V9).
+  if (!matchesTriggerEventPresence(this, effect, owner, options.ctx,
+    { readImmunity: !deferActivationChecks })) return null;
 
   if (
     typeof options.activate !== "function" &&
@@ -719,6 +757,10 @@ export function buildTriggerEntry(
           activationCtx.equipHostExitBinding, physical.player.id, physical.zone)) ||
             !isTriggerSourceLegal(sourceCard, effect, liveSourceZone, activationCtx.equipHostExitBinding)) {
           return { success: false, needsSelection: false, activationSkipped: true, reason: "Trigger source is no longer legal." };
+        }
+        if (!matchesTriggerEventPresence(this, effect, owner, options.ctx, { readImmunity: true })) {
+          return { success: false, needsSelection: false, activationSkipped: true,
+            reason: "The attacking monster can no longer be affected." };
         }
       }
       const resolvedCtx = {
