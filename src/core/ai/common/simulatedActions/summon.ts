@@ -39,6 +39,7 @@ import {
 import {
   attachSimulatedEquip,
   canMoveCardToZone,
+  captureSimulatedBanishProtection,
   findCardOwner,
   findCardZone,
   getZoneCards,
@@ -756,11 +757,14 @@ export function simulateSynchroSummon(
   const actionContext = { ...options.actionContext, synchroSummonContextId: contextId };
   const frame = createDeferredSimulatedEventFrame(state, options, event => event === "card_to_grave" || event === "after_summon");
   const eventOptions = frame.options;
+  // P1, as the runtime transaction: the materials leave together.
+  const banishProtectionSnapshot = captureSimulatedBanishProtection(state, materials.length);
   for (const material of materials) {
     const wasFaceupBeforeMove = !material.isFacedown;
     const effectsNegatedAtFieldExit = material.effectsNegated === true;
     const countersAtFieldExit = captureCounterSnapshot(material);
-    if (!moveCardToZone(player, material, "graveyard", player, { state })) return false;
+    if (!moveCardToZone(player, material, "graveyard", player, { state,
+      ...(banishProtectionSnapshot ? { banishProtectionSnapshot } : {}) })) return false;
     const toZone = findCardZone(player, material) || "removed";
     const payload = { card: material, player, fromPlayer: player, toPlayer: toZone === "removed" ? null : player,
       fromZone: "field", toZone,
@@ -1159,9 +1163,11 @@ export function applyNormalSummonFromHand(ctx: SimulatedActionHandlerContext<"no
     a.reduce((sum, c) => sum + (c.atk || 0), 0) - b.reduce((sum, c) => sum + (c.atk || 0), 0) || a.length - b.length)[0];
   if (!tributes) return;
   const events: SimulatedEventOccurrence[] = [];
+  const banishProtectionSnapshot = captureSimulatedBanishProtection(state, tributes.length);
   for (const tribute of tributes) {
     const countersAtFieldExit = captureCounterSnapshot(tribute);
-    if (!moveCardToZone(player, tribute, "graveyard", player, { state })) return;
+    if (!moveCardToZone(player, tribute, "graveyard", player, { state,
+      ...(banishProtectionSnapshot ? { banishProtectionSnapshot } : {}) })) return;
     events.push({ event: "card_to_grave", payload: { card: tribute, player, fromPlayer: player, toPlayer: player,
       fromZone: "field", wasTributed: true, context: "tribute_summon_cost",
       ...(countersAtFieldExit ? { countersAtFieldExit } : {}) } });
@@ -1421,6 +1427,7 @@ export function applyPolymerizationFusionSummon(
     card.effects?.some(effect => effect.timing === "on_event" && effect.event === "card_to_grave" &&
       (!effect.fromZone || effect.fromZone === "any" || effect.fromZone === "field")) === true;
   const materialSendOrder = [...materials].sort((a, b) => Number(hasFieldToGraveTrigger(a)) - Number(hasFieldToGraveTrigger(b)));
+  const banishProtectionSnapshot = captureSimulatedBanishProtection(state, materialSendOrder.length);
   for (const material of materialSendOrder) {
     const fromZone = findCardZone(targetPlayer, material);
     if (fromZone !== "hand" && fromZone !== "field") return;
@@ -1430,6 +1437,7 @@ export function applyPolymerizationFusionSummon(
     const receipt: { value: SimulatedMoveReceipt | null } = { value: null };
     if (!moveCardToZone(destination, material, "graveyard", targetPlayer, { state,
       ...(eventOptions.emitSimulatedEvent ? { emitSimulatedEvent: eventOptions.emitSimulatedEvent } : {}),
+      ...(banishProtectionSnapshot ? { banishProtectionSnapshot } : {}),
       onMoveCommitted: result => { receipt.value = result; } })) return;
     emitSimulatedMove(material, state, targetPlayer, destination, fromZone, wasFaceupBeforeMove,
       effectsNegatedAtFieldExit, materialOptions, "fusion_material", false, receipt.value);

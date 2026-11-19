@@ -34,6 +34,7 @@ import {
 } from "../StrategyUtils.js";
 import {
   canMoveCardToZone,
+  captureSimulatedBanishProtection,
   findCardOwner,
   findCardZone,
   getZoneCards,
@@ -2711,12 +2712,15 @@ export function applyGenericSimulatedMainPhaseAction<
         selectionOptions.onSimulatedEvent?.(counterEvent.event, counterEvent.payload);
         deferredProcedureEvents.push(counterEvent);
       }
+      // P1, as the runtime transaction: the costs leave together.
+      const banishProtectionSnapshot = captureSimulatedBanishProtection(state, materials.length);
       for (const material of materials) {
         const fromZone = player.field.includes(material) ? "field" : "graveyard";
         const destinationPlayer = costDestinationPlayer(material);
         const wasFaceupBeforeMove = material.isFacedown !== true;
         const countersAtFieldExit = fromZone === "field" ? captureCounterSnapshot(material) : undefined;
-        if (!moveCardToZone(destinationPlayer, material, destination, player, { state })) {
+        if (!moveCardToZone(destinationPlayer, material, destination, player, { state,
+          ...(banishProtectionSnapshot ? { banishProtectionSnapshot } : {}) })) {
           costComplete = false;
           break;
         }
@@ -2818,6 +2822,7 @@ export function applyGenericSimulatedMainPhaseAction<
         else for (const entry of events) selectionOptions.emitSimulatedEvent?.(entry.event, entry.payload);
       };
       let tributeCostComplete = true;
+      const banishProtectionSnapshot = captureSimulatedBanishProtection(state, tributeCards.length);
       for (const tribute of tributeCards) {
         const wasFaceupBeforeMove = tribute.isFacedown !== true;
         const effectsNegatedAtFieldExit = tribute.effectsNegated === true;
@@ -2825,6 +2830,7 @@ export function applyGenericSimulatedMainPhaseAction<
         if (!player.field.includes(tribute) ||
             !moveCardToZone(player, tribute, "graveyard", player, { state,
               ...(tributeOptions.emitSimulatedEvent ? { emitSimulatedEvent: tributeOptions.emitSimulatedEvent } : {}),
+              ...(banishProtectionSnapshot ? { banishProtectionSnapshot } : {}),
               onMoveCommitted: result => { receipt.value = result; } })) {
           tributeCostComplete = false;
           break;
@@ -3534,11 +3540,14 @@ export function applyGenericSimulatedMainPhaseAction<
       if (materials.length !== requiredCount) break;
       if ((player.field || []).length - materials.length + 1 > 5) break;
 
+      // P1: this stateless move reads only the holder's protections, taken before the first material.
+      const banishProtectionSnapshot = captureSimulatedBanishProtection(null, materials.length, player);
       for (const material of materials) {
         const fromZone = findCardZone(player, material) || "field";
         const wasFaceupBeforeMove = material.isFacedown !== true;
         const countersAtFieldExit = fromZone === "field" ? captureCounterSnapshot(material) : undefined;
-        if (moveCardToZone(player, material, "graveyard")) {
+        if (moveCardToZone(player, material, "graveyard", player,
+          banishProtectionSnapshot ? { banishProtectionSnapshot } : {})) {
           updateSimulatedSentToGraveMaterialMarker({
             card: material,
             state,

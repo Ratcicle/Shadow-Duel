@@ -20,6 +20,7 @@ import type {
   SummonCardIdentitySnapshot,
   SummonCostSnapshot,
   SummonCostPayment,
+  SummonCostPaymentContext,
   SummonExecutionResult,
   SummonState,
   SummonStatus,
@@ -32,6 +33,7 @@ import type { SummonOrigin } from "../../contracts/summon.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
 import { isCanonicalZone } from "../../contracts/zones.js";
 import { reportEngineFault } from "../devTools/faults.js";
+import { captureSimultaneousBanishProtection } from "../../effects/passives/passiveBuffs.js";
 import {
   checkSpecialSummonEligibility,
   establishProperSummon,
@@ -437,10 +439,11 @@ async function payCost(
   game: SummonTransactionHost,
   transaction: SummonTransaction,
   cost: SummonCostPayment,
+  payment: SummonCostPaymentContext,
 ) {
   let result;
   if (typeof cost.pay === "function") {
-    result = await cost.pay(transaction);
+    result = await cost.pay(transaction, payment);
   } else {
     const owner = cost.owner || transaction.controller;
     if (!owner) {
@@ -455,6 +458,8 @@ async function payCost(
       summonProcedure: transaction.summonProcedure,
       awaitCardToGraveEvent: (cost.toZone || "graveyard") === "graveyard",
       awaitCardMovedEvent: true,
+      ...(payment.banishProtectionSnapshot
+        ? { banishProtectionSnapshot: payment.banishProtectionSnapshot } : {}),
     });
   }
   if (resultFailed(result)) return result;
@@ -670,8 +675,12 @@ export async function executeSummonTransaction(
       }
     }
     if (!result) {
+      // P1: the costs leave together, so protection is read as it was before the first one.
+      const banishProtectionSnapshot = captureSimultaneousBanishProtection<GameCard, GamePlayer>(
+        [this.player, this.bot], transaction.costPayments.length);
+      const payment: SummonCostPaymentContext = banishProtectionSnapshot ? { banishProtectionSnapshot } : {};
       for (const cost of transaction.costPayments) {
-        const costResult = await payCost(this, transaction, cost);
+        const costResult = await payCost(this, transaction, cost, payment);
         if (resultFailed(costResult)) {
           result = {
             success: false,

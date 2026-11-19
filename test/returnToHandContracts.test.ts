@@ -73,7 +73,7 @@ for (const seat of ['player', 'bot'] as const) {
     });
   }
   for (const entry of ['moveCard', 'Sovereign', 'Assembly then Sovereign'] as const) {
-    test(`protected redirected bounce preserves field presence: ${entry}, ${seat}`, async t => {
+    test(`protected redirected bounce returns the card to its original destination: ${entry}, ${seat}`, async t => {
       const { game, owner, opponent, make } = setup(t, seat);
       const source = make(355), ownTarget = make(351);
       const phoenix = make(514, opponent), target = make(501, opponent);
@@ -98,25 +98,26 @@ for (const seat of ['player', 'bot'] as const) {
         target.banishWhenLeavesField = true;
       }
       const version = target.locationVersion;
-      const movements: unknown[] = [];
+      const movements: Array<{ readonly toZone?: unknown }> = [];
       game.on('card_moved', event => { if (event.card === target) movements.push(event); });
       if (entry === 'moveCard') {
         const result = await game.moveCard(target, opponent, 'hand', { fromZone: 'field',
           sourceCard: source, movedByEffect: true, awaitCardMovedEvent: true });
-        assert.equal(result.success, false);
-        assert.equal(result.reason, 'banish_protected');
+        assert.equal(result.success, true);
+        assert.equal(result.toZone, 'hand');
       } else {
         const result = await game.tryActivateMonsterEffect(source, {
           miragebound_glass_sovereign_return_self_target: [ownTarget],
           miragebound_glass_sovereign_return_opponent_target: [target],
         }, 'field', owner, { effectId: 'miragebound_glass_sovereign_bounce' });
-        assert.equal(result.success, false, 'the refused second movement reports partial resolution failure');
+        assert.equal(result.success, true, 'the protected second movement resolves to its original destination');
         assert.ok(owner.hand.includes(ownTarget), 'first target returns normally');
       }
-      assert.ok(opponent.field.includes(target), 'movement rejected by banish protection must preserve field presence');
-      assert.equal(opponent.hand.includes(target), false);
-      assert.equal(target.locationVersion, version);
-      assert.equal(movements.length, 0);
+      assert.equal(opponent.field.includes(target), false, 'a forbidden redirect does not keep the card on the field');
+      assert.equal(opponent.hand.includes(target), true);
+      assert.equal(target.locationVersion, version + 1);
+      assert.equal(movements.length, 1);
+      assert.equal(movements[0]?.toZone, 'hand');
     });
   }
 

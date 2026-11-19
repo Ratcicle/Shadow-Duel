@@ -405,41 +405,59 @@ test("negated Multimodal cannot supply the alternate non-Tuner role", t => {
 });
 
 for (const actor of ["player", "bot"] as const) {
-  test(`unpayable redirected materials are excluded before a real summon commits (${actor})`, async t => {
-    const { game, bot, botGame, make, phoenix } = setup(t, actor);
-    const core = make(501);
-    core.banishWhenLeavesField = true;
-    const connector = make(507);
-    connector.level = 7;
-    const reactor = make(515);
-    bot.field = [];
-    placeFieldCards(bot.field, core, phoenix);
-    bot.hand = [connector];
-    bot.extraDeck = [reactor];
-    const synchro: SynchroAIAction = { type: "synchro", synchroInstanceId: reactor.instanceId,
-      materialInstanceIds: [core.instanceId, phoenix.instanceId], position: "attack" };
-    const tribute: AIAction = { type: "summon", cardId: connector.id, index: 0, position: "attack" };
-    const transactions: string[] = [];
-    game.on("summon_transaction", event => { transactions.push(event.status); });
-    assert.deepEqual(synchroActions(botGame), [], "generic fallback cannot propose an unpayable material set");
+  test(`protected redirected materials stay payable and reach the Graveyard in a real summon (${actor})`, async t => {
+    // Two identical boards: the Synchro and the Tribute Summon each consume both materials.
+    const board = () => {
+      const { game, bot, botGame, make, phoenix } = setup(t, actor);
+      const core = make(501);
+      core.banishWhenLeavesField = true;
+      const connector = make(507);
+      connector.level = 7;
+      const reactor = make(515);
+      bot.field = [];
+      placeFieldCards(bot.field, core, phoenix);
+      bot.hand = [connector];
+      bot.extraDeck = [reactor];
+      const synchro: SynchroAIAction = { type: "synchro", synchroInstanceId: reactor.instanceId,
+        materialInstanceIds: [core.instanceId, phoenix.instanceId], position: "attack" };
+      const tribute: AIAction = { type: "summon", cardId: connector.id, index: 0, position: "attack" };
+      const transactions: string[] = [];
+      game.on("summon_transaction", event => { transactions.push(event.status); });
+      return { bot, botGame, phoenix, core, connector, reactor, synchro, tribute, transactions };
+    };
+    const { bot, botGame, phoenix, core, connector, reactor, synchro, tribute, transactions } = board();
+    assert.equal(synchroActions(botGame).length, 2, "a forbidden redirect leaves the material set payable in both positions");
     const clone = bot.cloneGameState(botGame);
     Object.defineProperty(clone, "_gameRef", { get() { throw new Error("live state consulted"); } });
-    assert.deepEqual(synchroActions(clone), []);
-    assert.deepEqual(bot.filterValidActionsForCurrentState([tribute, synchro], botGame), []);
-    assert.equal(await bot.executeMainPhaseAction(botGame, tribute), false);
-    assert.equal(await bot.executeMainPhaseAction(botGame, synchro), false);
-    assert.deepEqual(transactions, [], "preflight must reject before the destination card is committed");
-    assert.deepEqual(bot.field, [core, phoenix]);
-    assert.deepEqual(bot.hand, [connector]);
-    assert.deepEqual(bot.extraDeck, [reactor]);
-    assert.equal(bot.summonCount, 0);
-    assert.equal(core.banishWhenLeavesField, true);
+    assert.equal(synchroActions(clone).length, 2);
+    assert.deepEqual(bot.filterValidActionsForCurrentState([tribute, synchro], botGame), [tribute, synchro]);
     phoenix.effectsNegated = true;
     assert.equal(synchroActions(botGame).length, 2, "negated protection allows both positions");
     assert.equal(bot.filterValidActionsForCurrentState([tribute, synchro], botGame).length, 2);
+    phoenix.effectsNegated = false;
+    assert.equal(await bot.executeMainPhaseAction(botGame, synchro), true);
+    assert.ok(transactions.length > 0, "the summon commits a transaction");
+    // P1: the materials leave together, so the Phoenix still protects the marked Core.
+    assert.deepEqual(bot.field, [reactor]);
+    assert.deepEqual(bot.hand.map(card => card.id), [connector.id, 520], "the Energy Core draws as Synchro Material");
+    assert.deepEqual(bot.extraDeck, []);
+    assert.equal(bot.summonCount, 0);
+    assert.equal(core.banishWhenLeavesField, undefined);
+    assert.ok(bot.graveyard.includes(core) && bot.graveyard.includes(phoenix));
+    assert.deepEqual(bot.banished, []);
+    const tributeBoard = board();
+    assert.equal(await tributeBoard.bot.executeMainPhaseAction(tributeBoard.botGame, tributeBoard.tribute), true);
+    assert.ok(tributeBoard.transactions.length > 0);
+    assert.deepEqual(tributeBoard.bot.field, [tributeBoard.connector]);
+    assert.deepEqual(tributeBoard.bot.hand, []);
+    assert.deepEqual(tributeBoard.bot.extraDeck, [tributeBoard.reactor]);
+    assert.equal(tributeBoard.bot.summonCount, 1);
+    assert.equal(tributeBoard.core.banishWhenLeavesField, undefined);
+    assert.ok(tributeBoard.bot.graveyard.includes(tributeBoard.core) && tributeBoard.bot.graveyard.includes(tributeBoard.phoenix));
+    assert.deepEqual(tributeBoard.bot.banished, []);
   });
 
-  test(`simulated tribute refusal preserves all cards and the normal summon (${actor})`, t => {
+  test(`simulated tribute sends protected redirected materials to the Graveyard (${actor})`, t => {
     const { bot, botGame, make, phoenix } = setup(t, actor);
     const core = make(501);
     core.banishWhenLeavesField = true;
@@ -449,16 +467,16 @@ for (const actor of ["player", "bot"] as const) {
     placeFieldCards(bot.field, core, phoenix);
     bot.hand = [connector];
     const state = bot.cloneGameState(botGame);
-    const before = [...state.bot.field];
     bot.simulateMainPhaseAction(state, { type: "summon", cardId: connector.id, index: 0, position: "attack" });
-    assert.deepEqual(state.bot.field, before);
-    assert.deepEqual(state.bot.hand.map(card => card.instanceId), [connector.instanceId]);
-    assert.deepEqual(state.bot.graveyard, []);
+    // P1, as the runtime: the Tributes leave together and the Phoenix still protects the Core.
+    assert.deepEqual(state.bot.field.map(card => card.instanceId), [connector.instanceId]);
+    assert.deepEqual(state.bot.hand.map(card => card.instanceId), []);
+    assert.deepEqual(new Set(state.bot.graveyard.map(card => card.instanceId)), new Set([core.instanceId, phoenix.instanceId]));
     assert.deepEqual(state.bot.banished, []);
-    assert.equal(state.bot.summonCount, 0);
+    assert.equal(state.bot.summonCount, 1);
   });
 
-  test(`payable alternatives remain available beside a protected material (${actor})`, async t => {
+  test(`a protected redirected material is payable beside an unmarked one (${actor})`, async t => {
     const { bot, botGame, make, phoenix } = setup(t, actor);
     const protectedCore = make(501);
     protectedCore.banishWhenLeavesField = true;
@@ -470,37 +488,39 @@ for (const actor of ["player", "bot"] as const) {
     bot.hand = [connector];
     bot.extraDeck = [reactor];
     const actions = synchroActions(botGame);
-    assert.equal(actions.length, 2);
-    assert.ok(actions.every(action => action.materialInstanceIds.includes(legalCore.instanceId) &&
-      !action.materialInstanceIds.includes(protectedCore.instanceId)));
+    assert.equal(actions.length, 4);
+    assert.ok(actions.some(action => action.materialInstanceIds.includes(legalCore.instanceId)));
+    assert.ok(actions.some(action => action.materialInstanceIds.includes(protectedCore.instanceId)));
     const summon: AIAction = { type: "summon", cardId: connector.id, index: 0, position: "attack" };
     assert.deepEqual(bot.filterValidActionsForCurrentState([summon], botGame), [summon]);
     const state = bot.cloneGameState(botGame);
     bot.simulateMainPhaseAction(state, summon);
-    assert.deepEqual(state.bot.graveyard.map(card => card.instanceId), [legalCore.instanceId]);
-    assert.ok(state.bot.field.some(card => card.instanceId === protectedCore.instanceId));
+    // The two Cores tie in the Tribute policy; the simulation and the runtime pick the same one.
+    assert.deepEqual(state.bot.graveyard.map(card => card.instanceId), [protectedCore.instanceId]);
+    assert.ok(state.bot.field.some(card => card.instanceId === legalCore.instanceId));
     assert.equal(await bot.executeMainPhaseAction(botGame, summon), true);
-    assert.deepEqual(bot.graveyard, [legalCore]);
-    assert.deepEqual(bot.field, [protectedCore, phoenix, connector]);
-    assert.equal(protectedCore.banishWhenLeavesField, true);
+    assert.deepEqual(bot.graveyard, [protectedCore]);
+    assert.deepEqual(bot.field, [legalCore, phoenix, connector]);
+    assert.equal(protectedCore.banishWhenLeavesField, undefined);
   });
 }
 
-test("Assembly plus Phoenix blocks the whole simulated Synchro before any material is consumed", t => {
-  const { bot, botGame, multimodal, phoenix, lancer } = setup(t);
+test("Assembly plus Phoenix materials both reach the Graveyard in a simulated Synchro", t => {
+  const { bot, botGame, multimodal, portal, phoenix, lancer } = setup(t);
   const state = bot.cloneGameState(botGame);
   const marked = required(state.bot.field.find(card => card.instanceId === multimodal.instanceId));
   marked.banishWhenLeavesField = true;
-  const before = [...state.bot.field];
   const events: string[] = [];
   applyGenericSimulatedMainPhaseAction(state, { type: "synchro", synchroInstanceId: lancer.instanceId,
     materialInstanceIds: [phoenix.instanceId, multimodal.instanceId], position: "attack" },
     { enableSimulatedEvents: true, onSimulatedEvent: name => { events.push(name); } });
-  assert.deepEqual(state.bot.field, before, "even a first material that could leave is preserved");
-  assert.deepEqual(state.bot.graveyard, []);
+  // P1: the Phoenix leaves first, yet it still protects the marked material leaving with it.
+  assert.deepEqual(state.bot.field.map(card => card.instanceId), [portal.instanceId, lancer.instanceId],
+    "both materials leave the field");
+  assert.deepEqual(state.bot.graveyard.map(card => card.instanceId), [phoenix.instanceId, multimodal.instanceId]);
   assert.deepEqual(state.bot.banished, []);
-  assert.equal(marked.banishWhenLeavesField, true);
-  assert.deepEqual(events, []);
+  assert.equal(marked.banishWhenLeavesField, undefined);
+  assert.ok(events.includes("card_to_grave") && events.includes("card_moved"));
 });
 
 test("Synchro simulation never consults live callbacks or its live Game reference", t => {

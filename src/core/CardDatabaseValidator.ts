@@ -455,6 +455,29 @@ export function validateEffectActionTree(
       );
     }
 
+    // Decision V5: the leaves-the-field banish is attributed to the summoned
+    // card's original owner, which must be the one applying it. A summon of a
+    // card that may come from the opponent's zones cannot carry the clause.
+    const statusesOnSummon = Array.isArray(action.statusesOnSummon) ? action.statusesOnSummon : [];
+    if (statusesOnSummon.some(status => status === "banishWhenLeavesField" ||
+        (isRecord(status) && status.status === "banishWhenLeavesField"))) {
+      const sourceScope = action.sourceOwner ?? action.sourceScope ?? action.scope;
+      const target = typeof action.targetRef === "string" && action.targetRef !== "self"
+        ? targets.find(definition => definition.id === action.targetRef) : undefined;
+      const foreignTarget = target !== undefined &&
+        ((target.owner !== undefined && target.owner !== "self") ||
+          (target.targetFromContext !== undefined && target.owner !== "self"));
+      if ((sourceScope !== undefined && sourceScope !== "self") ||
+          action.owner === "opponent" || action.summonPlayer === "opponent" || foreignTarget) {
+        push(
+          errors,
+          '"banishWhenLeavesField" is applied by the original owner of the summoned card; summon only your own cards from your own zones with it.',
+          actionIndex,
+          pathText,
+        );
+      }
+    }
+
     const shapeResult = validateActionShape(action, {
       targetIds: new Set([...visit.targetIds, ...visit.availableRefs]),
     });

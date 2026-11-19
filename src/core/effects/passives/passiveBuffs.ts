@@ -16,6 +16,9 @@ import type {
   CardPermanentBuffMap,
 } from "../../contracts/cards.js";
 import type {
+  BanishProtectionSnapshot,
+  BanishProtectionSnapshotSource,
+  CardFilter,
   EffectDefinition,
   EffectCondition,
   PassiveRuleDefinition,
@@ -477,25 +480,250 @@ interface GraveReplacementPlayer {
   readonly field?: readonly GraveReplacementSource[] | undefined;
 }
 
-/** Query the same continuous replacement before payment and during movement. */
-export function getSendToGraveReplacementDestination(
+/** One active send_to_grave_replacement that matches a card going to the GY. */
+interface SendToGraveReplacementMatch<Source, Player> {
+  readonly zone: CanonicalZone;
+  readonly source: Source;
+  readonly controller: Player;
+}
+
+/** Every active continuous replacement that matches, in scan order (player, then bot). */
+function findSendToGraveReplacements<Source extends GraveReplacementSource, Player extends GraveReplacementPlayer & {
+  readonly field?: readonly Source[] | undefined;
+}>(
   card: object,
-  fromOwner: GraveReplacementPlayer,
-  players: readonly (GraveReplacementPlayer | null | undefined)[],
-): CanonicalZone | null {
+  fromOwner: Player,
+  players: readonly (Player | null | undefined)[],
+): SendToGraveReplacementMatch<Source, Player>[] {
+  const matches: SendToGraveReplacementMatch<Source, Player>[] = [];
   for (const controller of players) {
-    for (const source of controller?.field || []) {
+    if (!controller) continue;
+    for (const source of controller.field || []) {
       if (source === card || !isPassiveSourceActive(source)) continue;
       for (const effect of source.effects || []) {
         if (effect.timing !== "passive" || !("passive" in effect) || effect.passive?.type !== "send_to_grave_replacement") continue;
         const ownerRule = effect.passive.targetOwner || "opponent";
         if ((ownerRule === "self" && controller !== fromOwner) ||
             (ownerRule === "opponent" && controller === fromOwner)) continue;
-        return effect.passive.redirectTo || "banished";
+        matches.push({ zone: effect.passive.redirectTo || "banished", source, controller });
+        break;
       }
     }
   }
+  return matches;
+}
+
+interface BanishProtectionSourceView {
+  readonly isFacedown?: boolean | undefined;
+  readonly effectsNegated?: boolean | undefined;
+  readonly effects?: readonly EffectDefinition[] | undefined;
+}
+
+interface BanishProtectionHolderView<Card> {
+  readonly id?: string | undefined;
+  readonly field?: readonly Card[] | undefined;
+  readonly spellTrap?: readonly Card[] | undefined;
+  readonly fieldSpell?: Card | null | undefined;
+}
+
+/**
+ * Decision V5 / P1 (18/11/2026): the banish_protection sources active at one
+ * instant. An operation that moves several cards together (materials,
+ * Tributes, mass destruction, several targets) takes it once at its start, so
+ * a protector leaving in the same operation still protects the others. The
+ * runtime and the simulation share it; it is never serialized.
+ */
+export function captureBanishProtectionSnapshot<
+  Card extends BanishProtectionSourceView,
+  Player extends BanishProtectionHolderView<Card>,
+>(players: readonly (Player | null | undefined)[]): BanishProtectionSnapshot<Card, Player> {
+  const sources: BanishProtectionSnapshotSource<Card, Player>[] = [];
+  for (const controller of players) {
+    if (!controller) continue;
+    const zones: ReadonlyArray<readonly [BanishProtectionSnapshotSource["zone"], readonly Card[]]> = [
+      ["field", controller.field || []],
+      ["spellTrap", controller.spellTrap || []],
+      ["fieldSpell", controller.fieldSpell ? [controller.fieldSpell] : []],
+    ];
+    for (const [zone, cards] of zones) {
+      for (const source of cards) {
+        if (!source || !isPassiveSourceActive(source)) continue;
+        for (const effect of source.effects || []) {
+          if (effect.timing !== "passive" || !("passive" in effect) || effect.passive?.type !== "banish_protection") continue;
+          if (effect.requireZone && effect.requireZone !== zone) continue;
+          sources.push({ source, controller, zone, passive: effect.passive });
+        }
+      }
+    }
+  }
+  return { sources };
+}
+
+/**
+ * P1 for one operation: a snapshot when it moves two or more cards together,
+ * none for a single move, which reads the live field when it leaves.
+ */
+export function captureSimultaneousBanishProtection<
+  Card extends BanishProtectionSourceView,
+  Player extends BanishProtectionHolderView<Card>,
+>(
+  players: readonly (Player | null | undefined)[],
+  movingCardCount: number,
+): BanishProtectionSnapshot<Card, Player> | undefined {
+  return movingCardCount > 1 ? captureBanishProtectionSnapshot<Card, Player>(players) : undefined;
+}
+
+/** Who a banish is attributed to: a direct banish's mover, or the controller of a redirect. */
+export interface BanishAttribution {
+  readonly byEffect: boolean;
+  readonly controllerId: string | null;
+}
+
+type MutableProtectionFilters = { -readonly [Key in keyof CardFilter]?: CardFilter[Key] };
+
+function buildBanishProtectionFilters(passive: PassiveRuleDefinition): CardFilter {
+  const scope = passive.targetScope;
+  const filters: MutableProtectionFilters = { ...(scope?.filters || passive.filters || {}) };
+  if (filters.cardKind === undefined && passive.cardKind !== undefined) filters.cardKind = passive.cardKind;
+  if (filters.cardName === undefined && passive.cardName !== undefined) filters.cardName = passive.cardName;
+  if (filters.archetype === undefined && passive.archetype !== undefined) filters.archetype = passive.archetype;
+  const requireFaceup = scope?.requireFaceup ?? passive.requireFaceup;
+  if (filters.requireFaceup === undefined && requireFaceup !== undefined) filters.requireFaceup = requireFaceup;
+  return filters;
+}
+
+/**
+ * The protection that forbids banishing `card` from `cardZone` while `holder`
+ * holds it, read from a snapshot. `protectFrom: "opponent_effects"` compares
+ * the attribution with the holder; without `protectFrom` any banish is
+ * forbidden. The filter reader is injected by the runtime or the simulation.
+ */
+export function findBanishProtection<Card, Player extends { readonly id?: string | undefined }>(
+  snapshot: BanishProtectionSnapshot<Card, Player>,
+  card: Card,
+  holder: Player,
+  cardZone: CanonicalZone,
+  attribution: BanishAttribution,
+  matchesFilters: (card: Card, filters: CardFilter) => boolean,
+): BanishProtectionSnapshotSource<Card, Player> | null {
+  for (const entry of snapshot.sources) {
+    const { passive, controller, source } = entry;
+    if (passive.protectFrom === "opponent_effects" &&
+        (!attribution.byEffect || attribution.controllerId === null || attribution.controllerId === holder.id)) continue;
+    const scope = passive.targetScope;
+    const ownerRule = scope?.owner || passive.targetOwner || "self";
+    if ((ownerRule === "self" && controller !== holder) ||
+        (ownerRule === "opponent" && controller === holder)) continue;
+    const zones = scope?.zones ?? (scope?.zone ? [scope.zone] : ["field"]);
+    if (!zones.includes(cardZone)) continue;
+    if (scope?.excludeSelf === true && source === card) continue;
+    const filters = buildBanishProtectionFilters(passive);
+    if (Object.keys(filters).length > 0 && !matchesFilters(card, filters)) continue;
+    return entry;
+  }
   return null;
+}
+
+export type BanishRedirectKind = "send_to_grave_replacement" | "leaves_field_clause";
+
+/** A redirect that sends a departing card elsewhere; the banish is its controller's. */
+export interface BanishRedirect<Card, Player> {
+  readonly kind: BanishRedirectKind;
+  readonly zone: CanonicalZone;
+  readonly controllerId: string | null;
+  /** The replacement source; null for the leaves-the-field clause. */
+  readonly source: Card | null;
+  readonly sourceController: Player | null;
+}
+
+export interface ForbiddenBanishRedirect<Card, Player> extends BanishRedirect<Card, Player> {
+  readonly protection: BanishProtectionSnapshotSource<Card, Player>;
+}
+
+export interface DepartureProjection<Card, Player> {
+  /** Where the card goes before the original-owner and Extra Deck rules. */
+  readonly toZone: CanonicalZone;
+  readonly applied: BanishRedirect<Card, Player> | null;
+  readonly forbidden: readonly ForbiddenBanishRedirect<Card, Player>[];
+}
+
+interface DepartingCardView extends GraveReplacementSource, BanishProtectionSourceView {
+  readonly isToken?: boolean | undefined;
+  readonly banishWhenLeavesField?: boolean | undefined;
+  readonly originalOwner?: string | undefined;
+}
+
+export interface DepartureProjectionInput<Card, Player> {
+  readonly card: Card;
+  /** The player whose zone holds the card now. */
+  readonly holder: Player;
+  readonly fromZone: CanonicalZone | null;
+  readonly requestedZone: CanonicalZone;
+  /** Both players, in scan order; a projection without them sees only the holder. */
+  readonly players: readonly (Player | null | undefined)[];
+  readonly skipSendToGraveReplacement?: boolean | undefined;
+  /** Whose protections a snapshot taken here reads; defaults to `players`. */
+  readonly protectionPlayers?: readonly (Player | null | undefined)[] | undefined;
+  readonly matchesFilters: (card: Card, filters: CardFilter) => boolean;
+  /** P1: the protections of the operation's start; captured now when absent. */
+  readonly banishProtectionSnapshot?: BanishProtectionSnapshot<Card, Player> | undefined;
+}
+
+/**
+ * Decision V5 (16/11/2026): where a departing card goes and to whom a banish
+ * by redirect is attributed, decided once while the card is still in its zone.
+ * - send_to_grave_replacement (Macro Cosmos style): the first active source
+ *   that may banish the card wins; its controller banishes. A protection is
+ *   read only when the replacement zone is the banished zone.
+ * - banishWhenLeavesField: the card's original owner applied the clause.
+ * A forbidden redirect leaves the requested (original) destination. A direct
+ * banish (`requestedZone === "banished"`) is not projected here: its
+ * protection refuses the move instead. Pure: nothing is mutated.
+ */
+export function projectDepartureDestination<
+  Card extends DepartingCardView,
+  Player extends GraveReplacementPlayer & BanishProtectionHolderView<Card>,
+>(input: DepartureProjectionInput<Card, Player>): DepartureProjection<Card, Player> {
+  const { card, holder, fromZone, requestedZone } = input;
+  let snapshot = input.banishProtectionSnapshot ?? null;
+  const protectionFor = (redirect: BanishRedirect<Card, Player>) => {
+    if (redirect.zone !== "banished" || !fromZone) return null;
+    snapshot ??= captureBanishProtectionSnapshot<Card, Player>(input.protectionPlayers ?? input.players);
+    return findBanishProtection(snapshot, card, holder, fromZone,
+      { byEffect: true, controllerId: redirect.controllerId }, input.matchesFilters);
+  };
+  const forbidden: ForbiddenBanishRedirect<Card, Player>[] = [];
+  let toZone = requestedZone;
+  let applied: BanishRedirect<Card, Player> | null = null;
+  if (requestedZone === "graveyard" && card.isToken !== true && input.skipSendToGraveReplacement !== true) {
+    for (const match of findSendToGraveReplacements<Card, Player>(card, holder, input.players)) {
+      const redirect: BanishRedirect<Card, Player> = { kind: "send_to_grave_replacement", zone: match.zone,
+        controllerId: match.controller.id ?? null, source: match.source, sourceController: match.controller };
+      const protection = protectionFor(redirect);
+      if (protection) {
+        forbidden.push({ ...redirect, protection });
+        continue;
+      }
+      if (match.zone !== requestedZone) {
+        toZone = match.zone;
+        applied = redirect;
+      }
+      break;
+    }
+  }
+  if (fromZone === "field" && toZone !== "field" && toZone !== "banished" &&
+      card.banishWhenLeavesField === true && card.isToken !== true) {
+    const redirect: BanishRedirect<Card, Player> = { kind: "leaves_field_clause", zone: "banished",
+      controllerId: card.originalOwner ?? holder.id ?? null, source: null, sourceController: null };
+    const protection = protectionFor(redirect);
+    if (protection) {
+      forbidden.push({ ...redirect, protection });
+    } else {
+      toZone = "banished";
+      applied = redirect;
+    }
+  }
+  return { toZone, applied, forbidden };
 }
 
 interface EquipAttackBonusSource {

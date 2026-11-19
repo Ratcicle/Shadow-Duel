@@ -218,7 +218,7 @@ for (const actor of ["player", "bot"] as const) {
     assert.ok(state.bot.banished.includes(incoming));
   });
 
-  test(`rejected field departure preserves the occupied slot and incoming hand card (${actor})`, () => {
+  test(`a forbidden Galaxy redirect sends the replaced Field Spell to the Graveyard (${actor})`, () => {
     const { state, make } = scenario(actor);
     const previous = make(518), incoming = make(518), galaxy = make(273), protector = make(501);
     galaxy.owner = state.player.id; galaxy.controller = state.player.id; galaxy.fieldSlot = 0;
@@ -227,11 +227,11 @@ for (const actor of ["player", "bot"] as const) {
     } }];
     protector.fieldSlot = 0; state.bot.field.push(protector); state.player.field.push(galaxy);
     state.bot.fieldSpell = previous; state.bot.hand.push(incoming);
-    assert.equal(new BaseStrategy(state.bot).placeSpellCard(state, incoming).placed, false);
-    assert.equal(state.bot.fieldSpell, previous);
-    assert.deepEqual(state.bot.hand, [incoming]);
-    assert.equal(previous.locationVersion || 0, 0);
-    assert.deepEqual(state.bot.graveyard, []);
+    assert.equal(new BaseStrategy(state.bot).placeSpellCard(state, incoming).placed, true);
+    assert.equal(state.bot.fieldSpell, incoming);
+    assert.deepEqual(state.bot.hand, []);
+    assert.equal(previous.locationVersion || 0, 1);
+    assert.deepEqual(state.bot.graveyard, [previous]);
   });
 
   test(`negated primary does not execute the after-resolution phase (${actor})`, () => {

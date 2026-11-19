@@ -961,8 +961,8 @@ function sameBattlePairCard(
 // Same generic move as destroySimulatedCard: the monster and the equips held on
 // either side go to their owners' Graveyards, field-exit statuses reset,
 // destination replacement applies and auras are refreshed. As in the runtime
-// destroyCard move, no effect owner is passed, so only banish protection not
-// limited to the opponent's effects can refuse it.
+// destroyCard move, banish protection never refuses it (decision V5): a
+// forbidden redirect leaves the monster in its owner's Graveyard.
 function destroyPlannerMonster(
   state: PlanningState,
   controller: PlannerPlayer | null | undefined,

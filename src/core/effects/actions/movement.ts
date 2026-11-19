@@ -5,7 +5,7 @@
 
 import { resolveFieldScopeCards } from "../../actionHandlers/shared.js";
 import { captureCostMarkerEvidence } from "../costs/summonMarkers.js";
-import { getSendToGraveReplacementDestination } from "../passives/passiveBuffs.js";
+import { captureSimultaneousBanishProtection, projectDepartureDestination } from "../passives/passiveBuffs.js";
 import { assignAutomaticFieldSlot, clearFieldSlot } from "../../game/zones/placement.js";
 import type {
   ActionMoveResult,
@@ -21,7 +21,7 @@ import { writeContextValue } from "../../contracts/actionRuntime.js";
 import type { ActionOf } from "../../contracts/actions.js";
 import type { CardFilter, EffectCondition } from "../../contracts/effects.js";
 import type { BattlePosition } from "../../contracts/cards.js";
-import type { ZoneInput } from "../../contracts/zones.js";
+import { CANONICAL_ZONES, normalizeZoneInput, type ZoneInput } from "../../contracts/zones.js";
 import type { PaidCostReferenceValues } from "../../contracts/chainRuntime.js";
 
 type MoveAction = ActionOf<"move"> & {
@@ -215,12 +215,14 @@ export async function applyMove(
       const owner = card.owner === "bot" ? this.game.bot : this.game.player;
       if (action.fromZone && !this.getZone(owner, action.fromZone)?.includes(card)) return false;
       if (payingCost && action.requireDestination && card.isToken && toZone !== "field") return false;
-      if (payingCost && action.requireDestination) {
-        if (owner.field.includes(card) && card.banishWhenLeavesField && toZone !== "field" && toZone !== "banished") return false;
-        const redirect = toZone === "graveyard"
-          ? getSendToGraveReplacementDestination(card, owner, [this.game.player, this.game.bot])
-          : null;
-        if (redirect && redirect !== toZone) return false;
+      const requestedZone = normalizeZoneInput(toZone);
+      if (payingCost && action.requireDestination && requestedZone !== "banished") {
+        // Decision V5: a redirect forbidden by a protection keeps the requested destination.
+        const fromZone = CANONICAL_ZONES.find(zone => this.getZone(owner, zone)?.includes(card)) ?? null;
+        const projected = projectDepartureDestination({ card, holder: owner, fromZone, requestedZone,
+          players: [this.game.player, this.game.bot],
+          matchesFilters: (candidate, filters) => this.cardMatchesFilters(candidate, filters) });
+        if (projected.toZone !== requestedZone) return false;
       }
     }
   }
@@ -228,6 +230,9 @@ export async function applyMove(
   let moved = false;
   const movedCards: MovementRuntimeCard[] = [];
   let movedLevelSum = 0;
+  // P1: the targets move together; protection is read as it was before the first one.
+  const banishProtectionSnapshot = captureSimultaneousBanishProtection(
+    [this.game.player, this.game.bot], targetCards.length);
 
   for (const card of targetCards) {
     const markerEvidence = payingCost && action.targetRef
@@ -316,6 +321,7 @@ export async function applyMove(
             action,
             ctx,
           ),
+          banishProtectionSnapshot,
         });
         if (typeof moveResult === "object" && moveResult !== null &&
           moveResult.needsSelection && moveResult.selectionContract) {

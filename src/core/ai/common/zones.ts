@@ -6,6 +6,7 @@ import { restoreFaceupStatuses } from "../../Card.js";
 import { clearEffectNegation } from "../../effects/negation.js";
 import { captureEventCardPresence } from "../../game/zones/ownership.js";
 import type { EventCardPresenceSnapshot, EventEquipHostExitBinding } from "../../contracts/events.js";
+import type { BanishProtectionSnapshot } from "../../contracts/effects.js";
 import { captureCounterSnapshot, clearCardCounters, restoreFieldExitStatuses, restoreTemporaryStatuses } from "../../Card.js";
 import { cardHasArchetype, cardMatchesFilter } from "./cardFilters.js";
 import { countTurnCardActivations } from "../../game/events/activationHistory.js";
@@ -13,7 +14,7 @@ import { getCounterValue } from "./counters.js";
 import { evaluateSimulatedConditions } from "./simulatedConditions.js";
 import type { RuntimePassive } from "../../effects/passives/passiveBuffs.js";
 import { clearLevelModifications, clearPermanentStatBuffs, expireFaceupStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
-import { clearPassiveBuffsForCard, getModeledPassiveContributions, pruneModeledPassiveContributions, registerModeledPassiveContribution, applyPassiveBuffValue, getFieldAuraBuffKey, getFieldCounterStatAuraBuffKey, getEquippedCounterBuffKey, getEquippedFieldCounterBuffKeys, getSendToGraveReplacementDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, isActiveEquipInZone, isBattleIndestructibleGrantedByEquip, refreshEquipBattleIndestructible, clearSuspendedEquipStatBonus, isPassiveSourceActive, refreshEquipStatBonus } from "../../effects/passives/passiveBuffs.js";
+import { clearPassiveBuffsForCard, getModeledPassiveContributions, pruneModeledPassiveContributions, registerModeledPassiveContribution, applyPassiveBuffValue, getFieldAuraBuffKey, getFieldCounterStatAuraBuffKey, getEquippedCounterBuffKey, getEquippedFieldCounterBuffKeys, captureBanishProtectionSnapshot, captureSimultaneousBanishProtection, findBanishProtection, projectDepartureDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, isActiveEquipInZone, isBattleIndestructibleGrantedByEquip, refreshEquipBattleIndestructible, clearSuspendedEquipStatBonus, isPassiveSourceActive, refreshEquipStatBonus } from "../../effects/passives/passiveBuffs.js";
 import {
   assignAutomaticFieldSlot,
   clearFieldSlot,
@@ -586,6 +587,21 @@ export interface SimulatedMoveOptions {
   sourceCard?: SimulatedCardState | null;
   sourcePlayer?: SimulatedPlayerState | null;
   allowExtraDeckMonsterToHand?: boolean;
+  /** Internal (P1): the protections of the operation that moves several cards together. */
+  banishProtectionSnapshot?: SimulatedBanishProtectionSnapshot | undefined;
+}
+
+/** P1 in the simulation: taken once before an operation that moves several cards together. */
+export type SimulatedBanishProtectionSnapshot = BanishProtectionSnapshot<SimulatedCardState, SimulatedPlayerState>;
+
+/** As the runtime: a snapshot when two or more cards move together, none for a single move. */
+export function captureSimulatedBanishProtection(
+  state: Pick<AiStateShape, "bot" | "player"> | null | undefined,
+  movingCardCount: number,
+  owner?: SimulatedPlayerState | null,
+): SimulatedBanishProtectionSnapshot | undefined {
+  return captureSimultaneousBanishProtection<SimulatedCardState, SimulatedPlayerState>(
+    state ? [state.player, state.bot] : [owner], movingCardCount);
 }
 
 export interface SimulatedMoveReceipt {
@@ -613,6 +629,8 @@ interface ReadMoveOptions {
   sourceCard?: AiCardInput | null;
   sourcePlayer?: AiPlayerInput | null;
   allowExtraDeckMonsterToHand?: boolean;
+  /** Internal (P1): the protections of the operation that moves several cards together. */
+  banishProtectionSnapshot?: BanishProtectionSnapshot<AiCardInput, AiPlayerInput> | undefined;
 }
 
 function isSimulatedZone(zone: string): zone is SimulatedZone {
@@ -621,45 +639,25 @@ function isSimulatedZone(zone: string): zone is SimulatedZone {
     zone === "extraDeck" || zone === "fieldSpell";
 }
 
-function isSimulatedBanishProtected(
+function simulatedProtectionPlayers(owner: AiPlayerInput, options: ReadMoveOptions): readonly (AiPlayerInput | null | undefined)[] {
+  return options.state ? [options.state.player, options.state.bot] : [owner];
+}
+
+/** A direct banish is attributed to the move's own source, as in the runtime. */
+function isSimulatedDirectBanishProtected(
   card: AiCardInput,
   owner: AiPlayerInput,
   fromZone: SimulatedZone,
   options: ReadMoveOptions,
 ): boolean {
-  const players = options.state ? [options.state.player, options.state.bot] : [owner];
-  for (const sourceOwner of players) {
-    if (!sourceOwner) continue;
-    const sources = [...(sourceOwner.field || []), ...(sourceOwner.spellTrap || []),
-      ...(sourceOwner.fieldSpell ? [sourceOwner.fieldSpell] : [])];
-    for (const source of sources) {
-      if (source.isFacedown || source.effectsNegated) continue;
-      for (const effect of source.effects || []) {
-        if (effect.timing !== "passive" || !("passive" in effect)) continue;
-        const passive = effect.passive;
-        if (passive?.type !== "banish_protection") continue;
-        if (effect.requireZone && effect.requireZone !== findCardZone(sourceOwner, source)) continue;
-        const scope = passive.targetScope;
-        const ownerRule = scope?.owner || passive.targetOwner || "self";
-        if ((ownerRule === "self" && sourceOwner !== owner) ||
-            (ownerRule === "opponent" && sourceOwner === owner)) continue;
-        const zones = scope?.zones || (scope?.zone ? [scope.zone] : ["field"]);
-        if (!zones.includes(fromZone)) continue;
-        if (scope?.excludeSelf && source === card) continue;
-        if (scope?.requireFaceup && card.isFacedown) continue;
-        if (passive.protectFrom === "opponent_effects") {
-          const effectOwner = options.sourcePlayer || players.find(candidate => findCardZone(candidate, options.sourceCard));
-          if ((!options.movedByEffect && !options.sourceCard) || !effectOwner || effectOwner === owner) continue;
-        }
-        const filters = { ...(scope?.filters || passive.filters || {}),
-          ...(passive.archetype ? { archetype: passive.archetype } : {}),
-          ...(passive.cardKind ? { cardKind: passive.cardKind } : {}) };
-        if (!cardMatchesFilter(card, filters)) continue;
-        return true;
-      }
-    }
-  }
-  return false;
+  const players = simulatedProtectionPlayers(owner, options);
+  const sourceOwner = options.sourcePlayer ||
+    (options.sourceCard ? players.find(candidate => findCardZone(candidate, options.sourceCard)) : undefined);
+  const snapshot = options.banishProtectionSnapshot ?? captureBanishProtectionSnapshot<AiCardInput, AiPlayerInput>(players);
+  return findBanishProtection(snapshot, card, owner, fromZone, {
+    byEffect: options.movedByEffect === true || !!options.sourceCard,
+    controllerId: sourceOwner?.id ?? null,
+  }, cardMatchesFilter) !== null;
 }
 
 function resolveSimulatedMove(
@@ -673,14 +671,18 @@ function resolveSimulatedMove(
   const fromZone = findCardZone(sourcePlayer, card);
   let toZone: SimulatedZone | "removed" = requestedZone;
   if (toZone === fromZone && player === sourcePlayer) return { fromZone, toZone };
-  if (toZone === "graveyard" && !card.isToken && options.state) {
-    const destination = getSendToGraveReplacementDestination(card, sourcePlayer, [options.state.player, options.state.bot]);
-    if (destination && isSimulatedZone(destination)) toZone = destination;
+  if (requestedZone === "banished") {
+    // A forbidden direct banish keeps the card where it is.
+    if (fromZone && isSimulatedDirectBanishProtected(card, sourcePlayer, fromZone, options)) return null;
+  } else {
+    // Decision V5, shared with the runtime: a forbidden redirect leaves the requested destination.
+    // Without the state there is no replacement source and only the holder's protections count.
+    const projected = projectDepartureDestination<AiCardInput, AiPlayerInput>({ card, holder: sourcePlayer, fromZone,
+      requestedZone, players: options.state ? [options.state.player, options.state.bot] : [],
+      protectionPlayers: simulatedProtectionPlayers(sourcePlayer, options), matchesFilters: cardMatchesFilter,
+      banishProtectionSnapshot: options.banishProtectionSnapshot });
+    if (isSimulatedZone(projected.toZone)) toZone = projected.toZone;
   }
-  if (fromZone === "field" && toZone !== "field" && card.banishWhenLeavesField && !card.isToken) {
-    toZone = "banished";
-  }
-  if (toZone === "banished" && fromZone && isSimulatedBanishProtected(card, sourcePlayer, fromZone, options)) return null;
   if (fromZone === "field" && toZone !== "field" && card.isToken) toZone = "removed";
   const extraMonster = card.monsterType === "fusion" || card.monsterType === "ascension" || card.monsterType === "synchro";
   if (extraMonster && (toZone === "deck" || (toZone === "hand" && !options.allowExtraDeckMonsterToHand))) toZone = "extraDeck";

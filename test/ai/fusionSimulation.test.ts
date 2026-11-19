@@ -206,7 +206,10 @@ for (const seat of ["player", "bot"] as const) {
   }
 
   for (const invalid of ["missing", "exclusive", "restriction", "field_limit", "unpayable"] as const) {
-    test(`Fusion rejects ${invalid} before consuming materials (${seat})`, () => {
+    // Decision V5: a material whose banish is forbidden stays payable and goes to the Graveyard.
+    test(invalid === "unpayable"
+      ? `Fusion pays a protected redirected material to the Graveyard (${seat})`
+      : `Fusion rejects ${invalid} before consuming materials (${seat})`, () => {
       const { state, player, fusion, run } = scenario();
       const first = make("Shadow-Heart Abyssal Eel"), second = make("Shadow-Heart Abyssal Eel");
       placeSimulationCards(player.field, first); player.hand.push(second);
@@ -222,6 +225,13 @@ for (const seat of ["player", "bot"] as const) {
         first.archetype = "Tech-Zero"; second.archetype = "Tech-Zero";
         fusion.fusionMaterials = [{ name: required(first.name), count: 2 }];
         placeSimulationCards(player.field, protector);
+      }
+      if (invalid === "unpayable") {
+        run(); assert.ok(player.field.includes(fusion));
+        assert.ok(player.graveyard.includes(first) && player.graveyard.includes(second));
+        assert.equal(player.banished.includes(first), false);
+        assert.equal(player.extraDeck.includes(fusion), false);
+        return;
       }
       const before = structuredClone(state);
       run(); assert.deepEqual(state, before); assert.ok(player.extraDeck.includes(fusion));

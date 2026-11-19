@@ -6,6 +6,7 @@
 
 import { resolveExactInstanceSelection } from "../AutoSelector.js";
 import { getCardLocationVersion } from "../Card.js";
+import { captureSimultaneousBanishProtection } from "../effects/passives/passiveBuffs.js";
 import type {
   ActionOf,
   DestroyDamageEntry,
@@ -304,6 +305,12 @@ export async function handleDestroyAndDamageByTargetAtk(
 
   const damageTotals = { self: 0, opponent: 0 };
   let destroyedAny = false;
+  // P1: every entry's targets are destroyed together; protection is read as it was before the first one.
+  const banishProtectionSnapshot = captureSimultaneousBanishProtection([game.player, game.bot],
+    entries.reduce((count, entry) => count + resolveTargetCards(action, ctx, targets, {
+      targetRef: entry.targetRef,
+      requireArray: true,
+    }).length, 0));
 
   for (const entry of entries) {
     const targetCards = resolveTargetCards(action, ctx, targets, {
@@ -326,6 +333,7 @@ export async function handleDestroyAndDamageByTargetAtk(
         cause: "effect",
         sourceCard: source || null,
         opponent,
+        banishProtectionSnapshot,
       });
 
       if (!result?.destroyed) continue;
@@ -585,6 +593,9 @@ export async function handleBanish(
       : player && typeof game.getOpponent === "function"
         ? game.getOpponent(player)
       : null;
+  // P1: the targets are banished together; protection is read as it was before the first one.
+  const banishProtectionSnapshot = captureSimultaneousBanishProtection(
+    [game.player, game.bot], resolved.length);
 
   for (const tgt of resolved) {
     if (!tgt) continue;
@@ -681,6 +692,7 @@ export async function handleBanish(
       effectId: ctx?.effect?.id || action.effectId || null,
       movedByEffect: true,
       awaitCardMovedEvent: true,
+      banishProtectionSnapshot,
     });
 
     if (!isMoveSuccess(moveResult)) {
@@ -1349,6 +1361,8 @@ async function destroySelectiveField(
     `Destroying ${toDestroyFiltered.length} monster(s) on the field...`,
   );
 
+  const banishProtectionSnapshot = captureSimultaneousBanishProtection(
+    [game.player, game.bot], toDestroyFiltered.length);
   for (const { card, owner } of toDestroyFiltered) {
     await game.destroyCard(card, {
       cause: "effect",
@@ -1356,6 +1370,7 @@ async function destroySelectiveField(
       sourceCard: source,
 
       opponent: getOpponent(owner),
+      banishProtectionSnapshot,
     });
   }
 
@@ -1478,11 +1493,14 @@ export async function handleDestroyTargetedCards(
       player,
       { actionType: "destroy_targeted_cards", sourceCard: source },
     );
+    const banishProtectionSnapshot = captureSimultaneousBanishProtection(
+      [game.player, game.bot], allowed.length);
     for (const card of allowed) {
       const result = await game.destroyCard(card, {
         cause: "effect",
         sourceCard: source,
         opponent: player,
+        banishProtectionSnapshot,
       });
       if (result?.destroyed) {
         getUI(game)?.log(`${source.name} destroyed ${card.name}!`);
@@ -1728,6 +1746,8 @@ export async function handleDestroyTargetedCards(
     return optionalSelection;
   }
 
+  const banishProtectionSnapshot = captureSimultaneousBanishProtection(
+    [game.player, game.bot], nonImmuneTargets.length);
   for (const card of nonImmuneTargets) {
     const presence = resolutionPresence?.get(card);
     if (resolutionPresence && (!presence ||
@@ -1743,6 +1763,7 @@ export async function handleDestroyTargetedCards(
       sourceCard: source,
 
       opponent: player,
+      banishProtectionSnapshot,
     });
 
     if (result?.destroyed) {
@@ -1793,12 +1814,15 @@ export async function handleDestroyCardsByScope(
   }
 
   let destroyedCount = 0;
+  const banishProtectionSnapshot = captureSimultaneousBanishProtection(
+    [game.player, game.bot], targetCards.length);
 
   for (const card of targetCards) {
     const result = await game.destroyCard(card, {
       cause: action.cause || "effect",
       sourceCard: source,
       opponent: player,
+      banishProtectionSnapshot,
     });
 
     if (result?.destroyed) {

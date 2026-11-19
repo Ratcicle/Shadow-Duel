@@ -733,11 +733,24 @@ Tipos suportados atualmente:
   comparação de stats declarada for satisfeita.
 - `activation_negation_protection`: impede que ativações cobertas pelo escopo
   sejam negadas.
-- `banish_protection`: impede que cards em `targetScope` sejam movidos para
-  `banished`; use `excludeSelf: true` quando a própria fonte não deve ser
-  protegida.
+- `banish_protection`: impede que cards em `targetScope` sejam banidos; use
+  `excludeSelf: true` quando a própria fonte não deve ser protegida. Um
+  banimento direto proibido é recusado e a carta fica onde está. Num
+  redirecionamento (`send_to_grave_replacement` ou a cláusula
+  `banishWhenLeavesField`), a carta segue ao destino original (Cemitério, mão,
+  Deck ou Extra Deck) e continua contando como destruída quando foi destruída.
+  `protectFrom: "opponent_effects"` compara com quem controla o
+  redirecionamento: na substituição, o controlador da fonte; na cláusula, o
+  dono original da carta. Numa operação que move várias cartas juntas
+  (materiais, Tributos, destruição ou retorno de vários alvos), a proteção é a
+  do início da operação: um protetor que sai junto ainda protege as outras.
+  Como a cláusula é atribuída ao dono original, `statusesOnSummon` com
+  `banishWhenLeavesField` só aceita invocar cartas das próprias zonas; a
+  validação do banco recusa as outras formas. Um efeito que marque uma carta
+  de outro dono original exige um campo serializado próprio.
 - `send_to_grave_replacement`: substitui um envio ao Cemitério pelo destino
-  declarativo configurado.
+  declarativo configurado. A proteção contra banimento só é consultada quando
+  esse destino é `banished`.
 - `counter_attack_lock`: restringe ataques conforme counters e escopo declarados.
 - `battle_phase_activation_lock`: restringe ativações durante a Battle Phase.
 - `restrict_opponent_summon_turn_attack`: impede ataques de monstros Invocados
