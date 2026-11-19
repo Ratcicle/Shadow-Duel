@@ -133,6 +133,15 @@ Tomadas pelo usuário, todas com a recomendação. Nenhum texto de carta EN/PT m
 | V11 | Equip: sem um hospedeiro que o efeito possa afetar (por exemplo, o único Arcanist com Spore Counter sob a Rotting Ground), a Magia de Equipamento não pode ser ativada |
 | V12 | Um gatilho obrigatório cujo plano exato da IA ficou inválido resolve com alvos válidos escolhidos pelo AutoSelector, como sem plano. Nenhum gatilho obrigatório é perdido em silêncio |
 
+Complementos decididos no desenho do bloco R (19/11/2026, todos com a recomendação):
+
+| # | Complemento |
+| --- | --- |
+| V9a | Um atacante do oponente imune aos efeitos da Darkness Valley conta como "não há atacante para destruir", e o gatilho não dispara. Um atacante só indestrutível por efeito não bloqueia: o gatilho ativa, gasta o uso do turno e resolve sem destruir, como hoje |
+| V10a | A própria Myco-Weaver pode pagar o custo, como hoje. Se pagar com ela é bom, decide a política da IA (E-BR1) |
+| V11a | Com hospedeiros mistos, o imune sai da lista de alvos do Equip; só hospedeiros afetáveis podem ser escolhidos. A imunidade criada entre a ativação e a resolução segue como hoje (o Equip resolve sem efeito) |
+| V12a | Um gatilho opcional com plano exato inválido continua sem ativar, como hoje. Trocar o alvo planejado é política (bloco E) |
+
 Perguntas originais, para referência:
 
 - **Darkness Valley:** o "destrua o monstro atacante" vale quando o Shadow-Heart de Level 8 destruído foi o próprio atacante ou morreu em destruição mútua? Hoje o gatilho é obrigatório e falha em silêncio (13 falhas na v3; `src/core/actionHandlers/destruction.ts:1918-1924`).
@@ -175,7 +184,7 @@ Uma classe por lote: um lote nunca mistura refatoração, paridade e política. 
 
 | Lote | Tentativa | Commit | Medição | Resultado |
 | --- | --- | --- | --- | --- |
-| — | — | — | — | — |
+| R0 | 1 | `c56e55d` (plano) e `07ea51f` (golden) | Identidade do ambiente pelo `--dry-run` do benchmark; passo histórico v29 no golden; desenhos R1–R5 revisados; sondas "antes" no HEAD | Ambiente igual ao da v3: Node v24.21.0, lockfile `8a2b9093…`, banco `a11dc8c4` (`98d97a75…`), `configDigest` `0e7dbbda…`; só o commit muda. Golden: envelope v29 congelado em `.cache/plan24-work/R0/v29-fixture.json` (hashes `0a69cfa6`/`a196a87e`, envelope `8d70aef2`, comprimento 33776); `test/replay/canonicalReplay.test.ts` com 14/14. Desenhos e revisões em `.cache/plan24-work/design/`, com os complementos V9a–V12a. Sonda principal (`.cache/plan24-work/R0/rules_probe_v30.mts`, 65 confrontos × 3 duelos, seed 4242, 14,8 min): V9 com 10 disparos da Darkness Valley e 0 com atacante próprio ou fora do campo; 2 falhas com o atacante presente e protegido (caso V9a). V10 com 20 escolhas da Ficha pela Myco-Weaver, todas `ACTIVATION_COST_UNAVAILABLE`. V11 com 227 ativações de Equip e 4 Equips ao Cemitério sem equipar (3 Burning Peacemaker e 1 Grimoire); em 2 não havia hospedeiro afetável e em 3 havia imune entre os candidatos. V12 com 0. Sonda do R4 (`r4_plan_fallback_probe.mts`, 17 confrontos com Tech-Zero × 3): 44 planos de gatilho obrigatório (43 do Reactor Dragon e 1 do Ghost Samurai), 0 inválidos; 13 planos opcionais rejeitados (`source_location_changed`, Energy Core). Teste alterado com aval: o passo histórico v29 em `test/replay/canonicalReplay.test.ts` |
 
 ---
 
@@ -324,6 +333,14 @@ Cada lote tem um desenho revisado por um segundo agente, em `.cache/plan24-work/
 | R4 | V12: um gatilho obrigatório com plano exato inválido cai no AutoSelector com os alvos válidos (`src/core/effects/targeting/resolution.ts:673-677`), com a escolha passando pelo broker | Todos (raro) |
 | R5 | Bump `engine-rules-v30`, com a projeção v30 → v29 do passo histórico e o portão `canonicalReplay`/`canonicalDriver`. Os replays v29 salvos deixam de carregar depois do merge | — |
 | v4 | Baseline N = 20 no commit final limpo, com `compare` contra a v3 (`--allow-identity-change engineVersion`), teste do sinal, controles, invariância N = 1 e ponte N = 5 | — |
+
+Escolhas técnicas fechadas pelos desenhos revisados (`.cache/plan24-work/design/R1–R5`, cada um com a seção "Revisão"):
+
+- **R1:** o requisito "atacante do oponente no campo" é declarado por action type num manifesto tipado em `src/core/contracts/`, e não num campo da carta 115. A assinatura `a11dc8c4` e os pinos de teste ficam como estão. O filtro fica em `buildTriggerEntry` e é reconferido ao ativar. O validador recusa uma action do manifesto em posição aninhada. Com V9a, o predicado também consulta a imunidade.
+- **R2:** o filtro de "carta que não chega ao destino" é aplicado na saída de `selectCandidates`, sobre uma cópia, sem mudar o cache. A cláusula do Extra Deck entra igual no runtime e na simulação.
+- **R3:** o pós-filtro de hospedeiro afetável devolve a mesma referência quando nada sai. O alcance declarado são os confrontos do Bloomrot, incluindo o Burning West (Peacemaker) e o Arcanist.
+- **R4:** R4a e R4b recortados por canal, com a prévia e o handler do mesmo canal no mesmo lote. A queda vale só para `purpose === "target"`, e a simulação marca `exact_selection_fallback:<id>`. A frase de contrato em `docs/Replay canônico.md` entra no commit do R4.
+- **R5:** saídas em `.cache/benchmark/regras-v30/`. Um defeito achado depois do bump vira um lote de regra pós-bump, sem v31, com os portões da v4 reancorados nele. As quatro edições de teste do bump pedem aval no próprio lote.
 
 Efeitos nos lotes seguintes:
 
