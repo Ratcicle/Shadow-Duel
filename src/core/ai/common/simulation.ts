@@ -17,6 +17,7 @@ import { recordTurnCardActivation } from "../../game/events/activationHistory.js
 import { projectStoredBlueprintActivation } from "../../effects/blueprints/index.js";
 import { effectMatchesFilters } from "../../effects/filters/effectFilters.js";
 import { projectEffectActivationCase } from "../../effects/activation/cases.js";
+import { allowsUnplannedFallback } from "../../AutoSelector.js";
 import { hasActionZoneCandidates, hasActionSummonCapacity } from "./actionValidation.js";
 import { getGraveyardBanishBurnEntries } from "./simulatedActions/destruction.js";
 import { collectProcedureCounterSources, getCounterValue, setCounterValue } from "./counters.js";
@@ -2450,12 +2451,19 @@ export function prepareSimulatedEffectActivation(
     return { effect, selections };
   };
   if (!parentEffect.activationCases?.length) return prepare(parentEffect);
-  const exactId = options.activationContext?.decisions?.cases?.[parentEffect.id];
-  const legal = parentEffect.activationCases.flatMap(activationCase => {
-    if (exactId !== undefined && activationCase.id !== exactId) return [];
+  const activationCases = parentEffect.activationCases;
+  const legalCases = (exactCase: string | undefined) => activationCases.flatMap(activationCase => {
+    if (exactCase !== undefined && activationCase.id !== exactCase) return [];
     const prepared = prepare(projectEffectActivationCase(parentEffect, activationCase));
     return prepared ? [{ activationCase, prepared }] : [];
   });
+  let exactId = options.activationContext?.decisions?.cases?.[parentEffect.id];
+  let legal = legalCases(exactId);
+  // As in the runtime mode choice, a mandatory trigger's unavailable planned mode is chosen as unplanned.
+  if (legal.length === 0 && exactId !== undefined && allowsUnplannedFallback(parentEffect)) {
+    exactId = undefined;
+    legal = legalCases(undefined);
+  }
   const chooser = options.chooseActionCase || options.strategy?.chooseActionCase?.bind(options.strategy);
   const chosen = exactId === undefined && chooser
     ? chooser(legal.map(entry => entry.activationCase), { state, source: card, effect: parentEffect, activationContext: options.activationContext })

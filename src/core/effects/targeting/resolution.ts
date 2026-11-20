@@ -10,7 +10,7 @@ import { captureReferencePresence, matchesFrozenReferencePresence, getEventEffec
  */
 
 import { isAI } from "../../Player.js";
-import { resolveExactInstanceSelection } from "../../AutoSelector.js";
+import { allowsUnplannedFallback, resolvePlannedSelection } from "../../AutoSelector.js";
 import { aiSelectionDecisionRequest } from "../../actionHandlers/shared.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
 import type { DecisionBrokerPort } from "../../contracts/decisions.js";
@@ -122,6 +122,7 @@ interface TargetAutoSelectorPort {
       owner?: RuntimePlayer | null | undefined;
       activationContext?: TargetActivationContext | null;
       selectionKind?: "target";
+      unplannedWhenPlanInvalid?: boolean;
     },
   ): { ok: false; reason?: string } | { ok: true; selections: SelectionResult };
 }
@@ -525,6 +526,9 @@ export function resolveTargets(
     ctx?.player?.debug === true;
   const resolvedTargets = activationContext.resolvedTargets || null;
   const contextEffect = ctx.effect || ctx.source?.effects?.find(effect => effect.targets === targetDefs);
+  // A mandatory trigger's invalid target plan resolves as unplanned; costs keep rejecting.
+  const unplannedWhenPlanInvalid = activationContext.purpose !== "cost" &&
+    allowsUnplannedFallback(contextEffect);
   const occurrenceReference = ctx.actionContext?.eventReferenceSnapshots?.find(entry =>
     entry.source === ctx.source && contextEffect && entry.effect === getEventEffectOrigin(contextEffect));
   if (isPreview && activationContext.committed !== true && activationContext.costsPaid !== true &&
@@ -683,10 +687,22 @@ export function resolveTargets(
     }
 
     if (exactIds !== undefined) {
-      const chosen = resolveExactInstanceSelection(candidates, exactIds, { min, max });
-      if (!chosen) return { ok: false, reason: "Planned targets are no longer valid." };
-      targetMap[def.id] = chosen;
-      continue;
+      // Per definition: a cost target keeps rejecting even when the context has no purpose.
+      const plan = resolvePlannedSelection(candidates, exactIds, { min, max },
+        unplannedWhenPlanInvalid && def.intent !== "cost");
+      switch (plan.status) {
+        case "planned":
+          targetMap[def.id] = plan.cards;
+          continue;
+        case "rejected":
+          return { ok: false, reason: "Planned targets are no longer valid." };
+        case "unplanned":
+          if (hasResolved) {
+            targetMap[def.id] = normalizeResolvedCards(resolvedTargets[def.id]);
+            continue;
+          }
+          break;
+      }
     }
 
     const decoratedCandidates = candidates.map((card, idx) => {
@@ -960,6 +976,7 @@ export function resolveTargets(
             owner: ctx?.player,
             activationContext,
             selectionKind: "target",
+            ...(unplannedWhenPlanInvalid ? { unplannedWhenPlanInvalid } : {}),
           });
 
           if (autoResult?.ok && autoResult.selections) {

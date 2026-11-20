@@ -1,4 +1,5 @@
 import { isAI } from "../Player.js";
+import { allowsUnplannedFallback } from "../AutoSelector.js";
 import type {
   ChainActionContext,
   ChainActivationCandidate,
@@ -392,6 +393,9 @@ export async function getPlayerSelectionsForDefinitions(
       }
       return selected;
     };
+    // Declared targets only, never costs: a mandatory trigger's invalid plan is
+    // unplanned. Derived from the effect definition outside the resolver.
+    const unplannedWhenPlanInvalid = purpose === "target" && allowsUnplannedFallback(context?.effect);
     const resolveAI = () => {
       const provided = resolveProvided();
       if (!provided) return null;
@@ -402,6 +406,7 @@ export async function getPlayerSelectionsForDefinitions(
         owner: player, selectionContract: remainingContract, selectionKind: purpose,
         activationContext: context?.activationContext || {},
         effect: context?.effect || null,
+        ...(unplannedWhenPlanInvalid ? { unplannedWhenPlanInvalid } : {}),
       });
       return result?.ok ? normalizeSelections({ ...provided, ...result.selections }) : null;
     };

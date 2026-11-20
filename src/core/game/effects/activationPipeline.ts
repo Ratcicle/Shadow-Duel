@@ -18,6 +18,7 @@
  */
 
 import { isAI } from "../../Player.js";
+import { allowsUnplannedFallback } from "../../AutoSelector.js";
 import { aiSelectionDecisionRequest } from "../../actionHandlers/shared.js";
 import { isActivationSourcePresent, selectActivationCase } from "./activationModes.js";
 import { recordMaterialEffectIdentity } from "../summon/materialStats.js";
@@ -141,6 +142,7 @@ interface ActivationAutoSelectorPort {
       owner: GamePlayer;
       activationContext: ActivationPipelineContext;
       selectionKind: string;
+      unplannedWhenPlanInvalid?: boolean;
     },
   ): {
     ok: boolean;
@@ -783,11 +785,18 @@ export async function runActivationPipeline(
 
       if (shouldAutoSelect) {
         const autoFailure: { reason: string | null } = { reason: null };
+        // Derived from the effect definition outside the resolver, so playback
+        // takes the same branch: a mandatory trigger's invalid plan is unplanned.
+        const contractPurpose = "purpose" in selectionContract
+          ? selectionContract.purpose : selectionContract.kind;
+        const unplannedWhenPlanInvalid = contractPurpose !== "cost" && contract.kind !== "cost" &&
+          allowsUnplannedFallback(activationEffect);
         const selectAutomatically = (): SelectionResult | null => {
           const autoResult = this.autoSelector?.select(contract, {
             owner,
             activationContext,
             selectionKind,
+            ...(unplannedWhenPlanInvalid ? { unplannedWhenPlanInvalid } : {}),
           });
           if (autoResult?.ok) return autoResult.selections || {};
           autoFailure.reason = autoResult?.reason || null;

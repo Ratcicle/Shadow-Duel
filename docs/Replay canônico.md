@@ -160,9 +160,14 @@ da IA pela identidade do duelo. O contexto
 `{ type: "trigger_activation", sourceDuelCardId, effectId }` vincula a decisão
 à fonte e ao efeito, e o broker confere esse vínculo e o ator no playback.
 Só um gatilho opcional pode ser recusado: no playback, um `pass` gravado para
-um gatilho obrigatório interrompe a reprodução. Gatilhos de um controlador
-humano não têm essa decisão: a escolha humana acontece na ordenação da SEGOC e
-nas confirmações.
+um gatilho obrigatório interrompe a reprodução. Num gatilho obrigatório, um
+requisito de alvo, de modo de ativação ou de escolha de resolução cujo plano
+exato deixou de valer contra os candidatos legais é resolvido como sem plano, e
+a escolha resultante é uma decisão `target` (ou a decisão `choice` do modo de
+ativação, ou a do sítio da escolha de resolução); custos e gatilhos opcionais
+continuam recusando o plano inválido. Gatilhos de um
+controlador humano não têm essa decisão: a escolha humana acontece na ordenação
+da SEGOC e nas confirmações.
 
 `field_placement` registra quem decide, o jogador de destino, a linha,
 a carta, os slots candidatos e o resultado. O resultado é `chosen` com slot

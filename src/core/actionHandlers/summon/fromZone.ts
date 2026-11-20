@@ -3,7 +3,8 @@ import { resolveContextualSummonPosition } from "./position.js";
 import { isAI } from "../../Player.js";
 import { applyPaidCostSummonMarkers } from "../../effects/costs/summonMarkers.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
-import { resolveExactInstanceSelection } from "../../AutoSelector.js";
+import { allowsResolutionChoiceFallback, resolvePlannedSelection } from "../../AutoSelector.js";
+import type { PlannedSelectionResolution } from "../../AutoSelector.js";
 import { assignAutomaticFieldSlot } from "../../game/zones/placement.js";
 import { applyStatusesOnSummon } from "../../Card.js";
 import type { ActionOf } from "../../contracts/actions.js";
@@ -292,8 +293,10 @@ export async function handleSpecialSummonFromZone(
   const isOptionalSelection = Number.isFinite(minRequired) && minRequired <= 0;
   const requireDistinctNames = action.distinctNames === true;
   const decisionKey = action.contextLabel || ctx.effect?.id || action.type || "special_summon_from_zone";
-  const plannedIds = isAI(player)
+  let plannedIds = isAI(player)
     ? ctx.activationContext?.decisions?.specialSummons?.[decisionKey] : undefined;
+  // A mandatory trigger's plan that no longer resolves summons as unplanned.
+  const unplannedFallback = allowsResolutionChoiceFallback(ctx.effect, ctx.activationContext);
   const revalidation = isAI(player)
     ? ctx.activationContext?.decisions?.specialSummonRevalidation?.[decisionKey] : undefined;
 
@@ -529,7 +532,7 @@ export async function handleSpecialSummonFromZone(
   const zoneHasCards = zoneEntries.some((entry) => entry.list.length > 0);
 
   if (!zoneHasCards && !(plannedIds !== undefined && revalidation === "remaining")) {
-    if (plannedIds?.length) return false;
+    if (plannedIds?.length && !unplannedFallback) return false;
     if (isOptionalSelection) {
       getUI(game)?.log("No optional Special Summon targets available.");
       if (optEffect && typeof game.markOncePerTurnUsed === "function") {
@@ -648,31 +651,6 @@ export async function handleSpecialSummonFromZone(
     return !!entry && isLegalZoneSummon(card, summonPlayer, entry.name, game);
   });
 
-  if (requireDistinctNames && plannedIds === undefined) {
-    candidates = keepOneCardPerName(candidates);
-  }
-
-  if (candidates.length === 0 && !(plannedIds !== undefined && revalidation === "remaining")) {
-    if (plannedIds?.length) return false;
-    if (isOptionalSelection) {
-      getUI(game)?.log("No optional Special Summon targets available.");
-      if (optEffect && typeof game.markOncePerTurnUsed === "function") {
-        Reflect.apply(game.markOncePerTurnUsed, game, [
-          source,
-          player,
-          optEffect,
-        ]);
-      }
-      return true;
-    }
-    getUI(game)?.log(
-      `No valid cards in ${
-        Array.isArray(zoneSpec) ? zoneSpec.join("/") : zoneSpec
-      } matching filters.`,
-    );
-    return false;
-  }
-
   // Determine how many cards to summon
   const dynamicSource = count.maxFrom;
 
@@ -695,11 +673,53 @@ export async function handleSpecialSummonFromZone(
   const resolvedMax =
     dynamicMax !== null ? Math.min(dynamicMax, dynamicCap, baseMax) : baseMax;
 
-  const maxSelect = Math.min(
+  const selectableMax = (candidateCount: number): number => Math.min(
     resolvedMax,
-    candidates.length,
+    candidateCount,
     5 - (summonPlayer?.field?.length || 0),
   );
+
+  let plannedSummon: PlannedSelectionResolution<ActionRuntimeCard> | null = null;
+  if (plannedIds !== undefined) {
+    const resolution = resolvePlannedSelection(candidates, plannedIds, {
+      min: minRequired, max: selectableMax(candidates.length), revalidation,
+    }, unplannedFallback);
+    plannedSummon = resolution.status === "planned" && requireDistinctNames &&
+        new Set(resolution.cards.map(card => card.name)).size !== resolution.cards.length
+      ? unplannedFallback ? { status: "unplanned" } : { status: "rejected" }
+      : resolution;
+    if (plannedSummon.status === "unplanned") {
+      plannedIds = undefined;
+      plannedSummon = null;
+    }
+  }
+
+  if (requireDistinctNames && plannedIds === undefined) {
+    candidates = keepOneCardPerName(candidates);
+  }
+
+  if (candidates.length === 0 && !(plannedIds !== undefined && revalidation === "remaining")) {
+    if (plannedIds?.length && !unplannedFallback) return false;
+    if (isOptionalSelection) {
+      getUI(game)?.log("No optional Special Summon targets available.");
+      if (optEffect && typeof game.markOncePerTurnUsed === "function") {
+        Reflect.apply(game.markOncePerTurnUsed, game, [
+          source,
+          player,
+          optEffect,
+        ]);
+      }
+      return true;
+    }
+    getUI(game)?.log(
+      `No valid cards in ${
+        Array.isArray(zoneSpec) ? zoneSpec.join("/") : zoneSpec
+      } matching filters.`,
+    );
+    return false;
+  }
+
+  const maxSelect = selectableMax(candidates.length);
 
   if (maxSelect === 0 && !(isOptionalSelection && (plannedIds?.length === 0 ||
       (plannedIds !== undefined && revalidation === "remaining")))) {
@@ -714,13 +734,9 @@ export async function handleSpecialSummonFromZone(
     return false;
   }
 
-  if (plannedIds !== undefined) {
-    const planned = resolveExactInstanceSelection(candidates, plannedIds, {
-      min: minRequired, max: maxSelect, revalidation,
-    });
-    if (!planned || (
-      requireDistinctNames && new Set(planned.map(card => card.name)).size !== planned.length
-    )) return false;
+  if (plannedSummon !== null) {
+    if (plannedSummon.status !== "planned") return false;
+    const planned = plannedSummon.cards;
     const selected = await selectResolutionCards({ game, player, cards: candidates,
       requirementId: action.selectionId || `${ctx.effect?.id || action.type}_selection`,
       min: minRequired, max: maxSelect, message: action.selectionMessage,

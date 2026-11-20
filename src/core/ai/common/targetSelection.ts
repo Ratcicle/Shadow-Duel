@@ -12,7 +12,7 @@ import {
   getPiercingDamage,
 } from "./cardStats.js";
 import { getCardComparableAttribute } from "../../Card.js";
-import AutoSelector, { resolveExactInstanceSelection } from "../../AutoSelector.js";
+import AutoSelector, { allowsUnplannedFallback, resolvePlannedSelection } from "../../AutoSelector.js";
 import { getCounterValue } from "./counters.js";
 import type { AIDecisionPlan } from "../../contracts/ai.js";
 import { cardMatchesFilter } from "./cardFilters.js";
@@ -736,15 +736,29 @@ export function selectSimulatedTargets({
   if (!Array.isArray(targets) || targets.length === 0) return result;
   const { self, opponent } = getPerspectivePlayers(state, selfId);
   const intents = buildTargetIntents(actions || []);
-  const exactSelection = (id: string, candidates: readonly SimulatedCardState[], count: NormalizedCount) => {
+  // Mirrors the runtime: a mandatory trigger's invalid plan is chosen as unplanned.
+  const mandatoryFallback = allowsUnplannedFallback(effect);
+  const exactSelection = (
+    id: string,
+    candidates: readonly SimulatedCardState[],
+    count: NormalizedCount,
+    unplannedFallback: boolean,
+  ) => {
     const ids = options.activationContext?.decisions?.selections?.[id];
     if (ids === undefined) return undefined;
     // The runtime refuses too few legal candidates before it reads the plan;
     // only a plan that the present candidates cannot honor is a divergence.
     if (candidates.length < count.min) return [];
-    const selected = resolveExactInstanceSelection(candidates, ids, count);
-    if (selected === null) (state._simUnsupportedActions ??= []).push(`exact_selection:${id}`);
-    return selected || [];
+    const plan = resolvePlannedSelection(candidates, ids, count, unplannedFallback);
+    switch (plan.status) {
+      case "planned":
+        return plan.cards;
+      case "unplanned":
+        return undefined;
+      case "rejected":
+        (state._simUnsupportedActions ??= []).push(`exact_selection:${id}`);
+        return [];
+    }
   };
   const hasPairedCandidate = (
     sourceCandidate: SimulatedCardState,
@@ -841,7 +855,7 @@ export function selectSimulatedTargets({
         );
       });
       const count = normalizeCount(target.count, 1);
-      result[target.id] = exactSelection(target.id, contextCards, count) ?? contextCards.slice(
+      result[target.id] = exactSelection(target.id, contextCards, count, mandatoryFallback) ?? contextCards.slice(
         0,
         Math.min(count.max, contextCards.length),
       );
@@ -976,7 +990,7 @@ export function selectSimulatedTargets({
       : normalizeCount(target.count, 1);
     const min = count.min;
     const max = count.max;
-    const exact = exactSelection(target.id, filtered, count);
+    const exact = exactSelection(target.id, filtered, count, mandatoryFallback && intent !== "cost");
     // Outside costs, take as many targets as the runtime AutoSelector does
     // for the bot: the minimum of a range, or one optional target only when
     // it would choose it. An exact plan keeps its own count.

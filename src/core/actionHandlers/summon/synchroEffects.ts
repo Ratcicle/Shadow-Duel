@@ -1,6 +1,7 @@
 import { isAI } from "../../Player.js";
 import { getCardDisplayName, getUIText } from "../../i18n.js";
-import { resolveExactInstanceSelection } from "../../AutoSelector.js";
+import { allowsResolutionChoiceFallback, resolveExactInstanceSelection, resolvePlannedSelection } from "../../AutoSelector.js";
+import type { PlannedSelectionResolution } from "../../AutoSelector.js";
 import type { ActionOf } from "../../contracts/actions.js";
 import type {
   ActionHandlerEnginePort,
@@ -541,13 +542,27 @@ export async function handleSynchroSummonFromExtraDeck(
     ctx.effect?.id || action.type
   ] : undefined;
   if (planned && action.position && action.position !== "choice" && action.position !== planned.position) return false;
+  // From the effect definition, outside the resolvers: each requirement of a
+  // mandatory trigger whose plan no longer resolves is chosen as unplanned.
+  const unplannedFallback = allowsResolutionChoiceFallback(ctx.effect, ctx.activationContext);
+  const cardPlan = planned ? resolvePlannedSelection(legalEntries.map(entry => entry.card),
+    [planned.synchroInstanceId], { min: 1, max: 1 }, unplannedFallback) : null;
   const cardContract = buildCardChoiceContract(game, player, legalEntries.map(entry => entry.card), action);
   const chosenCards = await selectResolutionCards({ game, player,
     cards: legalEntries.map(entry => entry.card), requirementId: "synchro_extra_deck_card", min: 1, max: 1,
     message: cardContract.message, locate: card => ({ player, zone: "extraDeck", index: player.extraDeck.indexOf(card) }),
     resolveAI: () => {
-      const entry = planned ? legalEntries.find(candidate => candidate.card.instanceId === planned.synchroInstanceId)
-        : legalEntries.slice().sort((a, b) => Number(b.card.atk || 0) + Number(b.card.def || 0) - Number(a.card.atk || 0) - Number(a.card.def || 0))[0];
+      if (cardPlan) {
+        switch (cardPlan.status) {
+          case "planned":
+            return cardPlan.cards;
+          case "rejected":
+            return null;
+          case "unplanned":
+            break;
+        }
+      }
+      const entry = legalEntries.slice().sort((a, b) => Number(b.card.atk || 0) + Number(b.card.def || 0) - Number(a.card.atk || 0) - Number(a.card.def || 0))[0];
       return entry ? [entry.card] : null;
     },
   });
@@ -569,14 +584,27 @@ export async function handleSynchroSummonFromExtraDeck(
   const materialCandidates = Array.isArray(rawCandidates) ? rawCandidates.filter((card): card is ActionRuntimeCard =>
     Boolean(card && typeof card === "object" && typeof Reflect.get(card, "name") === "string")) : [];
   const materialContract = buildMaterialSelectionContract(game, synchroCard, player, materialCandidates);
+  const combos: unknown = Reflect.get(check, "materialCombos");
+  const plannedMaterials = planned
+    ? resolveExactInstanceSelection(player.field, planned.materialInstanceIds, { min: 2, max: 5 }) : null;
+  const materialPlan: PlannedSelectionResolution<ActionRuntimeCard> | null = !planned ? null
+    : plannedMaterials && Array.isArray(combos) && combos.some(combo => Array.isArray(combo) &&
+        combo.length === plannedMaterials.length && plannedMaterials.every(card => combo.includes(card)))
+      ? { status: "planned", cards: plannedMaterials }
+      : unplannedFallback ? { status: "unplanned" } : { status: "rejected" };
   const materials = await selectResolutionCards({ game, player, cards: materialCandidates,
     requirementId: "synchro_materials", min: 2, max: materialCandidates.length,
     message: materialContract.message, locate: card => ({ player, zone: "field", index: player.field.indexOf(card) }),
     resolveAI: () => {
-      const combos: unknown = Reflect.get(check, "materialCombos");
-      if (planned) {
-        const chosen = resolveExactInstanceSelection(player.field, planned.materialInstanceIds, { min: 2, max: 5 });
-        return chosen && Array.isArray(combos) && combos.some(combo => Array.isArray(combo) && combo.length === chosen.length && chosen.every(card => combo.includes(card))) ? chosen : null;
+      if (materialPlan) {
+        switch (materialPlan.status) {
+          case "planned":
+            return materialPlan.cards;
+          case "rejected":
+            return null;
+          case "unplanned":
+            break;
+        }
       }
       const combo = Array.isArray(combos) ? combos[0] : null;
       return Array.isArray(combo) ? combo.filter((card): card is ActionRuntimeCard =>
@@ -591,7 +619,7 @@ export async function handleSynchroSummonFromExtraDeck(
     synchroCard,
     {
       checkActionWindow: false,
-      position: planned?.position || action.position,
+      position: (cardPlan?.status === "planned" ? planned?.position : undefined) || action.position,
       summonOrigin: ctx.afterEffectResolution ? "procedure" : "effect_resolution",
       ...(ctx.afterEffectResolution ? { negationWindowPolicy: ctx.afterEffectResolution.chainLevel === 1 ? "auto" : "suppressed", skipFinalTiming: true } : {}),
       actionContext:
@@ -618,9 +646,12 @@ export function hasSynchroSummonPreviewCandidate(
     ctx.effect?.id || action.type
   ] : undefined;
   if (planned && action.position && action.position !== "choice" && action.position !== planned.position) return false;
+  // A mandatory trigger's plan only narrows legal outcomes it may fall back from,
+  // so its preview is the unplanned one (see `allowsUnplannedFallback`).
+  const narrowingPlan = planned && !allowsResolutionChoiceFallback(ctx.effect, ctx.activationContext) ? planned : undefined;
   const filters = getSynchroCandidateFilters(action);
   const extraDeckCandidates = (player.extraDeck || []).filter((card) =>
-    matchesActionFilters(engine, card, filters) && (!planned || card.instanceId === planned.synchroInstanceId),
+    matchesActionFilters(engine, card, filters) && (!narrowingPlan || card.instanceId === narrowingPlan.synchroInstanceId),
   );
   if (extraDeckCandidates.length === 0) return false;
 
@@ -671,9 +702,9 @@ export function hasSynchroSummonPreviewCandidate(
       return (
         Array.isArray(rawCombos) &&
         rawCombos.some(
-          (combo) => Array.isArray(combo) && field.length - combo.length + 1 <= 5 && (!planned || (
-            new Set(planned.materialInstanceIds).size === planned.materialInstanceIds.length &&
-            combo.length === planned.materialInstanceIds.length && planned.materialInstanceIds.every(id =>
+          (combo) => Array.isArray(combo) && field.length - combo.length + 1 <= 5 && (!narrowingPlan || (
+            new Set(narrowingPlan.materialInstanceIds).size === narrowingPlan.materialInstanceIds.length &&
+            combo.length === narrowingPlan.materialInstanceIds.length && narrowingPlan.materialInstanceIds.every(id =>
               combo.some((material: unknown) => typeof material === "object" && material !== null && Reflect.get(material, "instanceId") === id))
           )),
         )

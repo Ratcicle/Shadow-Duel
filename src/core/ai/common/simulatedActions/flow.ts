@@ -35,6 +35,7 @@ import {
   resolveActionPlayer,
   resolveSimulatedLpCost,
   resolveTargetsForAction,
+  simulatedUnplannedFallback,
   STOP_SIMULATION,
 } from "./shared.js";
 import type { ActionCase } from "../../../contracts/actions.js";
@@ -444,11 +445,18 @@ export function applyOptionalTargetActions(
       return action.optional !== false;
     }
     // AutoSelector selects the required minimum by default. Explicit plans
-    // keep their full legal selection, including a larger allowed group.
+    // keep their full legal selection, including a larger allowed group; a
+    // mandatory trigger's plan that no longer held was chosen as unplanned.
+    const unplannedFallback = simulatedUnplannedFallback(localOptions);
     for (const definition of targetDefs) {
       const chosen = selectedTargets[definition.id];
-      if (Array.isArray(chosen) && !definition.targetFromContext &&
-          options.activationContext?.decisions?.selections?.[definition.id] === undefined) {
+      const plannedIds = options.activationContext?.decisions?.selections?.[definition.id];
+      const keptPlan = plannedIds !== undefined && (!unplannedFallback || (Array.isArray(chosen) &&
+        chosen.length === plannedIds.length && chosen.every(card => {
+          const instanceId: unknown = typeof card === "object" && card !== null ? Reflect.get(card, "instanceId") : undefined;
+          return (typeof instanceId === "number" || typeof instanceId === "string") && plannedIds.includes(instanceId);
+        })));
+      if (Array.isArray(chosen) && !definition.targetFromContext && !keptPlan) {
         selectedTargets[definition.id] = chosen.slice(0, normalizeCount(definition.count, 1).min);
       }
     }
@@ -630,9 +638,9 @@ export function applyChooseActionCase(
     applySimulatedActions,
   } = ctx;
   const decisionKey = action.effectChoiceKey || action.requirementId || "action_case_choice";
-  const exactCase = options.activationContext?.decisions?.cases?.[decisionKey] ??
+  const plannedCase = options.activationContext?.decisions?.cases?.[decisionKey] ??
     options.activationContext?.decisions?.cases?.[action.requirementId || "action_case_choice"];
-  const validCases = (action.cases || [])
+  const collectValidCases = (exactCase: string | undefined) => (action.cases || [])
     .filter(choiceCase => exactCase === undefined || choiceCase.id === exactCase)
     .map((choiceCase) => {
       if (!choiceCase) return null;
@@ -662,6 +670,13 @@ export function applyChooseActionCase(
       return { choiceCase, caseSelections };
     })
     .filter(Boolean) as SimulatedCaseEntry[];
+  let exactCase = plannedCase;
+  let validCases = collectValidCases(exactCase);
+  // As in the runtime, a mandatory trigger's unavailable planned case is chosen as unplanned.
+  if (validCases.length === 0 && exactCase !== undefined && simulatedUnplannedFallback(options)) {
+    exactCase = undefined;
+    validCases = collectValidCases(undefined);
+  }
   if (validCases.length === 0) {
     if (exactCase !== undefined) {
       (state._simUnsupportedActions ??= []).push(`exact_case:${decisionKey}`);

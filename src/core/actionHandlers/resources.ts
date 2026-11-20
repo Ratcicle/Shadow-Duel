@@ -6,7 +6,7 @@ import { selectResolutionCards } from "./shared.js";
  */
 
 import { isAI } from "../Player.js";
-import { resolveExactInstanceSelection } from "../AutoSelector.js";
+import { allowsResolutionChoiceFallback, resolvePlannedSelection } from "../AutoSelector.js";
 import { clearFieldSlot } from "../game/zones/placement.js";
 import { getBaseLpCost } from "../effects/costs/lpCost.js";
 import { cardMatchesKind } from "../Card.js";
@@ -1055,6 +1055,8 @@ export async function handleAddFromZoneToHand(
 
   const decisionKey = readString(action, "selectionId") || `${ctx.effect?.id || action.type}_selection`;
   const plannedIds = isAI(player) ? ctx.activationContext?.decisions?.selections?.[decisionKey] : undefined;
+  // From the effect definition, outside the resolver: a mandatory trigger's invalid plan is unplanned.
+  const unplannedFallback = allowsResolutionChoiceFallback(ctx.effect, ctx.activationContext);
 
   const selection = await selectCardsFromZone({
     game,
@@ -1070,7 +1072,15 @@ export async function handleAddFromZoneToHand(
       // A planned line names its exact pick; it is still recorded as the
       // bot's decision.
       if (plannedIds !== undefined) {
-        return resolveExactInstanceSelection(cards, plannedIds, { min, max }) ?? [];
+        const plan = resolvePlannedSelection(cards, plannedIds, { min, max }, unplannedFallback);
+        switch (plan.status) {
+          case "planned":
+            return plan.cards;
+          case "rejected":
+            return [];
+          case "unplanned":
+            break;
+        }
       }
       if (typeof player.strategy?.rankSearchCandidates === "function") {
         const ranked = player.strategy.rankSearchCandidates(cards, action, {
