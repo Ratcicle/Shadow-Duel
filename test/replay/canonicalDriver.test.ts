@@ -152,6 +152,11 @@ function replay(commands: ReadonlyArray<CanonicalReplayCommand> = []) {
 }
 
 test("incompatible replay versions never initialize or mutate an existing duel", async () => {
+  const beforeRulesV30 = driverFixture();
+  const beforeRulesV30State = createCanonicalStateSnapshot(beforeRulesV30.game);
+  await assert.rejects(() => replayCanonicalDuel({ ...replay(), engineVersion: "engine-rules-v29" }, { game: beforeRulesV30.game }), /engineVersion/);
+  assert.deepEqual(beforeRulesV30.calls, []);
+  assert.deepEqual(createCanonicalStateSnapshot(beforeRulesV30.game), beforeRulesV30State);
   const beforeRulesV29 = driverFixture();
   const beforeRulesV29State = createCanonicalStateSnapshot(beforeRulesV29.game);
   await assert.rejects(() => replayCanonicalDuel({ ...replay(), engineVersion: "engine-rules-v28" }, { game: beforeRulesV29.game }), /engineVersion/);
@@ -189,6 +194,7 @@ test("incompatible replay versions never initialize or mutate an existing duel",
 test("Hatred Empress database compatibility rejects the previous signature independently of old rules before initialization", async () => {
   for (const [engineVersion, cardDatabaseSignature, message] of [
     [CANONICAL_REPLAY_ENGINE_VERSION, "feeb687b", /database signature/],
+    ["engine-rules-v29", getCardDatabaseSignature(), /engineVersion/],
     ["engine-rules-v28", getCardDatabaseSignature(), /engineVersion/],
     ["engine-rules-v27", getCardDatabaseSignature(), /engineVersion/],
     ["engine-rules-v26", getCardDatabaseSignature(), /engineVersion/],
