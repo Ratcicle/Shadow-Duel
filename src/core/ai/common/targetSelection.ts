@@ -26,6 +26,7 @@ import {
 import { getPerspectivePlayers } from "./perspective.js";
 import { canSimulatedCostCardReachDestination, findCardOwner, findCardZone, getZoneCards } from "./zones.js";
 import { findDestinationBoundCost } from "../../effects/passives/passiveBuffs.js";
+import { getAffectableHostActions, getCardEffectImmunity, isAffectableHost } from "../../effects/targeting/filters.js";
 import { isSimulatedReferencePresenceValid, type SimulatedReferenceSnapshot } from "./simulatedActions/shared.js";
 import type { CardAction } from "../../contracts/actions.js";
 import type {
@@ -231,7 +232,7 @@ interface SelectSimulatedTargetsInput {
   effect?: import("../../contracts/effects.js").EffectDefinition | undefined;
   targets: readonly AiTargetFilter[] | null | undefined;
   actions?: readonly (CardAction & ActionIntentView)[] | null | undefined;
-  state: Pick<AiStateShape, "bot" | "player" | "_simUnsupportedActions">;
+  state: Pick<AiStateShape, "bot" | "player" | "_simUnsupportedActions" | "turnCounter">;
   sourceCard?: SimulatedCardState | null | undefined;
   selfId?: string;
   options?: TargetSelectionOptions;
@@ -798,7 +799,15 @@ export function selectSimulatedTargets({
   targets.forEach((target) => {
     if (!target || !target.id) return;
     const requireUnnegated = requiresUnnegatedTarget(effect, target);
-    const negationEligible = (card: SimulatedCardState) => !requireUnnegated || card.cardKind !== "monster" || card.effectsNegated !== true;
+    // Decision V11: an Equip host must be affectable, by the resolution's immunity rule.
+    const requireAffectableHost = getAffectableHostActions(effect, target).length > 0;
+    // By id, not by slot: perspective states keep the actor in the bot slot with its real id.
+    const immunityView = { game: { player: self.id === "player" ? self : opponent,
+      bot: self.id === "bot" ? self : opponent, turnCounter: state.turnCounter ?? 0 } };
+    const activationEligible = (card: SimulatedCardState) =>
+      (!requireUnnegated || card.cardKind !== "monster" || card.effectsNegated !== true) &&
+      (!requireAffectableHost || isAffectableHost(effect, target, effectType =>
+        getCardEffectImmunity(immunityView, card, self, { effectType, sourceCard: sourceCard ?? null }).immune));
     if (target.targetFromContext) {
       const contextValue =
         target.intent === "reference" && options.referenceSnapshots !== undefined
@@ -825,7 +834,7 @@ export function selectSimulatedTargets({
           owner === self ? "self" : owner === opponent ? "opponent" : null;
         const zone = owner ? findCardZone(owner, card) : null;
         return (
-          negationEligible(card) && matchesTargetFilters(card, target, sourceCard, ownerRole) &&
+          activationEligible(card) && matchesTargetFilters(card, target, sourceCard, ownerRole) &&
           (requiredZones.length === 0 ||
             requiredZones.includes("any") ||
             requiredZones.includes(zone!))
@@ -910,7 +919,7 @@ export function selectSimulatedTargets({
     const destinationCost = target.intent === "cost" ? findDestinationBoundCost(effect, target.id) : null;
     const filtered = candidates
       .filter(({ card, role }) => {
-        if (!negationEligible(card) || !matchesTargetFilters(card, effectiveTarget, sourceCard, role)) {
+        if (!activationEligible(card) || !matchesTargetFilters(card, effectiveTarget, sourceCard, role)) {
           return false;
         }
         if (destinationCost) {
@@ -1003,11 +1012,23 @@ function zoneCards(player: AiPlayerInput | undefined, zone: CanonicalZone): read
  * The effect supplies the activation eligibility shared with the simulation
  * and the runtime: a target it negates excludes already negated monsters.
  */
-export function collectExactTargetCandidates(target: EffectTarget, source: AiCardInput, ctx: { player: AiPlayerInput; opponent?: AiPlayerInput },
+export function collectExactTargetCandidates(target: EffectTarget, source: AiCardInput,
+  ctx: { player: AiPlayerInput; opponent?: AiPlayerInput; turnCounter?: number },
   selections: Readonly<Record<string, readonly (number | string)[]>>,
-  effect: Pick<EffectDefinition, "actions" | "activationCosts"> | null | undefined): AiCardInput[] {
+  effect: Pick<EffectDefinition, "actions" | "activationCosts" | "targets" | "timing"> | null | undefined): AiCardInput[] {
   const requireUnnegated = requiresUnnegatedTarget(effect, target);
   const destinationCost = target.intent === "cost" ? findDestinationBoundCost(effect, target.id) : null;
+  const tables = ctx.opponent ? (ctx.player.id === "bot" ? { bot: ctx.player, player: ctx.opponent }
+    : { player: ctx.player, bot: ctx.opponent }) : undefined;
+  // Decision V11 needs an identified actor (otherwise the filter is skipped) and
+  // identified tables (otherwise conditional passives such as Rotting Ground are not read).
+  const identified = (player: AiPlayerInput | undefined) =>
+    player && typeof player.id === "string"
+      ? { id: player.id, field: player.field ?? [], spellTrap: player.spellTrap ?? [], fieldSpell: player.fieldSpell ?? null }
+      : null;
+  const hostActor = getAffectableHostActions(effect, target).length > 0 ? identified(ctx.player) : null;
+  const hostTables = { player: identified(tables?.player), bot: identified(tables?.bot) };
+  const immunityView = { game: { ...hostTables, turnCounter: ctx.turnCounter ?? 0 } };
   const allZones: readonly CanonicalZone[] = ["field", "hand", "deck", "graveyard", "banished", "extraDeck", "spellTrap", "fieldSpell"];
   const fromZones = (spec: { owner?: EffectOwner; zone?: EffectZone; zones?: readonly EffectZone[] }) => {
     const roles = spec.owner === "opponent" ? ["opponent"] as const :
@@ -1032,9 +1053,9 @@ export function collectExactTargetCandidates(target: EffectTarget, source: AiCar
     if (requireUnnegated && card.cardKind === "monster" && card.effectsNegated === true) continue;
     if (excludedNames.includes(card.name) || !matchesTargetFilters(card, target, source, role)) continue;
     const holder = role === "self" ? ctx.player : ctx.opponent;
-    if (destinationCost && holder && !canSimulatedCostCardReachDestination(destinationCost, card, ctx.player, holder,
-      ctx.opponent ? (ctx.player.id === "bot" ? { bot: ctx.player, player: ctx.opponent } : { player: ctx.player, bot: ctx.opponent })
-        : undefined)) continue;
+    if (destinationCost && holder && !canSimulatedCostCardReachDestination(destinationCost, card, ctx.player, holder, tables)) continue;
+    if (hostActor && !isAffectableHost(effect, target, effectType =>
+      getCardEffectImmunity(immunityView, card, hostActor, { effectType, sourceCard: source }).immune)) continue;
     if (target.compareAttribute && !matchesTargetAttributeComparison(card, references(target.compareAttribute.ref)[0], target.compareAttribute)) continue;
     if (pair && !fromZones(pair).some(({ card: paired, role: pairedRole }) =>
       card.instanceId !== paired.instanceId && !(pair.excludeSameName && paired.name === card.name) &&

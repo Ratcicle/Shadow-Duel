@@ -1,3 +1,4 @@
+import { isAffectableHost } from "./filters.js";
 import { hasFeasibleSelection, findFeasibleSelection } from "../../game/selection/contract.js";
 import { requiresUnnegatedTarget } from "../negation.js";
 import { captureReferencePresence, matchesFrozenReferencePresence, getEventEffectOrigin, getPaidCostReferenceValues } from "./references.js";
@@ -149,6 +150,12 @@ interface TargetResolutionHost {
     context: TargetResolutionContext,
   ): TargetCandidateSelection;
   cardMatchesFilters?(card: RuntimeCard, filters: CardFilter): boolean;
+  /** The resolution's immunity rule (decision V11 reads it for Equip hosts). */
+  checkImmunity?(
+    card: RuntimeCard,
+    sourcePlayer: NonNullable<TargetResolutionContext["player"]>,
+    options?: { readonly effectType?: "destruction" | "banish" | "target" | "negate" | null; readonly sourceCard?: RuntimeCard | null },
+  ): { readonly immune: boolean };
   findCardZone(player: RuntimePlayer, card: RuntimeCard): EffectZone | null;
   getZone(player: RuntimePlayer, zone: EffectZone): RuntimeCard[] | null;
   buildSelectionCandidateKey(
@@ -392,6 +399,11 @@ function contextTargetMatchesDef(
   }
   if (ctx.activationContext?.timing !== "resolution" && card.cardKind === "monster" &&
       card.effectsNegated === true && requiresUnnegatedTarget(ctx.effect, def)) return false;
+  // Decision V11: an Equip host from the context must be affectable too.
+  const player = ctx.player;
+  if (ctx.activationContext?.timing !== "resolution" && player && typeof engine.checkImmunity === "function" &&
+      !isAffectableHost(ctx.effect, def, effectType =>
+        engine.checkImmunity?.(card, player, { effectType, sourceCard: ctx.source ?? null }).immune === true)) return false;
   const filters = buildContextTargetFilters(def);
   if (
     Object.keys(filters).length > 0 &&

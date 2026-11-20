@@ -1151,8 +1151,13 @@ function matchesSimulatedEventPresence(
     attacker: { found: !!zone, locationVersion: attacker?.locationVersion, controllerId: attackerOwner?.id ?? null, zone },
     expectedLocationVersion: fromBattleAttacker ? payload.battleAttackerLocationVersion : undefined,
     triggerOwnerId: owner.id,
-    attackerImmune: () => !!attacker && getCardEffectImmunity({ game: { player: state.player, bot: state.bot,
-      turnCounter: state.turnCounter } }, attacker, owner).immune,
+    // By id, not by slot: perspective states keep the actor in the bot slot with its real id.
+    attackerImmune: () => {
+      if (!attacker) return false;
+      const other = getOtherSimPlayer(state, owner);
+      return getCardEffectImmunity({ game: { player: owner.id === "player" ? owner : other,
+        bot: owner.id === "bot" ? owner : other, turnCounter: state.turnCounter } }, attacker, owner).immune;
+    },
   });
 }
 
