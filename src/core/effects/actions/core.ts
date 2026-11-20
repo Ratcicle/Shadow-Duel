@@ -6,7 +6,8 @@ import { cardMatchesKind, getCardComparableAttribute } from "../../Card.js";
 import { isAI } from "../../Player.js";
 import { resolveExactInstanceSelection } from "../../AutoSelector.js";
 import { getBaseLpCost } from "../costs/lpCost.js";
-import { projectDepartureDestination } from "../passives/passiveBuffs.js";
+import { canReachRequiredDestination, projectDepartureDestination } from "../passives/passiveBuffs.js";
+import { shouldAllowExtraDeckMonsterToHand } from "./movement.js";
 import { hasSynchroSummonPreviewCandidate } from "../../actionHandlers/summon/synchroEffects.js";
 import { mergeCanonicalSelections } from "../../game/selection/contract.js";
 import { checkSpecialSummonEligibility } from "../../game/summon/eligibility.js";
@@ -50,7 +51,7 @@ import type {
   EventResolutionResult,
 } from "../../contracts/events.js";
 import type { RawSelectionContract } from "../../contracts/selection.js";
-import type { ZoneInput } from "../../contracts/zones.js";
+import { normalizeZoneInput, type ZoneInput } from "../../contracts/zones.js";
 
 type PreviewZone =
   | "deck"
@@ -205,7 +206,7 @@ interface FieldCountSpec {
   readonly max?: number;
 }
 
-interface PreviewAction {
+interface PreviewAction extends Partial<Pick<ActionOf<"move">, "allowExtraDeckMonsterToHand" | "allowExtraDeckMonsterToHandIf">> {
   excludeSummonRestrict?: readonly string[];
   readonly type: ActionType | string;
   readonly allowBelow?: boolean;
@@ -1536,15 +1537,13 @@ function checkPreviewMoveTargetAvailability(
   }
   if (action.requireDestination && toZone) {
     const players = [engine.game.player, engine.game.bot];
-    const canReachDestination = (entry: PreviewTargetEntry): boolean => {
-      if (entry.card.isToken && toZone !== "field") return false;
-      if (action.type === "return_to_hand" &&
-          ["fusion", "synchro", "ascension"].includes(entry.card.monsterType || "")) return false;
-      // Decision V5: a redirect forbidden by a protection keeps the requested destination.
-      return projectDepartureDestination({ card: entry.card, holder: entry.owner, fromZone: entry.zone,
-        requestedZone: toZone, players,
-        matchesFilters: (candidate, filters) => engine.cardMatchesFilters(candidate, filters) === true }).toZone === toZone;
-    };
+    const requestedZone = normalizeZoneInput(toZone);
+    const allowExtraDeckMonsterToHand = action.type === "move" && shouldAllowExtraDeckMonsterToHand(action, ctx);
+    // Decisions V5 and V10: the same predicate filters the cost candidates.
+    const canReachDestination = (entry: PreviewTargetEntry): boolean => canReachRequiredDestination({
+      card: entry.card, holder: entry.owner, fromZone: entry.zone, requestedZone, players,
+      matchesFilters: (candidate, filters) => engine.cardMatchesFilters(candidate, filters) === true,
+      allowExtraDeckMonsterToHand });
     const ref = action.targetRef;
     const definition = ref ? getEffectTargetDefinition(ctx, ref) : null;
     let entries: PreviewTargetEntry[] = [];

@@ -8,7 +8,7 @@ import type { SimulatedEquipHostExitBinding } from "./zones.js";
 import { getEffectEventPresenceRequirement, hasEquipHostExitProof, matchesAfterSummonTrigger, matchesEquipHostExitSourcePresence, matchesEventPresenceRequirement } from "../../effects/triggers/collectors/shared.js";
 import { getCardEffectImmunity } from "../../effects/targeting/filters.js";
 import { canTriggerAfterSummonFromHand } from "../../effects/triggers/collectors/afterSummon.js";
-import { getImmediateEventEffectValidationError, isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
+import { findDestinationBoundCost, getImmediateEventEffectValidationError, isActiveEquipInZone } from "../../effects/passives/passiveBuffs.js";
 import { captureProcedureTriggerConditions } from "../../effects/conditions/runtime.js";
 import { matchesCardFilter, type RuntimeCardFilter } from "../../effects/filters/cardFilters.js";
 import { getPositionChangeProvenance, matchesPositionChangeEvent } from "../../effects/triggers/collectors/positionChange.js";
@@ -35,6 +35,7 @@ import {
 } from "../StrategyUtils.js";
 import {
   canMoveCardToZone,
+  canSimulatedCostCardReachDestination,
   captureSimulatedBanishProtection,
   findCardOwner,
   findCardZone,
@@ -1497,10 +1498,12 @@ function canPaySimulatedActivationCosts(
     return cards.every(card => {
       const owner = findCardOwner(state, card);
       if (!owner || (cost.fromZone && findCardZone(owner, card) !== cost.fromZone)) return false;
-      if (cost.requireDestination && card.isToken && cost.to !== "field") return false;
+      if (cost.requireDestination) {
+        const bound = findDestinationBoundCost({ activationCosts: [cost] }, cost.targetRef);
+        return !!bound && canSimulatedCostCardReachDestination(bound, card, player, owner, state);
+      }
       return canMoveCardToZone(player, card, cost.to || "graveyard", owner, {
-        state, requireDestination: cost.requireDestination === true,
-        allowExtraDeckMonsterToHand: cost.allowExtraDeckMonsterToHand === true,
+        state, allowExtraDeckMonsterToHand: cost.allowExtraDeckMonsterToHand === true,
       });
     });
   });

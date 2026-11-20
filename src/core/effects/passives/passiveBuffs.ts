@@ -25,7 +25,8 @@ import type {
   EffectOwner,
 } from "../../contracts/effects.js";
 import type { FilterCard, RuntimeCardFilter } from "../filters/cardFilters.js";
-import type { CanonicalZone } from "../../contracts/zones.js";
+import { isZoneInput, normalizeZoneInput, type CanonicalZone } from "../../contracts/zones.js";
+import type { ActionOf, CardAction } from "../../contracts/actions.js";
 
 type PassiveStat = "atk" | "def";
 type PassiveStatCard = {
@@ -724,6 +725,52 @@ export function projectDepartureDestination<
     }
   }
   return { toZone, applied, forbidden };
+}
+
+/**
+ * Whether a card paid as a cost with `requireDestination` arrives where the
+ * cost sends it (decision V10). One predicate for the preview, the payment
+ * and the cost candidate list: a Token leaving the field disappears, an
+ * Extra Deck monster sent to the Deck (or to the hand without permission)
+ * returns to the Extra Deck, and a V5 redirect leads elsewhere.
+ */
+export function canReachRequiredDestination<
+  Card extends DepartingCardView & { readonly monsterType?: string | null | undefined },
+  Player extends GraveReplacementPlayer & BanishProtectionHolderView<Card>,
+>(input: DepartureProjectionInput<Card, Player> & { readonly allowExtraDeckMonsterToHand: boolean }): boolean {
+  const { card, requestedZone } = input;
+  if (card.isToken === true && requestedZone !== "field") return false;
+  const extraDeckMonster = card.monsterType === "fusion" || card.monsterType === "synchro" ||
+    card.monsterType === "ascension";
+  if (extraDeckMonster && (requestedZone === "deck" ||
+      (requestedZone === "hand" && !input.allowExtraDeckMonsterToHand))) return false;
+  return projectDepartureDestination(input).toZone === requestedZone;
+}
+
+/** A destination-bound activation cost and the zone it sends a card to. */
+export interface DestinationBoundCost {
+  readonly action: ActionOf<"move"> | ActionOf<"return_to_hand">;
+  readonly requestedZone: CanonicalZone;
+}
+
+/**
+ * The activation cost that pays with the cards of one target definition and
+ * requires them to reach its destination, if any. Resolution actions with
+ * `requireDestination` are not costs and are not read here.
+ */
+export function findDestinationBoundCost(
+  effect: { readonly activationCosts?: readonly CardAction[] | undefined } | null | undefined,
+  targetId: string | null | undefined,
+): DestinationBoundCost | null {
+  if (!targetId) return null;
+  for (const action of effect?.activationCosts ?? []) {
+    if (action.type !== "move" && action.type !== "return_to_hand") continue;
+    if (action.targetRef !== targetId || action.requireDestination !== true) continue;
+    const zone = action.type === "return_to_hand" ? "hand" : action.to;
+    if (!isZoneInput(zone)) continue;
+    return { action, requestedZone: normalizeZoneInput(zone) };
+  }
+  return null;
 }
 
 interface EquipAttackBonusSource {

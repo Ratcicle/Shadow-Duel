@@ -24,7 +24,8 @@ import {
   isBattleReadyAttacker,
 } from "./cardValue.js";
 import { getPerspectivePlayers } from "./perspective.js";
-import { findCardOwner, findCardZone, getZoneCards } from "./zones.js";
+import { canSimulatedCostCardReachDestination, findCardOwner, findCardZone, getZoneCards } from "./zones.js";
+import { findDestinationBoundCost } from "../../effects/passives/passiveBuffs.js";
 import { isSimulatedReferencePresenceValid, type SimulatedReferenceSnapshot } from "./simulatedActions/shared.js";
 import type { CardAction } from "../../contracts/actions.js";
 import type {
@@ -905,10 +906,16 @@ export function selectSimulatedTargets({
         );
       });
     });
+    // Decision V10: a destination-bound cost offers only cards that arrive.
+    const destinationCost = target.intent === "cost" ? findDestinationBoundCost(effect, target.id) : null;
     const filtered = candidates
       .filter(({ card, role }) => {
         if (!negationEligible(card) || !matchesTargetFilters(card, effectiveTarget, sourceCard, role)) {
           return false;
+        }
+        if (destinationCost) {
+          const holder = findCardOwner(state, card);
+          if (holder && !canSimulatedCostCardReachDestination(destinationCost, card, self, holder, state)) return false;
         }
         if (
           !hasPairedCandidate(
@@ -998,8 +1005,9 @@ function zoneCards(player: AiPlayerInput | undefined, zone: CanonicalZone): read
  */
 export function collectExactTargetCandidates(target: EffectTarget, source: AiCardInput, ctx: { player: AiPlayerInput; opponent?: AiPlayerInput },
   selections: Readonly<Record<string, readonly (number | string)[]>>,
-  effect: Pick<EffectDefinition, "actions"> | null | undefined): AiCardInput[] {
+  effect: Pick<EffectDefinition, "actions" | "activationCosts"> | null | undefined): AiCardInput[] {
   const requireUnnegated = requiresUnnegatedTarget(effect, target);
+  const destinationCost = target.intent === "cost" ? findDestinationBoundCost(effect, target.id) : null;
   const allZones: readonly CanonicalZone[] = ["field", "hand", "deck", "graveyard", "banished", "extraDeck", "spellTrap", "fieldSpell"];
   const fromZones = (spec: { owner?: EffectOwner; zone?: EffectZone; zones?: readonly EffectZone[] }) => {
     const roles = spec.owner === "opponent" ? ["opponent"] as const :
@@ -1023,6 +1031,10 @@ export function collectExactTargetCandidates(target: EffectTarget, source: AiCar
     if (card.instanceId == null || excluded.includes(card.instanceId) || result.some(other => card.instanceId === other.instanceId)) continue;
     if (requireUnnegated && card.cardKind === "monster" && card.effectsNegated === true) continue;
     if (excludedNames.includes(card.name) || !matchesTargetFilters(card, target, source, role)) continue;
+    const holder = role === "self" ? ctx.player : ctx.opponent;
+    if (destinationCost && holder && !canSimulatedCostCardReachDestination(destinationCost, card, ctx.player, holder,
+      ctx.opponent ? (ctx.player.id === "bot" ? { bot: ctx.player, player: ctx.opponent } : { player: ctx.player, bot: ctx.opponent })
+        : undefined)) continue;
     if (target.compareAttribute && !matchesTargetAttributeComparison(card, references(target.compareAttribute.ref)[0], target.compareAttribute)) continue;
     if (pair && !fromZones(pair).some(({ card: paired, role: pairedRole }) =>
       card.instanceId !== paired.instanceId && !(pair.excludeSameName && paired.name === card.name) &&

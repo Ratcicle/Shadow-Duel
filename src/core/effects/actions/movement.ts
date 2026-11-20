@@ -5,7 +5,7 @@
 
 import { resolveFieldScopeCards } from "../../actionHandlers/shared.js";
 import { captureCostMarkerEvidence } from "../costs/summonMarkers.js";
-import { captureSimultaneousBanishProtection, projectDepartureDestination } from "../passives/passiveBuffs.js";
+import { canReachRequiredDestination, captureSimultaneousBanishProtection } from "../passives/passiveBuffs.js";
 import { assignAutomaticFieldSlot, clearFieldSlot } from "../../game/zones/placement.js";
 import type {
   ActionMoveResult,
@@ -214,15 +214,13 @@ export async function applyMove(
     for (const card of targetCards) {
       const owner = card.owner === "bot" ? this.game.bot : this.game.player;
       if (action.fromZone && !this.getZone(owner, action.fromZone)?.includes(card)) return false;
-      if (payingCost && action.requireDestination && card.isToken && toZone !== "field") return false;
-      const requestedZone = normalizeZoneInput(toZone);
-      if (payingCost && action.requireDestination && requestedZone !== "banished") {
-        // Decision V5: a redirect forbidden by a protection keeps the requested destination.
+      if (payingCost && action.requireDestination) {
+        // Decisions V5 and V10: the card must arrive where the cost sends it.
         const fromZone = CANONICAL_ZONES.find(zone => this.getZone(owner, zone)?.includes(card)) ?? null;
-        const projected = projectDepartureDestination({ card, holder: owner, fromZone, requestedZone,
+        if (!canReachRequiredDestination({ card, holder: owner, fromZone, requestedZone: normalizeZoneInput(toZone),
           players: [this.game.player, this.game.bot],
-          matchesFilters: (candidate, filters) => this.cardMatchesFilters(candidate, filters) });
-        if (projected.toZone !== requestedZone) return false;
+          matchesFilters: (candidate, filters) => this.cardMatchesFilters(candidate, filters),
+          allowExtraDeckMonsterToHand: shouldAllowExtraDeckMonsterToHand(action, ctx) })) return false;
       }
     }
   }
