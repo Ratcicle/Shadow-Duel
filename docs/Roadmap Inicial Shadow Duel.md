@@ -8,7 +8,7 @@ Este documento registra a direção geral de desenvolvimento do **Shadow Duel** 
 | --- | --- |
 | Estabilização pós-TypeScript | Concluída em 06/10/2026. |
 | Saneamento (fase 1.5) | Concluído em 10/10/2026: CI `Verify` verde como portão de `main` e do deploy, replay `engine-rules-v27`, determinismo de IA e Arena, bugs de engine e correções de UI/i18n. |
-| IAs atuais | Arquitetura e paridade (2.1), harness de benchmark (2.2) e limites conhecidos (2.3) concluídos. A 2.3 levou o replay a `engine-rules-v28` e fechou com a baseline v2. O pacote de regras v29 levou o replay a `engine-rules-v29` e fechou com a baseline v3, a referência da 2.4. Ajuste guiado por dados (2.4) em planejamento: diagnóstico da v3 e plano em [Plano da Fase 2.4](Plano%20da%20Fase%202.4.md), com as decisões D1–D14 aprovadas em 19/11/2026. As decisões de regra do diretor de 19/11/2026 (V9–V12) abrem a 2.4 com o pacote de regras v30, que fecha com a baseline v4. |
+| IAs atuais | Arquitetura e paridade (2.1), harness de benchmark (2.2) e limites conhecidos (2.3) concluídos. A 2.3 levou o replay a `engine-rules-v28` e fechou com a baseline v2. O pacote de regras v29 levou o replay a `engine-rules-v29` e fechou com a baseline v3, a referência da 2.4. Ajuste guiado por dados (2.4) em planejamento: diagnóstico da v3 e plano em [Plano da Fase 2.4](Plano%20da%20Fase%202.4.md), com as decisões D1–D14 aprovadas em 19/11/2026. As decisões de regra do diretor de 19/11/2026 (V9–V12) abriram a 2.4 com o pacote de regras v30, concluído em 20/11/2026: o replay foi para `engine-rules-v30`, e a baseline v4 passou a ser a referência de medição da 2.4. |
 | Carmim Real | Catálogo proposto, com decisões de regra em aberto; cartas e IA ainda não implementadas. |
 | Suporte adicional de Burning West e Bloomrot | Planejado; escopo e necessidade dependem do diagnóstico dos decks e das IAs. |
 | Gauntlet | Planejado, ainda não implementado. |
@@ -66,7 +66,7 @@ Os itens adiados estão na seção "Fora do escopo da fase 1.5" do plano. Os que
 
 ## 2. Aprimoramento das IAs atuais
 
-**Status:** 2.1 concluída em **07/10/2026**. 2.2 concluída em **11/10/2026**, com a baseline v1 registrada abaixo. 2.3 concluída em **16/11/2026**, com a baseline v2 registrada na sua seção. Pacote de regras v29 concluído em **19/11/2026**, com a baseline v3 registrada depois da v2. 2.4 planejada em **19/11/2026** ([plano](Plano%20da%20Fase%202.4.md), decisões D1–D14 aprovadas); começa pelo pacote de regras v30 (bloco R), ainda não iniciado.
+**Status:** 2.1 concluída em **07/10/2026**. 2.2 concluída em **11/10/2026**, com a baseline v1 registrada abaixo. 2.3 concluída em **16/11/2026**, com a baseline v2 registrada na sua seção. Pacote de regras v29 concluído em **19/11/2026**, com a baseline v3 registrada depois da v2. 2.4 planejada em **19/11/2026** ([plano](Plano%20da%20Fase%202.4.md), decisões D1–D14 aprovadas); Pacote de regras v30 (bloco R) concluído em **20/11/2026**, com a baseline v4 registrada depois da v3; a 2.4 segue no bloco A.
 
 **Objetivo:** aproximar a qualidade dos bots antes de usar a Bot Arena como referência séria de balanceamento. Resultados de bot vs bot podem refletir a qualidade da IA, e não só a força real do deck. Por isso, a força relativa dos nove bots precisa ser medida com benchmarks reproduzíveis e intervalos de confiança.
 
@@ -372,6 +372,47 @@ As mudanças são o efeito acumulado das correções. A atribuição por lote es
 | Bloomrot | 37,8% [32,7%; 43,2%] | 36,6% [31,5%; 42,0%] | −1,3 |
 | Burning West | 25,0% [20,6%; 30,0%] | 25,0% [20,6%; 30,0%] | 0,0 |
 
+**Pacote de regras v30** (20/11/2026). Implementa as decisões de regra do diretor criativo de 19/11/2026 (detalhes, lotes e medições no [plano da 2.4](Plano%20da%20Fase%202.4.md), bloco R):
+
+- **V9:** o gatilho que destrói o monstro atacante só é coletado com um atacante do oponente no campo que o efeito possa afetar; um atacante só indestrutível não impede a ativação (R1).
+- **V10:** um custo com destino não oferece cartas que não chegam a ele, como as Fichas; a fonte ainda pode pagar o próprio custo (R2).
+- **V11:** um Equip só ativa com um hospedeiro que o efeito possa afetar; os imunes saem da lista (R3).
+- **V12:** um gatilho obrigatório da IA com plano exato inválido cai na escolha sem plano; gatilhos opcionais e custos ficam como antes (R4).
+- **Replay:** um único bump `engine-rules-v30` (R5). Os replays v29 salvos deixam de carregar depois do merge.
+
+**Baseline v4** (20/11/2026), a referência de medição da 2.4. A v3 continua sendo a referência do diagnóstico.
+
+- **Execução:** `canonical-8e019a6-0e7dbbda`, com `--workers 4`.
+- **Identidade:** commit `8e019a6`, árvore limpa, `engine-rules-v30`, banco de cartas `a11dc8c4` (o mesmo da v3).
+- **Digests:** `configDigest` `0e7dbbda…`, a mesma configuração efetiva da v3; `deterministicDigest` `c232324ba17b07e45cac82ca238aec50a16ddd95b86e3072c8a17760f84a041b`.
+- **Duelos:** 1.620 válidos (N = 20), 0 erros. 1.618 foram decididos por PV zerado; `luminarch:luminarch:1` (como na v3) e `bloomrot:bloomrot:14` chegaram ao limite de turnos.
+- **Sanidade:** todos os portões passaram.
+- **Quem começa:** vence 53,6% [51,0%; 56,2%].
+- **Defeitos:** 0.
+- **Guarda de stall:** picos de 150/66/108 e nenhum disparo.
+- **Controles no mesmo commit:**
+  - corpus `d4c2a4a9…`, 108 casos sem falhas;
+  - `controlsDigest` `d2abdab9…`. Contra a v3, mudam `smoke-natural-4242` e `smoke-bridge-4242`.
+- **Controle de invariância** (N = 1): `deterministicDigest` `7976eeb5…`. Todas as raízes têm ação 0 e score 0.
+- **Ponte N = 5 de referência para a 2.4:** `canonical-8e019a6-45173ff3`, com `deterministicDigest` `abe31c6d…`. Teve 405 válidos, 0 erros e 0 defeitos; um duelo chegou ao limite de turnos. Contra a ponte da v3, 401 casos com o mesmo resultado e 4 viradas, todas com Bloomrot. A única novidade de vocabulário, `negated_field_exit_trigger` num caso do `bloomrot:bloomrot`, vem de uma trajetória mudada pelo R2; o marcador já aparecia na v3 natural. Não é elegível a baseline, por causa do override do planner.
+- **Contra a v3:** `compare` com `--allow-identity-change engineVersion`, sem diferenças de configuração.
+  - Nenhum preset tem diferença significativa, e não há novidades.
+  - Dos 1.620 casos, 1.606 têm o mesmo resultado e 14 viradas, todas com Bloomrot.
+  - O teste do sinal pareado não acusa nenhum preset. O menor p é 0,50: Burning West com 2 viradas a favor e 0 contra, e Void com 0 a favor e 2 contra.
+  - Os 137 casos diferentes estão todos em confrontos com Shadow-Heart, Bloomrot ou Tech-Zero, os presets alcançados pelas regras novas.
+
+| Preset | v3 (n = 320) [IC 95%] | v4 (n = 320) [IC 95%] | Δ |
+| --- | --- | --- | ---: |
+| Dragon | 82,5% [78,0%; 86,3%] | 82,5% [78,0%; 86,3%] | 0,0 |
+| Tech-Zero | 78,4% [73,6%; 82,6%] | 78,4% [73,6%; 82,6%] | 0,0 |
+| Miragebound | 68,1% [62,8%; 73,0%] | 67,8% [62,5%; 72,7%] | −0,3 |
+| Void | 40,6% [35,4%; 46,1%] | 40,0% [34,8%; 45,5%] | −0,6 |
+| Shadow-Heart | 39,7% [34,5%; 45,1%] | 39,7% [34,5%; 45,1%] | 0,0 |
+| Luminarch | 39,1% [33,9%; 44,5%] | 39,4% [34,2%; 44,8%] | +0,3 |
+| Arcanist | 40,0% [34,8%; 45,5%] | 39,7% [34,5%; 45,1%] | −0,3 |
+| Bloomrot | 36,6% [31,5%; 42,0%] | 36,9% [31,8%; 42,3%] | +0,3 |
+| Burning West | 25,0% [20,6%; 30,0%] | 25,6% [21,2%; 30,7%] | +0,6 |
+
 ### 2.4 Ajuste de qualidade guiado por dados
 
 **Plano:** [Plano da Fase 2.4](Plano%20da%20Fase%202.4.md) (19/11/2026). Traz o diagnóstico da v3 por preset e os achados transversais, o pacote de regras v30 (bloco R, com as decisões V9–V12 do diretor de 19/11/2026 e a baseline v4 como referência de medição), os blocos A–G (instrumento, resíduos, paridade fora da batalha, paridade de batalha, política por deck, política transversal e fechamento com a baseline v5), a política de medição com blocos de seeds de validação e de confirmação, e as decisões D1–D14, aprovadas pelo usuário em 19/11/2026 com as recomendações. A D2 troca o aceite por intervalo de Wilson das regras acima pelo teste do sinal pareado no bloco de validação.
@@ -619,7 +660,7 @@ A implementação deve ser feita **depois do Renderer Three.js**, para que esse 
 | --- | --- | --- |
 | 1 | Estabilização pós-TypeScript | Concluída |
 | 1.5 | Saneamento | Concluído |
-| 2 | IAs atuais | 2.1, 2.2 e 2.3 concluídas, pacote de regras v29 concluído, baselines v1, v2 e v3 registradas; 2.4 em planejamento |
+| 2 | IAs atuais | 2.1, 2.2 e 2.3 concluídas, pacotes de regras v29 e v30 concluídos, baselines v1, v2, v3 e v4 registradas; 2.4 em andamento (bloco A) |
 | 3 | Carmim Real | — |
 | 4 | Burning West + Bloomrot | — |
 | 5 | Modo Gauntlet | — |
@@ -639,7 +680,7 @@ Exemplo de organização da etapa concluída:
 
 Organização prevista para a próxima etapa:
 
-**Projeto principal:** aprimoramento das IAs (2.4, medida contra a baseline v3)  
+**Projeto principal:** aprimoramento das IAs (2.4, medida contra a baseline v4)  
 **Projeto paralelo:** preparação final do Carmim Real
 
 A meta é sempre terminar cada fase com um **Shadow Duel mais estável, completo e jogável**, evitando vários sistemas grandes incompletos ao mesmo tempo.
