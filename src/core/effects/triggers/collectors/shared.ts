@@ -9,6 +9,7 @@ import type {
 } from "../runtime.js";
 import type { EventEquipHostExitBinding } from "../../../contracts/events.js";
 import type { EffectCondition } from "../../../contracts/effects.js";
+import { getActionEventPresenceRequirement, type ActionEventPresenceRequirement } from "../../../contracts/actions.js";
 import { matchesEventCardPresence, type PresenceCard } from "../../../game/zones/ownership.js";
 
 /** Shared factual gates for one successful Summon, independent of activation. */
@@ -96,6 +97,56 @@ export function matchesEquipHostExitSourcePresence(
 ): boolean {
   return !!binding?.equipAfterCleanup && hasEquipHostExitProof(card, effect, binding) &&
     matchesEventCardPresence(card, binding.equipAfterCleanup, physicalControllerId, physicalZone);
+}
+
+/**
+ * The presence requirement declared by the top-level actions of an effect
+ * (decision V9). Nested branches decide on resolution; the validator forbids
+ * a requiring action there, so the requirement is never silently skipped.
+ */
+export function getEffectEventPresenceRequirement(
+  effect: { readonly actions?: readonly ({ readonly type?: string } | null | undefined)[] | undefined } | null | undefined,
+): ActionEventPresenceRequirement | null {
+  for (const action of effect?.actions ?? []) {
+    const requirement = getActionEventPresenceRequirement(action?.type);
+    if (requirement) return requirement;
+  }
+  return null;
+}
+
+/** Facts about the battle attacker read by an event presence requirement. */
+export interface EventPresenceAttackerView {
+  readonly found: boolean;
+  readonly locationVersion: number | null | undefined;
+  readonly controllerId: string | null;
+  readonly zone: string | null;
+}
+
+/**
+ * Pure presence gate shared by the runtime and the AI simulation. The
+ * attacker must be on the field, controlled by the requested side, in the
+ * presence captured for this battle, and affectable by the trigger owner.
+ * Immunity is evaluated lazily, only when every positional fact holds.
+ */
+export function matchesEventPresenceRequirement(
+  requirement: ActionEventPresenceRequirement | null,
+  input: {
+    readonly eventName: string | null | undefined;
+    readonly attacker: EventPresenceAttackerView;
+    readonly expectedLocationVersion: number | null | undefined;
+    readonly triggerOwnerId: string;
+    readonly attackerImmune: () => boolean;
+  },
+): boolean {
+  if (!requirement) return true;
+  if (!input.eventName || !(requirement.events as readonly string[]).includes(input.eventName)) return false;
+  const { attacker } = input;
+  if (!attacker.found || attacker.zone !== "field" || !attacker.controllerId) return false;
+  const opposing = attacker.controllerId !== input.triggerOwnerId;
+  if ((requirement.battleAttacker === "opponent") !== opposing) return false;
+  if (typeof input.expectedLocationVersion === "number" &&
+      attacker.locationVersion !== input.expectedLocationVersion) return false;
+  return !input.attackerImmune();
 }
 
 /** Event ownership is opt-in; the destination remains the default. */

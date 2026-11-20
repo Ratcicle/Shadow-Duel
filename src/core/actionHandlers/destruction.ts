@@ -4,7 +4,7 @@
  * Handlers for banishment and destruction effects.
  */
 
-import { resolveExactInstanceSelection } from "../AutoSelector.js";
+import { allowsResolutionChoiceFallback, resolveExactInstanceSelection, resolvePlannedSelection } from "../AutoSelector.js";
 import { getCardLocationVersion } from "../Card.js";
 import { captureSimultaneousBanishProtection } from "../effects/passives/passiveBuffs.js";
 import type {
@@ -1586,8 +1586,11 @@ export async function handleDestroyTargetedCards(
   const requestedMaxTargets =
     contextTargetCount !== null ? contextTargetCount : action.maxTargets || 1;
   const exactSelection = optionalSelection ? ctx.activationContext?.decisions?.selections?.destroy_targets : undefined;
-  if (optionalSelection && exactSelection !== undefined &&
-    resolveExactInstanceSelection(opponentCards, exactSelection, { min: 0, max: requestedMaxTargets }) === null) {
+  // From the effect definition, outside the resolver: a mandatory trigger's invalid plan is unplanned.
+  const unplannedFallback = allowsResolutionChoiceFallback(ctx.effect, ctx.activationContext);
+  if (optionalSelection && exactSelection !== undefined && resolvePlannedSelection(
+    opponentCards, exactSelection, { min: 0, max: requestedMaxTargets }, unplannedFallback,
+  ).status === "rejected") {
     return false;
   }
   if (opponentCards.length === 0) {
@@ -1682,9 +1685,20 @@ export async function handleDestroyTargetedCards(
       },
       resolveAI: () => {
         const exact = ctx.activationContext?.decisions?.selections?.destroy_targets;
-        if (exact !== undefined) return resolveExactInstanceSelection(opponentCards, exact, { min: 0, max: maxTargets });
+        if (exact !== undefined) {
+          const plan = resolvePlannedSelection(opponentCards, exact, { min: 0, max: maxTargets }, unplannedFallback);
+          switch (plan.status) {
+            case "planned":
+              return plan.cards;
+            case "rejected":
+              return null;
+            case "unplanned":
+              break;
+          }
+        }
         const automatic = game.autoSelector?.select?.({ ...selectionContract, kind: "choice" }, {
           owner: player, activationContext: ctx.activationContext, selectionKind: "choice",
+          ...(unplannedFallback ? { unplannedWhenPlanInvalid: true } : {}),
         });
         if (!automatic) return opponentCards.slice(0, maxTargets);
         if (!automatic.ok) return null;
@@ -1707,6 +1721,7 @@ export async function handleDestroyTargetedCards(
         owner: player,
         activationContext: ctx.activationContext,
         selectionKind: "target",
+        ...(unplannedFallback ? { unplannedWhenPlanInvalid: true } : {}),
       },
       autoSelectKeys: () =>
         candidates

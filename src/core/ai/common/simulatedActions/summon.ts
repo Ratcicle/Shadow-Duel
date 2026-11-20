@@ -7,7 +7,8 @@ import { getCounterLimitSummonOptions } from "../../../actionHandlers/summon/cou
 import { resolveSummonPositionPreference } from "../../../actionHandlers/summon/position.js";
 import { aiConfirmsFollowupSummon } from "../../../actionHandlers/shared.js";
 import { recordNormalSummonForTurn } from "../../../Player.js";
-import { resolveExactInstanceSelection } from "../../../AutoSelector.js";
+import { resolvePlannedSelection } from "../../../AutoSelector.js";
+import type { PlannedSelectionResolution } from "../../../AutoSelector.js";
 import { appendSimulatedFieldCard } from "../zones.js";
 import { getEffectiveAtk } from "../cardStats.js";
 import { emitSimulatedMove, getOriginalOwner } from "./movement.js";
@@ -60,6 +61,7 @@ import {
   resolveSimulatedLpCost,
   resolveTargetsForAction,
   isSimulatedSourcePresenceValid,
+  simulatedUnplannedFallback,
   STOP_SIMULATION,
   storeSimActionResult,
   updateSimulatedSentToGraveMaterialMarker,
@@ -479,15 +481,23 @@ function resolveSpecialSummonFromZone(
     targetPlayer,
     options,
   );
-  const preferred = exactIds === undefined
-    ? options.chooseSpecialSummonCards?.(candidates, { action, player: targetPlayer, state, sourceCard: options.sourceCard })
-    : resolveExactInstanceSelection(candidates, exactIds, { min: normalizeCount(action.count, 1).min, max,
-      revalidation: options.activationContext?.decisions?.specialSummonRevalidation?.[decisionKey] });
-  if (exactIds !== undefined && (preferred === null ||
-      (action.distinctNames && preferred && new Set(preferred.map(card => card.name)).size !== preferred.length))) {
+  // As in the runtime handler, a mandatory trigger's plan that no longer
+  // resolves (or breaks distinct names) is summoned as unplanned.
+  const unplannedFallback = simulatedUnplannedFallback(options);
+  const resolution = exactIds === undefined ? null
+    : resolvePlannedSelection(candidates, exactIds, { min: normalizeCount(action.count, 1).min, max,
+      revalidation: options.activationContext?.decisions?.specialSummonRevalidation?.[decisionKey] }, unplannedFallback);
+  const plan: PlannedSelectionResolution<SimulatedCardState> | null = resolution?.status === "planned" &&
+      action.distinctNames && new Set(resolution.cards.map(card => card.name)).size !== resolution.cards.length
+    ? unplannedFallback ? { status: "unplanned" } : { status: "rejected" }
+    : resolution;
+  if (plan?.status === "rejected") {
     (state._simUnsupportedActions ??= []).push(`exact_special_summon:${decisionKey}`);
     return STOP_SIMULATION;
   }
+  if (plan?.status === "unplanned" && !hasOpenMonsterZone(targetPlayer)) return fail();
+  const preferred = plan?.status === "planned" ? plan.cards
+    : options.chooseSpecialSummonCards?.(candidates, { action, player: targetPlayer, state, sourceCard: options.sourceCard });
   if (preferred === null) return fail();
   const chosen: SimulatedCardState[] = [];
   for (const card of summonsEveryTarget ? [...(preferred ?? ranked), ...candidates] : preferred ?? ranked) {
@@ -711,13 +721,20 @@ export function applySynchroSummonFromExtraDeck(
   const selected = entries[0];
   const fallbackMaterials = selected?.combos[0];
   const decisionKey = ("contextLabel" in action && typeof action.contextLabel === "string" && action.contextLabel) || options.effect?.id || action.type;
-  const exactChoice = options.activationContext?.decisions?.synchroSummons?.[decisionKey];
-  const choice = exactChoice !== undefined ? exactChoice : options.chooseSynchroMaterials
+  const plannedChoice = options.activationContext?.decisions?.synchroSummons?.[decisionKey];
+  const unplannedChoice = (): SimulatedSynchroChoice | null => options.chooseSynchroMaterials
     ? options.chooseSynchroMaterials({ candidates: entries, player, state, sourceCard: options.sourceCard })
     : selected?.card.instanceId != null && fallbackMaterials?.every(card => card.instanceId != null)
       ? { synchroInstanceId: selected.card.instanceId,
         materialInstanceIds: fallbackMaterials.map(card => card.instanceId!),
         position: action.position === "defense" ? "defense" as const : "attack" as const } : null;
+  // As in the runtime handler, each requirement of a mandatory trigger's plan
+  // that no longer resolves (card, materials) is chosen as unplanned.
+  const choice = plannedChoice === undefined ? unplannedChoice()
+    : simulatedUnplannedFallback(options)
+      ? resolveSimulatedSynchroPlan(plannedChoice, entries, unplannedChoice)
+      : plannedChoice;
+  const exactChoice = plannedChoice !== undefined && choice === plannedChoice ? plannedChoice : undefined;
   const success = choice && entries.some(entry => entry.card.instanceId === choice.synchroInstanceId) &&
     ((action.position !== "attack" && action.position !== "defense") || (choice.position || "attack") === action.position) &&
     simulateSynchroSummon(state, player, choice, options, ctx.applySimulatedActions);
@@ -725,6 +742,30 @@ export function applySynchroSummonFromExtraDeck(
     (state._simUnsupportedActions ??= []).push(`exact_synchro_summon:${decisionKey}`);
     return STOP_SIMULATION;
   }
+}
+
+function resolveSimulatedSynchroPlan(
+  plan: SimulatedSynchroChoice,
+  entries: readonly SimulatedSynchroEntry[],
+  unplannedChoice: () => SimulatedSynchroChoice | null,
+): SimulatedSynchroChoice | null {
+  const ids = plan.materialInstanceIds;
+  const plannedCombo = (entry: SimulatedSynchroEntry) => new Set(ids).size === ids.length &&
+    entry.combos.some(combo => combo.length === ids.length && ids.every(id => combo.some(card => card.instanceId === id)));
+  const plannedEntry = entries.find(entry => entry.card.instanceId === plan.synchroInstanceId);
+  if (plannedEntry && plannedCombo(plannedEntry)) return plan;
+  const unplanned = plannedEntry ? null : unplannedChoice();
+  const entry = plannedEntry ?? entries.find(candidate => candidate.card.instanceId === unplanned?.synchroInstanceId);
+  const synchroInstanceId = entry?.card.instanceId;
+  if (!entry || synchroInstanceId == null) return unplanned;
+  const fallbackCombo = entry.combos[0];
+  const materialInstanceIds = plannedCombo(entry) ? ids
+    : unplanned ? unplanned.materialInstanceIds
+      : fallbackCombo?.every(card => card.instanceId != null)
+        ? fallbackCombo.flatMap(card => card.instanceId != null ? [card.instanceId] : []) : null;
+  if (!materialInstanceIds) return null;
+  const position = plannedEntry ? plan.position : unplanned?.position;
+  return { synchroInstanceId, materialInstanceIds, ...(position ? { position } : {}) };
 }
 
 /** One shared procedure for explicit AI actions and Synchros performed by effects. */

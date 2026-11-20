@@ -8,6 +8,7 @@ import type { SelectionResult } from "../../contracts/selection.js";
 import { getAvailableActivationCases, projectEffectActivationCase } from "../../effects/activation/cases.js";
 import { getUIText } from "../../i18n.js";
 import { isAI } from "../../Player.js";
+import { allowsUnplannedFallback } from "../../AutoSelector.js";
 
 export function isActivationSourcePresent(card: GameCard, player: GamePlayer, zone: ActivationZone, version: number): boolean {
   if (!zone) return false;
@@ -52,10 +53,13 @@ export async function selectActivationCase(
   const candidates = contract.requirements.flatMap(requirement => requirement.candidates);
   let selections: SelectionResult | null;
   if (isAI(player)) {
+    // A mandatory trigger's invalid mode plan is unplanned; read from the definition, outside the resolver.
+    const unplannedWhenPlanInvalid = allowsUnplannedFallback(effect);
     selections = await game.requestDecision({
       kind: "choice", actor: player, candidates, requireCandidate: false,
       resolveAI: () => {
-        const result = game.autoSelector?.select(contract, { owner: player, activationContext, selectionKind: "choice" });
+        const result = game.autoSelector?.select(contract, { owner: player, activationContext, selectionKind: "choice",
+          ...(unplannedWhenPlanInvalid ? { unplannedWhenPlanInvalid } : {}) });
         if (!result?.ok) return null;
         const values = result.selections?.[requirementId];
         return Array.isArray(values) ? { [requirementId]: values.flatMap(value => typeof value === "string" ? [value] : []) } : null;

@@ -1,4 +1,8 @@
 import { requiresUnnegatedTarget } from "../negation.js";
+import { canReachRequiredDestination, findDestinationBoundCost } from "../passives/passiveBuffs.js";
+import { getAffectableHostActions, isAffectableHost } from "./filters.js";
+import { shouldAllowExtraDeckMonsterToHand } from "../actions/movement.js";
+import { CANONICAL_ZONES } from "../../contracts/zones.js";
 import { getPaidCostReferenceValues } from "./references.js";
 import type { ChainCostPayment } from "../../contracts/chainRuntime.js";
 /**
@@ -233,6 +237,8 @@ export interface TargetingCandidateSelection {
 
 interface TargetingSelectionHost {
   readonly game?: {
+    readonly player?: TargetingPlayer | null;
+    readonly bot?: TargetingPlayer | null;
     canSpecialSummonUnderRestrictions?(
       card: TargetingCard,
       player: TargetingPlayer | null,
@@ -243,7 +249,13 @@ interface TargetingSelectionHost {
   _targetingCacheHits?: number;
   _targetingCacheMisses?: number;
   getZone(player: TargetingPlayer, zone: EffectZone): TargetingCard[] | null;
-  cardMatchesFilters?(card: TargetingCard, filters: TargetingCardFilter): boolean;
+  cardMatchesFilters?(card: TargetingCard, filters: TargetingCardFilter | CardFilter): boolean;
+  /** The resolution's immunity rule (decision V11 reads it for Equip hosts). */
+  checkImmunity?(
+    card: TargetingCard,
+    sourcePlayer: TargetingPlayer,
+    options?: { readonly effectType?: "destruction" | "banish" | "target" | "negate" | null; readonly sourceCard?: TargetingCard | null },
+  ): { readonly immune: boolean };
 }
 
 // Track duplicate selectCandidates calls per turn
@@ -795,12 +807,78 @@ export function buildSelectionCandidateKey(
 }
 
 /**
- * Select candidate cards matching a target definition
- * @param {Object} def - Target definition with zone, owner, filters, etc.
- * @param {Object} ctx - Context with player, opponent, source, etc.
- * @returns {{zoneName: string, candidates: Array}} Zone name and matching candidates
+ * Candidates of one target definition. Two rules filter the cached list on a
+ * copy, so the cache and its key stay as they are and every consumer (human
+ * session, AutoSelector, previews, collectors) sees the same list:
+ * - a cost that requires its cards to reach a destination (decision V10)
+ *   offers only cards that arrive there; every cost path passes `ctx.effect`;
+ * - an Equip host (decision V11/V11a) offers only monsters the effect can
+ *   affect, outside resolution. Immunity changes without moving a card
+ *   (Spore Counters, durations), so it is never cached.
  */
 export function selectCandidates(
+  this: TargetingSelectionHost,
+  def: RuntimeEffectTarget,
+  ctx: TargetingContext,
+): TargetingCandidateSelection {
+  const selection = collectTargetCandidates.call(this, def, ctx);
+  return def.intent === "cost"
+    ? filterDestinationBoundCostCandidates(this, def, ctx, selection)
+    : filterAffectableHostCandidates(this, def, ctx, selection);
+}
+
+function withCandidates(
+  selection: TargetingCandidateSelection,
+  kept: TargetingCard[],
+): TargetingCandidateSelection {
+  return kept.length === selection.candidates.length
+    ? selection
+    : { zoneName: selection.zoneName, candidates: kept };
+}
+
+function filterAffectableHostCandidates(
+  host: TargetingSelectionHost,
+  def: RuntimeEffectTarget,
+  ctx: TargetingContext,
+  selection: TargetingCandidateSelection,
+): TargetingCandidateSelection {
+  if (ctx?.activationContext?.timing === "resolution" ||
+      getAffectableHostActions(ctx?.effect, def).length === 0) return selection;
+  const player = ctx.player;
+  if (!player || typeof host.checkImmunity !== "function") return selection;
+  return withCandidates(selection, selection.candidates.filter(card =>
+    isAffectableHost(ctx.effect, def, effectType =>
+      host.checkImmunity?.(card, player, { effectType, sourceCard: ctx.source ?? null }).immune === true)));
+}
+
+function filterDestinationBoundCostCandidates(
+  host: TargetingSelectionHost,
+  def: RuntimeEffectTarget,
+  ctx: TargetingContext,
+  selection: TargetingCandidateSelection,
+): TargetingCandidateSelection {
+  const cost = findDestinationBoundCost(ctx?.effect, def.id);
+  const player = host.game?.player ?? null;
+  const bot = host.game?.bot ?? null;
+  if (!cost || !player || !bot) return selection;
+  const players = [player, bot];
+  const allowExtraDeckMonsterToHand = cost.action.type === "move" &&
+    shouldAllowExtraDeckMonsterToHand(cost.action, ctx);
+  const reaching = selection.candidates.filter(card => {
+    for (const holder of players) {
+      const fromZone = CANONICAL_ZONES.find(zone => host.getZone(holder, zone)?.includes(card)) ?? null;
+      if (!fromZone) continue;
+      return canReachRequiredDestination({ card, holder, fromZone, requestedZone: cost.requestedZone, players,
+        matchesFilters: (candidate, filters) => host.cardMatchesFilters?.(candidate, filters) === true,
+        allowExtraDeckMonsterToHand });
+    }
+    return true;
+  });
+  return withCandidates(selection, reaching);
+}
+
+/** Candidate cards matching a target definition, cached per definition. */
+function collectTargetCandidates(
   this: TargetingSelectionHost,
   def: RuntimeEffectTarget,
   ctx: TargetingContext,

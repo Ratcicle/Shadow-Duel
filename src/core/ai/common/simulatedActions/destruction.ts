@@ -3,7 +3,7 @@ import type { SimulatedBanishProtectionSnapshot, SimulatedMoveReceipt } from "..
 import { emitSimulatedMove, getOriginalOwner, setSimulatedController } from "./movement.js";
 import { applySimulatedEffectDamage } from "./resources.js";
 import { applySimulatedActions } from "./index.js";
-import { resolveExactInstanceSelection } from "../../../AutoSelector.js";
+import { resolvePlannedSelection } from "../../../AutoSelector.js";
 import { getEffectiveAtk } from "../cardStats.js";
 import { getCardEffectImmunity } from "../../../effects/targeting/filters.js";
 import { getCounterValue, setCounterValue } from "../counters.js";
@@ -41,6 +41,7 @@ import {
   resolveActionPlayer,
   resolveSimulatedLpCost,
   resolveTargetsForAction,
+  simulatedUnplannedFallback,
   STOP_SIMULATION,
 } from "./shared.js";
 import type {
@@ -471,11 +472,14 @@ export function applyDestroyTargetedCards(
   const max = Math.min(requestedMax, candidates.length);
   const min = Math.min(max, Math.max(0, optional ? 0 : action.targetCountFromContext ? requestedMax : action.minTargets ?? max));
   const exact = optional ? options.activationContext?.decisions?.selections?.destroy_targets : undefined;
-  const selected = exact !== undefined
-    ? resolveExactInstanceSelection(candidates, exact, { min, max: requestedMax })
-    : rankCandidates(candidates, "harm", {
+  const plan = exact !== undefined
+    ? resolvePlannedSelection(candidates, exact, { min, max: requestedMax }, simulatedUnplannedFallback(options))
+    : null;
+  const selected = plan === null || plan.status === "unplanned"
+    ? rankCandidates(candidates, "harm", {
         ...options, targetPreference: getTargetPreference(options, "destroy_targets"),
-      }).slice(0, max);
+      }).slice(0, max)
+    : plan.status === "planned" ? plan.cards : null;
   if (selected === null) {
     (state._simUnsupportedActions ??= []).push("exact_selection:destroy_targets");
     return STOP_SIMULATION;

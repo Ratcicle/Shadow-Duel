@@ -312,6 +312,14 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   const replayResult = required(replay.result);
   assert.equal(replayResult.finalStateHash, "a196a87e");
   // Historical envelopes retain their exact version and declaration signature.
+  // engine-rules-v29: the envelope before the v30 rule package.
+  const beforeRulesV30 = structuredClone(replay);
+  beforeRulesV30.cardDatabaseSignature = "a11dc8c4";
+  required(beforeRulesV30.commands[0]).stateHash = "0a69cfa6";
+  required(beforeRulesV30.commands[1]).stateHash = "a196a87e";
+  required(beforeRulesV30.result).finalStateHash = "a196a87e";
+  assert.equal(hashCanonicalValue({ ...beforeRulesV30, engineVersion: "engine-rules-v29" }), "8d70aef2");
+  assert.equal(JSON.stringify({ ...beforeRulesV30, engineVersion: "engine-rules-v29" }).length, 33776);
   // engine-rules-v28: the envelope before the v29 rule package.
   const beforeRulesV29 = structuredClone(replay);
   beforeRulesV29.cardDatabaseSignature = "a11dc8c4";
@@ -397,7 +405,7 @@ test("replay canônico headless termina com o mesmo hash", async () => {
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "f60cba87", engineVersion: "engine-rules-v22" }), "b1bbca51");
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "7e5d54cb", engineVersion: "engine-rules-v23" }), "7bfe1e4a");
   assert.equal(hashCanonicalValue({ ...beforeCapturedTriggers, cardDatabaseSignature: "feeb687b", engineVersion: "engine-rules-v23" }), "6b0653a2");
-  assert.equal(hashCanonicalValue(replay), "8d70aef2");
+  assert.equal(hashCanonicalValue(replay), "127b0150");
   assert.equal(JSON.stringify(replay).length, 33776);
 
   const result = await replayCanonicalDuel(replay);

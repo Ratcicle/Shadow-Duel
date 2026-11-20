@@ -6,7 +6,7 @@ import type {
   EffectContext,
   ResolvedTargetMap,
 } from "../../contracts/actionRuntime.js";
-import type { ActionType } from "../../contracts/actions.js";
+import type { ActionOf, ActionType, CardAction } from "../../contracts/actions.js";
 import type {
   CardFilter,
   EffectDefinition,
@@ -19,7 +19,7 @@ type TargetingEffectType = "destruction" | "banish" | "target" | "negate";
 
 /** Context references and passive observations do not declare an activation target. */
 export function isNonTargetingEffectReference(
-  effect: EffectDefinition | null | undefined,
+  effect: Pick<EffectDefinition, "timing" | "targets"> | null | undefined,
   reference: string | null | undefined,
 ): boolean {
   return effect?.timing === "passive" ||
@@ -400,6 +400,51 @@ function findConditionalUnaffectedPassiveReason(
   return null;
 }
 
+/** The immunity category an action applies to its targets, shared by activation and resolution. */
+export function resolveActionImmunityEffectType(
+  action: Pick<ImmunityAction, "type" | "targetRef" | "effectType">,
+  effect: Pick<EffectDefinition, "timing" | "targets"> | null | undefined,
+): TargetingEffectType | null {
+  return isNonTargetingEffectReference(effect, action.targetRef)
+    ? null : action.effectType || inferEffectType(action.type);
+}
+
+/**
+ * Actions whose declared host must be affectable for the activation to be
+ * legal (decision V11). A new host action joins here with its own rule decision.
+ */
+function isAffectableHostAction(action: CardAction): action is ActionOf<"equip"> {
+  return action.type === "equip";
+}
+
+/**
+ * Top-level actions that host on one declared target and need it affectable
+ * (decision V11). Costs are not hosts, and nested branches decide on
+ * resolution.
+ */
+export function getAffectableHostActions(
+  effect: Pick<EffectDefinition, "actions"> | null | undefined,
+  target: { readonly id?: string | undefined; readonly intent?: string | undefined } | null | undefined,
+): readonly ActionOf<"equip">[] {
+  if (!target?.id || target.intent === "cost") return [];
+  return (effect?.actions ?? []).filter(isAffectableHostAction).filter(action => action.targetRef === target.id);
+}
+
+/**
+ * Whether the effect can affect a candidate host (decision V11). The caller
+ * supplies the resolution's immunity query for that candidate: the engine's
+ * `checkImmunity` live, `getCardEffectImmunity` over the simulated state.
+ * Candidates of targets without host actions are always affectable.
+ */
+export function isAffectableHost(
+  effect: Pick<EffectDefinition, "actions" | "timing" | "targets"> | null | undefined,
+  target: { readonly id?: string | undefined; readonly intent?: string | undefined } | null | undefined,
+  isImmune: (effectType: TargetingEffectType | null) => boolean,
+): boolean {
+  return getAffectableHostActions(effect, target)
+    .every(action => !isImmune(resolveActionImmunityEffectType(action, effect)));
+}
+
 export function getCardEffectImmunity(
   context: ImmunityQueryContext,
   card: ImmunityCardView | null | undefined,
@@ -590,8 +635,7 @@ export function filterTargetsByImmunity(
   }
 
   // Determine effect type from action for more specific immunity checks
-  const effectType = isNonTargetingEffectReference(ctx.effect, action.targetRef)
-    ? null : action.effectType || this.inferEffectType(action.type);
+  const effectType = resolveActionImmunityEffectType(action, ctx.effect);
 
   const { allowed, skipped, skippedReasons } = this.filterCardsListByImmunity(
     targetCards,

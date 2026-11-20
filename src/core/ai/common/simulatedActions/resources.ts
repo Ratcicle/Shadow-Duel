@@ -1,7 +1,7 @@
 import { appendSimulatedZoneCard, getZoneCards } from "../zones.js";
 import { getLpGainMultiplier } from "../../../effects/passives/passiveBuffs.js";
 import { cardMatchesKind } from "../../../Card.js";
-import { resolveExactInstanceSelection } from "../../../AutoSelector.js";
+import { resolvePlannedSelection } from "../../../AutoSelector.js";
 import { getEffectiveAtk } from "../cardStats.js";
 import { emitSimulatedMove } from "./movement.js";
 import type { SimulatedMoveReceipt } from "../zones.js";
@@ -39,6 +39,7 @@ import {
   resolveActionPlayer,
   resolveSimulatedLpCost,
   resolveTargetsForAction,
+  simulatedUnplannedFallback,
   STOP_SIMULATION,
   storeSimActionResult,
   getContextPathValue,
@@ -675,14 +676,17 @@ export function applyAddFromZoneToHand(
   const pickCount = pickCountForAction(action, 1);
   const decisionKey = action.selectionId || `${options.effect?.id || action.type}_selection`;
   const exactIds = options.activationContext?.decisions?.selections?.[decisionKey];
-  const chosen = exactIds !== undefined ? resolveExactInstanceSelection(candidates, exactIds, normalizeCount(action.count, 1)) : chooseRankedCards(
+  const plan = exactIds !== undefined
+    ? resolvePlannedSelection(candidates, exactIds, normalizeCount(action.count, 1), simulatedUnplannedFallback(options))
+    : null;
+  const chosen = plan === null || plan.status === "unplanned" ? chooseRankedCards(
     candidates,
     "benefit",
     action,
     state,
     targetPlayer,
     options,
-  ).slice(0, Math.min(pickCount, candidates.length));
+  ).slice(0, Math.min(pickCount, candidates.length)) : plan.status === "planned" ? plan.cards : null;
   if (chosen === null) {
     (state._simUnsupportedActions ??= []).push(`exact_selection:${decisionKey}`);
     return STOP_SIMULATION;

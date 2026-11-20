@@ -24,6 +24,7 @@ import type {
 import type { SelectionCandidateKey } from "./contracts/primitives.js";
 import type { AIDecisionPlan } from "./contracts/ai.js";
 import type { CardAction } from "./contracts/actions.js";
+import type { TriggerRequirement } from "./contracts/effects.js";
 
 interface AutoSelectorCard extends ActionRuntimeCard {
   fieldPresenceId?: string | number | null;
@@ -179,6 +180,12 @@ interface AutoSelectorContext {
   player?: AutoSelectorPlayer | null;
   activationContext?: AutoSelectorActivationContext | null;
   effect?: { readonly activationCosts?: readonly CardAction[] } | null;
+  /**
+   * A requirement whose exact plan no longer resolves follows the unplanned
+   * order instead of failing. Callers derive it with `allowsUnplannedFallback`
+   * from the effect definition, outside any decision resolver.
+   */
+  unplannedWhenPlanInvalid?: boolean;
 }
 
 interface AutoSelectorLimits {
@@ -219,6 +226,107 @@ export function resolveExactInstanceSelection<
   }
   const result = remaining ? selected.slice(0, Math.max(0, limits.max)) : selected;
   return result.length < limits.min ? null : result;
+}
+
+/**
+ * Rule (V12/V12a): only a mandatory Trigger Effect resolves a requirement whose
+ * exact AI plan stopped matching the legal candidates as if it had no plan.
+ * The trigger must still activate, so the choice falls back to the unplanned
+ * flow. Optional triggers, ignitions, Spells/Traps, Chain responses and
+ * commands keep rejecting an invalid plan: there the plan is the reason to
+ * act, and picking another card is policy. Costs never fall back; callers
+ * apply this predicate to targets and resolution choices only. It reads the
+ * effect definition, never a strategy context, so playback takes the same
+ * branch from the recorded plan.
+ */
+export function allowsUnplannedFallback(
+  effect: { readonly triggerRequirement?: TriggerRequirement | undefined } | null | undefined,
+): boolean {
+  return effect?.triggerRequirement === "mandatory";
+}
+
+/**
+ * The fallback for one resolution choice of a handler: the same mandatory
+ * trigger rule, except while the handler pays an activation cost (handlers
+ * also run as costs, with the effect in context), where plans keep rejecting.
+ */
+export function allowsResolutionChoiceFallback(
+  effect: { readonly triggerRequirement?: TriggerRequirement | undefined } | null | undefined,
+  activationContext: { readonly payingActivationCosts?: boolean | undefined } | null | undefined,
+): boolean {
+  return activationContext?.payingActivationCosts !== true && allowsUnplannedFallback(effect);
+}
+
+export type PlannedSelectionResolution<Card> =
+  | { status: "planned"; cards: Card[] }
+  | { status: "unplanned" }
+  | { status: "rejected" };
+
+/** Exact plan resolution with the mandatory-trigger fallback of `allowsUnplannedFallback`. */
+export function resolvePlannedSelection<
+  Card extends { instanceId?: number | string },
+>(
+  candidates: readonly Card[],
+  ids: readonly (number | string)[],
+  limits: { min: number; max: number; revalidation?: "remaining" | undefined },
+  unplannedFallback: boolean,
+): PlannedSelectionResolution<Card> {
+  const cards = resolveExactInstanceSelection(candidates, ids, limits);
+  if (cards) return { status: "planned", cards };
+  return unplannedFallback ? { status: "unplanned" } : { status: "rejected" };
+}
+
+interface PlanCandidate {
+  key?: string;
+  instanceId?: string | number | undefined;
+  cardRef?: { readonly id?: unknown; readonly instanceId?: string | number | undefined } | null | undefined;
+}
+
+/** One requirement's exact plan (`selections` or `cases`) against its current candidates. */
+function resolveRequirementPlan<Candidate extends PlanCandidate>(
+  candidates: readonly Candidate[],
+  limits: { min: number; max: number },
+  exactIds: readonly (number | string)[] | undefined,
+  exactCase: string | undefined,
+): { cards: Candidate[]; invalid?: undefined } | { cards?: undefined; invalid: "selection" | "case" } {
+  const { min, max } = limits;
+  const identified = candidates.map(candidate => {
+    const instanceId = candidate.cardRef?.instanceId ?? candidate.instanceId;
+    return { candidate, ...(instanceId !== undefined ? { instanceId } : {}) };
+  });
+  const chosen = exactIds !== undefined
+    ? resolveExactInstanceSelection(identified, exactIds, { min, max })
+        ?.map(entry => entry.candidate) ?? null
+    : candidates.filter(candidate => candidate.cardRef?.id === exactCase);
+  if (
+    !chosen || chosen.length < min || chosen.length > max ||
+    chosen.some(candidate => !hasCanonicalCandidateKey(candidate))
+  ) return { invalid: "selection" };
+  if (exactCase !== undefined && chosen.length !== 1) return { invalid: "case" };
+  return { cards: chosen };
+}
+
+/**
+ * Whether a requirement carries an exact plan that still resolves against its
+ * candidates. Callers that refuse to replace a plan use it to tell a valid
+ * plan from one a mandatory trigger resolves as unplanned.
+ */
+export function requirementPlanResolves(
+  requirement: {
+    readonly id?: string | undefined;
+    readonly min?: number | undefined;
+    readonly max?: number | undefined;
+    readonly candidates?: readonly PlanCandidate[] | undefined;
+  },
+  decisions: AIDecisionPlan | null | undefined,
+): boolean {
+  const id = requirement.id ?? "undefined";
+  const exactIds = decisions?.selections?.[id];
+  const exactCase = decisions?.cases?.[id];
+  if (exactIds === undefined && exactCase === undefined) return false;
+  const min = Number(requirement.min ?? 0);
+  const max = Number(requirement.max ?? min);
+  return resolveRequirementPlan(requirement.candidates || [], { min, max }, exactIds, exactCase).cards !== undefined;
 }
 
 function hasCanonicalCandidateKey<Candidate extends { key?: string }>(
@@ -334,27 +442,30 @@ export default class AutoSelector {
       const exactIds = decisions?.selections?.[id];
       const exactCase = decisions?.cases?.[id];
       if (exactIds !== undefined || exactCase !== undefined) {
-        const identified = candidates.map(candidate => {
-          const instanceId = candidate.cardRef?.instanceId ?? candidate.instanceId;
-          return { candidate, ...(instanceId !== undefined ? { instanceId } : {}) };
-        });
-        const chosen = exactIds !== undefined
-          ? resolveExactInstanceSelection(identified, exactIds, { min, max })
-              ?.map(entry => entry.candidate) ?? null
-          : candidates.filter(candidate => candidate.cardRef?.id === exactCase);
-        if (
-          !chosen || chosen.length < min || chosen.length > max ||
-          chosen.some(candidate => !hasCanonicalCandidateKey(candidate))
-        ) {
-          return { ok: false, reason: `Planned selection is no longer valid for ${id}.` };
+        const exact = resolveRequirementPlan(candidates, { min, max }, exactIds, exactCase);
+        const caseInvalid = exact.invalid === "case";
+        const plan: PlannedSelectionResolution<AutoSelectionCandidate> =
+          exact.cards
+            ? { status: "planned", cards: exact.cards }
+            : context.unplannedWhenPlanInvalid === true && requirement.intent !== "cost"
+              ? { status: "unplanned" }
+              : { status: "rejected" };
+        switch (plan.status) {
+          case "planned":
+            dependentPools.set(id, plan.cards);
+            fixedDependentCounts.add(id);
+            selections[id] = plan.cards.filter(hasCanonicalCandidateKey).map(candidate => candidate.key);
+            continue;
+          case "rejected":
+            return {
+              ok: false,
+              reason: caseInvalid
+                ? `Planned case is no longer valid for ${id}.`
+                : `Planned selection is no longer valid for ${id}.`,
+            };
+          case "unplanned":
+            break;
         }
-        if (exactCase !== undefined && chosen.length !== 1) {
-          return { ok: false, reason: `Planned case is no longer valid for ${id}.` };
-        }
-        dependentPools.set(id, chosen);
-        fixedDependentCounts.add(id);
-        selections[id] = chosen.filter(hasCanonicalCandidateKey).map(candidate => candidate.key);
-        continue;
       }
       if (candidates.length < min) {
         return {

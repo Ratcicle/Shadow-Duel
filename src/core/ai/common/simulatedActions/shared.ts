@@ -20,6 +20,7 @@ import { getZoneCards, findCardZone, refreshSimulatedFieldPresenceTypeSummonBuff
 import type { SimulatedFieldPresenceBuffState } from "../zones.js";
 import { applyStatusesOnSummon } from "../../../Card.js";
 import { recordCompletedFieldSummon } from "../../../effects/triggers/counters.js";
+import { allowsResolutionChoiceFallback } from "../../../AutoSelector.js";
 import type {
   ActionOf,
   ActionProperties,
@@ -52,6 +53,14 @@ import type {
 import type { PlayerId } from "../../../contracts/primitives.js";
 import type { ChainSourceSnapshot } from "../../../contracts/chainRuntime.js";
 import { captureSourceSnapshot } from "../../../chain/link.js";
+
+/**
+ * The runtime's mandatory-trigger fallback for resolution choices: an exact
+ * plan that no longer resolves is chosen as unplanned. Costs keep rejecting.
+ */
+export function simulatedUnplannedFallback(options: Pick<SimulatedActionOptions, "effect" | "payingActivationCosts">): boolean {
+  return allowsResolutionChoiceFallback(options.effect, { payingActivationCosts: options.payingActivationCosts === true });
+}
 
 /** Capture the canonical activation evidence from the simulator's read view. */
 export function captureSimulatedSourceSnapshot(

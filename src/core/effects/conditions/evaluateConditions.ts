@@ -881,7 +881,10 @@ function collectFilterConditionTargetCards(
       activationContext: { ...activationContext, autoSelectTargets: false, autoSelectSingleTarget: false },
     } as Parameters<ConditionHost["resolveTargets"]>[1], null);
     if (result?.ok === false) return [];
-    return asArray(result?.targets?.[targetRef]).filter((card): card is ConditionCard => !!card);
+    // Only a mandatory trigger's invalid plan asks for a selection here: it previews as unplanned.
+    if (!result?.needsSelection) {
+      return asArray(result?.targets?.[targetRef]).filter((card): card is ConditionCard => !!card);
+    }
   }
   return collectTargetRefCandidateCards(engine, targetRef, ctx.effect, ctx, activationContext);
 }

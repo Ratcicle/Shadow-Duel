@@ -21,6 +21,7 @@ import type {
 } from "../contracts/selection.js";
 import { getUI, requestOptionalConfirmation, resolutionChoiceContext, resolveTargetCards } from "./shared.js";
 import { isAI } from "../Player.js";
+import { allowsResolutionChoiceFallback, requirementPlanResolves } from "../AutoSelector.js";
 
 type OptionalTargetAction = ActionOf<"optional_target_actions">;
 type TemporaryEventAction = ActionOf<"register_temporary_event_effect"> & {
@@ -328,6 +329,7 @@ function resolveOptionalAutoSelection(
   game: ActionRuntimeGamePort,
   selectionContract: RawSelectionContract,
   ctx: EffectContext,
+  unplannedFallback: boolean,
 ): SelectionResult | null {
   const player = ctx?.player || null;
   if (!isAI(player)) return null;
@@ -339,6 +341,7 @@ function resolveOptionalAutoSelection(
     activationContext: ctx?.activationContext || {},
     selectionContract,
     game,
+    ...(unplannedFallback ? { unplannedWhenPlanInvalid: true } : {}),
   });
 
   if (autoResult?.ok) {
@@ -354,9 +357,10 @@ function resolveOptionalAutoSelection(
   if (requirements.some(req => req.id && (
     decisions?.selections?.[req.id] !== undefined ||
     decisions?.cases?.[req.id] !== undefined
-  ))) {
+  ) && (!unplannedFallback || requirementPlanResolves(req, decisions)))) {
     // A rejected exact plan is a failed choice, never permission to replace
-    // the selected cards with a different available group.
+    // the selected cards with a different available group. Only a mandatory
+    // trigger resolves a plan that no longer matches as unplanned.
     return null;
   }
 
@@ -385,7 +389,9 @@ function runOptionalTargetSelection(
   const player = ctx.player;
   if (!player) return Promise.resolve(null);
   if (isAI(player)) {
-    const resolveAI = () => resolveOptionalAutoSelection(game, selectionContract, ctx);
+    // From the effect definition, outside the resolver (see `allowsUnplannedFallback`).
+    const unplannedFallback = allowsResolutionChoiceFallback(ctx.effect, ctx.activationContext);
+    const resolveAI = () => resolveOptionalAutoSelection(game, selectionContract, ctx, unplannedFallback);
     if (!game.requestDecision) return Promise.resolve(resolveAI());
     const requirements = Array.isArray(selectionContract.requirements)
       ? selectionContract.requirements

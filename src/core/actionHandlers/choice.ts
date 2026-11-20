@@ -1,4 +1,5 @@
 import { getUI } from "./shared.js";
+import { allowsResolutionChoiceFallback } from "../AutoSelector.js";
 import { cardDatabase } from "../../data/cards.js";
 import type { ActionCase, ActionOf, CardAction } from "../contracts/actions.js";
 import type {
@@ -84,6 +85,8 @@ interface SelectionRunOptions {
   context?: EffectContext;
   player?: ActionRuntimePlayer | null;
   activationContext?: EffectContext["activationContext"];
+  /** A mandatory trigger's invalid case plan resolves as unplanned (see `allowsUnplannedFallback`). */
+  unplannedWhenPlanInvalid?: boolean;
 }
 
 interface CompletedTargetResolution {
@@ -264,6 +267,7 @@ function resolveAutoSelection(
       options.activationContext || options.context?.activationContext || {},
     selectionContract,
     game,
+    ...(options.unplannedWhenPlanInvalid ? { unplannedWhenPlanInvalid: true } : {}),
   });
 
   return {
@@ -642,6 +646,8 @@ export async function handleChooseActionCase(
     context: ctx,
     player,
     activationContext: activationContext || {},
+    ...(plannedCase !== undefined && allowsResolutionChoiceFallback(ctx.effect, ctx.activationContext)
+      ? { unplannedWhenPlanInvalid: true } : {}),
   });
 
   if (!selections || Object.keys(selections).length === 0) {

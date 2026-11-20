@@ -1444,6 +1444,8 @@ export interface ChainAutoSelectionOptions {
   selectionKind: "cost" | "target" | "choice";
   activationContext?: Pick<PreparedActivationContext, "decisions">;
   effect?: ChainEffect | null;
+  /** A mandatory trigger's invalid exact plan resolves as unplanned (see `allowsUnplannedFallback`). */
+  unplannedWhenPlanInvalid?: boolean;
 }
 
 export interface ChainTriggerOrderModalOptions {

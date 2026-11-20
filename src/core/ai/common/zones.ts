@@ -12,7 +12,8 @@ import { cardHasArchetype, cardMatchesFilter } from "./cardFilters.js";
 import { countTurnCardActivations } from "../../game/events/activationHistory.js";
 import { getCounterValue } from "./counters.js";
 import { evaluateSimulatedConditions } from "./simulatedConditions.js";
-import type { RuntimePassive } from "../../effects/passives/passiveBuffs.js";
+import type { DestinationBoundCost, RuntimePassive } from "../../effects/passives/passiveBuffs.js";
+import { shouldAllowExtraDeckMonsterToHand } from "../../effects/actions/movement.js";
 import { clearLevelModifications, clearPermanentStatBuffs, expireFaceupStatBuffs, removeTrackedStatChange } from "../../effects/actions/stats.js";
 import { clearPassiveBuffsForCard, getModeledPassiveContributions, pruneModeledPassiveContributions, registerModeledPassiveContribution, applyPassiveBuffValue, getFieldAuraBuffKey, getFieldCounterStatAuraBuffKey, getEquippedCounterBuffKey, getEquippedFieldCounterBuffKeys, captureBanishProtectionSnapshot, captureSimultaneousBanishProtection, findBanishProtection, projectDepartureDestination, refreshEquipExtraAttackBonus, removeFieldAuraBuffContributions, isActiveEquipInZone, isBattleIndestructibleGrantedByEquip, refreshEquipBattleIndestructible, clearSuspendedEquipStatBonus, isPassiveSourceActive, refreshEquipStatBonus } from "../../effects/passives/passiveBuffs.js";
 import {
@@ -760,6 +761,26 @@ export function canMoveCardToZone(
   options: ReadMoveOptions = {},
 ): boolean {
   return resolveSimulatedMove(player, card, zone, sourcePlayer, options) !== null;
+}
+
+/**
+ * Decision V10, simulated: whether a cost card arrives where its
+ * destination-bound cost sends it, with the runtime's Extra Deck permission.
+ * Without the state only the holder's protections count.
+ */
+export function canSimulatedCostCardReachDestination(
+  cost: DestinationBoundCost,
+  card: AiCardInput,
+  payer: AiPlayerInput,
+  owner: AiPlayerInput,
+  state?: Pick<AiStateInput, "bot" | "player">,
+): boolean {
+  return canMoveCardToZone(payer, card, cost.requestedZone, owner, {
+    ...(state ? { state } : {}),
+    requireDestination: true,
+    allowExtraDeckMonsterToHand: cost.action.type === "move" &&
+      shouldAllowExtraDeckMonsterToHand(cost.action, { player: payer }),
+  });
 }
 
 export function moveCardToZone(
