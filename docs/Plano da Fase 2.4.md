@@ -405,6 +405,8 @@ Aceite:
 - `outcome`, `opening`, `profiles` e `guard` idênticos;
 - testes canônicos de replay e smoke com `--check-replays`.
 
+Os códigos novos também mudam `seatMetrics.*.actions.blockedByCode`: o bloqueio por limite de uso passa de `uncoded` a `ACTIVATION_USAGE_LIMIT`, e a negação do link de um trigger passa de `uncoded` a `ACTIVATION_NEGATED`. A execução sem o plugin do A1 não tem bloqueio `uncoded`, então o aceite acima não muda. A v4 tem 26 bloqueios `uncoded` nesses dois sítios (16 de limite de uso e 10 de negação). Toda comparação `--expect-identical` que atravesse o A1b contra a v4, ou contra outra execução anterior com a mesma configuração, ignora também `seatMetrics.*.actions.blockedByCode`. Fora do benchmark, o `reason` de `actionsExecuted` do Arena passa a levar o código quando o resultado não tem `reason`. Esse campo só sai no export JSONL de diagnóstico do Arena. Não entra no relatório estratégico, no replay nem em decisão.
+
 ### A2 — Ablações de diagnóstico
 
 Classe: medição. Nenhum comportamento de preset muda.

@@ -333,6 +333,59 @@ export function normalizeActivationResult(
   } as ActivationPipelineResult;
 }
 
+/**
+ * Generic cause of a failed resolution, read only from flags its producers
+ * already set. Tracker-only: the returned result is never changed. A result
+ * without a known discriminator stays uncoded on purpose, as an alarm for an
+ * unidentified producer.
+ */
+function resolutionFailureCode(
+  result: ActivationPipelineResult,
+): string | null {
+  if (result.activationNegated === true) return "ACTIVATION_NEGATED";
+  if (result.fizzled === true) return "RESOLUTION_SOURCE_LOST";
+  const actionResult: unknown = Reflect.get(result, "actionResult");
+  const nested = actionResult !== null && typeof actionResult === "object";
+  // A handler exception arrives top-level on the Chain path and nested
+  // under `actionResult` without Chain.
+  if (
+    Reflect.get(result, "error") != null ||
+    (nested && Reflect.get(actionResult, "error") != null)
+  ) {
+    return "RESOLUTION_FAILED";
+  }
+  const validation: unknown = Reflect.get(result, "targetValidation");
+  if (
+    Reflect.get(result, "resolvedWithoutEffect") === true &&
+    validation !== null &&
+    typeof validation === "object"
+  ) {
+    return "RESOLUTION_TARGET_INVALID";
+  }
+  if (typeof Reflect.get(result, "failedAction") === "string" || nested) {
+    return "RESOLUTION_ACTION_FAILED";
+  }
+  return null;
+}
+
+/**
+ * Generic cause of a failure before resolution, from the canonical
+ * transaction's flags. Tracker-only: the returned result is never changed.
+ */
+function preparationFailureCode(result: ActivationPipelineResult): string {
+  if (
+    result.noRollback === true &&
+    result.costsPaid === true &&
+    result.committed === true
+  ) {
+    return "ACTIVATION_COMMIT_ACTIONS_FAILED";
+  }
+  if (result.noRollback === true && result.costsPaid !== true) {
+    return "ACTIVATION_COST_PAYMENT_FAILED";
+  }
+  return "ACTIVATION_PREPARATION_FAILED";
+}
+
 export function createActionResult(
   result: unknown = {},
 ): ActivationPipelineResult {
@@ -455,11 +508,14 @@ export async function runActivationPipeline(
       if (gateResult.reason) {
         this.ui.log(gateResult.reason);
       }
-      trackActivationAttempt({
-        success: false,
-        reason: gateResult.reason,
-        code: gateResult.code,
-      });
+      trackActivationAttempt(
+        {
+          success: false,
+          reason: gateResult.reason,
+          code: gateResult.code,
+        },
+        { code: "ACTIVATION_UNAVAILABLE" },
+      );
       return normalizeActivationResult(gateResult);
     }
   }
@@ -471,11 +527,14 @@ export async function runActivationPipeline(
       if (previewResult.reason) {
         this.ui.log(previewResult.reason);
       }
-      trackActivationAttempt({
-        success: false,
-        reason: previewResult.reason,
-        code: previewResult.code,
-      });
+      trackActivationAttempt(
+        {
+          success: false,
+          reason: previewResult.reason,
+          code: previewResult.code,
+        },
+        { code: "ACTIVATION_UNAVAILABLE" },
+      );
       return normalizeActivationResult(previewResult);
     }
     logPipeline("PIPELINE_PREVIEW_OK");
@@ -535,7 +594,10 @@ export async function runActivationPipeline(
         reason: optCheck.reason,
         blockedOncePerTurn: true,
       };
-      trackActivationAttempt(blockedResult, { blocked: true });
+      trackActivationAttempt(blockedResult, {
+        blocked: true,
+        code: "ACTIVATION_USAGE_LIMIT",
+      });
       return blockedResult;
     }
     oncePerTurnInfo = {
@@ -878,6 +940,10 @@ export async function runActivationPipeline(
     }
 
     if (!normalized.success) {
+      // Read before the post-resolution branch can set `noRollback`.
+      const failureCode = activationContext.afterResolution
+        ? resolutionFailureCode(normalized)
+        : preparationFailureCode(normalized);
       if (activationContext.afterResolution) {
         if (typeof config.finalize === "function" && activationContext.chainFinalizationHandled !== true) {
           await config.finalize(normalized, { card: resolvedCard, owner, activationZone: resolvedActivationZone, activationContext });
@@ -909,7 +975,7 @@ export async function runActivationPipeline(
         config.onFailure(normalized, activationContext);
       }
       if (!skipFailureTracking) {
-        trackActivationAttempt(normalized);
+        trackActivationAttempt(normalized, { code: failureCode });
       }
       return normalized;
     }
@@ -1195,7 +1261,9 @@ export async function runActivationPipeline(
             activationContext,
           );
         }
-        trackActivationAttempt(costResult);
+        trackActivationAttempt(costResult, {
+          code: "ACTIVATION_COST_PAYMENT_FAILED",
+        });
         return this.normalizeActivationResult(costResult);
       }
       if (preparedActivation.costsPaid === true) {
@@ -1217,7 +1285,9 @@ export async function runActivationPipeline(
               activationContext,
             );
           }
-          trackActivationAttempt(commitmentResult);
+          trackActivationAttempt(commitmentResult, {
+            code: "ACTIVATION_COMMIT_ACTIONS_FAILED",
+          });
           return this.normalizeActivationResult({
             ...commitmentResult,
             committed: true,
@@ -1260,6 +1330,7 @@ export async function runActivationPipeline(
             }
             trackActivationAttempt(failedResult, {
               blocked: linkResult?.activationNegated === true,
+              code: resolutionFailureCode(failedResult),
             });
             return failedResult;
           }
@@ -1366,7 +1437,9 @@ export async function runActivationPipeline(
         }
         if (resolutionResult.activationContext?.afterResolution) activationContext.afterResolution = resolutionResult.activationContext.afterResolution;
         await finishDirectAfterResolution();
-        trackActivationAttempt(resolutionResult);
+        trackActivationAttempt(resolutionResult, {
+          code: resolutionFailureCode(resolutionResult),
+        });
         return resolutionResult;
       }
     }

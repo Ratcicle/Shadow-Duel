@@ -134,20 +134,32 @@ export const GUARD_STAGE_RING_SIZE = 16;
 export const MISMATCH_SAMPLE_LIMIT = 8;
 
 // ── Failure codes ──────────────────────────────────────────────────────────
-// Stable codes of failed or blocked actions (activationPipeline.ts and
-// actions/guard.ts). The localized `reason` text is never classified.
+// Stable codes of failed or blocked actions. They come from the result's
+// producer (actions/guard.ts, the Chain, the activation transaction) or, when
+// the producer set none, from the attempt tracking of activationPipeline.ts,
+// by stage (gate/preview, usage limit, preparation, costs, commit actions,
+// resolution). The localized `reason` text is never classified.
+// ACTIVATION_COMMIT_FAILED: committing the source card failed.
+// ACTIVATION_COMMIT_ACTIONS_FAILED: the declared commit actions failed.
+// RESOLUTION_TARGET_INVALID: a declared target or reference is no longer
+// valid at resolution, for any reason of revalidateDeclaredTargets.
+// "resolution" keeps engine exceptions apart from actions that resolved
+// without effect ("resolution_action").
 const FAILURE_CODE_TABLE: ReadonlyArray<readonly [string, readonly string[]]> = [
   ["busy_timing", ["BLOCKED_SELECTION_ACTIVE", "BLOCKED_RESOLVING", "BLOCKED_CHAIN_WINDOW_OPEN", "BLOCKED_FAST_EFFECT_TIMING"]],
   ["wrong_context", ["BLOCKED_WRONG_PHASE", "BLOCKED_NOT_YOUR_TURN", "BLOCKED_BATTLE_PHASE_LOCK", "BLOCKED_GAME_DISPOSED"]],
   ["usage_limit", ["ACTIVATION_USAGE_LIMIT"]],
   ["opponent_response", ["ACTIVATION_NEGATED"]],
+  ["preparation", ["ACTIVATION_PREPARATION_FAILED", "ACTIVATION_UNAVAILABLE"]],
   ["cost", ["ACTIVATION_COST_UNAVAILABLE", "ACTIVATION_COST_SELECTION_INVALID", "ACTIVATION_COST_SELECTION_CANCELLED",
-    "ACTIVATION_COMMITMENT_UNAVAILABLE"]],
+    "ACTIVATION_COMMITMENT_UNAVAILABLE", "ACTIVATION_COST_PAYMENT_FAILED", "ACTIVATION_COMMIT_ACTIONS_FAILED"]],
   ["target_selection", ["TARGET_SELECTION_FAILED", "INVALID_ACTIVATION_TARGET", "AUTO_SELECTION_FAILED", "SELECTION_ABORTED",
     "CANCELLED", "ACTIVATION_TARGET_COUNT_MISMATCH", "ACTIVATION_TARGET_COUNT_UNAVAILABLE",
     "ACTIVATION_TARGET_SELECTION_FAILED_AFTER_COMMIT"]],
-  ["revalidation", ["ACTIVATION_REVALIDATION_FAILED", "ACTIVATION_SOURCE_MOVED", "ACTIVATION_CASE_UNAVAILABLE"]],
+  ["revalidation", ["ACTIVATION_REVALIDATION_FAILED", "ACTIVATION_SOURCE_MOVED", "ACTIVATION_CASE_UNAVAILABLE",
+    "RESOLUTION_TARGET_INVALID", "RESOLUTION_SOURCE_LOST"]],
   ["resolution", ["RESOLUTION_FAILED", "ACTIVATION_COMMIT_FAILED"]],
+  ["resolution_action", ["RESOLUTION_ACTION_FAILED"]],
   ["config", ["INVALID_ACTIVATION_CONFIG"]],
 ];
 
