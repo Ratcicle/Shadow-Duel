@@ -45,6 +45,8 @@ import {
 } from "./schema.js";
 import { InvarianceTallies, installInvarianceControl, type InvarianceHost } from "./invariance.js";
 import { increment, round, sortedCounter } from "./statistics.js";
+// Imported after every engine module above: it only uses modules those already loaded.
+import { Diag24Collector } from "./diag24.js";
 
 // Instance-level observation for the benchmark harness. Nothing here changes
 // a decision: wrappers are synchronous, keep `this` and the return value, and
@@ -78,6 +80,8 @@ type ProgressArgs = Parameters<DuelTracker["recordProgress"]>;
 type ActivationAttemptArgs = Parameters<DuelTracker["recordActivationAttempt"]>;
 type BlockedActionArgs = Parameters<DuelTracker["recordBlockedAction"]>;
 type FinalizeArgs = Parameters<DuelTracker["finalize"]>;
+type EventArgs = Parameters<DuelTracker["recordEvent"]>;
+type ProjectionGuardArgs = Parameters<DuelTracker["recordPublicProjectionGuard"]>;
 
 function seatOf(value: unknown): Seat | null {
   const id = typeof value === "string" ? value : value !== null && typeof value === "object" ? Reflect.get(value, "id") : null;
@@ -287,6 +291,8 @@ export class DuelObserver {
   muted = false;
   /** Comparisons of the invariance control; null when the run does not carry it. */
   readonly invariance: InvarianceTallies | null;
+  /** The diag24 plugin's collector; null when the plugin is off. */
+  readonly diag24: Diag24Collector | null;
   /** This duel's tracker, kept for its public-projection guard tallies. */
   tracker: DuelTracker | null = null;
   observerErrors = 0;
@@ -311,11 +317,16 @@ export class DuelObserver {
     this.plugins = new Set(spec.config.presetMetrics);
     this.invariance = spec.config.invarianceControl === undefined ? null
       : new InvarianceTallies({ player: spec.entry.seat1, bot: spec.entry.seat2 });
+    this.diag24 = this.plugins.has("diag24")
+      ? new Diag24Collector(game, { player: spec.entry.seat1, bot: spec.entry.seat2 },
+        { ids: TECH_ZERO_COMBO_IDS, metrics: techZeroComboMetrics })
+      : null;
   }
 
   /** Stops every deterministic counter; later engine activity is not part of the record. */
   freeze(): void {
     this.frozen = true;
+    this.diag24?.freeze();
   }
 
   private guarded(task: () => void): void {
@@ -366,6 +377,7 @@ export class DuelObserver {
       if (this.stageRing.length > GUARD_STAGE_RING_SIZE) this.stageRing.shift();
       this.bump("progress");
       if (this.frozen) return;
+      this.diag24?.onProgress(stage, details);
       switch (stage) {
         case "starting_player_selected": this.captureStart(); return;
         case "opening_draw_after": this.captureOpening(); return;
@@ -528,6 +540,7 @@ export class DuelObserver {
     this.guarded(() => {
       this.bump("actions");
       if (this.frozen) return;
+      this.diag24?.onAttempt(data, false);
       const seat = seatOf(read(data, "player") || read(data, "owner") || read(data, "seat"));
       if (!seat) return;
       const actions = this.seats[seat].metrics.actions;
@@ -543,6 +556,7 @@ export class DuelObserver {
     this.guarded(() => {
       this.bump("actions");
       if (this.frozen) return;
+      this.diag24?.onAttempt(data, true);
       const seat = seatOf(read(data, "player") || read(data, "actor") || read(data, "seat"));
       if (!seat) return;
       const actions = this.seats[seat].metrics.actions;
@@ -587,13 +601,14 @@ export class DuelObserver {
     });
   }
 
-  onPlanningProfile(actorId: unknown, profile: unknown): void {
+  onPlanningProfile(actorId: unknown, profile: unknown, context: unknown): void {
     this.guarded(() => {
       const actor = seatOf(actorId);
       if (!actor) return;
       const seat = this.seats[actor];
       if (!seat.awaitingProfile) return;
       seat.awaitingProfile = false;
+      this.diag24?.onPlanningProfile(actor, context);
       seat.profile = {
         beamWidth: read(profile, "beamWidth"), maxDepth: read(profile, "maxDepth"),
         nodeBudget: read(profile, "nodeBudget"), candidateLimit: read(profile, "candidateLimit"),
@@ -601,11 +616,38 @@ export class DuelObserver {
     });
   }
 
-  onExecuteMainPhaseAction(actorId: unknown): void {
+  onExecuteMainPhaseAction(actorId: unknown, action: AIAction): void {
     this.guarded(() => {
       const actor = seatOf(actorId);
-      if (actor) this.seats[actor].executedSinceDecision = true;
+      if (!actor) return;
+      this.seats[actor].executedSinceDecision = true;
+      this.diag24?.onExecute(actor, action);
     });
+  }
+
+  /** diag24 only: one engine event, before its listeners and triggers. */
+  onEvent(eventName: string, payload: unknown): void {
+    const diag24 = this.diag24;
+    if (diag24) this.guarded(() => diag24.onEvent(eventName, payload));
+  }
+
+  /** diag24 only: a planning root reached the public-projection guard. */
+  onProjectionGuard(seat: unknown, root: unknown): void {
+    const diag24 = this.diag24;
+    if (diag24) this.guarded(() => diag24.onProjectionGuard(seat, root));
+  }
+
+  /** diag24 only: game.nextPhase is about to run. */
+  onNextPhase(): void {
+    const diag24 = this.diag24;
+    if (diag24) this.guarded(() => diag24.onNextPhase());
+  }
+
+  /** diag24 only: the live Main Phase candidate generation of one bot. */
+  onGeneration(bot: HarnessBot, game: Parameters<Bot["generateMainPhaseActions"]>[0], actions: readonly AIAction[]): void {
+    const diag24 = this.diag24;
+    if (!diag24 || game._isPerspectiveState === true || game !== this.game) return;
+    this.guarded(() => diag24.onGeneration(bot, actions));
   }
 
   onSummon(payload: AfterSummonEventPayload): void {
@@ -619,6 +661,7 @@ export class DuelObserver {
 
   onBattlePhase(bot: HarnessBot, game: BotGamePort): void {
     this.guarded(() => {
+      this.diag24?.onBattlePhase(bot.id);
       if (!this.plugins.has("lethal")) return;
       const seat = seatOf(bot.id);
       if (!seat || this.battles.some(battle => battle.seat === seat && battle.turn === game.turnCounter)) return;
@@ -661,6 +704,8 @@ export class DuelObserver {
       lethal: this.plugins.has("lethal")
         ? { player: lethalForSeat(this.battles, "player", completed), bot: lethalForSeat(this.battles, "bot", completed) }
         : null,
+      // Absent, not null, when the plugin is off (D5); record() never throws and self-checks with parseDiag24.
+      ...(this.diag24 ? { diag24: this.diag24.record(completed) } : {}),
     };
   }
 
@@ -766,6 +811,27 @@ export class HarnessGame extends Game {
     if (!(tracker instanceof DuelTracker)) problems.push("_arenaTracker não é o DuelTracker da Arena");
     if (problems.length) throw new HarnessConfigDriftError(`Deriva de configuração: ${problems.join("; ")}.`);
     if (tracker instanceof DuelTracker) this.attachTracker(tracker);
+    if (this.observer.diag24) {
+      // diag24 only (G9): an own property of this instance; same this, same
+      // arguments (retryOnBlocked) and the very promise of the original.
+      const observer = this.observer;
+      const original = this.nextPhase;
+      this.nextPhase = (...args: Parameters<typeof original>) => {
+        observer.onNextPhase();
+        return original.apply(this, args);
+      };
+      // diag24 only (G8): an own property of each live bot of this duel;
+      // synchronous, same this and arguments, the very array of the original.
+      for (const bot of [this.player, this.bot]) {
+        if (!(bot instanceof HarnessBot)) continue;
+        const generate = bot.generateMainPhaseActions;
+        bot.generateMainPhaseActions = (...args: Parameters<typeof generate>) => {
+          const actions = generate.apply(bot, args);
+          observer.onGeneration(bot, args[0], actions);
+          return actions;
+        };
+      }
+    }
   }
 
   /** Synchronous wrappers on this duel's tracker only; each calls the original with the tracker as `this`. */
@@ -787,6 +853,19 @@ export class HarnessGame extends Game {
       observer.onBlockedAction(args[0]);
       recordBlockedAction.apply(tracker, args);
     };
+    if (observer.diag24) {
+      // diag24 only (G6, G7): every event and every guarded planning root.
+      const recordEvent = tracker.recordEvent;
+      tracker.recordEvent = (...args: EventArgs) => {
+        observer.onEvent(args[0], args[1]);
+        return recordEvent.apply(tracker, args);
+      };
+      const recordPublicProjectionGuard = tracker.recordPublicProjectionGuard;
+      tracker.recordPublicProjectionGuard = (...args: ProjectionGuardArgs) => {
+        observer.onProjectionGuard(args[0], args[1]);
+        return recordPublicProjectionGuard.apply(tracker, args);
+      };
+    }
     // The tracker's result is a snapshot: stop counting at the same point.
     const finalize = tracker.finalize;
     tracker.finalize = (...args: FinalizeArgs) => {
@@ -842,7 +921,7 @@ function instrumentStrategy(bot: HarnessBot): void {
   if (typeof getPlanningProfile === "function") {
     strategy.getPlanningProfile = (game, context) => {
       const profile = getPlanningProfile.call(strategy, game, context);
-      activeObserver()?.onPlanningProfile(bot.id, profile);
+      activeObserver()?.onPlanningProfile(bot.id, profile, context);
       return profile;
     };
   }
@@ -859,7 +938,7 @@ export class HarnessBot extends Bot {
   // Not async: marks the execution and returns the very promise of the base
   // method, without an extra microtask.
   override executeMainPhaseAction(game: BotGamePort, action: AIAction): Promise<boolean> {
-    activeObserver()?.onExecuteMainPhaseAction(this.id);
+    activeObserver()?.onExecuteMainPhaseAction(this.id, action);
     return super.executeMainPhaseAction(game, action);
   }
 
