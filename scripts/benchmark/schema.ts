@@ -60,11 +60,12 @@ export const GUARD_COUNTERS: readonly GuardCounterName[] = ["decisions", "action
  * Opt-in preset metrics (--preset-metrics), computed by the observer:
  * - techzero-combo: Tech-Zero seats; real M + Portal + Synchro boss summons in one turn (IDs from TECH_ZERO_IDS);
  * - lethal: every seat; public battle projection once per seat and turn, converted only by an LP-zero win that turn;
- * - diag24: phase 2.4 diagnostics (A1); absent from the record when off.
+ * - diag24: phase 2.4 diagnostics (A1); absent from the record when off;
+ * - planner-budget: phase 2.4 A2; TLS searches whose evaluated nodes reached the effective nodeBudget; absent when off.
  */
-export type PresetMetricId = "techzero-combo" | "lethal" | "diag24";
-// diag24 comes last: a run without it keeps the presetMetrics list, configDigest and runId of before.
-export const PRESET_METRIC_IDS: readonly PresetMetricId[] = ["techzero-combo", "lethal", "diag24"];
+export type PresetMetricId = "techzero-combo" | "lethal" | "diag24" | "planner-budget";
+// Each later plugin comes last: a run without it keeps the presetMetrics list, configDigest and runId of before.
+export const PRESET_METRIC_IDS: readonly PresetMetricId[] = ["techzero-combo", "lethal", "diag24", "planner-budget"];
 export type RunOrder = "forward" | "reverse";
 
 /**
@@ -93,6 +94,92 @@ export const INVARIANCE_SAMPLE_LIMIT = 4;
 
 export interface InvarianceControlConfig {
   swap: typeof INVARIANCE_SWAP_RULE;
+}
+
+/** Characters of a matrix preset id; shared by the matrix and by CLI grammars that name a preset. */
+export const PRESET_ID_CHARACTER_CLASS = "[A-Za-z0-9_-]";
+export const PRESET_ID_PATTERN = new RegExp(`^${PRESET_ID_CHARACTER_CLASS}+$`);
+
+// ── Diagnostic ablations (phase 2.4, A2) ────────────────────────────────────
+
+/** The four TurnLineSearch budgets a per-preset planner profile override may adjust. */
+export const PLANNER_PROFILE_FIELDS = ["beamWidth", "maxDepth", "nodeBudget", "candidateLimit"] as const;
+export type PlannerProfileField = (typeof PLANNER_PROFILE_FIELDS)[number];
+/** "all" applies in every phase; main1/main2 only in that Main Phase. */
+export const PLANNER_PROFILE_SCOPES = ["all", "main1", "main2"] as const;
+export type PlannerProfileScope = (typeof PLANNER_PROFILE_SCOPES)[number];
+export const PLANNER_PROFILE_OPS = ["set", "add"] as const;
+export type PlannerProfileOp = (typeof PLANNER_PROFILE_OPS)[number];
+export interface PlannerProfileAdjustment { op: PlannerProfileOp; value: number }
+export type PlannerProfileAdjustments = Partial<Record<PlannerProfileField, PlannerProfileAdjustment>>;
+export type PlannerProfileOverride = Partial<Record<PlannerProfileScope, PlannerProfileAdjustments>>;
+/** Harness caps of the override (diagnostic only); an effective value is clamped to [1, cap]. */
+export const PLANNER_PROFILE_CAPS: Readonly<Record<PlannerProfileField, number>> = Object.freeze({
+  beamWidth: 12, maxDepth: 12, nodeBudget: 5000, candidateLimit: 24,
+});
+/**
+ * Reserved source of --strategy-override: the harness's diagnostic strategy
+ * (scripts/benchmark/neutralStrategy.ts), registered only in the case worker that asks for it.
+ */
+export const NEUTRAL_STRATEGY_ID = "neutral";
+
+/** null when the adjustment is inside the bounds; otherwise the reason (for the CLI and the parser). */
+export function plannerProfileAdjustmentProblem(field: PlannerProfileField, adjustment: PlannerProfileAdjustment): string | null {
+  const cap = PLANNER_PROFILE_CAPS[field];
+  const { op, value } = adjustment;
+  if (!Number.isSafeInteger(value)) return "deve ser um inteiro.";
+  if (op === "set") return value >= 1 && value <= cap ? null : `deve ficar entre 1 e ${cap} (set).`;
+  if (value === 0) return "não pode somar 0.";
+  return Math.abs(value) <= cap ? null : `deve somar no máximo ${cap} em módulo.`;
+}
+
+/** The first field declared both in "all" and in a phase scope; null without one. */
+export function plannerProfileScopeConflict(override: PlannerProfileOverride): PlannerProfileField | null {
+  const all = override.all ?? {};
+  for (const field of PLANNER_PROFILE_FIELDS) {
+    if (all[field] !== undefined && (override.main1?.[field] !== undefined || override.main2?.[field] !== undefined)) return field;
+  }
+  return null;
+}
+
+/** Canonical copy: presets sorted by code unit, scopes and fields in their declared order. */
+export function sortedPlannerProfileOverrides(
+  source: Readonly<Record<string, PlannerProfileOverride>>,
+): Record<string, PlannerProfileOverride> {
+  const result: Record<string, PlannerProfileOverride> = {};
+  for (const preset of Object.keys(source).sort(compareCodeUnits)) {
+    const override = source[preset];
+    if (!override) continue;
+    const copy: PlannerProfileOverride = {};
+    for (const scope of PLANNER_PROFILE_SCOPES) {
+      const adjustments = override[scope];
+      if (!adjustments) continue;
+      const fields: PlannerProfileAdjustments = {};
+      for (const field of PLANNER_PROFILE_FIELDS) {
+        const adjustment = adjustments[field];
+        if (adjustment) fields[field] = { op: adjustment.op, value: adjustment.value };
+      }
+      copy[scope] = fields;
+    }
+    result[preset] = copy;
+  }
+  return result;
+}
+
+/** The CLI spelling of a recorded override: preset[@phase].field=value, with a sign for add. */
+export function formatPlannerProfileOverrides(source: Readonly<Record<string, PlannerProfileOverride>>): string {
+  const items: string[] = [];
+  for (const [preset, override] of Object.entries(sortedPlannerProfileOverrides(source))) {
+    for (const scope of PLANNER_PROFILE_SCOPES) {
+      for (const field of PLANNER_PROFILE_FIELDS) {
+        const adjustment = override[scope]?.[field];
+        if (!adjustment) continue;
+        const value = adjustment.op === "add" && adjustment.value > 0 ? `+${adjustment.value}` : String(adjustment.value);
+        items.push(`${preset}${scope === "all" ? "" : `@${scope}`}.${field}=${value}`);
+      }
+    }
+  }
+  return items.join(",");
 }
 
 export type ErrorKind =
@@ -271,7 +358,7 @@ export function buildMatrixCases(options: MatrixOptions): BenchmarkCase[] {
   if (!options.presets.length) throw new RangeError("É preciso ao menos um preset.");
   if (new Set(options.presets).size !== options.presets.length) throw new RangeError("Os presets devem ser únicos.");
   for (const preset of options.presets) {
-    if (!/^[a-z0-9_-]+$/i.test(preset)) throw new RangeError(`ID de preset inválido: ${preset}.`);
+    if (!PRESET_ID_PATTERN.test(preset)) throw new RangeError(`ID de preset inválido: ${preset}.`);
   }
   const cases: BenchmarkCase[] = [];
   const push = (seat1: string, seat2: string, pair: string, mirror: boolean, k: number, seed: number) => {
@@ -435,6 +522,8 @@ export interface RunConfig {
   caseFilter: string[] | null;
   /** Present only when the run carries the invariance control; absent, the configuration is unchanged. */
   invarianceControl?: InvarianceControlConfig;
+  /** Present only when a per-preset planner profile override is on (A2); absent, the configuration is unchanged. */
+  plannerProfileOverrides?: Record<string, PlannerProfileOverride>;
 }
 
 export const SEED_RULE = "seed_k = (base + k) >>> 0; a:b and b:a share seed_k; mirrors play once";
@@ -488,6 +577,7 @@ export function configBaselineBlockers(config: RunConfig): string[] {
   if (config.caseFilter !== null) blockers.push("caseFilter");
   if (Object.keys(config.strategyOverrides).length) blockers.push("strategyOverrides");
   if (config.invarianceControl !== undefined) blockers.push("invarianceControl");
+  if (config.plannerProfileOverrides !== undefined) blockers.push("plannerProfileOverrides");
   return blockers;
 }
 
@@ -570,6 +660,8 @@ export interface SeatMetrics {
     mismatchByPath: Counter;
     terminations: Counter;
     repeatedStates: number;
+    /** Present only when config.plannerProfileOverrides is (A2), on both seats; never undefined. */
+    profileOverride?: PlannerProfileOverrideSeat;
   };
   unsupported: {
     tlsBranches: number;
@@ -592,6 +684,30 @@ export interface SeatMetrics {
   mainPhaseExits: Counter;
 }
 
+/**
+ * Evidence of the planner profile override, counted once per Main Phase
+ * decision (the profile capture). Phases are main1, main2 or other.
+ */
+export interface PlannerProfileOverrideSeat {
+  /** Profiles captured, by phase. */
+  captured: Counter;
+  /** Of those, the ones with an adjustment in scope, by phase. */
+  applied: Counter;
+  /** Applied captures whose effective profile differs from the base one. */
+  changed: number;
+  /** Add adjustments on a field the base profile does not define (an observer defect). */
+  missing: number;
+  /** "field:base>effective" per adjusted field, or "field:missing". */
+  transitions: Counter;
+}
+
+/** planner-budget plugin (A2): TLS searches with plannedNodesEvaluated >= the effective nodeBudget. */
+export interface PlannerBudgetSeat {
+  budgetReached: number;
+  /** The same, by the planner tuple of profiles.planner. */
+  budgetReachedByTuple: Counter;
+}
+
 export interface TechZeroComboSeat {
   summonsById: Counter;
   comboTurns: number[];
@@ -610,6 +726,8 @@ export interface PresetMetricsRecord {
   lethal: { player: LethalSeat; bot: LethalSeat } | null;
   /** Present only when config.presetMetrics includes "diag24" (D5); never null, never undefined. */
   diag24?: Diag24Record;
+  /** Present only when config.presetMetrics includes "planner-budget" (A2); never null, never undefined. */
+  "planner-budget"?: { player: PlannerBudgetSeat; bot: PlannerBudgetSeat };
 }
 
 // ── diag24 (phase 2.4, A1) ─────────────────────────────────────────────────
@@ -1180,13 +1298,54 @@ function parsePlannerBudgets(value: unknown, label: string): PlannerBudgets {
   };
 }
 
+function parsePlannerProfileOverrides(value: unknown, presets: readonly string[], label: string): Record<string, PlannerProfileOverride> {
+  const raw = object(value, label);
+  if (!Object.keys(raw).length) fail(label, "não pode ser vazio.");
+  const result: Record<string, PlannerProfileOverride> = {};
+  for (const [preset, entry] of Object.entries(raw)) {
+    const presetLabel = `${label}.${preset}`;
+    if (!presets.includes(preset)) fail(presetLabel, "não é um preset da execução.");
+    const scopes = object(entry, presetLabel);
+    if (!Object.keys(scopes).length) fail(presetLabel, "não pode ser vazio.");
+    const override: PlannerProfileOverride = {};
+    for (const [scopeKey, scopeEntry] of Object.entries(scopes)) {
+      const scope = oneOf(scopeKey, PLANNER_PROFILE_SCOPES, `${presetLabel}.${scopeKey}`);
+      const scopeLabel = `${presetLabel}.${scope}`;
+      const fields = object(scopeEntry, scopeLabel);
+      if (!Object.keys(fields).length) fail(scopeLabel, "não pode ser vazio.");
+      const adjustments: PlannerProfileAdjustments = {};
+      for (const [fieldKey, fieldEntry] of Object.entries(fields)) {
+        const field = oneOf(fieldKey, PLANNER_PROFILE_FIELDS, `${scopeLabel}.${fieldKey}`);
+        const fieldLabel = `${scopeLabel}.${field}`;
+        const adjustmentRaw = object(fieldEntry, fieldLabel);
+        exactKeys(adjustmentRaw, ["op", "value"], fieldLabel);
+        const adjustment: PlannerProfileAdjustment = {
+          op: oneOf(adjustmentRaw.op, PLANNER_PROFILE_OPS, `${fieldLabel}.op`),
+          value: finiteNumber(adjustmentRaw.value, `${fieldLabel}.value`),
+        };
+        const problem = plannerProfileAdjustmentProblem(field, adjustment);
+        if (problem) fail(`${fieldLabel}.value`, problem);
+        adjustments[field] = adjustment;
+      }
+      override[scope] = adjustments;
+    }
+    const conflict = plannerProfileScopeConflict(override);
+    if (conflict) fail(presetLabel, `declara ${conflict} em all e também numa fase.`);
+    result[preset] = override;
+  }
+  return result;
+}
+
 function parseConfig(value: unknown, label: string): RunConfig {
   const raw = object(value, label);
-  // The invariance control is the only optional key: a run without it keeps the v1 configuration exactly.
+  // The invariance control and the planner profile override are the only optional keys:
+  // a run without them keeps the v1 configuration exactly.
   const invarianceControl = Object.hasOwn(raw, "invarianceControl");
+  const plannerProfileOverrides = Object.hasOwn(raw, "plannerProfileOverrides");
   exactKeys(raw, ["profile", "speed", "beam", "planner", "delays", "environment", "maxTurns", "timeoutMs", "timeoutOutcome",
     "stallGuard", "availablePresets", "presets", "decks", "decksSha256", "banlistSha256", "seeds", "matrix", "presetMetrics",
-    "strategyOverrides", "caseFilter", ...(invarianceControl ? ["invarianceControl"] : [])], label);
+    "strategyOverrides", "caseFilter", ...(invarianceControl ? ["invarianceControl"] : []),
+    ...(plannerProfileOverrides ? ["plannerProfileOverrides"] : [])], label);
   const beam = object(raw.beam, `${label}.beam`);
   exactKeys(beam, ["beamWidth", "maxDepth", "nodeBudget", "source"], `${label}.beam`);
   const planner = object(raw.planner, `${label}.planner`);
@@ -1309,6 +1468,10 @@ function parseConfig(value: unknown, label: string): RunConfig {
     const control = object(raw.invarianceControl, `${label}.invarianceControl`);
     exactKeys(control, ["swap"], `${label}.invarianceControl`);
     config.invarianceControl = { swap: literal(control.swap, INVARIANCE_SWAP_RULE, `${label}.invarianceControl.swap`) };
+  }
+  if (plannerProfileOverrides) {
+    config.plannerProfileOverrides = parsePlannerProfileOverrides(raw.plannerProfileOverrides, presets,
+      `${label}.plannerProfileOverrides`);
   }
   if (!isUint32(config.seeds.base)) fail(`${label}.seeds.base`, "deve ser um uint32.");
   const expectedSeeds = Array.from({ length: config.seeds.count }, (_, k) => seedFor(config.seeds.base, k));
@@ -1439,8 +1602,10 @@ function parseSeatMetrics(value: unknown, label: string): SeatMetrics {
   const decisions = object(raw.decisions, `${label}.decisions`);
   exactKeys(decisions, ["mainPhase", "measured", "broker"], `${label}.decisions`);
   const planning = object(raw.planning, `${label}.planning`);
+  // profileOverride is optional (A2): present only when the configuration carries the override.
+  const hasProfileOverride = Object.hasOwn(planning, "profileOverride");
   exactKeys(planning, ["searches", "used", "comparisons", "matches", "mismatches", "failed", "mismatchBySeverity",
-    "mismatchByPath", "terminations", "repeatedStates"], `${label}.planning`);
+    "mismatchByPath", "terminations", "repeatedStates", ...(hasProfileOverride ? ["profileOverride"] : [])], `${label}.planning`);
   const failed = object(planning.failed, `${label}.planning.failed`);
   exactKeys(failed, ["notExecuted", "executedRejected"], `${label}.planning.failed`);
   const unsupported = object(raw.unsupported, `${label}.unsupported`);
@@ -1472,6 +1637,9 @@ function parseSeatMetrics(value: unknown, label: string): SeatMetrics {
       mismatchByPath: counter(planning.mismatchByPath, `${label}.planning.mismatchByPath`),
       terminations: counter(planning.terminations, `${label}.planning.terminations`),
       repeatedStates: integer(planning.repeatedStates, `${label}.planning.repeatedStates`),
+      ...(hasProfileOverride
+        ? { profileOverride: parseProfileOverrideSeat(planning.profileOverride, `${label}.planning.profileOverride`) }
+        : {}),
     },
     unsupported: {
       tlsBranches: integer(unsupported.tlsBranches, `${label}.unsupported.tlsBranches`),
@@ -1499,6 +1667,33 @@ function parseSeatMetrics(value: unknown, label: string): SeatMetrics {
   };
 }
 
+function parseProfileOverrideSeat(value: unknown, label: string): PlannerProfileOverrideSeat {
+  const raw = object(value, label);
+  exactKeys(raw, ["captured", "applied", "changed", "missing", "transitions"], label);
+  return {
+    captured: counter(raw.captured, `${label}.captured`),
+    applied: counter(raw.applied, `${label}.applied`),
+    changed: integer(raw.changed, `${label}.changed`),
+    missing: integer(raw.missing, `${label}.missing`),
+    transitions: counter(raw.transitions, `${label}.transitions`),
+  };
+}
+
+function parsePlannerBudgetSeat(value: unknown, label: string): PlannerBudgetSeat {
+  const raw = object(value, label);
+  exactKeys(raw, ["budgetReached", "budgetReachedByTuple"], label);
+  return {
+    budgetReached: integer(raw.budgetReached, `${label}.budgetReached`),
+    budgetReachedByTuple: counter(raw.budgetReachedByTuple, `${label}.budgetReachedByTuple`),
+  };
+}
+
+function parsePlannerBudget(value: unknown, label: string): { player: PlannerBudgetSeat; bot: PlannerBudgetSeat } {
+  const raw = object(value, label);
+  exactKeys(raw, ["player", "bot"], label);
+  return { player: parsePlannerBudgetSeat(raw.player, `${label}.player`), bot: parsePlannerBudgetSeat(raw.bot, `${label}.bot`) };
+}
+
 function parseComboSeat(value: unknown, label: string): TechZeroComboSeat {
   const raw = object(value, label);
   exactKeys(raw, ["summonsById", "comboTurns"], label);
@@ -1518,9 +1713,10 @@ function parseLethalSeat(value: unknown, label: string): LethalSeat {
 
 function parsePresetMetrics(value: unknown, label: string): PresetMetricsRecord {
   const raw = object(value, label);
-  // diag24 is optional (D5): absent when the plugin is off, never null.
+  // diag24 and planner-budget are optional (D5): absent when the plugin is off, never null.
   const hasDiag24 = Object.hasOwn(raw, "diag24");
-  exactKeys(raw, ["techzero-combo", "lethal", ...(hasDiag24 ? ["diag24"] : [])], label);
+  const hasBudget = Object.hasOwn(raw, "planner-budget");
+  exactKeys(raw, ["techzero-combo", "lethal", ...(hasDiag24 ? ["diag24"] : []), ...(hasBudget ? ["planner-budget"] : [])], label);
   return {
     "techzero-combo": nullable(raw["techzero-combo"], entry => {
       const combo = object(entry, `${label}.techzero-combo`);
@@ -1539,6 +1735,7 @@ function parsePresetMetrics(value: unknown, label: string): PresetMetricsRecord 
       };
     }),
     ...(hasDiag24 ? { diag24: parseDiag24(raw.diag24, `${label}.diag24`) } : {}),
+    ...(hasBudget ? { "planner-budget": parsePlannerBudget(raw["planner-budget"], `${label}.planner-budget`) } : {}),
   };
 }
 

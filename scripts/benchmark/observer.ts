@@ -3,7 +3,7 @@ import Game from "../../src/core/Game.js";
 import { DuelTracker } from "../../src/core/ai/ArenaAnalytics.js";
 import { evaluateVisibleBattle, type VisibleBattleProjection } from "../../src/core/ai/common/battleProjection.js";
 import { TECH_ZERO_IDS } from "../../src/core/ai/techzero/knowledge.js";
-import type { AIAction } from "../../src/core/contracts/ai.js";
+import type { AIAction, AIPlanningProfile } from "../../src/core/contracts/ai.js";
 import type { ArenaDuelResult } from "../../src/core/contracts/arena.js";
 import type { BotGamePort, BotStrategyPort } from "../../src/core/contracts/bot.js";
 import type { AfterSummonEventPayload } from "../../src/core/contracts/events.js";
@@ -16,6 +16,8 @@ import {
   FAILED_BACKROW_REACTION_KEY,
   GUARD_STAGE_RING_SIZE,
   MISMATCH_SAMPLE_LIMIT,
+  PLANNER_PROFILE_CAPS,
+  PLANNER_PROFILE_FIELDS,
   SEATS,
   classifyFailureCode,
   digestOf,
@@ -36,6 +38,11 @@ import {
   type JsonValue,
   type LethalSeat,
   type MismatchSample,
+  type PlannerBudgetSeat,
+  type PlannerProfileAdjustments,
+  type PlannerProfileField,
+  type PlannerProfileOverride,
+  type PlannerProfileOverrideSeat,
   type PresetMetricId,
   type PresetMetricsRecord,
   type RunConfig,
@@ -132,7 +139,7 @@ function markerFamily(marker: string): string {
   return marker.split(":", 1)[0] ?? marker;
 }
 
-function emptySeatMetrics(preset: string): SeatMetrics {
+function emptySeatMetrics(preset: string, profileOverride: boolean): SeatMetrics {
   return {
     preset,
     decisions: { mainPhase: 0, measured: 0, broker: 0 },
@@ -140,6 +147,8 @@ function emptySeatMetrics(preset: string): SeatMetrics {
       searches: 0, used: 0, comparisons: 0, matches: 0, mismatches: 0,
       failed: { notExecuted: 0, executedRejected: 0 },
       mismatchBySeverity: {}, mismatchByPath: {}, terminations: {}, repeatedStates: 0,
+      // Only with the override in the configuration (D5): otherwise the key is absent.
+      ...(profileOverride ? { profileOverride: { captured: {}, applied: {}, changed: 0, missing: 0, transitions: {} } } : {}),
     },
     unsupported: { tlsBranches: 0, tlsByFamily: {}, tlsByMarker: {}, beamGreedyByFamily: {}, beamGreedyByMarker: {}, otherByFamily: {} },
     nodes: { tls: 0, beamGreedySimulations: 0, otherSimulations: 0 },
@@ -148,16 +157,28 @@ function emptySeatMetrics(preset: string): SeatMetrics {
   };
 }
 
+function sortedProfileOverrideSeat(evidence: PlannerProfileOverrideSeat): PlannerProfileOverrideSeat {
+  return {
+    captured: sortedCounter(evidence.captured),
+    applied: sortedCounter(evidence.applied),
+    changed: evidence.changed,
+    missing: evidence.missing,
+    transitions: sortedCounter(evidence.transitions),
+  };
+}
+
 function sortedSeatMetrics(metrics: SeatMetrics): SeatMetrics {
+  const { profileOverride, ...planning } = metrics.planning;
   return {
     preset: metrics.preset,
     decisions: { ...metrics.decisions },
     planning: {
-      ...metrics.planning,
+      ...planning,
       failed: { ...metrics.planning.failed },
       mismatchBySeverity: sortedCounter(metrics.planning.mismatchBySeverity),
       mismatchByPath: sortedCounter(metrics.planning.mismatchByPath),
       terminations: sortedCounter(metrics.planning.terminations),
+      ...(profileOverride ? { profileOverride: sortedProfileOverrideSeat(profileOverride) } : {}),
     },
     unsupported: {
       tlsBranches: metrics.unsupported.tlsBranches,
@@ -188,6 +209,65 @@ interface PlannerProfileSnapshot {
   candidateLimit: unknown;
 }
 
+// ── Planner profile override (phase 2.4, A2) ───────────────────────────────
+
+/** What one call of the override did; the observer counts it at the profile capture. */
+export interface ProfileOverrideEvidence {
+  /** Phase of the decision, as the strategies read it (context.phase || game.phase). */
+  phase: string;
+  /** An adjustment of this phase's scope exists. */
+  inScope: boolean;
+  /** The effective profile differs from the base one. */
+  changed: boolean;
+  /** Add adjustments on a field the base profile does not define; the field keeps the base value. */
+  missing: PlannerProfileField[];
+  /** "field:base>effective" per adjusted field. */
+  transitions: string[];
+}
+
+/**
+ * Pure: the base profile when no adjustment is in scope (the very object), or
+ * a shallow copy with the four TLS budgets adjusted. Only beamWidth, maxDepth,
+ * nodeBudget and candidateLimit change; every effective value is clamped to
+ * [1, cap]. The base object is never written (some profiles are frozen).
+ */
+export function applyPlannerProfileOverride(base: AIPlanningProfile, override: PlannerProfileOverride, phase: string): {
+  profile: AIPlanningProfile;
+  evidence: Omit<ProfileOverrideEvidence, "phase">;
+} {
+  const adjustments: PlannerProfileAdjustments = {
+    ...override.all,
+    ...(phase === "main1" ? override.main1 : phase === "main2" ? override.main2 : {}),
+  };
+  const fields = PLANNER_PROFILE_FIELDS.filter(field => adjustments[field] !== undefined);
+  if (!fields.length) return { profile: base, evidence: { inScope: false, changed: false, missing: [], transitions: [] } };
+  const profile: AIPlanningProfile = { ...base };
+  const missing: PlannerProfileField[] = [];
+  const transitions: string[] = [];
+  let changed = false;
+  for (const field of fields) {
+    const adjustment = adjustments[field];
+    if (!adjustment) continue;
+    const current: unknown = Reflect.get(base, field);
+    const baseValue = typeof current === "number" && Number.isFinite(current) ? current : null;
+    if (adjustment.op === "add" && baseValue === null) {
+      missing.push(field);
+      transitions.push(`${field}:missing`);
+      continue;
+    }
+    const raw = adjustment.op === "set" ? adjustment.value : (baseValue ?? 0) + adjustment.value;
+    const next = Math.min(PLANNER_PROFILE_CAPS[field], Math.max(1, raw));
+    profile[field] = next;
+    transitions.push(`${field}:${String(current)}>${next}`);
+    if (next !== current) changed = true;
+  }
+  return { profile, evidence: { inScope: true, changed, missing, transitions } };
+}
+
+function phaseBucket(phase: unknown): string {
+  return phase === "main1" || phase === "main2" ? phase : "other";
+}
+
 interface SeatObservation {
   metrics: SeatMetrics;
   /** pre: between ai_decision_before and ai_turn_line_search; post: after it; idle: outside a decision. */
@@ -202,6 +282,8 @@ interface SeatObservation {
   awaitingProfile: boolean;
   profile: PlannerProfileSnapshot | null;
   plannerProfiles: Counter;
+  /** planner-budget plugin (A2); counted only when the plugin is on. */
+  budget: PlannerBudgetSeat;
   latencies: number[];
 }
 
@@ -305,10 +387,11 @@ export class DuelObserver {
   constructor(spec: HarnessSpec, game: HarnessGame) {
     this.spec = spec;
     this.game = game;
+    const profileOverride = spec.config.plannerProfileOverrides !== undefined;
     const observation = (preset: string): SeatObservation => ({
-      metrics: emptySeatMetrics(preset), window: "idle", pendingSimulations: 0, pendingBranches: 0, pendingMarkers: [],
+      metrics: emptySeatMetrics(preset, profileOverride), window: "idle", pendingSimulations: 0, pendingBranches: 0, pendingMarkers: [],
       tlsSearchMismatches: 0, executedSinceDecision: false, decisionOpen: false, decisionStartedAt: 0,
-      awaitingProfile: false, profile: null, plannerProfiles: {}, latencies: [],
+      awaitingProfile: false, profile: null, plannerProfiles: {}, budget: { budgetReached: 0, budgetReachedByTuple: {} }, latencies: [],
     });
     this.seats = { player: observation(spec.entry.seat1), bot: observation(spec.entry.seat2) };
     const guard = spec.config.stallGuard;
@@ -335,10 +418,13 @@ export class DuelObserver {
       task();
     } catch (error) {
       // A harness defect never reaches the duel; it is counted as a defect of the record.
-      this.observerErrors += 1;
-      const message = error instanceof Error ? error.message : String(error);
-      increment(this.observerErrorLabels, `[observer] ${message.split(/\r?\n/, 1)[0]?.slice(0, 200) ?? ""}`);
+      this.recordObserverError(error instanceof Error ? error.message : String(error));
     }
+  }
+
+  private recordObserverError(message: string): void {
+    this.observerErrors += 1;
+    increment(this.observerErrorLabels, `[observer] ${message.split(/\r?\n/, 1)[0]?.slice(0, 200) ?? ""}`);
   }
 
   private bump(name: GuardCounterName): void {
@@ -475,25 +561,40 @@ export class DuelObserver {
     if (numberOr(read(details, "plannerUnsupportedBranches"), 0) !== seat.pendingBranches) seat.tlsSearchMismatches += 1;
     this.flushPending(seat, "tls");
     seat.window = "post";
-    increment(seat.plannerProfiles, this.plannerTuple(seat.profile, details));
+    const budgets = this.plannerBudgets(seat.profile);
+    const tuple = this.plannerTuple(budgets, details);
+    increment(seat.plannerProfiles, tuple);
+    if (this.plugins.has("planner-budget")) {
+      // "Budget reached", not "search cut": the loop stops at >=, and a search may also end naturally at exactly nodeBudget.
+      const nodes = read(details, "plannedNodesEvaluated");
+      if (typeof budgets.budget === "number" && typeof nodes === "number" && nodes >= budgets.budget) {
+        seat.budget.budgetReached += 1;
+        increment(seat.budget.budgetReachedByTuple, tuple);
+      }
+    }
   }
 
-  /** Effective planner profile with mainPhaseController's precedence (turnLineSearch* are absent, checked at start). */
-  private plannerTuple(profile: PlannerProfileSnapshot | null, details: unknown): string {
+  /** Effective planner budgets with mainPhaseController's precedence (turnLineSearch* are absent, checked at start). */
+  private plannerBudgets(profile: PlannerProfileSnapshot | null): { width: unknown; depth: unknown; budget: unknown; candidates: unknown } {
     const game = this.game;
     const field = (key: string): unknown => Reflect.get(game, key);
-    const width = firstPresent(field("turnLineSearchBeamWidth"), profile?.beamWidth, field("arenaPlannerBeamWidth"),
-      field("arenaBeamWidth"), 2);
-    const depth = firstPresent(field("turnLineSearchMaxDepth"), profile?.maxDepth, field("arenaPlannerMaxDepth"),
-      field("arenaMaxDepth"), 2);
-    const budget = firstPresent(field("turnLineSearchNodeBudget"), profile?.nodeBudget, field("arenaPlannerNodeBudget"),
-      field("arenaNodeBudget"), 100);
-    const candidates = firstPresent(field("turnLineSearchCandidateLimit"), profile?.candidateLimit,
-      field("arenaPlannerCandidateLimit"), "actions");
+    return {
+      width: firstPresent(field("turnLineSearchBeamWidth"), profile?.beamWidth, field("arenaPlannerBeamWidth"),
+        field("arenaBeamWidth"), 2),
+      depth: firstPresent(field("turnLineSearchMaxDepth"), profile?.maxDepth, field("arenaPlannerMaxDepth"),
+        field("arenaMaxDepth"), 2),
+      budget: firstPresent(field("turnLineSearchNodeBudget"), profile?.nodeBudget, field("arenaPlannerNodeBudget"),
+        field("arenaNodeBudget"), 100),
+      candidates: firstPresent(field("turnLineSearchCandidateLimit"), profile?.candidateLimit,
+        field("arenaPlannerCandidateLimit"), "actions"),
+    };
+  }
+
+  private plannerTuple(budgets: ReturnType<DuelObserver["plannerBudgets"]>, details: unknown): string {
     const turnMode = read(details, "plannerTurnMode") ?? "?";
     const battleSteps = read(details, "plannerBattleStepLimit") ?? "?";
     const mode = read(details, "plannerMode") ?? "?";
-    return [width, depth, budget, candidates, turnMode, battleSteps, mode].map(String).join("/");
+    return [budgets.width, budgets.depth, budgets.budget, budgets.candidates, turnMode, battleSteps, mode].map(String).join("/");
   }
 
   private planExecution(stage: string, actor: Seat, seat: SeatObservation, details: unknown): void {
@@ -601,7 +702,8 @@ export class DuelObserver {
     });
   }
 
-  onPlanningProfile(actorId: unknown, profile: unknown, context: unknown): void {
+  /** evidence comes only from a seat with a planner profile override (A2). */
+  onPlanningProfile(actorId: unknown, profile: unknown, context: unknown, evidence?: ProfileOverrideEvidence): void {
     this.guarded(() => {
       const actor = seatOf(actorId);
       if (!actor) return;
@@ -613,6 +715,18 @@ export class DuelObserver {
         beamWidth: read(profile, "beamWidth"), maxDepth: read(profile, "maxDepth"),
         nodeBudget: read(profile, "nodeBudget"), candidateLimit: read(profile, "candidateLimit"),
       };
+      const overrideSeat = seat.metrics.planning.profileOverride;
+      if (!overrideSeat) return;
+      const phase = phaseBucket(evidence ? evidence.phase : read(context, "phase") || this.game.phase);
+      increment(overrideSeat.captured, phase);
+      if (!evidence?.inScope) return;
+      increment(overrideSeat.applied, phase);
+      if (evidence.changed) overrideSeat.changed += 1;
+      for (const transition of evidence.transitions) increment(overrideSeat.transitions, transition);
+      if (!evidence.missing.length) return;
+      overrideSeat.missing += evidence.missing.length;
+      // Deterministic and visible: the defect gate discards the run; the field kept its base value.
+      this.recordObserverError(`planner profile override: ${evidence.missing.join(", ")} missing from the base profile`);
     });
   }
 
@@ -686,6 +800,11 @@ export class DuelObserver {
     return [...this.seats[seat].latencies];
   }
 
+  plannerBudget(seat: Seat): PlannerBudgetSeat {
+    const budget = this.seats[seat].budget;
+    return { budgetReached: budget.budgetReached, budgetReachedByTuple: sortedCounter(budget.budgetReachedByTuple) };
+  }
+
   /** Side line of the invariance control, with the tracker's guard tallies; null without the control. */
   invarianceRecord(entry: BenchmarkCase): InvarianceCaseRecord | null {
     return this.invariance?.record(entry, this.tracker?.getPublicProjectionGuard() ?? { player: {}, bot: {} }) ?? null;
@@ -706,6 +825,7 @@ export class DuelObserver {
         : null,
       // Absent, not null, when the plugin is off (D5); record() never throws and self-checks with parseDiag24.
       ...(this.diag24 ? { diag24: this.diag24.record(completed) } : {}),
+      ...(this.plugins.has("planner-budget") ? { "planner-budget": { player: this.plannerBudget("player"), bot: this.plannerBudget("bot") } } : {}),
     };
   }
 
@@ -918,11 +1038,20 @@ function instrumentStrategy(bot: HarnessBot): void {
     }
   };
   const getPlanningProfile = strategy.getPlanningProfile;
+  // A2: the override of this seat's preset (bot.archetype), read once; without one the wrapper is the one of before.
+  const overrides = HarnessGame.spec?.config.plannerProfileOverrides;
+  const override = overrides && Object.hasOwn(overrides, bot.archetype) ? overrides[bot.archetype] : undefined;
   if (typeof getPlanningProfile === "function") {
     strategy.getPlanningProfile = (game, context) => {
       const profile = getPlanningProfile.call(strategy, game, context);
-      activeObserver()?.onPlanningProfile(bot.id, profile, context);
-      return profile;
+      if (!override) {
+        activeObserver()?.onPlanningProfile(bot.id, profile, context);
+        return profile;
+      }
+      const phase = String(read(context, "phase") || read(game, "phase") || "");
+      const applied = applyPlannerProfileOverride(profile, override, phase);
+      activeObserver()?.onPlanningProfile(bot.id, applied.profile, context, { phase, ...applied.evidence });
+      return applied.profile;
     };
   }
 }
