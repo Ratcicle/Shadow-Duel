@@ -1,5 +1,6 @@
 import type Bot from "../../src/core/Bot.js";
 import type Game from "../../src/core/Game.js";
+import { getCardComparableAttribute } from "../../src/core/Card.js";
 import ShadowHeartStrategy from "../../src/core/ai/ShadowHeartStrategy.js";
 import { evaluateVisibleBattle } from "../../src/core/ai/common/battleProjection.js";
 import { getTributeRequirementFor, shouldSummonMonster } from "../../src/core/ai/shadowheart/summonPolicy.js";
@@ -131,10 +132,14 @@ function actionLabel(fingerprint: unknown): string | null {
   return [type, card, target].filter((entry): entry is string => entry !== null).join(":");
 }
 
-/** Main Phase candidate key, with the controller's card precedence (card.name, then cardName). */
+/**
+ * Main Phase candidate key, with the controller's card precedence (card.name,
+ * then cardName); the automatic Ascension action carries only ascensionCard.
+ */
 function actionKey(action: unknown): string {
   const type = textOrNull(read(action, "type")) ?? "action";
-  const name = textOrNull(read(read(action, "card"), "name")) || textOrNull(read(action, "cardName")) || "-";
+  const name = textOrNull(read(read(action, "card"), "name")) || textOrNull(read(action, "cardName")) ||
+    textOrNull(read(read(action, "ascensionCard"), "name")) || "-";
   return `${type}|${name}`;
 }
 
@@ -215,8 +220,9 @@ function classifyCardZone(expected: readonly JsonCard[], actual: readonly JsonCa
   const sameInstances = multiset(expected, ["name", "instanceId"]) === multiset(actual, ["name", "instanceId"]);
   if (!content && !sameInstances) flags.add("instance_swap");
   // Same physical card on both sides: compare its place and its state. Cards
-  // with an instanceId pair by it; cards without one (simulated tokens,
-  // created cards) pair in array order by (name, id).
+  // with an instanceId pair by it; cards without one pair in array order by
+  // (name, id). A token created in the simulation carries its own instanceId
+  // (sim:token:N), never the live token's, so it reads as instance_swap.
   const hasInstance = (card: JsonCard): boolean => (card.instanceId ?? null) !== null;
   const remaining = [...actual];
   const pairs: Array<[JsonCard, JsonCard]> = [];
@@ -293,7 +299,6 @@ function unknownIds(names: readonly JsonValue[]): string[] {
 interface PreparedDiff {
   path: string;
   severity: string;
-  reason: string | null;
   kind: "cards" | "names" | "scalar";
   cls: Diag24DiffClass;
   flags: string[];
@@ -318,7 +323,6 @@ function singleZone(value: JsonValue): JsonValue {
 function prepareDiff(diff: unknown): PreparedDiff {
   const path = textOrNull(read(diff, "path")) ?? "unspecified";
   const severity = textOrNull(read(diff, "severity")) ?? "unknown";
-  const reason = textOrNull(read(diff, "reason"));
   let expected = toJson(read(diff, "expected"));
   let actual = toJson(read(diff, "actual"));
   const extraFlags: string[] = [];
@@ -333,13 +337,13 @@ function prepareDiff(diff: unknown): PreparedDiff {
     const actualCards = cardList(actual);
     if (expectedCards && actualCards) {
       const { cls, flags } = classifyCardZone(expectedCards, actualCards);
-      return { path, severity, reason, kind: "cards", cls, flags: [...flags, ...extraFlags].sort(compareCodeUnits),
+      return { path, severity, kind: "cards", cls, flags: [...flags, ...extraFlags].sort(compareCodeUnits),
         expected: sortCards(expectedCards), actual: sortCards(actualCards) };
     }
   }
   const kind = isNameZone(path) && Array.isArray(expected) && Array.isArray(actual) ? "names" : "scalar";
   const cls: Diag24DiffClass = identical ? "compact_identical" : kind;
-  return { path, severity, reason, kind, cls, flags: [...(identical ? ["compact_identical"] : []), ...extraFlags].sort(compareCodeUnits),
+  return { path, severity, kind, cls, flags: [...(identical ? ["compact_identical"] : []), ...extraFlags].sort(compareCodeUnits),
     expected, actual };
 }
 
@@ -390,7 +394,7 @@ function normalizeSample(diffs: readonly PreparedDiff[]): Diag24DiffSample[] {
     return value;
   };
   return diffs.map(diff => ({
-    path: diff.path, severity: diff.severity, reason: diff.reason, class: diff.cls, flags: [...diff.flags],
+    path: diff.path, severity: diff.severity, class: diff.cls, flags: [...diff.flags],
     expected: rewrite(diff, diff.expected), actual: rewrite(diff, diff.actual),
   }));
 }
@@ -788,7 +792,9 @@ export class Diag24Collector {
     state.decision = { actions: typeof actions === "number" ? actions : null, tls: false, roots: new Set() };
     if (state.generationPending) {
       state.generationPending = false;
-      if (!this.closed && state.data.summonVetoes) state.data.summonVetoes.roots += 1;
+      // ai_decision_before follows every generation, the empty ones too
+      // (no_candidates, alternatives_exhausted): only one with candidates is a root.
+      if (!this.closed && state.data.summonVetoes && typeof actions === "number" && actions > 0) state.data.summonVetoes.roots += 1;
     }
   }
 
@@ -1159,8 +1165,12 @@ export class Diag24Collector {
     increment(backrow.reactionsByCard, name);
     let down = 0;
     let up = 0;
-    for (const entry of [...owner.spellTrap, ...(owner.fieldSpell ? [owner.fieldSpell] : [])]) {
-      const facedown = entry === card && typeof wasFacedown === "boolean" ? wasFacedown : entry.isFacedown === true;
+    const backrowCards: unknown[] = [...owner.spellTrap, ...(owner.fieldSpell ? [owner.fieldSpell] : [])];
+    // A card whose cost sent itself away (Mirror Path, Jagged Peak) has left the
+    // zone before publication; it still counts once, with its face at activation.
+    if (!backrowCards.includes(card)) backrowCards.push(card);
+    for (const entry of backrowCards) {
+      const facedown = entry === card && typeof wasFacedown === "boolean" ? wasFacedown : read(entry, "isFacedown") === true;
       if (facedown) down += 1;
       else up += 1;
     }
@@ -1203,7 +1213,9 @@ export class Diag24Collector {
     const turn = this.game.turnCounter;
     const cardId = integerOrNull(read(card, "id"));
     const extraDeck = fromZone === "extraDeck" || EXTRA_DECK_METHODS.has(method);
-    const level = read(card, "level");
+    // The engine's base level (baseLevel ?? originalLevel ?? level): a level
+    // lowered until end of turn, as by Solar Eclipse Dragon, keeps a boss a boss.
+    const level = getCardComparableAttribute(card, "originalLevel");
     const boss = extraDeck || (typeof level === "number" && level >= 7);
     const data = this.seats[seat].data.extraDeck;
     if (extraDeck) {

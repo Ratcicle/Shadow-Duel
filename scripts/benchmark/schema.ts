@@ -805,7 +805,6 @@ export interface Diag24Turn {
 export interface Diag24DiffSample {
   path: string;
   severity: string;
-  reason: string | null;
   class: Diag24DiffClass;
   /** Sorted. */
   flags: string[];
@@ -1578,11 +1577,10 @@ function parseDiag24Sample(value: unknown, label: string): Diag24DivergenceSampl
     diffs: boundedArray(raw.diffs, DIAG24_DIFFS_PER_SAMPLE, `${label}.diffs`).map((entry, index) => {
       const at = `${label}.diffs[${index}]`;
       const diff = object(entry, at);
-      exactKeys(diff, ["path", "severity", "reason", "class", "flags", "expected", "actual"], at);
+      exactKeys(diff, ["path", "severity", "class", "flags", "expected", "actual"], at);
       return {
         path: string(diff.path, `${at}.path`),
         severity: string(diff.severity, `${at}.severity`),
-        reason: nullableString(diff.reason, `${at}.reason`),
         class: oneOf(diff.class, DIAG24_DIFF_CLASSES, `${at}.class`),
         flags: stringArray(diff.flags, `${at}.flags`),
         expected: jsonValue(diff.expected, `${at}.expected`),
