@@ -35,6 +35,20 @@ type EffectChoiceInput = {
   player?: AiPlayerInput; game?: AIState | undefined; activationZone?: CanonicalZone | "temporary" | null | undefined;
 };
 
+/** The fields this strategy reads of the engine's replacement question (zones/movement.ts, effects/destructionReplacement.ts). */
+type ReplacementChoiceInput = {
+  game?: { turnCounter?: number } | null; sourceCard?: object | null; targetCard?: object | null;
+  kind?: string; context?: unknown;
+};
+
+/** Whether the send being asked about is `target` paying a cost of its own effect (effects/actions/movement.ts). */
+function isOwnCostSend(context: unknown, target: object): boolean {
+  if (!context || typeof context !== "object") return false;
+  const options: unknown = Reflect.get(context, "moveOptions");
+  if (!options || typeof options !== "object") return false;
+  return Reflect.get(options, "contextLabel") === "cost" && Reflect.get(options, "sourceCard") === target;
+}
+
 /** Generic tribute value: ATK + DEF/2, the cheapest monsters go first. */
 function neutralTributeValue(card: AiCardInput): number {
   return (card.atk || 0) + (card.def || 0) / 2;
@@ -46,6 +60,26 @@ function selectNeutralTributes<Card extends AiCardInput>(field: readonly Card[],
 
 export default class NeutralDiagnosticStrategy extends BaseStrategy {
   constructor(bot: AIStrategyBotPort) { super(bot); }
+
+  /** Sources of the send-to-GY replacements accepted this turn. */
+  private sendReplacementSources: { turn: number | null; cards: Set<object> } = { turn: null, cards: new Set() };
+
+  /**
+   * Accepts every legal replacement except a send-to-GY one that would protect a card while it
+   * pays the cost of its own send-to-GY replacement accepted this turn: that use is still being
+   * paid, so accepting would re-enter the same hook (zones/movement.ts marks the OPT after the cost).
+   */
+  shouldUseReplacementEffect({ game, sourceCard, targetCard, kind, context }: ReplacementChoiceInput = {}): boolean {
+    if (kind !== "send_to_grave") return true;
+    const turn = game?.turnCounter ?? null;
+    if (this.sendReplacementSources.turn !== turn) this.sendReplacementSources = { turn, cards: new Set() };
+    if (targetCard && this.sendReplacementSources.cards.has(targetCard) && isOwnCostSend(context, targetCard)) {
+      this.sendReplacementSources.cards.delete(targetCard);
+      return false;
+    }
+    if (sourceCard) this.sendReplacementSources.cards.add(sourceCard);
+    return true;
+  }
 
   override get archetypeLabel() { return "Neutral (diagnostic)"; }
 
