@@ -546,6 +546,21 @@ Commit do lote: `ce28c22`. Desenvolvimento N = 5 restrito aos 85 casos do Burnin
 
 Resultado do B0a: aceito (22/11/2026). Validação com 66 × 6, p = 3,6·10⁻¹⁴, e teste por cluster com 23 × 2. O único portão não cumprido à letra é o de 0 defeitos: o aviso da guarda de ataque em `bloomrot:burningwest:11` é um defeito de regra anterior ao lote, exposto pela trajetória nova, e vira o lote R7. Detalhes na linha do B0a no acompanhamento.
 
+#### Pré-registro do B0b (Bloomrot)
+
+Commit do lote: `cddfd35`, sobre o B0a aceito. Desenvolvimento N = 5 restrito aos 85 casos do Bloomrot (`canonical-cddfd35-401c9887`, 0 erros, 0 defeitos) contra a base composta A2-ctl (casos sem Burning West) + B0a (casos com Burning West): placar do Bloomrot sem espelhos de 24 para 28 em 80 casos, 4 casos a favor e 0 contra.
+
+| Campo | Valor |
+| --- | --- |
+| Preset-alvo | Bloomrot |
+| Direção | Para cima, unilateral |
+| Métrica primária | Placar do Bloomrot sem espelhos, teste do sinal pareado (sign-flip exato, empate vale 0,5) |
+| N | 40 no bloco de validação (`--seed-base 20271011`), restrito aos casos do Bloomrot, em duas olhadas com α = 0,0294 em cada uma (Pocock, K = 2). Projeção pela regra 8: 4 discordantes em N = 5, cerca de 16 em N = 20, abaixo do limiar de 20. Primeira olhada: k = 0..19 contra a composta V0 (casos sem Burning West) + B0a-val (casos com Burning West). Segunda olhada, só se a primeira não passar: k = 0..39, com a base k = 20..39 rodada no commit do B0a antes do lote (`canonical-424f78c-6da11724`, 340 casos, 0 erros, 0 defeitos) |
+| Métricas de apoio (sonda dev com `diag24` contra a A3 nos casos sem Burning West e o B0a nos casos com Burning West) | Escolhas do hook de 0 para 37 (Sudden Germination, todas na declaração de ataque do oponente); `hook_rejected` de 12 para 0; Rotting Ground por fallback de 102 para 108 ativações; nenhuma falha de preparação nova; falhas por caminho de 4 para 3; na divergência, nenhum caminho ou classe nova |
+| Portões não estatísticos | Os do B0a: 0 erros e 0 defeitos; guarda de stall sem disparo; vocabulário novo só o do A1b ou explicado pela Sudden Germination; falhas por caminho que não sobem; divergência do Bloomrot sem caminho ou classe nova; prova fora de P idêntica à composta de validação; controles com mudança só em `bloomrot:techzero` e `techzero:bloomrot`; smoke sem divergência de replay; portão estático só em `BloomrotStrategy.ts`, contra o commit do B0a |
+| Agrupamento (E5) | Relatado; teste por cluster (k, assento de P) se o efeito passar de 1,3; o desenvolvimento concentra os casos em poucos clusters |
+| Resultado não aceito | Passe explícito, provado neutro |
+
 ### B1 — Respostas de Chain por nome
 
 - Holy Shield e Void Mirror Dimension saem de `botResponsePolicy.ts` para hooks dos pacotes Luminarch e Void, com a mesma lógica e a mesma ordem de consumo do `aiRandom`.
