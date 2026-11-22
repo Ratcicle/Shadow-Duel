@@ -1,8 +1,9 @@
 import { USAGE_POLICIES } from "../../contracts/effects.js";
-import type { GameCard } from "../../contracts/cards.js";
+import type { GameCard, OncePerTurnDefinition } from "../../contracts/cards.js";
 import type { EffectDefinition, UsagePolicy } from "../../contracts/effects.js";
 import type { EffectUsageEventPayload } from "../../contracts/events.js";
 import type { GamePlayer } from "../../contracts/player.js";
+import type { TriggerEffectLike } from "../../effects/triggers/runtime.js";
 
 interface EffectUsageInput {
   card?: GameCard | null;
@@ -137,11 +138,15 @@ function compact(
   };
 }
 
-function consume(
-  game: EffectUsageHost,
-  card: GameCard | null | undefined,
-  player: EffectUsagePlayer,
-  effect: EffectDefinition,
+function consume<
+  C extends LimitedUsageCard | null | undefined,
+  P extends LimitedUsagePlayer,
+  E extends LimitedUsageEffect,
+>(
+  game: Pick<LimitedUsageSpendHost<C, P, E>, "markOncePerTurnUsed">,
+  card: C,
+  player: P,
+  effect: E,
   reservedTurnKey?: string | null,
 ): void {
   if (effect?.oncePerTurn) {
@@ -154,6 +159,149 @@ function consume(
   }
   if (effect?.oncePerDuel) {
     markOncePerDuelEffectUsed(card, player, effect);
+  }
+}
+
+/** Limit metadata read by a spend; EffectDefinition and runtime replacement definitions satisfy it. */
+export type LimitedUsageEffect = Partial<OncePerTurnDefinition> &
+  Pick<TriggerEffectLike, "id" | "oncePerDuel" | "oncePerDuelName" | "oncePerDuelLimit">;
+
+/** Card projection the once-per-duel ledger keys on. */
+export interface LimitedUsageCard {
+  readonly name?: string | null;
+}
+
+/** Player carrying the once-per-duel ledger written by markOncePerDuelEffectUsed. */
+export type LimitedUsagePlayer = Pick<GamePlayer, "id"> & {
+  oncePerDuelUsageByName?: { [effectKey: string]: number | boolean };
+};
+
+/**
+ * Host a spend reads and writes. The once-per-turn accessors are required so
+ * every spend of a once-per-turn effect yields a restorable token; restore
+ * itself works only on that token and takes no host.
+ */
+export interface LimitedUsageSpendHost<C, P, E> {
+  ensureOncePerTurnUsageFresh(): void;
+  getOncePerTurnLockKey(card: C, effect: E): string;
+  getOncePerTurnStore(card: C, player: P, effect: E): Map<string, unknown>;
+  markOncePerTurnUsed?(card: C, player: P, effect: E, options?: { lockKey: string }): void;
+}
+
+/**
+ * Previous and written value of each counter a spend touched. A restore puts
+ * back the previous value while the counter still holds what the spend wrote,
+ * and otherwise removes only this spend's single use.
+ */
+export interface LimitedUsageSpend {
+  readonly turn: {
+    readonly store: Map<string, unknown>;
+    readonly lockKey: string;
+    readonly had: boolean;
+    readonly previous: unknown;
+    readonly written: unknown;
+  } | null;
+  readonly duel: {
+    readonly player: LimitedUsagePlayer;
+    readonly key: string;
+    readonly hadLedger: boolean;
+    readonly had: boolean;
+    readonly previous: number | boolean | undefined;
+    readonly written: number | boolean | undefined;
+  } | null;
+}
+
+/**
+ * Spends the usage of a limited effect applied outside a Chain Link, before
+ * its cost is paid: no other effect sharing the key can be applied while the
+ * cost resolves. The token lets a failed cost or application undo this spend.
+ */
+export function spendLimitedEffectUsage<
+  C extends LimitedUsageCard | null | undefined,
+  P extends LimitedUsagePlayer,
+  E extends LimitedUsageEffect,
+>(
+  game: LimitedUsageSpendHost<C, P, E>,
+  card: C,
+  player: P | null | undefined,
+  effect: E,
+): LimitedUsageSpend | null {
+  if (!player || (!effect.oncePerTurn && !effect.oncePerDuel)) return null;
+  let turnBefore: {
+    store: Map<string, unknown>;
+    lockKey: string;
+    had: boolean;
+    previous: unknown;
+  } | null = null;
+  if (effect.oncePerTurn) {
+    game.ensureOncePerTurnUsageFresh();
+    const lockKey = game.getOncePerTurnLockKey(card, effect);
+    const store = game.getOncePerTurnStore(card, player, effect);
+    turnBefore = { store, lockKey, had: store.has(lockKey), previous: store.get(lockKey) };
+  }
+  const duelKey = effect.oncePerDuel ? getOncePerDuelKey(card, effect) : null;
+  const ledgerBefore = player.oncePerDuelUsageByName;
+  const duelBefore = duelKey
+    ? {
+      key: duelKey,
+      hadLedger: ledgerBefore !== undefined,
+      had: ledgerBefore !== undefined && Object.hasOwn(ledgerBefore, duelKey),
+      previous: ledgerBefore?.[duelKey],
+    }
+    : null;
+  consume(game, card, player, effect, turnBefore?.lockKey ?? null);
+  return {
+    turn: turnBefore
+      ? { ...turnBefore, written: turnBefore.store.get(turnBefore.lockKey) }
+      : null,
+    duel: duelBefore
+      ? { ...duelBefore, player, written: player.oncePerDuelUsageByName?.[duelBefore.key] }
+      : null,
+  };
+}
+
+/** Uses recorded by a once-per-turn store entry, whatever turn it names. */
+function recordedTurnUses(entry: unknown): number {
+  if (typeof entry === "number") return 1;
+  if (typeof entry !== "object" || entry === null || !("count" in entry)) return 0;
+  const count = Math.floor(Number(entry.count));
+  return Number.isFinite(count) && count > 0 ? count : 0;
+}
+
+/**
+ * Undoes a spend whose cost or application failed. While a counter still
+ * holds the value the spend wrote, its exact previous value comes back; when
+ * another use of the same key followed the spend, only one use is removed.
+ */
+export function restoreLimitedEffectUsage(spend: LimitedUsageSpend | null): void {
+  if (!spend) return;
+  const { turn, duel } = spend;
+  if (turn && turn.store.has(turn.lockKey)) {
+    const current = turn.store.get(turn.lockKey);
+    if (current === turn.written) {
+      if (turn.had) turn.store.set(turn.lockKey, turn.previous);
+      else turn.store.delete(turn.lockKey);
+    } else {
+      const remaining = recordedTurnUses(current) - 1;
+      if (remaining > 0 && typeof current === "object" && current !== null && "turn" in current) {
+        turn.store.set(turn.lockKey, { turn: current.turn, count: remaining });
+      } else {
+        turn.store.delete(turn.lockKey);
+      }
+    }
+  }
+  const ledger = duel?.player.oncePerDuelUsageByName;
+  if (!duel || !ledger || !Object.hasOwn(ledger, duel.key)) return;
+  if (ledger[duel.key] === duel.written) {
+    if (duel.had && duel.previous !== undefined) ledger[duel.key] = duel.previous;
+    else delete ledger[duel.key];
+  } else {
+    const remaining = getOncePerDuelUsage(duel.player, duel.key) - 1;
+    if (remaining > 0) ledger[duel.key] = remaining;
+    else delete ledger[duel.key];
+  }
+  if (!duel.hadLedger && Object.keys(ledger).length === 0) {
+    delete duel.player.oncePerDuelUsageByName;
   }
 }
 
@@ -336,4 +484,8 @@ export function getEffectUsageState(this: EffectUsageHost) {
       .sort((a, b) => a.reservationId - b.reservationId),
   };
 }
-import { markOncePerDuelEffectUsed } from "../../effects/triggers/registration.js";
+import {
+  getOncePerDuelKey,
+  getOncePerDuelUsage,
+  markOncePerDuelEffectUsed,
+} from "../../effects/triggers/registration.js";
