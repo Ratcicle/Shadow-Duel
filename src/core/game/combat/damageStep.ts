@@ -53,7 +53,6 @@ const DAMAGE_STEP_SEQUENCE = Object.freeze([
 
 interface DamageStepWindowResult extends ChainOperationResult {
   occurrence?: ChainRuntimeTriggerOccurrence | null;
-  resolutionResult?: { reason?: string | null } | null;
   timingRecovery?: DamageStepWindowResult | null;
   suppressed?: boolean;
 }
@@ -421,6 +420,7 @@ export function createDamageStepTransaction(
     revealedDefender: false,
     stoppedBeforeCalculation: false,
     endFinalized: false,
+    attackUseSettled: false,
     nextDestructionIndex: 0,
     destructionQueueStart: null,
     destructionAtomicGroupId: null,
@@ -566,6 +566,31 @@ async function collectStageOccurrences(
   return occurrences;
 }
 
+/**
+ * Phase 2.4 R7: a Chain link that resolves without applying its effect (no
+ * legal or affectable target, a declared target no longer valid, a source
+ * that left, an action that found nothing to change) is a resolved link, and
+ * the Damage Step goes on. Only an engine fault stops it: a pending selection,
+ * a window that failed before any Chain resolved, a cancelled Chain, a failed
+ * finalization, or a link that carries an exception.
+ */
+function isDamageStepWindowFault(
+  result: DamageStepWindowResult | null | undefined,
+): boolean {
+  if (!result) return false;
+  if (result.needsSelection === true) return true;
+  if (result.ok !== false) return false;
+  const resolution = result.resolutionResult;
+  if (!resolution || resolution.cancelled === true) return true;
+  if (resolution.finalizationResult?.success === false) return true;
+  // An `ok: false` that no link explains is not a link without effect.
+  if (resolution.success !== false) return true;
+  const links = resolution.linkResults;
+  if (!Array.isArray(links) || links.length === 0) return true;
+  // Every Chain producer puts a link exception at the top level of its entry.
+  return links.some((entry) => entry.error != null);
+}
+
 async function resolveStageWindow(
   game: DamageStepHost,
   transaction: DamageStepTransaction,
@@ -593,7 +618,7 @@ async function resolveStageWindow(
         } as FastEffectContextInput,
       },
     );
-    if (triggerResult?.needsSelection || triggerResult?.ok === false) {
+    if (isDamageStepWindowFault(triggerResult)) {
       return triggerResult;
     }
   }
@@ -850,6 +875,7 @@ async function calculateBattleOutcome(
       Number(attacker.atk || 0),
     );
     game.markAttackUsed?.(attacker, null);
+    transaction.attackUseSettled = true;
     return;
   }
 
@@ -942,6 +968,7 @@ async function calculateBattleOutcome(
     );
   }
   game.markAttackUsed?.(attacker, defender);
+  transaction.attackUseSettled = true;
 }
 
 async function resolveQueuedDestructionTriggers(
@@ -1240,9 +1267,8 @@ async function resolveTimingWithBattlePairEffects(
   if (pairResult?.needsSelection) return pairResult;
   const windowResult = await resolveStageWindow(game, transaction, events);
   if (
-    pairResult?.ok !== false ||
-    windowResult?.needsSelection ||
-    windowResult?.ok === false
+    !isDamageStepWindowFault(pairResult) ||
+    isDamageStepWindowFault(windowResult)
   ) {
     return windowResult;
   }
@@ -1378,7 +1404,7 @@ async function runEndOfDamageStep(
   if (destructionResult?.needsSelection) {
     return destructionResult;
   }
-  const destructionFailed = destructionResult?.ok === false;
+  const destructionFailed = isDamageStepWindowFault(destructionResult);
   if (options.resolveTriggers !== false) {
     const windowResult = await resolveStageWindow(game, transaction, [
       "damage_step",
@@ -1397,7 +1423,7 @@ async function runEndOfDamageStep(
         timingRecovery: windowResult || null,
       };
     }
-    if (windowResult?.ok === false) return windowResult;
+    if (isDamageStepWindowFault(windowResult)) return windowResult;
   }
   game.clearEndOfDamageStepBuffs?.();
   return destructionFailed ? destructionResult : { ok: true };
@@ -1408,7 +1434,7 @@ async function requireEndOfDamageStep(
   transaction: DamageStepTransaction,
 ): Promise<DamageStepWindowResult> {
   const endResult = await runEndOfDamageStep(game, transaction);
-  if (endResult?.needsSelection || endResult?.ok === false) {
+  if (isDamageStepWindowFault(endResult)) {
     throw new Error(
       endResult?.reason ||
         endResult?.resolutionResult?.reason ||
@@ -1416,6 +1442,28 @@ async function requireEndOfDamageStep(
     );
   }
   return endResult;
+}
+
+/**
+ * Phase 2.4 R7: the attacker that declared the attack consumes it once,
+ * however the Damage Step ends. An attacker that left the field, even to
+ * return as a new card, has no attack to consume.
+ */
+function settleDeclaredAttackUse(
+  game: DamageStepHost,
+  transaction: DamageStepTransaction,
+): void {
+  if (transaction.attackUseSettled) return;
+  transaction.attackUseSettled = true;
+  if (
+    cardStillMatchesSnapshot(
+      transaction.attackerOwner,
+      transaction.attacker,
+      transaction.sourceAtStart.attacker,
+    )
+  ) {
+    game.markAttackUsed?.(transaction.attacker, transaction.defender);
+  }
 }
 
 /**
@@ -1430,15 +1478,7 @@ async function stopBeforeDamageCalculation(
   transaction: DamageStepTransaction,
 ): Promise<void> {
   transaction.stoppedBeforeCalculation = true;
-  if (
-    cardStillMatchesSnapshot(
-      transaction.attackerOwner,
-      transaction.attacker,
-      transaction.sourceAtStart.attacker,
-    )
-  ) {
-    game.markAttackUsed?.(transaction.attacker, transaction.defender);
-  }
+  settleDeclaredAttackUse(game, transaction);
   await requireEndOfDamageStep(game, transaction);
 }
 
@@ -1455,7 +1495,7 @@ export async function executeDamageStepTransaction(
     let windowResult = await resolvePairTimingWindow(this, transaction, [
       "damage_step",
     ]);
-    if (windowResult?.needsSelection || windowResult?.ok === false) {
+    if (isDamageStepWindowFault(windowResult)) {
       throw new Error(windowResult?.reason || "damage_step_start_failed");
     }
     if (!participantsRemainValid(transaction)) {
@@ -1474,7 +1514,7 @@ export async function executeDamageStepTransaction(
           ? ["damage_step"]
           : ["damage_step", "battle_damage"],
       );
-      if (windowResult?.needsSelection || windowResult?.ok === false) {
+      if (isDamageStepWindowFault(windowResult)) {
         throw new Error(windowResult?.reason || "damage_step_before_failed");
       }
       if (!participantsRemainValid(transaction)) {
@@ -1484,7 +1524,7 @@ export async function executeDamageStepTransaction(
         windowResult = await resolveStageWindow(this, transaction, [
           "damage_step",
         ]);
-        if (windowResult?.needsSelection || windowResult?.ok === false) {
+        if (isDamageStepWindowFault(windowResult)) {
           throw new Error(
             windowResult?.reason || "damage_step_calculation_window_failed",
           );
@@ -1518,7 +1558,7 @@ export async function executeDamageStepTransaction(
             transaction,
             afterEvents,
           );
-          if (windowResult?.needsSelection || windowResult?.ok === false) {
+          if (isDamageStepWindowFault(windowResult)) {
             throw new Error(windowResult?.reason || "damage_step_after_failed");
           }
           await requireEndOfDamageStep(this, transaction);
@@ -1541,6 +1581,14 @@ export async function executeDamageStepTransaction(
   } catch (error: unknown) {
     transaction.status = "failed";
     transaction.failureReason = errorMessage(error, "damage_step_failed");
+    try {
+      settleDeclaredAttackUse(this, transaction);
+    } catch (settleError: unknown) {
+      transaction.failureReason = `${transaction.failureReason}; attack use not settled: ${errorMessage(
+        settleError,
+        "unknown_error",
+      )}`;
+    }
     if (transaction.outcome.committed && !transaction.endFinalized) {
       try {
         await runEndOfDamageStep(this, transaction, {

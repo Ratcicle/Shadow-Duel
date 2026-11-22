@@ -575,6 +575,8 @@ export interface DamageStepTransaction {
   revealedDefender: boolean;
   stoppedBeforeCalculation: boolean;
   endFinalized: boolean;
+  /** Internal: the declared attack was consumed or found nothing to consume. Never serialized. */
+  attackUseSettled: boolean;
   nextDestructionIndex: number;
   destructionQueueStart: number | null;
   destructionAtomicGroupId: number | string | null;

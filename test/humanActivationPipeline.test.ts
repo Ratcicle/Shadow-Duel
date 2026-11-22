@@ -332,8 +332,8 @@ test("falha de Trigger no fim do Damage Step recupera o Fast Effect Timing", asy
 
   const combatResult = required(await game.resolveCombat(attacker, eel));
 
-  assert.ok(combatResult.ok === false);
-  assert.match(required(combatResult.reason), /Action "move" failed/);
+  assert.ok(combatResult.ok === true);
+  assert.equal(game.getDamageStepState().last?.status, "completed");
   assert.equal(game.chainSystem.isOpenGameState(), true);
   const phaseResult = await game.nextPhase();
   assert.notEqual(
