@@ -170,7 +170,7 @@ Texto, só para informar: as descrições da Burning Peacemaker e do Sheriff diz
 | --- | --- | --- | --- | --- |
 | R — Pacote de regras v30 | R0–R5 | Regra (V9–V12) e contrato de replay | Sim (raro) | Baseline v4 (N = 20), controles, invariância e ponte N = 5 |
 | A — Preparação e instrumento | A0, A1, A1b, A2, A3 | Medição, instrumentação e sondas | Não | V0, confirmação selada e tabela de triagem |
-| B — Resíduos e mecanismos comuns | B0, B1–B3, B5, B6 | Refatoração equivalente; B0 é correção de contrato (A3) | Não; B0 sim | — |
+| B — Resíduos e mecanismos comuns | B0, B1–B3, B5, B6 | Refatoração equivalente; B0 é correção de contrato (A3) | Não; B0 sim | RB, se um sublote do B0 for aceito: N = 20 nos dois blocos, controles, ponte N = 5 e invariância N = 1 |
 | C — Paridade fora da batalha | C1–C14 | Paridade | Sim | Referência RC (N = 20 nos dois blocos) |
 | D — Paridade de batalha | D1, D1b, D2–D6 | Paridade | Sim | Referência RD (N = 20 nos dois blocos e ponte N = 5) |
 | E — Política por deck | E-BW, E-BR, E-SH, E-VD, E-LU, E-AR, E-MB; condicionais E-DR e E-TZ | Ajuste de política | Sim | Cada lote aceito vira a base do seguinte |
@@ -282,8 +282,8 @@ O placar não é critério.
 ### Cadeias
 
 - **Pacote v30:** v3 → pontos N = 5 de R1–R4 → prova do bump → v4, como no pacote v29.
-- **Desenvolvimento:** v4 (R0) → pontos N = 5 de C → RC → pontos de D → RD → lotes E e F.
-- **Validação:** V0 (v4 no bloco de validação, em A0) → RC-val → RD-val → lotes de política aceitos. Nenhum lote E ou F faz a validação antes do RD-val; o desenvolvimento N = 5 pode adiantar. Um lote E nunca é validado numa branch que não contenha todos os lotes de paridade já integrados.
+- **Desenvolvimento:** v4 (R0) → A2-ctl → B0a e B0b (pontos N = 5 restritos) → RB → pontos N = 5 de C → RC → pontos de D → RD → lotes E e F.
+- **Validação:** V0 (v4 no bloco de validação, em A0) → B0a-val → B0b-val → RB-val → RC-val → RD-val → lotes de política aceitos. O B0a e o B0b validam antes do RC-val por exceção (B0). Nenhum lote E ou F faz a validação antes do RD-val; o desenvolvimento N = 5 pode adiantar. Um lote E nunca é validado numa branch que não contenha todos os lotes de paridade já integrados.
 - **Lote restrito e base composta:**
   - Portão estático: `git diff --stat` do lote só toca os arquivos do pacote de P.
   - Prova dos casos sem P no bloco de validação: `--seeds 2 --seed-base 20271011` com os 64 padrões `a:b:*` (a, b ≠ P, espelhos incluídos), gerados pela ferramenta de A0, contra a base vigente.
@@ -515,11 +515,32 @@ Sem esse resultado, o lote para e volta ao plano.
 
 ### B0 — Respostas de Chain dos hooks descartadas (A3)
 
-Classe: correção de contrato. É a exceção do bloco: muda decisões ao vivo do Burning West e do Bloomrot, e por isso o aceite é o de um lote de política no pacote de P (D2), medido em cada um dos dois presets.
+Classe: correção de contrato. É a exceção do bloco: muda decisões ao vivo do Burning West e do Bloomrot, e por isso o aceite é o de um lote de política no pacote de P (D2), num sublote por preset. Desenho e revisões em `.cache/plan24-work/design/B0/`.
 
-- Achado da A3: toda escolha de `chooseChainResponse` do Burning West (388 na sonda: Quick Draw 211, Ambush 168, Law 9) e do Bloomrot (222) volta com chaves que a candidata canônica não tem: `defenseEvaluation` no contexto, no Burning West; `archetype`, `sourceName` e `analysis` no `activationContext`, fora de `strategyActivationMetadata`, no Bloomrot. `normalizeChainResponseCandidate` (`src/core/game/decisions/chainResponse.ts:216-247`) exige igualdade por referência nessas chaves, devolve `null`, e o broker grava um passe (`decision_rejected`, `choice_not_in_candidate_list`). As respostas de Chain desses dois presets nunca saem do hook.
-- Entrega: o hook entrega só o que o contrato aceita (a candidata canônica e as escolhas exatas em `activationContext`), por regra comum, sem chave por carta. O desenho escolhe entre o contrato ignorar metadados de estratégia no contexto, como já faz em `activationContext` (`strategyActivationMetadata`), e os hooks deixarem de escrevê-los; o replay e o broker continuam recusando escolha fora da lista.
+- Achado da A3: toda escolha de `chooseChainResponse` do Burning West (388 na sonda: Quick Draw 211, Ambush 168, Law 9) e do Bloomrot (222, Sudden Germination) volta com chaves que a candidata canônica não tem. No Burning West são quatro, cada uma suficiente sozinha: `context.defenseEvaluation` e `activationContext.reason`, `sourceName` e `chainContext`. No Bloomrot são `archetype`, `sourceName` e `analysis` no `activationContext`. `normalizeChainResponseCandidate` devolve `null` em `botChooseChainResponse` (`src/core/chain/botResponsePolicy.ts`), sem fallback e sem RNG, e o broker grava um passe sem evento.
+- Mesmo aceita, uma escolha só transporta a candidata canônica e `activationContext.decisions`; as preferências de alvo e posição do hook (alvos da Quick Draw, posição da Ambush, exclusão do atacante na Sudden Germination) são descartadas, como já acontece no Miragebound. O B0 devolve o "ativar ou não"; as preferências ficam fora dele (decisão de 22/11/2026).
+- Sublotes (decisões de 22/11/2026, todas com a recomendação do desenho):
+  - **B0-0**, neutro: `botChooseChainResponse` notifica `ai_activation_rejected` (`choice_not_normalizable`) antes de devolver o mesmo `null`. Aceite do bloco B: N = 2 `--expect-identical`, controles, portão estático e smoke dos quatro hooks.
+  - **B0a**, Burning West, e depois **B0b**, Bloomrot: o hook devolve só `{ card, effect, candidateKey, reason }` da candidata canônica, como o Tech-Zero e o Miragebound; os construtores de contexto sem leitor saem. Só arquivos do pacote de P (portão estático contra o commit do lote anterior). O B0b é medido sobre a base composta que já inclui o B0a.
+  - Um sublote não aceito troca a escolha por um passe explícito, provado neutro contra a base (N = 2 restrito, idêntico), em vez de voltar ao descarte silencioso.
+- Bases: desenvolvimento `A2-ctl` (N = 5, pós-A1b); validação V0, com `--ignore` nos campos do A1b (`seatMetrics.*.actions.failedByCode`, `failedByClass` e `blockedByCode`), e para o B0b a composta V0 + B0a-val. Controles contra o lote anterior. Exceção à cadeia: o B0a e o B0b validam antes do RC-val, por serem correção de contrato, e não ajuste de estilo.
+- Fechamento: se algum sublote for aceito, o bloco B fecha com a referência **RB** logo depois do B0b e antes do B1: N = 20 completo nos blocos de desenvolvimento e de validação, controles, ponte N = 5 e invariância N = 1 (E3). O B1 ao B6 são provados idênticos ao RB. Se os dois sublotes terminarem em passe explícito, o bloco B não muda decisões e as referências atuais continuam valendo.
 - Vem antes do B1, porque muda a ordem do bloco E que o T5 sugere: sem o B0, o Burning West e o Bloomrot aparecem com 0 respostas pelo hook.
+
+#### Pré-registro do B0a (Burning West)
+
+Commit do lote: `ce28c22`. Desenvolvimento N = 5 restrito aos 85 casos do Burning West (`canonical-ce28c22-5f26c98b`, 0 erros, 0 defeitos) contra o A2-ctl: placar do Burning West sem espelhos de 24 para 37 em 80 casos, 14 casos a favor e 1 contra.
+
+| Campo | Valor |
+| --- | --- |
+| Preset-alvo | Burning West |
+| Direção | Para cima, unilateral |
+| Métrica primária | Placar do Burning West sem espelhos, teste do sinal pareado (sign-flip exato, empate vale 0,5), p < 0,05 |
+| N | 20 no bloco de validação (`--seed-base 20271011`), restrito aos casos do Burning West, contra o V0. Projeção pela regra 8: 15 discordantes em N = 5, cerca de 60 em N = 20, acima do limiar de 20; sem extensão para N = 40 |
+| Métricas de apoio (sonda dev com `diag24` contra a A3) | Escolhas do hook de 0 para 57 (Quick Draw), 53 (Ambush) e 6 (Law); `hook_pass_or_fallback_no_roll` de 1.323 para 585; `hook_rejected` 0; ativações por carta, com Ambush 53 e Quick Draw 57 na Battle Phase; nenhuma falha de preparação nova |
+| Portões não estatísticos | 0 erros e 0 defeitos; guarda de stall sem disparo; vocabulário novo só o do A1b ou explicado pelas três cartas; falhas por caminho que não sobem (na sonda dev, só 1 `tls\|opponent_response`: uma Quick Draw negada pelo oponente); divergência do Burning West sem caminho ou classe nova (nenhuma na sonda); prova fora de P idêntica ao V0; controles com mudança só nos confrontos do Burning West, explicada; smoke sem divergência de replay; portão estático só nos arquivos do pacote |
+| Agrupamento (E5) | Relatado; teste por cluster (k, assento de P) se o efeito passar de 1,3 |
+| Resultado não aceito | Passe explícito, provado neutro |
 
 ### B1 — Respostas de Chain por nome
 
