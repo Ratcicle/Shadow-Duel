@@ -59,10 +59,13 @@ export const GUARD_COUNTERS: readonly GuardCounterName[] = ["decisions", "action
 /**
  * Opt-in preset metrics (--preset-metrics), computed by the observer:
  * - techzero-combo: Tech-Zero seats; real M + Portal + Synchro boss summons in one turn (IDs from TECH_ZERO_IDS);
- * - lethal: every seat; public battle projection once per seat and turn, converted only by an LP-zero win that turn.
+ * - lethal: every seat; public battle projection once per seat and turn, converted only by an LP-zero win that turn;
+ * - diag24: phase 2.4 diagnostics (A1); absent from the record when off;
+ * - planner-budget: phase 2.4 A2; TLS searches whose evaluated nodes reached the effective nodeBudget; absent when off.
  */
-export type PresetMetricId = "techzero-combo" | "lethal";
-export const PRESET_METRIC_IDS: readonly PresetMetricId[] = ["techzero-combo", "lethal"];
+export type PresetMetricId = "techzero-combo" | "lethal" | "diag24" | "planner-budget";
+// Each later plugin comes last: a run without it keeps the presetMetrics list, configDigest and runId of before.
+export const PRESET_METRIC_IDS: readonly PresetMetricId[] = ["techzero-combo", "lethal", "diag24", "planner-budget"];
 export type RunOrder = "forward" | "reverse";
 
 /**
@@ -91,6 +94,92 @@ export const INVARIANCE_SAMPLE_LIMIT = 4;
 
 export interface InvarianceControlConfig {
   swap: typeof INVARIANCE_SWAP_RULE;
+}
+
+/** Characters of a matrix preset id; shared by the matrix and by CLI grammars that name a preset. */
+export const PRESET_ID_CHARACTER_CLASS = "[A-Za-z0-9_-]";
+export const PRESET_ID_PATTERN = new RegExp(`^${PRESET_ID_CHARACTER_CLASS}+$`);
+
+// ── Diagnostic ablations (phase 2.4, A2) ────────────────────────────────────
+
+/** The four TurnLineSearch budgets a per-preset planner profile override may adjust. */
+export const PLANNER_PROFILE_FIELDS = ["beamWidth", "maxDepth", "nodeBudget", "candidateLimit"] as const;
+export type PlannerProfileField = (typeof PLANNER_PROFILE_FIELDS)[number];
+/** "all" applies in every phase; main1/main2 only in that Main Phase. */
+export const PLANNER_PROFILE_SCOPES = ["all", "main1", "main2"] as const;
+export type PlannerProfileScope = (typeof PLANNER_PROFILE_SCOPES)[number];
+export const PLANNER_PROFILE_OPS = ["set", "add"] as const;
+export type PlannerProfileOp = (typeof PLANNER_PROFILE_OPS)[number];
+export interface PlannerProfileAdjustment { op: PlannerProfileOp; value: number }
+export type PlannerProfileAdjustments = Partial<Record<PlannerProfileField, PlannerProfileAdjustment>>;
+export type PlannerProfileOverride = Partial<Record<PlannerProfileScope, PlannerProfileAdjustments>>;
+/** Harness caps of the override (diagnostic only); an effective value is clamped to [1, cap]. */
+export const PLANNER_PROFILE_CAPS: Readonly<Record<PlannerProfileField, number>> = Object.freeze({
+  beamWidth: 12, maxDepth: 12, nodeBudget: 5000, candidateLimit: 24,
+});
+/**
+ * Reserved source of --strategy-override: the harness's diagnostic strategy
+ * (scripts/benchmark/neutralStrategy.ts), registered only in the case worker that asks for it.
+ */
+export const NEUTRAL_STRATEGY_ID = "neutral";
+
+/** null when the adjustment is inside the bounds; otherwise the reason (for the CLI and the parser). */
+export function plannerProfileAdjustmentProblem(field: PlannerProfileField, adjustment: PlannerProfileAdjustment): string | null {
+  const cap = PLANNER_PROFILE_CAPS[field];
+  const { op, value } = adjustment;
+  if (!Number.isSafeInteger(value)) return "deve ser um inteiro.";
+  if (op === "set") return value >= 1 && value <= cap ? null : `deve ficar entre 1 e ${cap} (set).`;
+  if (value === 0) return "não pode somar 0.";
+  return Math.abs(value) <= cap ? null : `deve somar no máximo ${cap} em módulo.`;
+}
+
+/** The first field declared both in "all" and in a phase scope; null without one. */
+export function plannerProfileScopeConflict(override: PlannerProfileOverride): PlannerProfileField | null {
+  const all = override.all ?? {};
+  for (const field of PLANNER_PROFILE_FIELDS) {
+    if (all[field] !== undefined && (override.main1?.[field] !== undefined || override.main2?.[field] !== undefined)) return field;
+  }
+  return null;
+}
+
+/** Canonical copy: presets sorted by code unit, scopes and fields in their declared order. */
+export function sortedPlannerProfileOverrides(
+  source: Readonly<Record<string, PlannerProfileOverride>>,
+): Record<string, PlannerProfileOverride> {
+  const result: Record<string, PlannerProfileOverride> = {};
+  for (const preset of Object.keys(source).sort(compareCodeUnits)) {
+    const override = source[preset];
+    if (!override) continue;
+    const copy: PlannerProfileOverride = {};
+    for (const scope of PLANNER_PROFILE_SCOPES) {
+      const adjustments = override[scope];
+      if (!adjustments) continue;
+      const fields: PlannerProfileAdjustments = {};
+      for (const field of PLANNER_PROFILE_FIELDS) {
+        const adjustment = adjustments[field];
+        if (adjustment) fields[field] = { op: adjustment.op, value: adjustment.value };
+      }
+      copy[scope] = fields;
+    }
+    result[preset] = copy;
+  }
+  return result;
+}
+
+/** The CLI spelling of a recorded override: preset[@phase].field=value, with a sign for add. */
+export function formatPlannerProfileOverrides(source: Readonly<Record<string, PlannerProfileOverride>>): string {
+  const items: string[] = [];
+  for (const [preset, override] of Object.entries(sortedPlannerProfileOverrides(source))) {
+    for (const scope of PLANNER_PROFILE_SCOPES) {
+      for (const field of PLANNER_PROFILE_FIELDS) {
+        const adjustment = override[scope]?.[field];
+        if (!adjustment) continue;
+        const value = adjustment.op === "add" && adjustment.value > 0 ? `+${adjustment.value}` : String(adjustment.value);
+        items.push(`${preset}${scope === "all" ? "" : `@${scope}`}.${field}=${value}`);
+      }
+    }
+  }
+  return items.join(",");
 }
 
 export type ErrorKind =
@@ -132,20 +221,32 @@ export const GUARD_STAGE_RING_SIZE = 16;
 export const MISMATCH_SAMPLE_LIMIT = 8;
 
 // ── Failure codes ──────────────────────────────────────────────────────────
-// Stable codes of failed or blocked actions (activationPipeline.ts and
-// actions/guard.ts). The localized `reason` text is never classified.
+// Stable codes of failed or blocked actions. They come from the result's
+// producer (actions/guard.ts, the Chain, the activation transaction) or, when
+// the producer set none, from the attempt tracking of activationPipeline.ts,
+// by stage (gate/preview, usage limit, preparation, costs, commit actions,
+// resolution). The localized `reason` text is never classified.
+// ACTIVATION_COMMIT_FAILED: committing the source card failed.
+// ACTIVATION_COMMIT_ACTIONS_FAILED: the declared commit actions failed.
+// RESOLUTION_TARGET_INVALID: a declared target or reference is no longer
+// valid at resolution, for any reason of revalidateDeclaredTargets.
+// "resolution" keeps engine exceptions apart from actions that resolved
+// without effect ("resolution_action").
 const FAILURE_CODE_TABLE: ReadonlyArray<readonly [string, readonly string[]]> = [
   ["busy_timing", ["BLOCKED_SELECTION_ACTIVE", "BLOCKED_RESOLVING", "BLOCKED_CHAIN_WINDOW_OPEN", "BLOCKED_FAST_EFFECT_TIMING"]],
   ["wrong_context", ["BLOCKED_WRONG_PHASE", "BLOCKED_NOT_YOUR_TURN", "BLOCKED_BATTLE_PHASE_LOCK", "BLOCKED_GAME_DISPOSED"]],
   ["usage_limit", ["ACTIVATION_USAGE_LIMIT"]],
   ["opponent_response", ["ACTIVATION_NEGATED"]],
+  ["preparation", ["ACTIVATION_PREPARATION_FAILED", "ACTIVATION_UNAVAILABLE"]],
   ["cost", ["ACTIVATION_COST_UNAVAILABLE", "ACTIVATION_COST_SELECTION_INVALID", "ACTIVATION_COST_SELECTION_CANCELLED",
-    "ACTIVATION_COMMITMENT_UNAVAILABLE"]],
+    "ACTIVATION_COMMITMENT_UNAVAILABLE", "ACTIVATION_COST_PAYMENT_FAILED", "ACTIVATION_COMMIT_ACTIONS_FAILED"]],
   ["target_selection", ["TARGET_SELECTION_FAILED", "INVALID_ACTIVATION_TARGET", "AUTO_SELECTION_FAILED", "SELECTION_ABORTED",
     "CANCELLED", "ACTIVATION_TARGET_COUNT_MISMATCH", "ACTIVATION_TARGET_COUNT_UNAVAILABLE",
     "ACTIVATION_TARGET_SELECTION_FAILED_AFTER_COMMIT"]],
-  ["revalidation", ["ACTIVATION_REVALIDATION_FAILED", "ACTIVATION_SOURCE_MOVED", "ACTIVATION_CASE_UNAVAILABLE"]],
+  ["revalidation", ["ACTIVATION_REVALIDATION_FAILED", "ACTIVATION_SOURCE_MOVED", "ACTIVATION_CASE_UNAVAILABLE",
+    "RESOLUTION_TARGET_INVALID", "RESOLUTION_SOURCE_LOST"]],
   ["resolution", ["RESOLUTION_FAILED", "ACTIVATION_COMMIT_FAILED"]],
+  ["resolution_action", ["RESOLUTION_ACTION_FAILED"]],
   ["config", ["INVALID_ACTIVATION_CONFIG"]],
 ];
 
@@ -257,7 +358,7 @@ export function buildMatrixCases(options: MatrixOptions): BenchmarkCase[] {
   if (!options.presets.length) throw new RangeError("É preciso ao menos um preset.");
   if (new Set(options.presets).size !== options.presets.length) throw new RangeError("Os presets devem ser únicos.");
   for (const preset of options.presets) {
-    if (!/^[a-z0-9_-]+$/i.test(preset)) throw new RangeError(`ID de preset inválido: ${preset}.`);
+    if (!PRESET_ID_PATTERN.test(preset)) throw new RangeError(`ID de preset inválido: ${preset}.`);
   }
   const cases: BenchmarkCase[] = [];
   const push = (seat1: string, seat2: string, pair: string, mirror: boolean, k: number, seed: number) => {
@@ -421,6 +522,8 @@ export interface RunConfig {
   caseFilter: string[] | null;
   /** Present only when the run carries the invariance control; absent, the configuration is unchanged. */
   invarianceControl?: InvarianceControlConfig;
+  /** Present only when a per-preset planner profile override is on (A2); absent, the configuration is unchanged. */
+  plannerProfileOverrides?: Record<string, PlannerProfileOverride>;
 }
 
 export const SEED_RULE = "seed_k = (base + k) >>> 0; a:b and b:a share seed_k; mirrors play once";
@@ -474,6 +577,7 @@ export function configBaselineBlockers(config: RunConfig): string[] {
   if (config.caseFilter !== null) blockers.push("caseFilter");
   if (Object.keys(config.strategyOverrides).length) blockers.push("strategyOverrides");
   if (config.invarianceControl !== undefined) blockers.push("invarianceControl");
+  if (config.plannerProfileOverrides !== undefined) blockers.push("plannerProfileOverrides");
   return blockers;
 }
 
@@ -556,6 +660,8 @@ export interface SeatMetrics {
     mismatchByPath: Counter;
     terminations: Counter;
     repeatedStates: number;
+    /** Present only when config.plannerProfileOverrides is (A2), on both seats; never undefined. */
+    profileOverride?: PlannerProfileOverrideSeat;
   };
   unsupported: {
     tlsBranches: number;
@@ -578,6 +684,30 @@ export interface SeatMetrics {
   mainPhaseExits: Counter;
 }
 
+/**
+ * Evidence of the planner profile override, counted once per Main Phase
+ * decision (the profile capture). Phases are main1, main2 or other.
+ */
+export interface PlannerProfileOverrideSeat {
+  /** Profiles captured, by phase. */
+  captured: Counter;
+  /** Of those, the ones with an adjustment in scope, by phase. */
+  applied: Counter;
+  /** Applied captures whose effective profile differs from the base one. */
+  changed: number;
+  /** Add adjustments on a field the base profile does not define (an observer defect). */
+  missing: number;
+  /** "field:base>effective" per adjusted field, or "field:missing". */
+  transitions: Counter;
+}
+
+/** planner-budget plugin (A2): TLS searches with plannedNodesEvaluated >= the effective nodeBudget. */
+export interface PlannerBudgetSeat {
+  budgetReached: number;
+  /** The same, by the planner tuple of profiles.planner. */
+  budgetReachedByTuple: Counter;
+}
+
 export interface TechZeroComboSeat {
   summonsById: Counter;
   comboTurns: number[];
@@ -594,6 +724,267 @@ export interface LethalSeat {
 export interface PresetMetricsRecord {
   "techzero-combo": { player: TechZeroComboSeat | null; bot: TechZeroComboSeat | null } | null;
   lethal: { player: LethalSeat; bot: LethalSeat } | null;
+  /** Present only when config.presetMetrics includes "diag24" (D5); never null, never undefined. */
+  diag24?: Diag24Record;
+  /** Present only when config.presetMetrics includes "planner-budget" (A2); never null, never undefined. */
+  "planner-budget"?: { player: PlannerBudgetSeat; bot: PlannerBudgetSeat };
+}
+
+// ── diag24 (phase 2.4, A1) ─────────────────────────────────────────────────
+// Bounded lists of presetMetrics.diag24; the observer and the parser read them from here.
+/** Divergence samples kept per seat and duel. */
+export const DIAG24_DIVERGENCE_SAMPLES_PER_SEAT = 6;
+/** Chronological timeline entries per duel, one limit per kind. */
+export const DIAG24_TIMELINE_LIMITS = Object.freeze({ summons: 48, lp: 32, pairs: 16 } as const);
+/** Per-turn entries per seat (maxTurns default is 50). */
+export const DIAG24_TURN_LIMIT = 64;
+/**
+ * Inherited from the payload, not chosen here: compactPlanningDiffs(..., 6)
+ * keeps at most 6 diffs per comparison, and compactDiffValue at most 6 items per array.
+ */
+export const DIAG24_DIFFS_PER_SAMPLE = 6;
+export const DIAG24_RECORD_VERSION = 1;
+
+// Each closed label list is the single source of its union (oneOf in the parser reads the same list).
+export const DIAG24_DIFF_CLASSES = [
+  "content", "instance_swap", "slot_swap", "order_swap", "battle_position", "face",
+  "stats", "attachments", "compact_identical", "names", "scalar",
+] as const;
+export type Diag24DiffClass = (typeof DIAG24_DIFF_CLASSES)[number];
+export const DIAG24_LP_CAUSES = ["battle", "effect", "cost"] as const;
+export type Diag24LpCause = (typeof DIAG24_LP_CAUSES)[number];
+export const DIAG24_SOURCE_RELS = ["self", "opponent", "none"] as const;
+export type Diag24SourceRel = (typeof DIAG24_SOURCE_RELS)[number];
+export const DIAG24_BATTLE_ROLES = ["attacker", "defender", "direct"] as const;
+export type Diag24BattleRole = (typeof DIAG24_BATTLE_ROLES)[number];
+export const DIAG24_SAMPLE_STAGES = ["compare", "failed"] as const;
+export type Diag24SampleStage = (typeof DIAG24_SAMPLE_STAGES)[number];
+export const DIAG24_PAIR_OUTCOMES = ["registered", "applied", "expired"] as const;
+export type Diag24PairOutcome = (typeof DIAG24_PAIR_OUTCOMES)[number];
+export const DIAG24_CLOSE_REASONS = ["lp_zero", "game_over"] as const;
+export type Diag24CloseReason = (typeof DIAG24_CLOSE_REASONS)[number];
+
+/** The Counter fields of each Diag24Seat section; the parser and the collector's sorter read them from here. */
+export const DIAG24_SEAT_COUNTERS = {
+  divergence: ["byPathClass", "byCardPathClass"],
+  paths: ["decisions", "executions", "failures", "failureCodes", "failuresByCard", "outside", "outsideByCard"],
+  planning: ["repeatedStates", "repeatedByTermination", "repeatedByCandidates"],
+  mainPhase: ["offeredByCard", "filteredByCard", "chosenByCard", "acceptedByCard", "neverChosenByCard", "atExitByCardReason"],
+  chain: ["windows", "offeredByCard", "chosenByCard", "declinedByCard", "preparationFailedByCard", "origin", "originByCard",
+    "offerOriginByCard"],
+  triggers: ["offeredByCard", "declinedByCard"],
+  activations: ["publishedByCardWindow", "attemptsByCardWindow", "targetsByCard"],
+  summonVetoes: ["byCardReason", "overriddenByCard"],
+  extraDeck: ["summonsByCardMethod", "bossSummonsByCard", "byTurnCard", "bossByTurnCard"],
+  attacks: ["declaredByCard", "battleEnds", "legalLeftByCard"],
+  pairEffects: ["expired"],
+  lpLoss: ["ownTurn", "opponentTurn", "ownTurnBySource", "opponentTurnBySource", "battleByRole"],
+  lethal: ["grades", "converted", "uncertainty", "viewUncertaintyByGrade"],
+  backrow: ["reactions", "reactionsByCard", "reactionsByCount", "exposure", "exposureByCount"],
+} as const;
+
+export interface Diag24Limits {
+  divergenceSamplesPerSeat: number;
+  timeline: { summons: number; lp: number; pairs: number };
+  turns: number;
+}
+
+export function diag24Limits(): Diag24Limits {
+  return {
+    divergenceSamplesPerSeat: DIAG24_DIVERGENCE_SAMPLES_PER_SEAT,
+    timeline: { ...DIAG24_TIMELINE_LIMITS },
+    turns: DIAG24_TURN_LIMIT,
+  };
+}
+
+export interface Diag24Record {
+  version: typeof DIAG24_RECORD_VERSION;
+  limits: Diag24Limits;
+  /** Plugin defects (label -> count); the acceptance requires {}. */
+  errors: Counter;
+  /** Entries dropped by a limit: "divergence:<seat>" | "timeline:<kind>" | "turns:<seat>" -> count. */
+  truncated: Counter;
+  /**
+   * Where the closing set stopped: "lp_zero" at the first LP <= 0, "game_over" at the first game.gameOver
+   * seen otherwise (the turn limit included). null only when neither was seen before the freeze (a guard trip).
+   */
+  closed: { turn: number; phase: string | null; reason: Diag24CloseReason } | null;
+  /** The event that took a seat to 0 LP; null without one. */
+  fatal: Diag24LpEvent | null;
+  /** Chronological, one list per kind with its own limit. */
+  timeline: { summons: Diag24SummonEntry[]; lp: Diag24LpEvent[]; pairs: Diag24PairEntry[] };
+  seats: { player: Diag24Seat; bot: Diag24Seat };
+}
+
+export interface Diag24Seat {
+  preset: string;
+  divergence: {
+    comparisons: number;
+    byPathClass: Counter;
+    byCardPathClass: Counter;
+    compactIdentical: number;
+    samples: Diag24DivergenceSample[];
+    samplesDropped: number;
+  };
+  /** Follows the seatMetrics lifecycle. */
+  paths: {
+    decisions: Counter;
+    executions: Counter;
+    failures: Counter;
+    failureCodes: Counter;
+    failuresByCard: Counter;
+    outside: Counter;
+    outsideByCard: Counter;
+    bridges: number;
+  };
+  /** Follows the seatMetrics lifecycle: repeated states per TLS search. */
+  planning: {
+    searches: number;
+    repeatedStates: Counter;
+    repeatedByTermination: Counter;
+    repeatedByCandidates: Counter;
+  };
+  offers: {
+    /** Follows the seatMetrics lifecycle. */
+    mainPhase: {
+      roots: number;
+      phases: number;
+      offeredByCard: Counter;
+      filteredByCard: Counter;
+      chosenByCard: Counter;
+      acceptedByCard: Counter;
+      neverChosenByCard: Counter;
+      atExitByCardReason: Counter;
+    };
+    chain: {
+      windows: Counter;
+      offeredByCard: Counter;
+      chosenByCard: Counter;
+      declinedByCard: Counter;
+      preparationFailedByCard: Counter;
+      origin: Counter;
+      originByCard: Counter;
+      offerOriginByCard: Counter;
+    };
+    triggers: { hookPresent: boolean; offeredByCard: Counter; declinedByCard: Counter };
+  };
+  activations: { publishedByCardWindow: Counter; attemptsByCardWindow: Counter; targetsByCard: Counter };
+  /** Shadow-Heart seats only; null elsewhere. */
+  summonVetoes: { generations: number; roots: number; byCardReason: Counter; overriddenByCard: Counter; drift: number } | null;
+  extraDeck: { summonsByCardMethod: Counter; bossSummonsByCard: Counter; byTurnCard: Counter; bossByTurnCard: Counter; turns: number[] };
+  attacks: {
+    battlePhases: number;
+    declared: number;
+    direct: number;
+    declaredByCard: Counter;
+    /** attacked | partial_with_candidate | refused_with_candidate | no_candidate | duel_ended | unclassified. */
+    battleEnds: Counter;
+    legalLeftByCard: Counter;
+  };
+  pairEffects: { registered: number; applied: number; expired: Counter };
+  lpLoss: {
+    ownTurn: Counter;
+    opponentTurn: Counter;
+    ownTurnBySource: Counter;
+    opponentTurnBySource: Counter;
+    battleByRole: Counter;
+  };
+  lethal: {
+    projections: number;
+    grades: Counter;
+    converted: Counter;
+    uncertainty: Counter;
+    viewUncertaintyByGrade: Counter;
+    hidden: { handNonEmpty: number; faceDownMonsters: number; faceDownBackrow: number };
+  };
+  backrow: {
+    reactions: Counter;
+    reactionsByCard: Counter;
+    reactionsByCount: Counter;
+    inPlannedExecution: number;
+    exposure: Counter;
+    exposureByCount: Counter;
+  };
+  turns: Diag24Turn[];
+  /** Tech-Zero seats only; null elsewhere. */
+  techZeroOpening: {
+    firstOwnTurn: 1 | 2;
+    handIds: number[];
+    nextDrawId: number | null;
+    handRoles: Counter;
+    zonesDigest: string;
+    firstOwnTurnHandIds: number[] | null;
+    c1: boolean;
+  } | null;
+}
+
+/** One game turn seen from one seat (own or opponent's turn). */
+export interface Diag24Turn {
+  turn: number;
+  own: boolean;
+  battlePhase: boolean;
+  attacksDeclared: number;
+  battleEnd: string | null;
+  lethalGrade: string | null;
+  lpLost: Counter;
+  activationsByCard: Counter;
+  chainDeclinedByCard: Counter;
+  handAtEnd: number | null;
+}
+
+export interface Diag24DiffSample {
+  path: string;
+  severity: string;
+  class: Diag24DiffClass;
+  /** Sorted. */
+  flags: string[];
+  expected: JsonValue;
+  actual: JsonValue;
+}
+
+export interface Diag24DivergenceSample {
+  turn: number;
+  phase: string | null;
+  stage: Diag24SampleStage;
+  severity: string;
+  plannedAction: string | null;
+  actualAction: string | null;
+  diffs: Diag24DiffSample[];
+}
+
+export interface Diag24LpEvent {
+  turn: number;
+  phase: string | null;
+  seat: Seat;
+  ownTurn: boolean;
+  cause: Diag24LpCause;
+  sourceRel: Diag24SourceRel;
+  sourceCardId: number | null;
+  sourceCardName: string | null;
+  /** Battle only: the loser's role; sourceCard is the monster on the other side. */
+  battleRole: Diag24BattleRole | null;
+  attackerCardName: string | null;
+  amount: number;
+  /** null when neither the payload nor the player gives a finite LP; such an event never closes the record. */
+  lpAfter: number | null;
+}
+
+export interface Diag24SummonEntry {
+  turn: number;
+  seat: Seat;
+  cardId: number | null;
+  method: string;
+  fromZone: string | null;
+  boss: boolean;
+  extraDeck: boolean;
+}
+
+export interface Diag24PairEntry {
+  turn: number;
+  seat: Seat;
+  outcome: Diag24PairOutcome;
+  reason: string | null;
+  sourceCardId: number | null;
 }
 
 export interface MismatchSample {
@@ -907,13 +1298,54 @@ function parsePlannerBudgets(value: unknown, label: string): PlannerBudgets {
   };
 }
 
+function parsePlannerProfileOverrides(value: unknown, presets: readonly string[], label: string): Record<string, PlannerProfileOverride> {
+  const raw = object(value, label);
+  if (!Object.keys(raw).length) fail(label, "não pode ser vazio.");
+  const result: Record<string, PlannerProfileOverride> = {};
+  for (const [preset, entry] of Object.entries(raw)) {
+    const presetLabel = `${label}.${preset}`;
+    if (!presets.includes(preset)) fail(presetLabel, "não é um preset da execução.");
+    const scopes = object(entry, presetLabel);
+    if (!Object.keys(scopes).length) fail(presetLabel, "não pode ser vazio.");
+    const override: PlannerProfileOverride = {};
+    for (const [scopeKey, scopeEntry] of Object.entries(scopes)) {
+      const scope = oneOf(scopeKey, PLANNER_PROFILE_SCOPES, `${presetLabel}.${scopeKey}`);
+      const scopeLabel = `${presetLabel}.${scope}`;
+      const fields = object(scopeEntry, scopeLabel);
+      if (!Object.keys(fields).length) fail(scopeLabel, "não pode ser vazio.");
+      const adjustments: PlannerProfileAdjustments = {};
+      for (const [fieldKey, fieldEntry] of Object.entries(fields)) {
+        const field = oneOf(fieldKey, PLANNER_PROFILE_FIELDS, `${scopeLabel}.${fieldKey}`);
+        const fieldLabel = `${scopeLabel}.${field}`;
+        const adjustmentRaw = object(fieldEntry, fieldLabel);
+        exactKeys(adjustmentRaw, ["op", "value"], fieldLabel);
+        const adjustment: PlannerProfileAdjustment = {
+          op: oneOf(adjustmentRaw.op, PLANNER_PROFILE_OPS, `${fieldLabel}.op`),
+          value: finiteNumber(adjustmentRaw.value, `${fieldLabel}.value`),
+        };
+        const problem = plannerProfileAdjustmentProblem(field, adjustment);
+        if (problem) fail(`${fieldLabel}.value`, problem);
+        adjustments[field] = adjustment;
+      }
+      override[scope] = adjustments;
+    }
+    const conflict = plannerProfileScopeConflict(override);
+    if (conflict) fail(presetLabel, `declara ${conflict} em all e também numa fase.`);
+    result[preset] = override;
+  }
+  return result;
+}
+
 function parseConfig(value: unknown, label: string): RunConfig {
   const raw = object(value, label);
-  // The invariance control is the only optional key: a run without it keeps the v1 configuration exactly.
+  // The invariance control and the planner profile override are the only optional keys:
+  // a run without them keeps the v1 configuration exactly.
   const invarianceControl = Object.hasOwn(raw, "invarianceControl");
+  const plannerProfileOverrides = Object.hasOwn(raw, "plannerProfileOverrides");
   exactKeys(raw, ["profile", "speed", "beam", "planner", "delays", "environment", "maxTurns", "timeoutMs", "timeoutOutcome",
     "stallGuard", "availablePresets", "presets", "decks", "decksSha256", "banlistSha256", "seeds", "matrix", "presetMetrics",
-    "strategyOverrides", "caseFilter", ...(invarianceControl ? ["invarianceControl"] : [])], label);
+    "strategyOverrides", "caseFilter", ...(invarianceControl ? ["invarianceControl"] : []),
+    ...(plannerProfileOverrides ? ["plannerProfileOverrides"] : [])], label);
   const beam = object(raw.beam, `${label}.beam`);
   exactKeys(beam, ["beamWidth", "maxDepth", "nodeBudget", "source"], `${label}.beam`);
   const planner = object(raw.planner, `${label}.planner`);
@@ -1036,6 +1468,10 @@ function parseConfig(value: unknown, label: string): RunConfig {
     const control = object(raw.invarianceControl, `${label}.invarianceControl`);
     exactKeys(control, ["swap"], `${label}.invarianceControl`);
     config.invarianceControl = { swap: literal(control.swap, INVARIANCE_SWAP_RULE, `${label}.invarianceControl.swap`) };
+  }
+  if (plannerProfileOverrides) {
+    config.plannerProfileOverrides = parsePlannerProfileOverrides(raw.plannerProfileOverrides, presets,
+      `${label}.plannerProfileOverrides`);
   }
   if (!isUint32(config.seeds.base)) fail(`${label}.seeds.base`, "deve ser um uint32.");
   const expectedSeeds = Array.from({ length: config.seeds.count }, (_, k) => seedFor(config.seeds.base, k));
@@ -1166,8 +1602,10 @@ function parseSeatMetrics(value: unknown, label: string): SeatMetrics {
   const decisions = object(raw.decisions, `${label}.decisions`);
   exactKeys(decisions, ["mainPhase", "measured", "broker"], `${label}.decisions`);
   const planning = object(raw.planning, `${label}.planning`);
+  // profileOverride is optional (A2): present only when the configuration carries the override.
+  const hasProfileOverride = Object.hasOwn(planning, "profileOverride");
   exactKeys(planning, ["searches", "used", "comparisons", "matches", "mismatches", "failed", "mismatchBySeverity",
-    "mismatchByPath", "terminations", "repeatedStates"], `${label}.planning`);
+    "mismatchByPath", "terminations", "repeatedStates", ...(hasProfileOverride ? ["profileOverride"] : [])], `${label}.planning`);
   const failed = object(planning.failed, `${label}.planning.failed`);
   exactKeys(failed, ["notExecuted", "executedRejected"], `${label}.planning.failed`);
   const unsupported = object(raw.unsupported, `${label}.unsupported`);
@@ -1199,6 +1637,9 @@ function parseSeatMetrics(value: unknown, label: string): SeatMetrics {
       mismatchByPath: counter(planning.mismatchByPath, `${label}.planning.mismatchByPath`),
       terminations: counter(planning.terminations, `${label}.planning.terminations`),
       repeatedStates: integer(planning.repeatedStates, `${label}.planning.repeatedStates`),
+      ...(hasProfileOverride
+        ? { profileOverride: parseProfileOverrideSeat(planning.profileOverride, `${label}.planning.profileOverride`) }
+        : {}),
     },
     unsupported: {
       tlsBranches: integer(unsupported.tlsBranches, `${label}.unsupported.tlsBranches`),
@@ -1226,6 +1667,33 @@ function parseSeatMetrics(value: unknown, label: string): SeatMetrics {
   };
 }
 
+function parseProfileOverrideSeat(value: unknown, label: string): PlannerProfileOverrideSeat {
+  const raw = object(value, label);
+  exactKeys(raw, ["captured", "applied", "changed", "missing", "transitions"], label);
+  return {
+    captured: counter(raw.captured, `${label}.captured`),
+    applied: counter(raw.applied, `${label}.applied`),
+    changed: integer(raw.changed, `${label}.changed`),
+    missing: integer(raw.missing, `${label}.missing`),
+    transitions: counter(raw.transitions, `${label}.transitions`),
+  };
+}
+
+function parsePlannerBudgetSeat(value: unknown, label: string): PlannerBudgetSeat {
+  const raw = object(value, label);
+  exactKeys(raw, ["budgetReached", "budgetReachedByTuple"], label);
+  return {
+    budgetReached: integer(raw.budgetReached, `${label}.budgetReached`),
+    budgetReachedByTuple: counter(raw.budgetReachedByTuple, `${label}.budgetReachedByTuple`),
+  };
+}
+
+function parsePlannerBudget(value: unknown, label: string): { player: PlannerBudgetSeat; bot: PlannerBudgetSeat } {
+  const raw = object(value, label);
+  exactKeys(raw, ["player", "bot"], label);
+  return { player: parsePlannerBudgetSeat(raw.player, `${label}.player`), bot: parsePlannerBudgetSeat(raw.bot, `${label}.bot`) };
+}
+
 function parseComboSeat(value: unknown, label: string): TechZeroComboSeat {
   const raw = object(value, label);
   exactKeys(raw, ["summonsById", "comboTurns"], label);
@@ -1245,7 +1713,10 @@ function parseLethalSeat(value: unknown, label: string): LethalSeat {
 
 function parsePresetMetrics(value: unknown, label: string): PresetMetricsRecord {
   const raw = object(value, label);
-  exactKeys(raw, ["techzero-combo", "lethal"], label);
+  // diag24 and planner-budget are optional (D5): absent when the plugin is off, never null.
+  const hasDiag24 = Object.hasOwn(raw, "diag24");
+  const hasBudget = Object.hasOwn(raw, "planner-budget");
+  exactKeys(raw, ["techzero-combo", "lethal", ...(hasDiag24 ? ["diag24"] : []), ...(hasBudget ? ["planner-budget"] : [])], label);
   return {
     "techzero-combo": nullable(raw["techzero-combo"], entry => {
       const combo = object(entry, `${label}.techzero-combo`);
@@ -1263,6 +1734,331 @@ function parsePresetMetrics(value: unknown, label: string): PresetMetricsRecord 
         bot: parseLethalSeat(lethal.bot, `${label}.lethal.bot`),
       };
     }),
+    ...(hasDiag24 ? { diag24: parseDiag24(raw.diag24, `${label}.diag24`) } : {}),
+    ...(hasBudget ? { "planner-budget": parsePlannerBudget(raw["planner-budget"], `${label}.planner-budget`) } : {}),
+  };
+}
+
+function nullableString(value: unknown, label: string): string | null {
+  return nullable(value, entry => string(entry, label));
+}
+
+function nullableInteger(value: unknown, label: string, minimum = 0): number | null {
+  return nullable(value, entry => integer(entry, label, minimum));
+}
+
+function boundedArray(value: unknown, limit: number, label: string): unknown[] {
+  const items = array(value, label);
+  if (items.length > limit) fail(label, `comporta no máximo ${limit} entradas.`);
+  return items;
+}
+
+function parseDiag24LpEvent(value: unknown, label: string): Diag24LpEvent {
+  const raw = object(value, label);
+  exactKeys(raw, ["turn", "phase", "seat", "ownTurn", "cause", "sourceRel", "sourceCardId", "sourceCardName", "battleRole",
+    "attackerCardName", "amount", "lpAfter"], label);
+  return {
+    turn: integer(raw.turn, `${label}.turn`),
+    phase: nullableString(raw.phase, `${label}.phase`),
+    seat: seat(raw.seat, `${label}.seat`),
+    ownTurn: boolean(raw.ownTurn, `${label}.ownTurn`),
+    cause: oneOf(raw.cause, DIAG24_LP_CAUSES, `${label}.cause`),
+    sourceRel: oneOf(raw.sourceRel, DIAG24_SOURCE_RELS, `${label}.sourceRel`),
+    sourceCardId: nullableInteger(raw.sourceCardId, `${label}.sourceCardId`),
+    sourceCardName: nullableString(raw.sourceCardName, `${label}.sourceCardName`),
+    battleRole: nullable(raw.battleRole, entry => oneOf(entry, DIAG24_BATTLE_ROLES, `${label}.battleRole`)),
+    attackerCardName: nullableString(raw.attackerCardName, `${label}.attackerCardName`),
+    amount: integer(raw.amount, `${label}.amount`),
+    lpAfter: nullable(raw.lpAfter, entry => integer(entry, `${label}.lpAfter`, Number.MIN_SAFE_INTEGER)),
+  };
+}
+
+function parseDiag24Sample(value: unknown, label: string): Diag24DivergenceSample {
+  const raw = object(value, label);
+  exactKeys(raw, ["turn", "phase", "stage", "severity", "plannedAction", "actualAction", "diffs"], label);
+  return {
+    turn: integer(raw.turn, `${label}.turn`),
+    phase: nullableString(raw.phase, `${label}.phase`),
+    stage: oneOf(raw.stage, DIAG24_SAMPLE_STAGES, `${label}.stage`),
+    severity: string(raw.severity, `${label}.severity`),
+    plannedAction: nullableString(raw.plannedAction, `${label}.plannedAction`),
+    actualAction: nullableString(raw.actualAction, `${label}.actualAction`),
+    diffs: boundedArray(raw.diffs, DIAG24_DIFFS_PER_SAMPLE, `${label}.diffs`).map((entry, index) => {
+      const at = `${label}.diffs[${index}]`;
+      const diff = object(entry, at);
+      exactKeys(diff, ["path", "severity", "class", "flags", "expected", "actual"], at);
+      return {
+        path: string(diff.path, `${at}.path`),
+        severity: string(diff.severity, `${at}.severity`),
+        class: oneOf(diff.class, DIAG24_DIFF_CLASSES, `${at}.class`),
+        flags: stringArray(diff.flags, `${at}.flags`),
+        expected: jsonValue(diff.expected, `${at}.expected`),
+        actual: jsonValue(diff.actual, `${at}.actual`),
+      };
+    }),
+  };
+}
+
+function parseDiag24Turn(value: unknown, label: string): Diag24Turn {
+  const raw = object(value, label);
+  exactKeys(raw, ["turn", "own", "battlePhase", "attacksDeclared", "battleEnd", "lethalGrade", "lpLost", "activationsByCard",
+    "chainDeclinedByCard", "handAtEnd"], label);
+  return {
+    turn: integer(raw.turn, `${label}.turn`),
+    own: boolean(raw.own, `${label}.own`),
+    battlePhase: boolean(raw.battlePhase, `${label}.battlePhase`),
+    attacksDeclared: integer(raw.attacksDeclared, `${label}.attacksDeclared`),
+    battleEnd: nullableString(raw.battleEnd, `${label}.battleEnd`),
+    lethalGrade: nullableString(raw.lethalGrade, `${label}.lethalGrade`),
+    lpLost: counter(raw.lpLost, `${label}.lpLost`),
+    activationsByCard: counter(raw.activationsByCard, `${label}.activationsByCard`),
+    chainDeclinedByCard: counter(raw.chainDeclinedByCard, `${label}.chainDeclinedByCard`),
+    handAtEnd: nullableInteger(raw.handAtEnd, `${label}.handAtEnd`),
+  };
+}
+
+function parseDiag24Seat(value: unknown, label: string): Diag24Seat {
+  const raw = object(value, label);
+  exactKeys(raw, ["preset", "divergence", "paths", "planning", "offers", "activations", "summonVetoes", "extraDeck", "attacks",
+    "pairEffects", "lpLoss", "lethal", "backrow", "turns", "techZeroOpening"], label);
+  const keys = DIAG24_SEAT_COUNTERS;
+  /** One section object, with its exact keys. */
+  const section = (source: unknown, at: string, fields: readonly string[]): Record<string, unknown> => {
+    const entry = object(source, at);
+    exactKeys(entry, fields, at);
+    return entry;
+  };
+  const c = (source: Record<string, unknown>, key: string, at: string): Counter => counter(source[key], `${at}.${key}`);
+  const n = (source: Record<string, unknown>, key: string, at: string): number => integer(source[key], `${at}.${key}`);
+  const atDivergence = `${label}.divergence`;
+  const divergence = section(raw.divergence, atDivergence, [...keys.divergence, "comparisons", "compactIdentical", "samples",
+    "samplesDropped"]);
+  const atPaths = `${label}.paths`;
+  const paths = section(raw.paths, atPaths, [...keys.paths, "bridges"]);
+  const atPlanning = `${label}.planning`;
+  const planning = section(raw.planning, atPlanning, ["searches", ...keys.planning]);
+  const offers = section(raw.offers, `${label}.offers`, ["mainPhase", "chain", "triggers"]);
+  const atMainPhase = `${label}.offers.mainPhase`;
+  const mainPhase = section(offers.mainPhase, atMainPhase, ["roots", "phases", ...keys.mainPhase]);
+  const atChain = `${label}.offers.chain`;
+  const chain = section(offers.chain, atChain, keys.chain);
+  const atTriggers = `${label}.offers.triggers`;
+  const triggers = section(offers.triggers, atTriggers, ["hookPresent", ...keys.triggers]);
+  const atActivations = `${label}.activations`;
+  const activations = section(raw.activations, atActivations, keys.activations);
+  const atExtraDeck = `${label}.extraDeck`;
+  const extraDeck = section(raw.extraDeck, atExtraDeck, [...keys.extraDeck, "turns"]);
+  const atAttacks = `${label}.attacks`;
+  const attacks = section(raw.attacks, atAttacks, ["battlePhases", "declared", "direct", ...keys.attacks]);
+  const atPairs = `${label}.pairEffects`;
+  const pairEffects = section(raw.pairEffects, atPairs, ["registered", "applied", ...keys.pairEffects]);
+  const atLp = `${label}.lpLoss`;
+  const lpLoss = section(raw.lpLoss, atLp, keys.lpLoss);
+  const atLethal = `${label}.lethal`;
+  const lethal = section(raw.lethal, atLethal, ["projections", ...keys.lethal, "hidden"]);
+  const atHidden = `${label}.lethal.hidden`;
+  const hidden = section(lethal.hidden, atHidden, ["handNonEmpty", "faceDownMonsters", "faceDownBackrow"]);
+  const atBackrow = `${label}.backrow`;
+  const backrow = section(raw.backrow, atBackrow, [...keys.backrow, "inPlannedExecution"]);
+  return {
+    preset: string(raw.preset, `${label}.preset`),
+    divergence: {
+      comparisons: n(divergence, "comparisons", atDivergence),
+      byPathClass: c(divergence, "byPathClass", atDivergence),
+      byCardPathClass: c(divergence, "byCardPathClass", atDivergence),
+      compactIdentical: n(divergence, "compactIdentical", atDivergence),
+      samples: boundedArray(divergence.samples, DIAG24_DIVERGENCE_SAMPLES_PER_SEAT, `${atDivergence}.samples`)
+        .map((entry, index) => parseDiag24Sample(entry, `${atDivergence}.samples[${index}]`)),
+      samplesDropped: n(divergence, "samplesDropped", atDivergence),
+    },
+    paths: {
+      decisions: c(paths, "decisions", atPaths),
+      executions: c(paths, "executions", atPaths),
+      failures: c(paths, "failures", atPaths),
+      failureCodes: c(paths, "failureCodes", atPaths),
+      failuresByCard: c(paths, "failuresByCard", atPaths),
+      outside: c(paths, "outside", atPaths),
+      outsideByCard: c(paths, "outsideByCard", atPaths),
+      bridges: n(paths, "bridges", atPaths),
+    },
+    planning: {
+      searches: n(planning, "searches", atPlanning),
+      repeatedStates: c(planning, "repeatedStates", atPlanning),
+      repeatedByTermination: c(planning, "repeatedByTermination", atPlanning),
+      repeatedByCandidates: c(planning, "repeatedByCandidates", atPlanning),
+    },
+    offers: {
+      mainPhase: {
+        roots: n(mainPhase, "roots", atMainPhase),
+        phases: n(mainPhase, "phases", atMainPhase),
+        offeredByCard: c(mainPhase, "offeredByCard", atMainPhase),
+        filteredByCard: c(mainPhase, "filteredByCard", atMainPhase),
+        chosenByCard: c(mainPhase, "chosenByCard", atMainPhase),
+        acceptedByCard: c(mainPhase, "acceptedByCard", atMainPhase),
+        neverChosenByCard: c(mainPhase, "neverChosenByCard", atMainPhase),
+        atExitByCardReason: c(mainPhase, "atExitByCardReason", atMainPhase),
+      },
+      chain: {
+        windows: c(chain, "windows", atChain),
+        offeredByCard: c(chain, "offeredByCard", atChain),
+        chosenByCard: c(chain, "chosenByCard", atChain),
+        declinedByCard: c(chain, "declinedByCard", atChain),
+        preparationFailedByCard: c(chain, "preparationFailedByCard", atChain),
+        origin: c(chain, "origin", atChain),
+        originByCard: c(chain, "originByCard", atChain),
+        offerOriginByCard: c(chain, "offerOriginByCard", atChain),
+      },
+      triggers: {
+        hookPresent: boolean(triggers.hookPresent, `${atTriggers}.hookPresent`),
+        offeredByCard: c(triggers, "offeredByCard", atTriggers),
+        declinedByCard: c(triggers, "declinedByCard", atTriggers),
+      },
+    },
+    activations: {
+      publishedByCardWindow: c(activations, "publishedByCardWindow", atActivations),
+      attemptsByCardWindow: c(activations, "attemptsByCardWindow", atActivations),
+      targetsByCard: c(activations, "targetsByCard", atActivations),
+    },
+    summonVetoes: nullable(raw.summonVetoes, entry => {
+      const at = `${label}.summonVetoes`;
+      const vetoes = section(entry, at, ["generations", "roots", ...keys.summonVetoes, "drift"]);
+      return {
+        generations: n(vetoes, "generations", at),
+        roots: n(vetoes, "roots", at),
+        byCardReason: c(vetoes, "byCardReason", at),
+        overriddenByCard: c(vetoes, "overriddenByCard", at),
+        drift: n(vetoes, "drift", at),
+      };
+    }),
+    extraDeck: {
+      summonsByCardMethod: c(extraDeck, "summonsByCardMethod", atExtraDeck),
+      bossSummonsByCard: c(extraDeck, "bossSummonsByCard", atExtraDeck),
+      byTurnCard: c(extraDeck, "byTurnCard", atExtraDeck),
+      bossByTurnCard: c(extraDeck, "bossByTurnCard", atExtraDeck),
+      turns: integerArray(extraDeck.turns, `${atExtraDeck}.turns`),
+    },
+    attacks: {
+      battlePhases: n(attacks, "battlePhases", atAttacks),
+      declared: n(attacks, "declared", atAttacks),
+      direct: n(attacks, "direct", atAttacks),
+      declaredByCard: c(attacks, "declaredByCard", atAttacks),
+      battleEnds: c(attacks, "battleEnds", atAttacks),
+      legalLeftByCard: c(attacks, "legalLeftByCard", atAttacks),
+    },
+    pairEffects: {
+      registered: n(pairEffects, "registered", atPairs),
+      applied: n(pairEffects, "applied", atPairs),
+      expired: c(pairEffects, "expired", atPairs),
+    },
+    lpLoss: {
+      ownTurn: c(lpLoss, "ownTurn", atLp),
+      opponentTurn: c(lpLoss, "opponentTurn", atLp),
+      ownTurnBySource: c(lpLoss, "ownTurnBySource", atLp),
+      opponentTurnBySource: c(lpLoss, "opponentTurnBySource", atLp),
+      battleByRole: c(lpLoss, "battleByRole", atLp),
+    },
+    lethal: {
+      projections: n(lethal, "projections", atLethal),
+      grades: c(lethal, "grades", atLethal),
+      converted: c(lethal, "converted", atLethal),
+      uncertainty: c(lethal, "uncertainty", atLethal),
+      viewUncertaintyByGrade: c(lethal, "viewUncertaintyByGrade", atLethal),
+      hidden: {
+        handNonEmpty: n(hidden, "handNonEmpty", atHidden),
+        faceDownMonsters: n(hidden, "faceDownMonsters", atHidden),
+        faceDownBackrow: n(hidden, "faceDownBackrow", atHidden),
+      },
+    },
+    backrow: {
+      reactions: c(backrow, "reactions", atBackrow),
+      reactionsByCard: c(backrow, "reactionsByCard", atBackrow),
+      reactionsByCount: c(backrow, "reactionsByCount", atBackrow),
+      inPlannedExecution: n(backrow, "inPlannedExecution", atBackrow),
+      exposure: c(backrow, "exposure", atBackrow),
+      exposureByCount: c(backrow, "exposureByCount", atBackrow),
+    },
+    turns: boundedArray(raw.turns, DIAG24_TURN_LIMIT, `${label}.turns`)
+      .map((entry, index) => parseDiag24Turn(entry, `${label}.turns[${index}]`)),
+    techZeroOpening: nullable(raw.techZeroOpening, entry => {
+      const at = `${label}.techZeroOpening`;
+      const opening = object(entry, at);
+      exactKeys(opening, ["firstOwnTurn", "handIds", "nextDrawId", "handRoles", "zonesDigest", "firstOwnTurnHandIds", "c1"], at);
+      const firstOwnTurn = integer(opening.firstOwnTurn, `${at}.firstOwnTurn`, 1);
+      if (firstOwnTurn !== 1 && firstOwnTurn !== 2) fail(`${at}.firstOwnTurn`, "deve ser 1 ou 2.");
+      return {
+        firstOwnTurn,
+        handIds: integerArray(opening.handIds, `${at}.handIds`),
+        nextDrawId: nullableInteger(opening.nextDrawId, `${at}.nextDrawId`),
+        handRoles: counter(opening.handRoles, `${at}.handRoles`),
+        zonesDigest: sha256String(opening.zonesDigest, `${at}.zonesDigest`),
+        firstOwnTurnHandIds: nullable(opening.firstOwnTurnHandIds, ids => integerArray(ids, `${at}.firstOwnTurnHandIds`)),
+        c1: boolean(opening.c1, `${at}.c1`),
+      };
+    }),
+  };
+}
+
+/** Strict parser of presetMetrics.diag24; the observer also runs it on its own projection. */
+export function parseDiag24(value: unknown, label = "presetMetrics.diag24"): Diag24Record {
+  const raw = object(value, label);
+  exactKeys(raw, ["version", "limits", "errors", "truncated", "closed", "fatal", "timeline", "seats"], label);
+  literal(raw.version, DIAG24_RECORD_VERSION, `${label}.version`);
+  if (canonicalJson(jsonValue(raw.limits, `${label}.limits`)) !== canonicalJson(diag24Limits())) {
+    fail(`${label}.limits`, "não correspondem aos limites do contrato.");
+  }
+  const timeline = object(raw.timeline, `${label}.timeline`);
+  exactKeys(timeline, ["summons", "lp", "pairs"], `${label}.timeline`);
+  const seats = object(raw.seats, `${label}.seats`);
+  exactKeys(seats, ["player", "bot"], `${label}.seats`);
+  return {
+    version: DIAG24_RECORD_VERSION,
+    limits: diag24Limits(),
+    errors: counter(raw.errors, `${label}.errors`),
+    truncated: counter(raw.truncated, `${label}.truncated`),
+    closed: nullable(raw.closed, entry => {
+      const closed = object(entry, `${label}.closed`);
+      exactKeys(closed, ["turn", "phase", "reason"], `${label}.closed`);
+      return {
+        turn: integer(closed.turn, `${label}.closed.turn`),
+        phase: nullableString(closed.phase, `${label}.closed.phase`),
+        reason: oneOf(closed.reason, DIAG24_CLOSE_REASONS, `${label}.closed.reason`),
+      };
+    }),
+    fatal: nullable(raw.fatal, entry => parseDiag24LpEvent(entry, `${label}.fatal`)),
+    timeline: {
+      summons: boundedArray(timeline.summons, DIAG24_TIMELINE_LIMITS.summons, `${label}.timeline.summons`).map((entry, index) => {
+        const at = `${label}.timeline.summons[${index}]`;
+        const summon = object(entry, at);
+        exactKeys(summon, ["turn", "seat", "cardId", "method", "fromZone", "boss", "extraDeck"], at);
+        return {
+          turn: integer(summon.turn, `${at}.turn`),
+          seat: seat(summon.seat, `${at}.seat`),
+          cardId: nullableInteger(summon.cardId, `${at}.cardId`),
+          method: string(summon.method, `${at}.method`),
+          fromZone: nullableString(summon.fromZone, `${at}.fromZone`),
+          boss: boolean(summon.boss, `${at}.boss`),
+          extraDeck: boolean(summon.extraDeck, `${at}.extraDeck`),
+        };
+      }),
+      lp: boundedArray(timeline.lp, DIAG24_TIMELINE_LIMITS.lp, `${label}.timeline.lp`)
+        .map((entry, index) => parseDiag24LpEvent(entry, `${label}.timeline.lp[${index}]`)),
+      pairs: boundedArray(timeline.pairs, DIAG24_TIMELINE_LIMITS.pairs, `${label}.timeline.pairs`).map((entry, index) => {
+        const at = `${label}.timeline.pairs[${index}]`;
+        const pair = object(entry, at);
+        exactKeys(pair, ["turn", "seat", "outcome", "reason", "sourceCardId"], at);
+        return {
+          turn: integer(pair.turn, `${at}.turn`),
+          seat: seat(pair.seat, `${at}.seat`),
+          outcome: oneOf(pair.outcome, DIAG24_PAIR_OUTCOMES, `${at}.outcome`),
+          reason: nullableString(pair.reason, `${at}.reason`),
+          sourceCardId: nullableInteger(pair.sourceCardId, `${at}.sourceCardId`),
+        };
+      }),
+    },
+    seats: {
+      player: parseDiag24Seat(seats.player, `${label}.seats.player`),
+      bot: parseDiag24Seat(seats.bot, `${label}.seats.bot`),
+    },
   };
 }
 

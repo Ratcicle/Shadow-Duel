@@ -20,9 +20,13 @@ import {
   INVARIANCE_SWAP_RULE,
   JOURNAL_FILE,
   LOGS_DIRECTORY,
+  NEUTRAL_STRATEGY_ID,
   PLANNER_MODES,
+  PLANNER_PROFILE_FIELDS,
+  PLANNER_PROFILE_SCOPES,
   PLANNER_MODE_SOURCES,
   PLANNER_TURN_MODES,
+  PRESET_ID_CHARACTER_CLASS,
   PRESET_METRIC_IDS,
   RUN_END_FILE,
   RUN_END_SCHEMA,
@@ -47,10 +51,13 @@ import {
   parseInvarianceRecord,
   parseRunConfig,
   parseRunHeader,
+  plannerProfileAdjustmentProblem,
+  plannerProfileScopeConflict,
   recordLine,
   seedFor,
   sha256Hex,
   sortByCaseIndex,
+  sortedPlannerProfileOverrides,
   stripClock,
   string,
   validateCaseFilterPattern,
@@ -66,6 +73,8 @@ import {
   type JsonValue,
   type PlannerMode,
   type PlannerModeSource,
+  type PlannerProfileAdjustment,
+  type PlannerProfileOverride,
   type PlannerTurnMode,
   type PresetMetricId,
   type RunConfig,
@@ -125,6 +134,8 @@ interface RunOptions {
   strategyOverrides: Record<string, string>;
   /** --invariance-control: hidden-information reruns of every live root (diagnostic only, phase 2.3 L09). */
   invarianceControl: boolean;
+  /** --planner-profile-override: per-preset TLS budget adjustments (diagnostic only, phase 2.4 A2); {} is off. */
+  plannerProfileOverrides: Record<string, PlannerProfileOverride>;
   allowDirty: boolean;
   workers: number;
   order: RunOrder;
@@ -137,7 +148,7 @@ const BOOLEAN_FLAGS: ReadonlySet<string> = new Set(["--dry-run", "--allow-dirty"
 const VALUE_FLAGS: ReadonlySet<string> = new Set([
   "--seeds", "--seed-base", "--presets", "--cases", "--profile", "--max-turns", "--timeout-ms", "--guard-decisions",
   "--guard-actions", "--guard-progress", "--planner-mode", "--planner-turn-mode", "--planner-mode-source",
-  "--preset-metrics", "--strategy-override", "--workers", "--order", "--out", "--resume",
+  "--preset-metrics", "--strategy-override", "--planner-profile-override", "--workers", "--order", "--out", "--resume",
 ]);
 const RESUME_FLAGS: ReadonlySet<string> = new Set(["--resume", "--workers", "--order"]);
 
@@ -184,6 +195,45 @@ function choice<Value extends string>(value: string, options: readonly Value[], 
   return match;
 }
 
+/** Phase scopes the CLI spells as @phase; the remaining scope ("all") is the item without a phase. */
+const PLANNER_PROFILE_PHASE_SCOPES = PLANNER_PROFILE_SCOPES.filter(scope => scope !== "all");
+const regexAlternation = (values: readonly string[]) => values.map(value => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+const PLANNER_PROFILE_OVERRIDE_ITEM = new RegExp(
+  `^(${PRESET_ID_CHARACTER_CLASS}+)(?:@(${regexAlternation(PLANNER_PROFILE_PHASE_SCOPES)}))?` +
+  `\\.(${regexAlternation(PLANNER_PROFILE_FIELDS)})=([+-]?)(\\d+)$`,
+);
+const PLANNER_PROFILE_OVERRIDE_SHAPE = `preset[${PLANNER_PROFILE_PHASE_SCOPES.map(scope => `@${scope}`).join("|")}].campo=valor`;
+
+/**
+ * preset[@phase].field=value items: an unsigned value sets the field,
+ * a signed one adds to the value the profile produced for that decision.
+ */
+export function parsePlannerProfileOverrides(text: string): Record<string, PlannerProfileOverride> {
+  const flag = "--planner-profile-override";
+  const result: Record<string, PlannerProfileOverride> = {};
+  for (const item of listValue(text, flag)) {
+    const match = PLANNER_PROFILE_OVERRIDE_ITEM.exec(item);
+    const [, preset, phase, fieldText, sign, digits] = match ?? [];
+    const field = PLANNER_PROFILE_FIELDS.find(entry => entry === fieldText);
+    if (!preset || !field || digits === undefined) {
+      throw new RunnerError(`${flag} usa ${PLANNER_PROFILE_OVERRIDE_SHAPE}, com campo em ${PLANNER_PROFILE_FIELDS.join(", ")} ` +
+        `e valor sem sinal (substitui) ou com + / - (soma); recebeu ${item}.`);
+    }
+    const scope = PLANNER_PROFILE_PHASE_SCOPES.find(entry => entry === phase) ?? "all";
+    const magnitude = Number(digits);
+    const adjustment: PlannerProfileAdjustment = sign ? { op: "add", value: sign === "-" ? -magnitude : magnitude } : { op: "set", value: magnitude };
+    const problem = plannerProfileAdjustmentProblem(field, adjustment);
+    if (problem) throw new RunnerError(`${flag} ${item}: ${field} ${problem}`);
+    const override = result[preset] ??= {};
+    const adjustments = override[scope] ??= {};
+    if (adjustments[field] !== undefined) throw new RunnerError(`${flag} repete ${preset}${scope === "all" ? "" : `@${scope}`}.${field}.`);
+    adjustments[field] = adjustment;
+    const conflict = plannerProfileScopeConflict(override);
+    if (conflict) throw new RunnerError(`${flag} declara ${preset}.${conflict} sem fase e também com fase; cada campo de um preset tem um só escopo.`);
+  }
+  return result;
+}
+
 export function parseRunArgs(argv: readonly string[]): RunOptions {
   const flags = parseFlags(argv, VALUE_FLAGS, BOOLEAN_FLAGS);
   const resume = flags.get("--resume") ?? null;
@@ -220,6 +270,8 @@ export function parseRunArgs(argv: readonly string[]): RunOptions {
     if (target === source) throw new RunnerError(`--strategy-override ${entry} não muda nada.`);
     overrides[target] = source;
   }
+  const profileOverrideText = value("--planner-profile-override");
+  const plannerProfileOverrides = profileOverrideText === null ? {} : parsePlannerProfileOverrides(profileOverrideText);
   const integerOption = (flag: string, fallback: number) => {
     const text = value(flag);
     return text === null ? fallback : positiveInteger(text, flag);
@@ -247,6 +299,7 @@ export function parseRunArgs(argv: readonly string[]): RunOptions {
     presetMetrics,
     strategyOverrides: overrides,
     invarianceControl: flags.has("--invariance-control"),
+    plannerProfileOverrides,
     allowDirty: flags.has("--allow-dirty"),
     workers: integerOption("--workers", defaultWorkers()),
     order: choice(value("--order") ?? "forward", ["forward", "reverse"] as const, "--order"),
@@ -323,8 +376,16 @@ function buildConfig(options: RunOptions, environment: EnvironmentDescription): 
   if (unknown.length) throw new RunnerError(`Preset(s) desconhecido(s): ${unknown.join(", ")}. Disponíveis: ${known.join(", ")}.`);
   // The plan always follows the canonical preset order.
   const presets = known.filter(preset => requested.includes(preset));
+  const neutralSources = Object.entries(options.strategyOverrides).filter(([, source]) => source === NEUTRAL_STRATEGY_ID);
+  if (neutralSources.length && (environment.strategyIds.includes(NEUTRAL_STRATEGY_ID) || known.includes(NEUTRAL_STRATEGY_ID))) {
+    throw new RunnerError(`--strategy-override: o ambiente já tem uma estratégia ou um preset ${NEUTRAL_STRATEGY_ID}, reservado à estratégia neutra de diagnóstico.`);
+  }
   for (const [target, source] of Object.entries(options.strategyOverrides)) {
-    for (const id of [target, source]) {
+    if (target === NEUTRAL_STRATEGY_ID) {
+      throw new RunnerError(`--strategy-override: ${NEUTRAL_STRATEGY_ID} só pode ser fonte (alvo=${NEUTRAL_STRATEGY_ID}).`);
+    }
+    // The diagnostic neutral strategy is a source outside the registry; the case worker registers it on demand.
+    for (const id of source === NEUTRAL_STRATEGY_ID ? [target] : [target, source]) {
       if (!environment.strategyIds.includes(id)) {
         throw new RunnerError(`--strategy-override usa ${id}, que não é uma estratégia registrada (${environment.strategyIds.join(", ")}).`);
       }
@@ -344,6 +405,25 @@ function buildConfig(options: RunOptions, environment: EnvironmentDescription): 
   const allCases = buildMatrixCases({ presets, seeds: options.seeds, seedBase: options.seedBase });
   const cases = allCases.filter(entry => matchCaseFilter(options.cases, entry.caseId));
   if (!cases.length) throw new RunnerError("--cases não corresponde a nenhum caso planejado.");
+  const hasCaseWith = (preset: string) => cases.some(entry => entry.seat1 === preset || entry.seat2 === preset);
+  for (const [target] of neutralSources) {
+    if (!hasCaseWith(target)) throw new RunnerError(`--strategy-override ${target}=${NEUTRAL_STRATEGY_ID}: nenhum caso planejado tem ${target}.`);
+  }
+  const profileOverridePresets = Object.keys(options.plannerProfileOverrides);
+  if (profileOverridePresets.length && options.plannerMode === "off") {
+    throw new RunnerError("--planner-profile-override não tem efeito com --planner-mode off: a TurnLineSearch nunca roda.");
+  }
+  const overriddenStrategies = new Set(Object.entries(options.strategyOverrides).flat());
+  for (const preset of profileOverridePresets) {
+    if (!presets.includes(preset)) {
+      throw new RunnerError(`--planner-profile-override usa ${preset}, que não é um preset desta execução (${presets.join(", ")}).`);
+    }
+    if (!hasCaseWith(preset)) throw new RunnerError(`--planner-profile-override: nenhum caso planejado tem ${preset}; o override não teria efeito.`);
+    // The override acts per deck (bot.archetype); a swapped strategy would make the ablation ambiguous.
+    if (overriddenStrategies.has(preset)) {
+      throw new RunnerError(`--planner-profile-override: ${preset} também aparece em --strategy-override (como alvo ou fonte).`);
+    }
+  }
   const config: RunConfig = {
     profile: options.profile,
     speed: "instant",
@@ -398,6 +478,8 @@ function buildConfig(options: RunOptions, environment: EnvironmentDescription): 
     caseFilter: options.cases,
     // Off, the key is absent: configDigest and the runId stay those of a run without the flag.
     ...(options.invarianceControl ? { invarianceControl: { swap: INVARIANCE_SWAP_RULE } } : {}),
+    // The same for the planner profile override (D5).
+    ...(profileOverridePresets.length ? { plannerProfileOverrides: sortedPlannerProfileOverrides(options.plannerProfileOverrides) } : {}),
   };
   return { config, cases };
 }
@@ -424,6 +506,7 @@ function optionsFromHeader(header: RunHeader, workers: number, order: RunOrder):
     presetMetrics: [...config.presetMetrics],
     strategyOverrides: { ...config.strategyOverrides },
     invarianceControl: config.invarianceControl !== undefined,
+    plannerProfileOverrides: config.plannerProfileOverrides ? structuredClone(config.plannerProfileOverrides) : {},
     allowDirty: header.identity.dirty,
     workers,
     order,
@@ -1284,14 +1367,21 @@ async function caseWorker(): Promise<void> {
   }
 
   const { registerStrategy, resolveRegisteredStrategy } = await import("../src/core/ai/StrategyRegistry.js");
+  // Two passes: every source resolves against the untouched registry, then every target is registered,
+  // so a chain such as a=b,b=c gives a the original b. Without overrides both loops are empty.
+  const swaps: Array<[string, NonNullable<ReturnType<typeof resolveRegisteredStrategy>>]> = [];
   for (const [target, source] of Object.entries(config.strategyOverrides)) {
-    const strategy = resolveRegisteredStrategy(source);
+    // The diagnostic neutral strategy is imported only by a case that asks for it (A2).
+    const strategy = source === NEUTRAL_STRATEGY_ID
+      ? (await import("./benchmark/neutralStrategy.js")).default
+      : resolveRegisteredStrategy(source);
     if (!strategy) {
       failWorker(new RunnerError(`A estratégia ${source} não está registrada.`));
       return;
     }
-    registerStrategy(target, strategy);
+    swaps.push([target, strategy]);
   }
+  for (const [target, strategy] of swaps) registerStrategy(target, strategy);
   const { HarnessGame, HarnessBot, HarnessConfigDriftError, projectDuelRecord } = await import("./benchmark/observer.js");
   const { default: BotArena } = await import("../src/core/BotArena.js");
 
@@ -1418,6 +1508,11 @@ const USAGE = [
   "  npm run benchmark -- [run] --seeds N [opções]",
   "  npm run benchmark -- --resume DIR [--workers K] [--order forward|reverse]",
   "  npm run benchmark -- controls [--out DIR] [--compare-with DIR_ANTERIOR] [--workers K]",
+  "",
+  "Opções de diagnóstico (ausentes da configuração quando desligadas):",
+  `  --planner-profile-override ${PLANNER_PROFILE_OVERRIDE_SHAPE}[,...]  (valor sem sinal substitui; +N/-N soma)`,
+  `  --strategy-override PRESET=${NEUTRAL_STRATEGY_ID}  (estratégia neutra do harness, só para diagnóstico)`,
+  `  --preset-metrics ${PRESET_METRIC_IDS.join("|")}[,...]`,
 ].join("\n");
 
 async function main(argv: readonly string[]): Promise<number> {

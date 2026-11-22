@@ -25,6 +25,7 @@ import {
   compareCodeUnits,
   configBaselineBlockers,
   deterministicDigest,
+  formatPlannerProfileOverrides,
   jsonValue,
   parseDuelRecord,
   parseInvarianceRecord,
@@ -36,6 +37,7 @@ import {
   type BenchmarkCase,
   type Counter,
   type CrossCheckDiff,
+  type Diag24Seat,
   type DuelRecordV1,
   type GuardCounterName,
   type GuardPeaks,
@@ -43,6 +45,7 @@ import {
   type InvarianceGuardTally,
   type InvarianceRoot,
   type JsonValue,
+  type PlannerProfileOverrideSeat,
   type RunConfig,
   type RunEnd,
   type RunHeader,
@@ -148,6 +151,32 @@ export function loadRun(dir: string, allowIncomplete = false): LoadedRun {
     }
     byCase.set(record.caseId, record);
   });
+  // presetMetrics.diag24 exists exactly in the complete records of a run that turns the plugin on (D5).
+  const diag24On = header.config.presetMetrics.includes("diag24");
+  for (const record of byCase.values()) {
+    if (record.presetMetrics === null || Object.hasOwn(record.presetMetrics, "diag24") === diag24On) continue;
+    throw new AnalysisInputError(diag24On
+      ? `${record.caseId} não tem presetMetrics.diag24, mas a configuração liga o plugin diag24.`
+      : `${record.caseId} tem presetMetrics.diag24, mas a configuração não liga o plugin diag24.`);
+  }
+  // The same for presetMetrics["planner-budget"], and seatMetrics.<seat>.planning.profileOverride
+  // exists on both seats exactly when the configuration carries the planner profile override (A2).
+  const budgetOn = header.config.presetMetrics.includes("planner-budget");
+  const overrideOn = header.config.plannerProfileOverrides !== undefined;
+  for (const record of byCase.values()) {
+    if (record.presetMetrics !== null && Object.hasOwn(record.presetMetrics, "planner-budget") !== budgetOn) {
+      throw new AnalysisInputError(budgetOn
+        ? `${record.caseId} não tem presetMetrics.planner-budget, mas a configuração liga o plugin planner-budget.`
+        : `${record.caseId} tem presetMetrics.planner-budget, mas a configuração não liga o plugin planner-budget.`);
+    }
+    for (const seat of SEATS) {
+      const metrics = record.seatMetrics?.[seat];
+      if (!metrics || Object.hasOwn(metrics.planning, "profileOverride") === overrideOn) continue;
+      throw new AnalysisInputError(overrideOn
+        ? `${record.caseId} não tem seatMetrics.${seat}.planning.profileOverride, mas a configuração tem plannerProfileOverrides.`
+        : `${record.caseId} tem seatMetrics.${seat}.planning.profileOverride, mas a configuração não tem plannerProfileOverrides.`);
+    }
+  }
   const runEndFile = path.join(resolved, RUN_END_FILE);
   const runEnd = fs.existsSync(runEndFile) ? parseRunEnd(readJson(runEndFile)) : null;
   if (runEnd && runEnd.runId !== header.runId) throw new AnalysisInputError(`${RUN_END_FILE} pertence a outra execução.`);
@@ -257,6 +286,8 @@ export interface PresetDiagnostics {
   mainPhaseExits: Counter;
   guardPeaks: GuardPeaks;
   plannerProfiles: Counter;
+  /** Present only when config.plannerProfileOverrides is (A2): the sum of the seats' evidence. */
+  profileOverride?: PlannerProfileOverrideSeat;
 }
 
 export interface Defect {
@@ -331,6 +362,10 @@ export interface BenchmarkSummary {
   presetMetrics: {
     "techzero-combo": { duelsWithCombo: number; turnsWithCombo: number; summonsById: Counter } | null;
     lethal: Record<string, { projections: number; opportunities: number; converted: number; unconverted: number }> | null;
+    /** Present only when config.presetMetrics includes "diag24". */
+    diag24?: Diag24Summary;
+    /** Present only when config.presetMetrics includes "planner-budget" (A2). */
+    "planner-budget"?: PlannerBudgetSummary;
   } | null;
   guardCalibration: {
     mode: string;
@@ -348,6 +383,133 @@ export interface BenchmarkSummary {
   } | null;
   /** Present only when the run directory has INVARIANCE_FILE. */
   invariance?: InvarianceSummary;
+}
+
+export interface Diag24PresetSummary {
+  seats: number;
+  decisions: Counter;
+  chainOrigin: Counter;
+  /** The largest entries of offers.chain.originByCard. */
+  chainOriginByCardTop: Counter;
+  lethalGrades: Counter;
+  lethalConverted: Counter;
+  /** Fatal LP events in this preset's own turn, by "cause|sourceRel|battleRole". */
+  fatalOwnTurn: Counter;
+  /** Every activation from the seat's own Spell/Trap or Field Zone (own_main included), and exposure snapshots, by window. */
+  backrowActivationsByWindow: Counter;
+  backrowExposureByWindow: Counter;
+  /** Backrow reactions outside the seat's own Main Phase (battle and the opponent's turn); of them, inside the opponent's planned TLS execution. */
+  backrowReactions: { outsideOwnMain: number; inPlannedExecution: number };
+  summonVetoes: { byCardReason: Counter; overriddenByCard: Counter; drift: number } | null;
+  repeatedStates: Counter;
+}
+
+export interface PlannerBudgetSummary {
+  byPreset: Record<string, { searches: number; budgetReached: number; budgetReachedByTuple: Counter }>;
+}
+
+/** Sums every seat a preset controls in valid duels, mirrors included, like the diagnostics. */
+function plannerBudgetSummary(config: RunConfig, records: readonly DuelRecordV1[]): PlannerBudgetSummary {
+  const byPreset: PlannerBudgetSummary["byPreset"] = {};
+  for (const preset of config.presets) byPreset[preset] = { searches: 0, budgetReached: 0, budgetReachedByTuple: {} };
+  for (const record of records) {
+    const budget = record.presetMetrics?.["planner-budget"];
+    if (!budget) continue;
+    for (const seat of SEATS) {
+      const target = byPreset[record.seats[seat]];
+      if (!target) continue;
+      target.searches += record.seatMetrics?.[seat].planning.searches ?? 0;
+      target.budgetReached += budget[seat].budgetReached;
+      mergeCounter(target.budgetReachedByTuple, budget[seat].budgetReachedByTuple);
+    }
+  }
+  for (const entry of Object.values(byPreset)) entry.budgetReachedByTuple = sortedCounter(entry.budgetReachedByTuple);
+  return { byPreset };
+}
+
+export interface Diag24Summary {
+  records: number;
+  errors: number;
+  truncated: Counter;
+  byPreset: Record<string, Diag24PresetSummary>;
+}
+
+const DIAG24_TOP_ENTRIES = 10;
+
+function topCounter(counts: Counter, limit: number): Counter {
+  return sortedCounter(Object.fromEntries(sortedEntries(counts).slice(0, limit)));
+}
+
+function windowOfKey(key: string): string {
+  return key.split("|", 1)[0] ?? key;
+}
+
+function diag24Summary(config: RunConfig, records: readonly DuelRecordV1[]): Diag24Summary {
+  const byPreset: Record<string, Diag24PresetSummary> = {};
+  for (const preset of config.presets) {
+    byPreset[preset] = {
+      seats: 0, decisions: {}, chainOrigin: {}, chainOriginByCardTop: {}, lethalGrades: {}, lethalConverted: {}, fatalOwnTurn: {},
+      backrowActivationsByWindow: {}, backrowExposureByWindow: {}, backrowReactions: { outsideOwnMain: 0, inPlannedExecution: 0 }, summonVetoes: preset === "shadowheart"
+        ? { byCardReason: {}, overriddenByCard: {}, drift: 0 } : null,
+      repeatedStates: {},
+    };
+  }
+  const originByCard: Record<string, Counter> = {};
+  const summary: Diag24Summary = { records: 0, errors: 0, truncated: {}, byPreset };
+  for (const record of records) {
+    const diag24 = record.presetMetrics?.diag24;
+    if (!diag24) continue;
+    summary.records += 1;
+    summary.errors += Object.values(diag24.errors).reduce((sum, count) => sum + count, 0);
+    mergeCounter(summary.truncated, diag24.truncated);
+    for (const seat of SEATS) {
+      const preset = record.seats[seat];
+      const target = byPreset[preset];
+      const data: Diag24Seat = diag24.seats[seat];
+      if (!target) continue;
+      target.seats += 1;
+      mergeCounter(target.decisions, data.paths.decisions);
+      mergeCounter(target.chainOrigin, data.offers.chain.origin);
+      mergeCounter(originByCard[preset] ??= {}, data.offers.chain.originByCard);
+      mergeCounter(target.lethalGrades, data.lethal.grades);
+      mergeCounter(target.lethalConverted, data.lethal.converted);
+      for (const [key, count] of Object.entries(data.backrow.reactions)) {
+        const window = windowOfKey(key);
+        increment(target.backrowActivationsByWindow, window, count);
+        if (window !== "own_main") target.backrowReactions.outsideOwnMain += count;
+      }
+      target.backrowReactions.inPlannedExecution += data.backrow.inPlannedExecution;
+      for (const [key, count] of Object.entries(data.backrow.exposureByCount)) increment(target.backrowExposureByWindow, windowOfKey(key), count);
+      if (target.summonVetoes && data.summonVetoes) {
+        mergeCounter(target.summonVetoes.byCardReason, data.summonVetoes.byCardReason);
+        mergeCounter(target.summonVetoes.overriddenByCard, data.summonVetoes.overriddenByCard);
+        target.summonVetoes.drift += data.summonVetoes.drift;
+      }
+      mergeCounter(target.repeatedStates, data.planning.repeatedStates);
+    }
+    const fatal = diag24.fatal;
+    if (fatal?.ownTurn) {
+      const target = byPreset[record.seats[fatal.seat]];
+      if (target) increment(target.fatalOwnTurn, `${fatal.cause}|${fatal.sourceRel}|${fatal.battleRole ?? "-"}`);
+    }
+  }
+  for (const [preset, target] of Object.entries(byPreset)) {
+    target.decisions = sortedCounter(target.decisions);
+    target.chainOrigin = sortedCounter(target.chainOrigin);
+    target.chainOriginByCardTop = topCounter(originByCard[preset] ?? {}, DIAG24_TOP_ENTRIES);
+    target.lethalGrades = sortedCounter(target.lethalGrades);
+    target.lethalConverted = sortedCounter(target.lethalConverted);
+    target.fatalOwnTurn = sortedCounter(target.fatalOwnTurn);
+    target.backrowActivationsByWindow = sortedCounter(target.backrowActivationsByWindow);
+    target.backrowExposureByWindow = sortedCounter(target.backrowExposureByWindow);
+    target.repeatedStates = sortedCounter(target.repeatedStates);
+    if (target.summonVetoes) {
+      target.summonVetoes.byCardReason = sortedCounter(target.summonVetoes.byCardReason);
+      target.summonVetoes.overriddenByCard = sortedCounter(target.summonVetoes.overriddenByCard);
+    }
+  }
+  summary.truncated = sortedCounter(summary.truncated);
+  return summary;
 }
 
 // ── Validation ─────────────────────────────────────────────────────────────
@@ -564,7 +726,7 @@ function mirrorStats(records: readonly DuelRecordV1[]) {
   };
 }
 
-function emptyDiagnostics(): PresetDiagnostics {
+function emptyDiagnostics(profileOverride: boolean): PresetDiagnostics {
   return {
     duels: 0,
     turns: distribution([]),
@@ -577,12 +739,13 @@ function emptyDiagnostics(): PresetDiagnostics {
     mainPhaseExits: {},
     guardPeaks: { decisions: 0, actions: 0, progress: 0 },
     plannerProfiles: {},
+    ...(profileOverride ? { profileOverride: { captured: {}, applied: {}, changed: 0, missing: 0, transitions: {} } } : {}),
   };
 }
 
 /** Sums every seat a preset controls in valid duels, mirrors included. */
-function presetDiagnostics(preset: string, records: readonly DuelRecordV1[]): PresetDiagnostics {
-  const result = emptyDiagnostics();
+function presetDiagnostics(preset: string, records: readonly DuelRecordV1[], profileOverride: boolean): PresetDiagnostics {
+  const result = emptyDiagnostics(profileOverride);
   const duels = records.filter(record => isValid(record) && (record.seats.player === preset || record.seats.bot === preset));
   result.duels = duels.length;
   result.turns = distribution(duels.flatMap(record => record.outcome.turns === null ? [] : [record.outcome.turns]));
@@ -620,7 +783,20 @@ function presetDiagnostics(preset: string, records: readonly DuelRecordV1[]): Pr
       result.decisions.broker += metrics.decisions.broker;
       mergeCounter(result.mainPhaseExits, metrics.mainPhaseExits);
       if (record.profiles) mergeCounter(result.plannerProfiles, record.profiles.planner[seat]);
+      const evidence = planning.profileOverride;
+      const total = result.profileOverride;
+      if (evidence && total) {
+        mergeCounter(total.captured, evidence.captured);
+        mergeCounter(total.applied, evidence.applied);
+        total.changed += evidence.changed;
+        total.missing += evidence.missing;
+        mergeCounter(total.transitions, evidence.transitions);
+      }
     }
+  }
+  const evidenceTotal = result.profileOverride;
+  if (evidenceTotal) {
+    for (const key of ["captured", "applied", "transitions"] as const) evidenceTotal[key] = sortedCounter(evidenceTotal[key]);
   }
   const divergence = result.divergence;
   const failed = divergence.failedNotExecuted + divergence.failedExecutedRejected;
@@ -758,7 +934,10 @@ export function computeSummary(run: LoadedRun, options: SummaryOptions = {}): Be
     starterScore: scoreOf(nonMirrorStarted.filter(record => record.start?.preset === record.outcome.winnerPreset).length,
       nonMirrorStarted.filter(record => record.outcome.draw).length, nonMirrorStarted.length),
   };
-  summary.diagnostics = { byPreset: Object.fromEntries(config.presets.map(preset => [preset, presetDiagnostics(preset, records)])) };
+  const profileOverride = config.plannerProfileOverrides !== undefined;
+  summary.diagnostics = {
+    byPreset: Object.fromEntries(config.presets.map(preset => [preset, presetDiagnostics(preset, records, profileOverride)])),
+  };
 
   let combo: NonNullable<BenchmarkSummary["presetMetrics"]>["techzero-combo"] = null;
   if (config.presetMetrics.includes("techzero-combo")) {
@@ -792,7 +971,13 @@ export function computeSummary(run: LoadedRun, options: SummaryOptions = {}): Be
       }
     }
   }
-  summary.presetMetrics = { "techzero-combo": combo, lethal };
+  summary.presetMetrics = {
+    "techzero-combo": combo,
+    lethal,
+    // Only with the plugin: without it the summary keeps exactly the two keys of before.
+    ...(config.presetMetrics.includes("diag24") ? { diag24: diag24Summary(config, valid) } : {}),
+    ...(config.presetMetrics.includes("planner-budget") ? { "planner-budget": plannerBudgetSummary(config, valid) } : {}),
+  };
 
   const observedPeaks: GuardPeaks = { decisions: 0, actions: 0, progress: 0 };
   for (const record of records) {
@@ -1034,6 +1219,10 @@ export function renderSummaryMarkdown(summary: BenchmarkSummary): string {
     `- Perfil ${config.profile}: beam ${config.beam.beamWidth}/${config.beam.maxDepth}/${config.beam.nodeBudget}; ` +
       `planner com o perfil de cada estratégia; modo imposto pela Arena: ${config.planner.arenaMode} (origem: ${config.planner.modeSource}` +
       `${config.planner.modeOverride ? `, modo ${config.planner.modeOverride}` : ""}${config.planner.turnModeOverride ? `, ${config.planner.turnModeOverride}` : ""}).`,
+    ...(config.plannerProfileOverrides
+      ? [`- Overrides de perfil do planner: ${formatPlannerProfileOverrides(config.plannerProfileOverrides)} ` +
+        "(execução de diagnóstico; os orçamentos desses presets vêm do override)."]
+      : []),
     `- Limite de ${config.maxTurns} turnos; relógio de segurança de ${config.timeoutMs} ms (vira erro); guarda ${config.stallGuard.mode} ` +
       `${config.stallGuard.decisionsPerTurn}/${config.stallGuard.actionsPerTurn}/${config.stallGuard.progressPerTurn} (decisões/ações/progresso por turno).`,
     `- Seeds: base ${config.seeds.base}, N = ${config.seeds.count}; casos planejados ${validation.plannedCases}, presentes ${validation.presentCases}` +
@@ -1152,8 +1341,18 @@ export function renderSummaryMarkdown(summary: BenchmarkSummary): string {
     .map(([preset, diagnostics]) => `${preset} (${counterText(diagnostics.failureMarks)})`);
   lines.push("", `Marcas em falhas de execução (prefixo \`${FAILED_MARK_PREFIX}\`, fora da soma das divergências): ` +
     `${failureMarks.length ? failureMarks.join("; ") : "nenhuma"}.`);
+  if (config.plannerProfileOverrides) {
+    lines.push("", "Aplicação do override de perfil do planner, contada uma vez por decisão da Main Phase (captura do perfil).", "",
+      "| Preset | Capturados por fase | Aplicados por fase | Mudados | Ausentes | Transições |", "| --- | --- | --- | ---: | ---: | --- |");
+    for (const [preset, diagnostics] of Object.entries(summary.diagnostics?.byPreset ?? {})) {
+      const evidence = diagnostics.profileOverride;
+      if (!diagnostics.duels || !evidence) continue;
+      lines.push(`| ${cell(preset)} | ${cell(counterText(evidence.captured))} | ${cell(counterText(evidence.applied))} | ${evidence.changed} | ` +
+        `${evidence.missing} | ${cell(counterText(evidence.transitions))} |`);
+    }
+  }
   const presetMetrics = summary.presetMetrics;
-  if (presetMetrics && (presetMetrics["techzero-combo"] || presetMetrics.lethal)) {
+  if (presetMetrics && (presetMetrics["techzero-combo"] || presetMetrics.lethal || presetMetrics.diag24 || presetMetrics["planner-budget"])) {
     lines.push("", "## Métricas opcionais por preset", "");
     const combo = presetMetrics["techzero-combo"];
     if (combo) {
@@ -1166,6 +1365,45 @@ export function renderSummaryMarkdown(summary: BenchmarkSummary): string {
         "| Preset | Projeções | Letais provados | Convertidos | Não convertidos |", "| --- | ---: | ---: | ---: | ---: |");
       for (const [preset, lethal] of Object.entries(presetMetrics.lethal)) {
         if (lethal.projections) lines.push(`| ${cell(preset)} | ${lethal.projections} | ${lethal.opportunities} | ${lethal.converted} | ${lethal.unconverted} |`);
+      }
+    }
+    const diag24 = presetMetrics.diag24;
+    if (diag24) {
+      lines.push("", "### Diagnóstico diag24", "",
+        `Registros com o plugin: ${diag24.records}; defeitos do plugin: ${diag24.errors}; ` +
+        `entradas descartadas por limite: ${counterText(diag24.truncated)}.`, "",
+        "| Preset | Assentos | Decisões por caminho | Origem das respostas de Chain | Letal graduado (convertidos) | " +
+        "PV zerados no próprio turno | Ativações do backrow / retratos por janela | Estados repetidos por busca |",
+        "| --- | ---: | --- | --- | --- | --- | --- | --- |");
+      for (const [preset, entry] of Object.entries(diag24.byPreset)) {
+        if (!entry.seats) continue;
+        const backrow = Object.keys({ ...entry.backrowExposureByWindow, ...entry.backrowActivationsByWindow }).sort(compareCodeUnits)
+          .map(window => `${window}: ${entry.backrowActivationsByWindow[window] ?? 0}/${entry.backrowExposureByWindow[window] ?? 0}`)
+          .join("; ") || "—";
+        lines.push(`| ${cell(preset)} | ${entry.seats} | ${cell(counterText(entry.decisions))} | ${cell(counterText(entry.chainOrigin))} | ` +
+          `${cell(`${counterText(entry.lethalGrades)} (${counterText(entry.lethalConverted)})`)} | ${cell(counterText(entry.fatalOwnTurn))} | ` +
+          `${cell(backrow)} | ${cell(counterText(entry.repeatedStates))} |`);
+      }
+      const vetoes = Object.entries(diag24.byPreset).flatMap(([preset, entry]) => entry.seats && entry.summonVetoes
+        ? [`${preset}: ${counterText(entry.summonVetoes.byCardReason, 5)}; desempates ${counterText(entry.summonVetoes.overriddenByCard, 3)}; ` +
+          `deriva ${entry.summonVetoes.drift}`] : []);
+      if (vetoes.length) lines.push("", `Vetos de invocação (Shadow-Heart): ${vetoes.join(" | ")}.`);
+      const reactions = Object.entries(diag24.byPreset).flatMap(([preset, entry]) => entry.seats
+        ? [`${preset}: ${entry.backrowReactions.outsideOwnMain} (${entry.backrowReactions.inPlannedExecution} na execução planejada do adversário)`]
+        : []);
+      if (reactions.length) {
+        lines.push("", `Reações de backrow fora da própria Main Phase (batalha, outras fases próprias e turno do adversário): ${reactions.join("; ")}.`);
+      }
+    }
+    const budget = presetMetrics["planner-budget"];
+    if (budget) {
+      lines.push("", "### Orçamento do planner", "",
+        "Buscas da TurnLineSearch cujo plannedNodesEvaluated atingiu o nodeBudget efetivo (orçamento atingido, não necessariamente busca cortada).", "",
+        "| Preset | Buscas | Orçamento atingido | Fração | Tuplas que o atingem |", "| --- | ---: | ---: | ---: | --- |");
+      for (const [preset, entry] of Object.entries(budget.byPreset)) {
+        if (!entry.searches) continue;
+        lines.push(`| ${cell(preset)} | ${entry.searches} | ${entry.budgetReached} | ${percent(ratio(entry.budgetReached, entry.searches))} | ` +
+          `${cell(counterText(entry.budgetReachedByTuple, 4))} |`);
       }
     }
   }
