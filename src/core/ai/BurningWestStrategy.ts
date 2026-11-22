@@ -39,7 +39,6 @@ import {
   selectBurningWestAutomaticAscension,
 } from "./burningwest/extraDeck.js";
 import {
-  buildBurningWestDefenseActivationContext,
   evaluateBurningWestAmbushResponse,
   evaluateBurningWestLawResponse,
   evaluateBurningWestQuickDrawResponse,
@@ -800,33 +799,14 @@ export default class BurningWestStrategy extends BaseStrategy {
       };
     }
 
-    const activationContext = buildBurningWestDefenseActivationContext({
-      option: best.option,
-      analysis,
-      context: evaluationContext,
-      evaluation: best,
-      buildActivationContext: this.buildBurningWestActivationContext.bind(this),
-    });
-
+    // The Chain response contract carries only the canonical candidate (plus exact
+    // activationContext.decisions); any other context key rejects the choice.
     return {
-      ...best.option,
-      priority: best.score,
-      score: best.score,
+      card: best.option.card,
+      effect: best.option.effect,
+      candidateKey: best.option.candidateKey,
       reason: best.reason,
-      activationContext,
-      context: {
-        ...context,
-        ...(best.option.context || {}),
-        activationContext,
-        defenseEvaluation: {
-          score: best.score,
-          reason: best.reason,
-          bestCandidate: best.bestCandidate?.name,
-          ownTarget: best.ownTarget?.name,
-          opponentTarget: best.opponentTarget?.name,
-        },
-      },
-    } as ChainStrategyResponse;
+    };
   }
 
   evaluateRecruitCandidate(candidates: BurningWestCard[] = [], context: BurningWestContext = {}) {
