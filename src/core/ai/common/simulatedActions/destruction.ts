@@ -58,6 +58,7 @@ import type { SimulatedActionHandlerContext } from "./shared.js";
 import type { SimulatedActionOptions, SimulatedRuntimeState } from "./shared.js";
 import { hasSimulatedProtection } from "./lifecycle.js";
 import { canUseSimulatedEffectUsage, markSimulatedEffectUsage } from "../simStateUtils.js";
+import type { SimulatedUsageCard } from "../simStateUtils.js";
 
 export function getGraveyardBanishBurnEntries(
   action: SimulatedActionHandlerContext<"banish_all_graveyard_and_burn">["action"],
@@ -187,8 +188,11 @@ function replaceSimulatedDestruction(
     const replacement = effect.replacementEffect;
     if (!isSupportedSimulatedDestructionReplacement(replacement)) continue;
     if (!isEligible(entry, firstOpportunityConsumed)) continue;
+    // The runtime spends the usage before the cost, so the mark keys on the
+    // source's presence as it applied the replacement, not after a cost moves it.
+    const usageIdentity = captureSimulatedUsageIdentity(source);
     const markUsage = () => {
-      if (!firstOpportunityConsumed) markSimulatedEffectUsage(state, effect, source, owner.id, true);
+      if (!firstOpportunityConsumed) markSimulatedEffectUsage(state, effect, usageIdentity, owner.id, true);
     };
     const costs = replacement.costActions;
     if (!costs?.length && !replacement.costCount) {
@@ -225,6 +229,17 @@ function replaceSimulatedDestruction(
     return source;
   }
   return null;
+}
+
+/** The fields a simulated usage key reads, copied from the card at this moment. */
+function captureSimulatedUsageIdentity(card: SimulatedCardState): SimulatedUsageCard {
+  return {
+    ...(card.name !== undefined ? { name: card.name } : {}),
+    ...(card.id !== undefined ? { id: card.id } : {}),
+    ...(card.instanceId !== undefined ? { instanceId: card.instanceId } : {}),
+    ...(card.duelCardId !== undefined ? { duelCardId: card.duelCardId } : {}),
+    ...(card.oncePerTurnResetVersion !== undefined ? { oncePerTurnResetVersion: card.oncePerTurnResetVersion } : {}),
+  };
 }
 
 interface ScopedCard {

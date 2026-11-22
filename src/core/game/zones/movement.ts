@@ -80,6 +80,8 @@ const FIELD_ZONE_NAMES: ReadonlySet<string> = new Set(["field", "spellTrap", "fi
 import { captureEventCardPresence } from "./ownership.js";
 import { reportEngineFault } from "../devTools/faults.js";
 import { captureReplacementPresence, formatReplacementText, replacementPresenceIsCurrent } from "../effects/destructionReplacement.js";
+import { restoreLimitedEffectUsage, spendLimitedEffectUsage } from "../effects/usage.js";
+import { canUseOncePerDuelEffect } from "../../effects/triggers/registration.js";
 import { requestOptionalConfirmation, resolutionChoiceContext } from "../../actionHandlers/shared.js";
 import { getCardDisplayName } from "../../i18n.js";
 import type { DecisionBrokerPort } from "../../contracts/decisions.js";
@@ -255,7 +257,15 @@ type MovementHost = Omit<
     sourceCard: GameCard,
     player: GamePlayer,
     effect: EffectDefinition,
+    options?: { lockKey: string },
   ): void;
+  ensureOncePerTurnUsageFresh(): void;
+  getOncePerTurnLockKey(sourceCard: GameCard, effect: EffectDefinition): string;
+  getOncePerTurnStore(
+    sourceCard: GameCard,
+    player: GamePlayer,
+    effect: EffectDefinition,
+  ): Map<string, unknown>;
   findCardZone?(player: GamePlayer, card: GameCard): CanonicalZone | null;
   cleanupExpiredSpecialSummonRestrictions(player?: GamePlayer | null): void;
   canSpecialSummonUnderRestrictions(
@@ -1542,6 +1552,7 @@ function isSendToGraveReplacementEligible(
   ) return false;
   const optCheck = game.canUseOncePerTurn?.(sourceCard, sourceOwner, effect);
   if (optCheck && optCheck.ok === false) return false;
+  if (!canUseOncePerDuelEffect(sourceCard, sourceOwner, effect).ok) return false;
   if (typeof game.effectEngine?.checkActionPreviewRequirements !== "function") return true;
   const preview = game.effectEngine.checkActionPreviewRequirements(entry.actions, {
     ...entry.replacementCtx,
@@ -1672,20 +1683,32 @@ async function trySendToGraveActionReplacement(
       const currentSourceZone = findCardLocation(game, sourceCard, null)?.zone ?? null;
       if (!currentSourceZone || !isSendToGraveReplacementEligible(game, eligibility, currentSourceZone)) continue;
 
-      const result = await game.effectEngine.applyActions(
-        actions,
-        replacementCtx,
-        {},
-      );
+      // The usage is spent as the replacement is applied, before its cost:
+      // no other replacement sharing the limit can apply while the cost
+      // resolves. A failed cost or application restores it.
+      const usageSpend = spendLimitedEffectUsage(game, sourceCard, sourceOwner, effect);
+      let result: Awaited<ReturnType<MovementEffectEnginePort["applyActions"]>>;
+      try {
+        result = await game.effectEngine.applyActions(
+          actions,
+          replacementCtx,
+          {},
+        );
+      } catch (error) {
+        restoreLimitedEffectUsage(usageSpend);
+        throw error;
+      }
       const success =
         result === true ||
         (result &&
           typeof result === "object" &&
           result.success !== false &&
           result.needsSelection !== true);
-      if (!success) continue;
+      if (!success) {
+        restoreLimitedEffectUsage(usageSpend);
+        continue;
+      }
 
-      game.markOncePerTurnUsed?.(sourceCard, sourceOwner, effect);
       const logMessage = formatReplacementText(replacement.logMessage, targetName, sourceName);
       if (logMessage) game.ui?.log?.(logMessage);
       const finalLocation = findCardLocation(game, card, null);

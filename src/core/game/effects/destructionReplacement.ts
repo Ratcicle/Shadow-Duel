@@ -15,6 +15,11 @@ import {
   canUseOncePerDuelEffect,
   markOncePerDuelEffectUsed,
 } from "../../effects/triggers/registration.js";
+import {
+  restoreLimitedEffectUsage,
+  spendLimitedEffectUsage,
+  type LimitedUsageSpend,
+} from "./usage.js";
 import { getCardDisplayName, getUIText } from "../../i18n.js";
 import { requestOptionalConfirmation, resolutionChoiceContext } from "../../actionHandlers/shared.js";
 import type { DecisionBrokerPort } from "../../contracts/decisions.js";
@@ -225,7 +230,18 @@ interface DestructionReplacementHost {
     card: ReplacementSourceCard,
     player: GamePlayer,
     effect: RuntimeReplacementEffectDefinition,
+    options?: { lockKey: string },
   ): void;
+  ensureOncePerTurnUsageFresh(): void;
+  getOncePerTurnLockKey(
+    card: ReplacementSourceCard,
+    effect: RuntimeReplacementEffectDefinition,
+  ): string;
+  getOncePerTurnStore(
+    card: ReplacementSourceCard,
+    player: GamePlayer,
+    effect: RuntimeReplacementEffectDefinition,
+  ): Map<string, unknown>;
   isBattleDestructionPreventionNegated?(
     card: GameCard,
     context: {
@@ -1070,10 +1086,14 @@ async function tryReplacement(
 ): Promise<ReplacementResolutionResult> {
   const { card, cause, fromZone, ownerPlayer } = ctx;
   const replacement = effect.replacementEffect;
+  // Once spent before the cost, the replacement's own usage no longer blocks
+  // the revalidations made while that cost resolves.
+  let usageSpend: LimitedUsageSpend | null = null;
+  let usageSpent = false;
   const revalidate = () => replacementPresenceIsCurrent(ctx.targetPresence) &&
     (!entry || replacementPresenceIsCurrent(entry.sourcePresence)) &&
     replacementIsEligible(game, sourceCard, sourceOwner, effect, ctx,
-      entry?.sourceCard || null, entry?.firstOpportunityConsumed === true);
+      entry?.sourceCard || null, entry?.firstOpportunityConsumed === true || usageSpent);
   if (!revalidate()) return { replaced: false };
 
   const confirmReplacement = async (message?: string): Promise<boolean> => {
@@ -1097,10 +1117,18 @@ async function tryReplacement(
     );
   };
 
-  const markReplacementUsageIfNeeded = () => {
-    if (entry?.firstOpportunityConsumed) return;
-    game.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
-    markOncePerDuelEffectUsed(sourceCard, sourceOwner, effect);
+  // The usage is spent as the replacement is applied, after its confirmation
+  // and last revalidation and before its first cost; a failed cost restores it.
+  const spendReplacementUsage = () => {
+    if (entry?.firstOpportunityConsumed || usageSpent) return;
+    usageSpend = spendLimitedEffectUsage(game, sourceCard, sourceOwner, effect);
+    usageSpent = true;
+  };
+  const restoreReplacementUsage = () => {
+    if (!usageSpent) return;
+    restoreLimitedEffectUsage(usageSpend);
+    usageSpend = null;
+    usageSpent = false;
   };
 
   const buildActionCostCtx = (extra: ReplacementActionContextExtra = {}) => {
@@ -1155,17 +1183,26 @@ async function tryReplacement(
 
       if (!await confirmReplacement() || !revalidate()) return false;
 
+      spendReplacementUsage();
       const costCtx = buildActionCostCtx({ validateCostPayment: revalidate });
-      const costResult = await engine.applyActions(costActions, costCtx, {});
+      let costResult: Awaited<ReturnType<typeof engine.applyActions>>;
+      try {
+        costResult = await engine.applyActions(costActions, costCtx, {});
+      } catch (error) {
+        restoreReplacementUsage();
+        throw error;
+      }
       if (isReplacementActionResult(costResult) && costResult.needsSelection) {
+        restoreReplacementUsage();
         return { ...costResult, success: false };
       }
-      return (
+      const costSucceeded =
         costResult === true ||
         (costResult &&
           typeof costResult === "object" &&
-          costResult.success !== false)
-      );
+          costResult.success !== false);
+      if (!costSucceeded) restoreReplacementUsage();
+      return costSucceeded;
     };
 
   const runFollowUpActions = async (): Promise<void> => {
@@ -1290,7 +1327,6 @@ async function tryReplacement(
       return { replaced: false };
     }
 
-    markReplacementUsageIfNeeded();
     const logMessage = formatReplacementText(
       replacement.logMessage,
       card.name,
@@ -1309,7 +1345,7 @@ async function tryReplacement(
 
   if (replacement.auto === true || costCount === 0) {
     if (!await confirmReplacement() || !revalidate()) return { replaced: false };
-    markReplacementUsageIfNeeded();
+    spendReplacementUsage();
     const logMessage = formatReplacementText(
       replacement.logMessage,
       card.name,
@@ -1403,27 +1439,34 @@ async function tryReplacement(
       .slice(0, costCount);
 
     if (!revalidate() || !selectedCostsAreCurrent(chosen)) return { replaced: false };
-    const costMoveResult = await moveReplacementCostCards({
-      game,
-      cards: chosen,
-      costOwner,
-      costZones,
-      candidateEntries,
-      costDestination,
-      sourceCard,
-      effect,
-    });
+    spendReplacementUsage();
+    let costMoveResult: ReplacementCostMoveResult;
+    try {
+      costMoveResult = await moveReplacementCostCards({
+        game,
+        cards: chosen,
+        costOwner,
+        costZones,
+        candidateEntries,
+        costDestination,
+        sourceCard,
+        effect,
+      });
+    } catch (error) {
+      restoreReplacementUsage();
+      throw error;
+    }
     if (costMoveResult?.needsSelection) {
+      restoreReplacementUsage();
       return {
         ...costMoveResult,
         replaced: false,
       };
     }
     if (!costMoveResult.success) {
+      restoreReplacementUsage();
       return { replaced: false };
     }
-
-    markReplacementUsageIfNeeded();
 
     const costNames = chosen.map((c) => c.name).join(", ");
     const logMessage = formatReplacementText(
@@ -1493,27 +1536,34 @@ async function tryReplacement(
   }
 
   if (!revalidate() || !selectedCostsAreCurrent(selections)) return { replaced: false };
-  const costMoveResult = await moveReplacementCostCards({
-    game,
-    cards: selections,
-    costOwner,
-    costZones,
-    candidateEntries,
-    costDestination,
-    sourceCard,
-    effect,
-  });
+  spendReplacementUsage();
+  let costMoveResult: ReplacementCostMoveResult;
+  try {
+    costMoveResult = await moveReplacementCostCards({
+      game,
+      cards: selections,
+      costOwner,
+      costZones,
+      candidateEntries,
+      costDestination,
+      sourceCard,
+      effect,
+    });
+  } catch (error) {
+    restoreReplacementUsage();
+    throw error;
+  }
   if (costMoveResult?.needsSelection) {
+    restoreReplacementUsage();
     return {
       ...costMoveResult,
       replaced: false,
     };
   }
   if (!costMoveResult.success) {
+    restoreReplacementUsage();
     return { replaced: false };
   }
-
-  markReplacementUsageIfNeeded();
 
   const costNames = selections.map((c) => c.name).join(", ");
   const logMessage = formatReplacementText(
