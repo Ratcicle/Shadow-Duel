@@ -93,10 +93,21 @@ export async function botChooseChainResponse(
         return null;
       }
       const responseContext = buildResponseContext(canonicalChoice.context, strategyResponse);
-      return normalizeChainResponseCandidate(canonicalChoice, {
+      const normalized = normalizeChainResponseCandidate(canonicalChoice, {
         ...canonicalChoice,
         context: responseContext,
       });
+      if (!normalized) {
+        // The strategy chose a canonical candidate but changed its context in a
+        // way the contract refuses; the choice becomes a pass, now observable.
+        this.game?.notify?.("ai_activation_rejected", {
+          playerId: player?.id || null,
+          candidateKey: canonicalChoice.candidateKey,
+          effectId: canonicalChoice.effectId,
+          reason: "choice_not_normalizable",
+        });
+      }
+      return normalized;
     }
     if (strategyResponse?.declinedCandidateKeys?.length) {
       const declined = new Set(strategyResponse.declinedCandidateKeys);
