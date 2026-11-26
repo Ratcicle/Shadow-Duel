@@ -5,6 +5,7 @@
 interface SequencedAction {
   priority?: number | undefined;
   type?: string;
+  sequenceAs?: string | undefined;
 }
 
 interface SequenceOptions {
@@ -30,8 +31,12 @@ export function sequenceActionsByPriority<Action extends SequencedAction>(
       const priorityB = b.action?.priority ?? 0;
       if (priorityA !== priorityB) return priorityB - priorityA;
 
-      const typeA = typeOrder[a.action?.type as string] ?? defaultTypeOrder;
-      const typeB = typeOrder[b.action?.type as string] ?? defaultTypeOrder;
+      const orderOf = (action: Action | undefined): number => {
+        const key = action?.sequenceAs ?? action?.type;
+        return (key === undefined ? undefined : typeOrder[key]) ?? defaultTypeOrder;
+      };
+      const typeA = orderOf(a.action);
+      const typeB = orderOf(b.action);
       if (typeA !== typeB) return typeA - typeB;
 
       return stable ? a.index - b.index : 0;

@@ -908,7 +908,6 @@ export default class LuminarchStrategy extends BaseStrategy {
       spellTrapEffect: 2,
       position_change: 2.5,
       summon: 3,
-      special_summon_sanctum_protector: 3,
       set_spell_trap: 4,
     };
 

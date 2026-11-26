@@ -137,8 +137,7 @@ export function simulateMainPhaseAction<State extends DragonSimulationState>(
   }
 
   switch (action.type) {
-    // These variants retain the existing no-op in Dragon's main-phase simulation.
-    case "special_summon_sanctum_protector":
+    // This variant retains the existing no-op in Dragon's main-phase simulation.
     case "simulatedBattle":
       break;
     default:

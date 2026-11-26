@@ -94,6 +94,8 @@ interface AIActionCommon {
   priority?: number | undefined;
   score?: number;
   reason?: string | undefined;
+  /** Type whose sequencing order the strategy applies instead of this action's own type. */
+  sequenceAs?: AIActionType;
   card?: SimulatedCardState | GameCard | null;
   cardId?: RawCardDefinitionId | number | undefined;
   cardName?: string | undefined;
@@ -158,12 +160,6 @@ export interface HandProcedureMaterialHint {
 export interface HandSummonProcedureAIAction extends AIActionCommon {
   type: "handSummonProcedure";
   materials: HandProcedureMaterialHint[];
-  position?: BattlePositionInput;
-}
-
-export interface SanctumProtectorAIAction extends AIActionCommon {
-  type: "special_summon_sanctum_protector";
-  materialIndex?: number | undefined;
   position?: BattlePositionInput;
 }
 
@@ -236,7 +232,6 @@ export interface AIActionByType {
   synchro: SynchroAIAction;
   extraDeckProcedure: ExtraDeckProcedureAIAction;
   handSummonProcedure: HandSummonProcedureAIAction;
-  special_summon_sanctum_protector: SanctumProtectorAIAction;
   position_change: PositionChangeAIAction;
   summon: SummonAIAction;
   spell: SpellAIAction;

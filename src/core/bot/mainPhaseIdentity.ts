@@ -170,7 +170,6 @@ export function fingerprintMainPhaseAction(action: AIPlannedAction, game: MainPh
     case "summon":
     case "handSummonProcedure":
     case "handIgnition":
-    case "special_summon_sanctum_protector":
       zone = "hand";
       source = bot.hand[resolveHandIndexForAction(bot, action, "monster")];
       if (action.type === "summon") choices = { position: action.position, facedown: action.facedown, tributes: action.tributeIndices?.map(index => sourceIdentity(bot.field[index], "tribute")) };
@@ -178,10 +177,6 @@ export function fingerprintMainPhaseAction(action: AIPlannedAction, game: MainPh
         const materials = resolveHandProcedureMaterials(bot, action.materials, action);
         if (!materials) throw new TypeError("Unresolved hand procedure materials");
         choices = { position: action.position || "attack", materials: materials.map(material => sourceIdentity(material, "material")) };
-      }
-      if (action.type === "special_summon_sanctum_protector") {
-        const material = Number.isInteger(action.materialIndex) ? indexedCard(bot.field, action.materialIndex) : bot.field.find(card => card.name === "Luminarch Aegisbearer" && !card.isFacedown);
-        choices = { position: action.position === "attack" ? "attack" : "defense", material: sourceIdentity(material, "material") };
       }
       break;
     case "spell":

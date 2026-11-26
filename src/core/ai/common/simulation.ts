@@ -2664,7 +2664,7 @@ export function applyGenericSimulatedMainPhaseAction<
 
   // Authoritative physical references are checked before strategy overrides.
   // This prevents an adapter from substituting an absent/expired copy.
-  const handTypes = ["summon", "spell", "set_spell_trap", "handIgnition", "handSummonProcedure", "special_summon_sanctum_protector"];
+  const handTypes = ["summon", "spell", "set_spell_trap", "handIgnition", "handSummonProcedure"];
   if (handTypes.includes(action.type)) {
     const bound = resolvePlanningCard(state.bot.hand, action.card, state.bot.id, "hand", action);
     if (bound.explicit && !bound.card) return state;
@@ -3661,9 +3661,6 @@ export function applyGenericSimulatedMainPhaseAction<
       break;
     }
 
-    // These actions are handled by strategy overrides, or leave this generic simulation unchanged.
-    case "special_summon_sanctum_protector":
-      break;
     default:
       action satisfies never;
       break;

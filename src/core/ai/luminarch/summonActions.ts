@@ -435,6 +435,12 @@ function getSanctumProtectorActions(context: LuminarchActionGenerationContext) {
     if (!chosenAegis || protectorIndex === undefined) return actions;
     const protectorCard = bot.hand[protectorIndex];
     if (!protectorCard) return actions;
+    const effect = protectorCard.effects?.find(entry =>
+      entry.timing === "ignition" && entry.activationZones?.includes("hand"));
+    const costTarget = effect?.targets?.find(target => target.intent === "cost");
+    const materialInstanceId = chosenAegis.card.instanceId;
+    const protectorName = protectorCard.name;
+    if (!effect || !costTarget || materialInstanceId === undefined || !protectorName) return actions;
 
     const oppStrongest = getStrongestAttackThreat(opponent?.field || [], {
       facedownValue: 1500,
@@ -468,17 +474,17 @@ function getSanctumProtectorActions(context: LuminarchActionGenerationContext) {
 
     actions.push(
       buildPrioritizedAction({
-        type: "special_summon_sanctum_protector",
+        type: "handIgnition",
         index: protectorIndex,
-        materialIndex: chosenAegis.fieldIndex,
         card: protectorCard,
+        effect,
         priority,
         reason: "upgrade_tank",
-        extra: {
-          position: "defense",
-          cardName: protectorCard?.name || "Luminarch Sanctum Protector",
-          macroBuff,
+        activationContext: {
+          decisions: { selections: { [costTarget.id]: [materialInstanceId] } },
+          actionContext: { specialSummonPositions: { byName: { [protectorName]: "defense" } } },
         },
+        extra: { cardName: protectorName, macroBuff, sequenceAs: "summon" },
       }),
     );
   } else if (bot?.debug && aegisCandidates.length > 0) {
