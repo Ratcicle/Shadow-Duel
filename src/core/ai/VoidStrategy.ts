@@ -15,7 +15,7 @@ import BaseStrategy from "./BaseStrategy.js";
 import { applyGenericSimulatedMainPhaseAction } from "./common/simulation.js";
 
 import { isVoid, getVoidCardKnowledge } from "./void/knowledge.js";
-import { assessVoidSummonEntry, evaluateVoidFinisherPlans, evaluateVoidFusionPriority } from "./void/priorities.js";
+import { assessVoidSummonEntry, chooseVoidChainResponse, evaluateVoidFinisherPlans, evaluateVoidFusionPriority } from "./void/priorities.js";
 import { VOID_IDS, COMBO_DATABASE } from "./void/combos.js";
 import { evaluateBoardVoid, evaluateVoidMonster } from "./void/scoring.js";
 import { buildVoidActivationContext, buildVoidTributePolicy } from "./void/costPolicy.js";
@@ -329,6 +329,10 @@ export default class VoidStrategy extends BaseStrategy {
       // Retorna função para usar como botSelect
       asBotSelect: () => [best].filter(Boolean) as Card[],
     };
+  }
+
+  chooseChainResponse(input: Parameters<typeof chooseVoidChainResponse>[0]) {
+    return chooseVoidChainResponse(input);
   }
 
   chooseSpecialSummonPosition(card: StrategyCard | undefined, context: VoidSelectionContext = {}) {

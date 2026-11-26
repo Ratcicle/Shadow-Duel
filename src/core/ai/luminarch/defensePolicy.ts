@@ -1,4 +1,7 @@
 import type { SimulatedCardState } from "../../contracts/aiState.js";
+import type { ChainCard, ChainStrategyPort, ChainStrategyResponse } from "../../contracts/chainRuntime.js";
+import { hasActivePiercing } from "../../game/combat/availability.js";
+import { GENERIC_QUICK_SPELL_RESPONSE_PRIORITY } from "../../chain/botResponsePolicy.js";
 import type { LuminarchAnalysis, LuminarchActionContext } from "./contracts.js";
 import {
   getEffectiveAtk,
@@ -522,4 +525,153 @@ export function applyLuminarchDefenseActionContext(
     next.targetPreferences = targetPreferences;
   }
   return next;
+}
+
+type LuminarchChainResponseInput = Parameters<NonNullable<ChainStrategyPort["chooseChainResponse"]>>[0];
+
+function wouldLoseOrTakeDamage(
+  attacker: ChainCard | null | undefined,
+  defender: ChainCard | null | undefined,
+) {
+  if (!attacker || !defender)
+    return { loseMonster: false, takeDamage: false };
+  const atk = attacker.atk || 0;
+  const isDefense = defender.position === "defense";
+  const defStat = isDefense ? defender.def || 0 : defender.atk || 0;
+
+  if (!isDefense) {
+    if (atk > defStat) return { loseMonster: true, takeDamage: true };
+    if (atk === defStat) return { loseMonster: true, takeDamage: false };
+    return { loseMonster: false, takeDamage: false };
+  }
+
+  if (atk > defStat) {
+    return {
+      loseMonster: true,
+      takeDamage: hasActivePiercing(attacker),
+    };
+  }
+  return { loseMonster: false, takeDamage: false };
+}
+
+/** An opponent attack on a face-up Luminarch that Holy Shield should answer. */
+function holyShieldAnswersBattle(
+  { game, player, opponent, context }: LuminarchChainResponseInput,
+): boolean {
+  const luminarchTargets = (player?.field || []).filter(
+    (card) =>
+      card &&
+      card.cardKind === "monster" &&
+      card.archetype === "Luminarch" &&
+      !card.isFacedown,
+  );
+  const oppAttackers = (opponent?.field || []).filter(
+    (card) =>
+      card &&
+      card.cardKind === "monster" &&
+      !card.isFacedown &&
+      card.position === "attack",
+  );
+
+  const attacker = context?.attacker || null;
+  const defender = context?.defender || context?.target || null;
+  const defenderOwnerId =
+    context?.defenderOwner?.id ||
+    context?.targetOwner?.id ||
+    (defender?.owner === "player"
+      ? game?.player?.id
+      : game?.bot?.id);
+  const attackerOwnerId = context?.attackerOwner?.id || attacker?.owner;
+
+  const isDefendingSelf =
+    defender && defenderOwnerId && defenderOwnerId === player.id;
+  const isOpponentAttack =
+    attacker && attackerOwnerId && attackerOwnerId !== player.id;
+  const isBattleContext =
+    context?.type === "attack_declaration" ||
+    context?.type === "battle_damage";
+  const isHolyShieldTiming =
+    isBattleContext &&
+    isOpponentAttack &&
+    isDefendingSelf &&
+    defender?.archetype === "Luminarch" &&
+    !defender?.isFacedown;
+
+  let directBattleThreat = false;
+  if (isHolyShieldTiming) {
+    const outcome = wouldLoseOrTakeDamage(attacker, defender);
+    directBattleThreat = outcome.loseMonster || outcome.takeDamage;
+  }
+
+  const multipleAttackers = oppAttackers.length >= 2;
+  const anyVulnerableTarget =
+    multipleAttackers &&
+    luminarchTargets.some((monster) =>
+      oppAttackers.some((opp) => {
+        const outcome = wouldLoseOrTakeDamage(opp, monster);
+        return outcome.loseMonster || outcome.takeDamage;
+      }),
+    );
+
+  return !!(
+    isHolyShieldTiming &&
+    luminarchTargets.length > 0 &&
+    (directBattleThreat || anyVulnerableTarget)
+  );
+}
+
+/**
+ * Final fallback score of Holy Shield when no battle answer applies. Its
+ * generic score is exactly the Quick Spell bonus: it is a speed 2 Quick
+ * Spell, so no other generic rule scores it.
+ */
+function holyShieldFallbackPriority(
+  { player, context }: LuminarchChainResponseInput,
+): number {
+  let priority = GENERIC_QUICK_SPELL_RESPONSE_PRIORITY;
+  // Holy Shield is only worth spending in the opponent's battle contexts;
+  // never on the bot's own turn or in response to its own summons.
+  const isOpponentAction =
+    typeof context?.isOpponentAttack === "boolean"
+      ? context.isOpponentAttack
+      : context?.player?.id !== player?.id;
+  const isBattleContext =
+    context?.type === "attack_declaration" ||
+    context?.type === "battle_damage";
+
+  if (isBattleContext) {
+    // Battle threats are answered by holyShieldAnswersBattle. Any other
+    // attack is not worth spending the shield on.
+    priority = -100;
+  } else if (!isOpponentAction) {
+    priority = -100;
+  } else if (context?.type === "effect_targeted") {
+    priority += 40;
+  } else {
+    priority -= 20;
+  }
+  if (isOpponentAction && isBattleContext && player?.lp < 3000) {
+    priority += 10;
+  }
+  return priority;
+}
+
+/**
+ * Chain response of the Luminarch pack: Holy Shield answers a threatening
+ * opponent attack directly; otherwise its generic fallback score is shifted
+ * to the pack's value and the generic fallback still ranks and rolls.
+ */
+export function chooseLuminarchChainResponse(
+  input: LuminarchChainResponseInput,
+): ChainStrategyResponse | null {
+  const shields = input.activatable.filter(option => option?.card?.name === HOLY_SHIELD);
+  const first = shields[0];
+  if (!first) return null;
+  if (holyShieldAnswersBattle(input)) {
+    return { card: first.card, effect: first.effect, candidateKey: first.candidateKey };
+  }
+  const adjustment = holyShieldFallbackPriority(input) - GENERIC_QUICK_SPELL_RESPONSE_PRIORITY;
+  return {
+    fallbackPriorityAdjustments: Object.fromEntries(shields.map(option => [option.candidateKey, adjustment])),
+  };
 }

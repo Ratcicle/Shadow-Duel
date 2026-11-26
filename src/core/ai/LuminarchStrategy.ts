@@ -40,6 +40,7 @@ import {
 import { buildLuminarchResourceEconomy, forecastLuminarchEffectLpCost } from "./luminarch/resourceEconomy.js";
 import { getLuminarchSummonActions } from "./luminarch/summonActions.js";
 import { getLuminarchSpellActions } from "./luminarch/spellActions.js";
+import { chooseLuminarchChainResponse } from "./luminarch/defensePolicy.js";
 import {
   chooseLuminarchAscensionPosition,
   detectLuminarchAscensionOpportunities,
@@ -947,6 +948,10 @@ export default class LuminarchStrategy extends BaseStrategy {
     if (canPierce && atk >= opponentStrongest) return "attack";
     if (def >= atk && opponentStrongest > atk) return "defense";
     return "attack";
+  }
+
+  chooseChainResponse(input: Parameters<typeof chooseLuminarchChainResponse>[0]) {
+    return chooseLuminarchChainResponse(input);
   }
 
   chooseSpecialSummonPosition(card: Parameters<typeof chooseLuminarchSpecialSummonPosition>[0], context: {game?:AIState;state?:AIState;player?:AIStrategyBotPort | null;action?:AIAction;sourceAction?:AIAction | null;activationContext?:import("../contracts/ai.js").AIActivationContext;actionPosition?:BattlePositionInput | null | undefined;position?:BattlePositionInput} = {}) {

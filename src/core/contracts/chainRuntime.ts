@@ -198,6 +198,15 @@ export interface ChainStrategyResponse {
   pass?: boolean;
   /** Omit only these canonical candidates from the generic bot fallback. */
   declinedCandidateKeys?: readonly string[];
+  /**
+   * Added to the generic fallback priority of the canonical candidate with
+   * that key. Read only when the response neither chooses nor passes; keys
+   * that are not offered are ignored. The fallback still ranks and rolls.
+   * An adjustment is relative to the candidate's full generic score, so a
+   * pack that aims at an absolute final score depends on the generic rules
+   * that reach that candidate.
+   */
+  fallbackPriorityAdjustments?: Readonly<Record<string, number>>;
   reason?: string;
   candidateKey?: string;
   card?: ChainCard;
