@@ -10,6 +10,7 @@ import {
 import {
   getCardInstanceId,
   getCostPreference,
+  getDeclaredPreferredCount,
   getTargetPreference,
   matchesTargetFilters,
   mergeCostPreference,
@@ -17,6 +18,7 @@ import {
   rankCandidates,
   selectSimulatedTargets,
 } from "../targetSelection.js";
+import { resolvePreferredSelectionCount } from "../../../AutoSelector.js";
 import {
   attachSimulatedEquip,
   findCardOwner,
@@ -444,9 +446,10 @@ export function applyOptionalTargetActions(
     if (!hasRequiredSelections(targetDefs, selectedTargets)) {
       return action.optional !== false;
     }
-    // AutoSelector selects the required minimum by default. Explicit plans
-    // keep their full legal selection, including a larger allowed group; a
-    // mandatory trigger's plan that no longer held was chosen as unplanned.
+    // AutoSelector selects the required minimum by default, or the count the
+    // strategy declared for the requirement (D9). Explicit plans keep their
+    // full legal selection, including a larger allowed group; a mandatory
+    // trigger's plan that no longer held was chosen as unplanned.
     const unplannedFallback = simulatedUnplannedFallback(localOptions);
     for (const definition of targetDefs) {
       const chosen = selectedTargets[definition.id];
@@ -457,7 +460,9 @@ export function applyOptionalTargetActions(
           return (typeof instanceId === "number" || typeof instanceId === "string") && plannedIds.includes(instanceId);
         })));
       if (Array.isArray(chosen) && !definition.targetFromContext && !keptPlan) {
-        selectedTargets[definition.id] = chosen.slice(0, normalizeCount(definition.count, 1).min);
+        const count = normalizeCount(definition.count, 1);
+        selectedTargets[definition.id] = chosen.slice(0, resolvePreferredSelectionCount(
+          getDeclaredPreferredCount(localOptions, definition.id), count, chosen.length) ?? count.min);
       }
     }
     nestedSelections = {

@@ -62,6 +62,21 @@ export interface AIDecisionPlan {
   }>>;
 }
 
+/**
+ * D9: how many targets a strategy prefers for one requirement, declared only in
+ * `activationContext.actionContext.targetPreferences[requirementId]`, the one
+ * map the runtime reads. The shared `targetPreference` and `costPreferences`
+ * accept the field by type but ignore it. The AutoSelector and the simulation
+ * clamp it to the requirement's range and to the available candidates; an
+ * exact plan or a pooled counter cost keeps its own count. Without it (or with
+ * a value that is not a non-negative integer) the bot takes today's count.
+ * The count applies to whichever AI seat resolves that requirement id under
+ * the activation's context, which may be the affected player, not the declarer.
+ */
+export interface AITargetCountPreference {
+  preferredCount?: number;
+}
+
 export interface AIActivationContext {
   decisions?: AIDecisionPlan;
   effect?: EffectDefinition | null | undefined;
