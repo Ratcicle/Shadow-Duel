@@ -84,6 +84,13 @@ export interface BotStrategyPort extends StrategyRuntimePort, PlayerStrategyPort
   }): Partial<BotAutomaticAscensionChoice> | null;
   chooseAutomaticAscensionPosition?(context: BotAscensionContext): BattlePositionInput | null;
   /**
+   * An additive score for one candidate of the Bot's generic Ascension choice
+   * (selectBestAscension). It is read only when selectAutomaticAscension chose
+   * nothing and the first material has two or more candidates; the opponent is
+   * its public view.
+   */
+  adjustAutomaticAscensionScore?(context: BotAscensionContext): number;
+  /**
    * Scores one attack candidate. The live battle loop passes the target, the
    * opponent and the game from the bot's public copy before the simulated
    * battle, so a face-down target is an opaque projection (phase 2.3 L12c);

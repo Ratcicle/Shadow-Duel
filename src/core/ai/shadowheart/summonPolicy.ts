@@ -596,6 +596,18 @@ export function isExtraDeckBoss(monster: StrategyCard) {
   );
 }
 
+/**
+ * The Bot's generic Ascension choice (BotStrategyPort.adjustAutomaticAscensionScore):
+ * Arctroth Pursuer's ATK/DEF drain is best against a strong opponent monster.
+ */
+export function scoreShadowHeartAutomaticAscension(
+  ascensionCard: { name?: string | null | undefined } | null | undefined,
+  opponent: { field?: readonly ({ atk?: number | null | undefined } | null | undefined)[] } | null | undefined,
+): number {
+  if (ascensionCard?.name !== SH.arctrothPursuer) return 0;
+  return (opponent?.field || []).some((monster) => (monster?.atk || 0) >= 2000) ? 5 : 0;
+}
+
 
 function isPremiumShadowHeartMonster(monster: StrategyCard) {
   const knowledge = CARD_KNOWLEDGE[monster?.name!];

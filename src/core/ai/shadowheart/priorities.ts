@@ -507,6 +507,6 @@ export { evaluateShadowHeartOffensivePlan, evaluateShadowHeartFusionPlan, evalua
 
 export { shouldPreserveScaleForDemonLine, isCovenantLive } from "./policyContext.js";
 
-export { assessShadowHeartSummonEntry, shouldSummonMonster, selectBestTributes, evaluateTributeTrade, getTributeRequirementFor } from "./summonPolicy.js";
+export { assessShadowHeartSummonEntry, shouldSummonMonster, selectBestTributes, evaluateTributeTrade, getTributeRequirementFor, scoreShadowHeartAutomaticAscension } from "./summonPolicy.js";
 
 export { chooseCovenantSearchTarget, chooseVoidMageSearchTarget, chooseGeckoSearchTarget, chooseImpSpecialTargetName, buildShadowHeartTargetPreferences, pickInfusionEmergencyRevive, rankShadowHeartSearchCandidates, evaluateShadowHeartRecruitCandidate, buildShadowHeartCostPreferences } from "./targeting.js";

@@ -3,6 +3,7 @@ import type { SimulatedCardState, SimulatedPlayerState } from "../contracts/aiSt
 import type { GameCard } from "../contracts/cards.js";
 import type { EffectDefinition } from "../contracts/effects.js";
 import type { CardAction } from "../contracts/actions.js";
+import type { BotAscensionContext } from "../contracts/bot.js";
 type StrategyCard = (GameCard | SimulatedCardState) & { cannotBeDestroyedByBattle?: boolean | undefined };
 type Analysis = ReturnType<ShadowHeartStrategy["analyzeGameState"]>;
 type StrategyGame = AIState & { devModeEnabled?: boolean; turnLineSearchEnabled?: boolean };
@@ -34,7 +35,7 @@ import { detectLethalOpportunity, detectDefensiveNeed, detectComeback, decideMac
 // Módulos Shadow-Heart refatorados
 import { CARD_KNOWLEDGE, isShadowHeart, isShadowHeartByName } from "./shadowheart/knowledge.js";
 import { COMBO_DATABASE, detectAvailableCombos } from "./shadowheart/combos.js";
-import { selectBestTributes, evaluateTributeTrade, getTributeRequirementFor, buildShadowHeartCostPreferences, buildShadowHeartTargetPreferences, assessShadowHeartSummonEntry, evaluateShadowHeartFinisherPlans, evaluateShadowHeartRecruitCandidate, rankShadowHeartSearchCandidates } from "./shadowheart/priorities.js";
+import { selectBestTributes, evaluateTributeTrade, getTributeRequirementFor, buildShadowHeartCostPreferences, buildShadowHeartTargetPreferences, assessShadowHeartSummonEntry, evaluateShadowHeartFinisherPlans, evaluateShadowHeartRecruitCandidate, rankShadowHeartSearchCandidates, scoreShadowHeartAutomaticAscension } from "./shadowheart/priorities.js";
 import { evaluateMonster, evaluateBoardShadowHeart, evaluateShadowHeartTributeBossBonus } from "./shadowheart/scoring.js";
 import { buildShadowHeartSimulationOptions, simulateMainPhaseAction as simAction, simulateSpellEffect } from "./shadowheart/simulation.js";
 import { buildShadowHeartResourceEconomy } from "./shadowheart/resourceEconomy.js";
@@ -183,6 +184,11 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     });
 
     return assessment.position || null;
+  }
+
+  /** Arctroth Pursuer's bonus in the Bot's generic Ascension choice. */
+  adjustAutomaticAscensionScore({ ascensionCard, opponent }: BotAscensionContext): number {
+    return scoreShadowHeartAutomaticAscension(ascensionCard, opponent);
   }
 
   /**
