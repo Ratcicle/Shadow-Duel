@@ -23,7 +23,7 @@ import { getGraveyardBanishBurnEntries } from "./simulatedActions/destruction.js
 import { collectProcedureCounterSources, getCounterValue, setCounterValue } from "./counters.js";
 import { prepareSimulatedFieldCounterPayment } from "./simulatedActions/counters.js";
 import { getBaseLpCost } from "../../effects/costs/lpCost.js";
-import { chooseSpecialSummonPosition, resolveActionPlayer, resolveSimulatedLpCost } from "./simulatedActions/shared.js";
+import { chooseSpecialSummonPosition, getOptionalSummonResponder, resolveActionPlayer, resolveSimulatedLpCost } from "./simulatedActions/shared.js";
 import { resolveTargetsForAction, captureSimulatedReferences, captureSimulatedSourceSnapshot, isSimulatedReferencePresenceValid, isSimulatedSourcePresenceValid, areRequiredContextualReferencesValid, recordCompletedSimulatedSummon } from "./simulatedActions/shared.js";
 import { buildEventReferenceContext } from "../../effects/targeting/references.js";
 import { appendSimulatedZoneCard } from "./zones.js";
@@ -569,12 +569,14 @@ export function normalizePlanningOwnerPolicy(
     normalized.strategy?.chooseSpecialSummonPosition?.bind(normalized.strategy);
   const chooseActionCase = normalized.chooseActionCase ||
     normalized.strategy?.chooseActionCase?.bind(normalized.strategy);
+  const optionalSummonResponder = getOptionalSummonResponder(normalized);
   return {
     ...normalized,
     ...(rankSearchCandidates ? { rankSearchCandidates } : {}),
     ...(evaluateRecruitCandidate ? { evaluateRecruitCandidate } : {}),
     ...(chooseSpecialSummonPosition ? { chooseSpecialSummonPosition } : {}),
     ...(chooseActionCase ? { chooseActionCase } : {}),
+    ...(optionalSummonResponder ? { optionalSummonResponder } : {}),
     ...(options.onEffectActivated ? { onEffectActivated: options.onEffectActivated } : {}),
     ...(strategy?.buildActivationContextForEffect ? {
       buildActivationContextForEffect: strategy.buildActivationContextForEffect.bind(strategy),

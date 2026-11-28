@@ -1,4 +1,5 @@
 import type { CardAction, ActionOf, ActionType } from "./actions.js";
+import type { ActionRuntimeCard, ActionRuntimePlayer } from "./actionRuntime.js";
 import type {
   BattlePosition,
   BattlePositionInput,
@@ -75,6 +76,95 @@ export interface AIDecisionPlan {
  */
 export interface AITargetCountPreference {
   preferredCount?: number;
+}
+
+/** B6: the actions whose Special Summon from the hand an AI may decline. */
+export type AIOptionalSummonActionType = Extract<ActionType,
+  | "search_then_optional_special_summon_from_hand"
+  | "conditional_summon_from_hand"
+  | "draw_and_summon">;
+
+/** What the effect offers; the resolver and the simulation fill the same fields. */
+export interface AIOptionalSummonRequest<Card, Player> {
+  readonly actionType: AIOptionalSummonActionType;
+  /** The monster in the hand that the effect would Special Summon. */
+  readonly card: Card;
+  /** The effect's controller: the reader asks only the policy of this seat. */
+  readonly player: Player;
+  readonly sourceCard: Card | null;
+  readonly effectId: string | null;
+}
+
+/** The controller's own zones and LP, without the Deck (its order is hidden), methods or strategy. */
+type AIOptionalSummonPlayerField =
+  | "id" | "lp" | "hand" | "field" | "spellTrap" | "fieldSpell" | "graveyard" | "banished" | "extraDeck";
+/** A zone or card seen through the hook's context: readonly arrays of readonly cards. */
+type AIOptionalSummonReadonlyValue<Value> =
+  Value extends readonly (infer Entry)[] ? readonly Readonly<Entry>[]
+    : Value extends object ? Readonly<Value>
+      : Value;
+type AIOptionalSummonReadonlyView<Value> = {
+  readonly [Key in keyof Value]: AIOptionalSummonReadonlyValue<Value[Key]>;
+};
+export type AIOptionalSummonPlayerView<Player extends Record<AIOptionalSummonPlayerField, unknown>> =
+  AIOptionalSummonReadonlyView<Pick<Player, AIOptionalSummonPlayerField>>;
+
+/**
+ * The one information class of both modes: the controller's own zones (its
+ * hand and Extra Deck are its own knowledge), the card, the source, the phase
+ * and the turn. No game port, no planning state and no opponent are typed, so
+ * a hook reads the same fields live and in simulation. The narrowing is a
+ * type-level view of the live (or simulated) objects, not an isolated
+ * snapshot: the zones are readonly arrays of cards whose own fields are
+ * readonly, so moving or editing a card through the context does not compile,
+ * but nested card data is readonly only one level deep, and the runtime object
+ * still carries the fields the type leaves out (Deck, methods, strategy). A
+ * hook must read only what the type exposes.
+ */
+interface AIOptionalSummonContextFields<Card, Player extends Record<AIOptionalSummonPlayerField, unknown>>
+  extends AIOptionalSummonRequest<Readonly<Card>, AIOptionalSummonPlayerView<Player>> {
+  readonly phase: GamePhase | string | null;
+  readonly turnCounter: number | null;
+}
+
+/** Built at resolution only for an AI seat with the hook, never in replay playback. */
+export interface AILiveOptionalSummonContext
+  extends AIOptionalSummonContextFields<ActionRuntimeCard, ActionRuntimePlayer> {
+  readonly mode: "live";
+}
+
+export interface AISimulatedOptionalSummonContext
+  extends AIOptionalSummonContextFields<SimulatedCardState, SimulatedPlayerState> {
+  readonly mode: "simulation";
+}
+
+export type AIOptionalSummonContext =
+  | AILiveOptionalSummonContext
+  | AISimulatedOptionalSummonContext;
+
+/** Only `false` declines; `true` or `undefined` accepts. */
+export type AIOptionalSummonConfirmation =
+  (context: AIOptionalSummonContext) => boolean | undefined;
+
+/**
+ * A bound hook and the id of the seat whose policy it is. The reader calls it
+ * only when `context.player.id` is that seat, compared by id (a simulated
+ * player is a clone of the live one), live and in simulation alike.
+ */
+export interface AIOptionalSummonResponder {
+  readonly seatId: PlayerId | string;
+  readonly confirm: AIOptionalSummonConfirmation;
+}
+
+/**
+ * B6: the common hook for an optional Special Summon from the hand offered by an
+ * effect. The runtime resolver of an AI seat and the simulation read it through
+ * `aiConfirmsFollowupSummon`, only for the strategy's own seat. Without the
+ * hook, for another seat, or with any answer but `false`, the AI accepts, as
+ * before. Synchronous.
+ */
+export interface AIOptionalSummonPolicy {
+  confirmOptionalSummon?(context: AIOptionalSummonContext): boolean | undefined;
 }
 
 export interface AIActivationContext {
@@ -498,7 +588,7 @@ export interface AILineMilestoneScore {
   milestones: AILineMilestone[];
 }
 
-export interface StrategyRuntimePort {
+export interface StrategyRuntimePort extends AIOptionalSummonPolicy {
   bot: AIStrategyBotPort;
   analyzeGameState?(state: AIState): unknown;
   getPlanningSimulationOptions?(state: GameTreeSimulationGameState): PlanningSimulationOptions;

@@ -7,7 +7,7 @@ import type {
   ResolvedTargetMap,
 } from "../../contracts/actionRuntime.js";
 import { getCardDisplayName, getUIText } from "../../i18n.js";
-import { getUI, requestOptionalConfirmation, resolutionChoiceContext } from "../shared.js";
+import { aiConfirmsLiveFollowupSummon, getUI, requestOptionalConfirmation, resolutionChoiceContext } from "../shared.js";
 import { performSummonFromHand } from "./fromHand.js";
 import { resolveContextualSummonPosition } from "./position.js";
 
@@ -200,7 +200,10 @@ export async function handleConditionalSummonFromHand(
           cardName,
         }),
         { kind: "conditional_summon", cardName },
-      )) ?? false, () => true, resolutionChoiceContext(game, source, ctx.effect?.id));
+      )) ?? false, () => aiConfirmsLiveFollowupSummon(game, {
+        actionType: action.type, card: handCard, player,
+        sourceCard: source ?? null, effectId: ctx.effect?.id ?? null,
+      }), resolutionChoiceContext(game, source, ctx.effect?.id));
 
     if (!wantsToSummon) {
       return false;

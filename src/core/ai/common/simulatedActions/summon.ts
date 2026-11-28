@@ -53,6 +53,7 @@ import {
   recordCompletedSimulatedSummon,
   chooseRankedCards,
   getActionCandidates,
+  getOptionalSummonResponder,
   hasOpenMonsterZone,
   hasRequiredSelections,
   markSimulatedPassiveUsed,
@@ -72,6 +73,7 @@ import type {
   SimulatedCardState,
   SimulatedPlayerState,
 } from "../../../contracts/aiState.js";
+import type { AIOptionalSummonActionType, AIOptionalSummonRequest } from "../../../contracts/ai.js";
 import type {
   GameCard,
   SpecialSummonProcedure,
@@ -864,6 +866,20 @@ export function simulateSynchroSummon(
 
 }
 
+/** B6: the simulated AI's answer, read as the runtime reads its seat's. */
+function simulatedAIConfirmsOptionalSummon(
+  ctx: Pick<SimulatedActionHandlerContext<AIOptionalSummonActionType>, "state" | "options">,
+  request: AIOptionalSummonRequest<SimulatedCardState, SimulatedPlayerState>,
+): boolean {
+  const { state, options } = ctx;
+  return aiConfirmsFollowupSummon(getOptionalSummonResponder(options), request.player, () => ({
+    ...request,
+    mode: "simulation",
+    phase: state.phase ?? null,
+    turnCounter: state.turnCounter ?? null,
+  }));
+}
+
 export function applySearchThenOptionalSpecialSummonFromHand(
   ctx: SimulatedActionHandlerContext<"search_then_optional_special_summon_from_hand">,
 ): void | typeof STOP_SIMULATION {
@@ -899,7 +915,10 @@ export function applySearchThenOptionalSpecialSummonFromHand(
       selfId,
       options,
     }) &&
-    (action.optional === false || aiConfirmsFollowupSummon());
+    (action.optional === false || simulatedAIConfirmsOptionalSummon(ctx, {
+      actionType: action.type, card: searched, player: targetPlayer,
+      sourceCard: options.sourceCard ?? null, effectId: options.effect?.id ?? null,
+    }));
   if (!canSummon) return;
 
   // The label is exclusive so a decision planned for another step of the
@@ -1295,7 +1314,7 @@ export function applySpecialSummonToken(
 
 export function applyConditionalSummonFromHand(
   ctx: SimulatedActionHandlerContext<"conditional_summon_from_hand">,
-): void {
+): void | false {
   const {
     action,
     targets,
@@ -1318,6 +1337,12 @@ export function applyConditionalSummonFromHand(
     !evaluateSimulatedConditions(action.condition, { state, selfId, options })
   ) return;
   if (canSimSpecialSummon(chosen, targetPlayer)) {
+    // As in the runtime resolver: an optional summon asks the AI, and a
+    // refusal fails the action, which the dispatcher treats as the runtime does.
+    if (action.optional !== false && !simulatedAIConfirmsOptionalSummon(ctx, {
+      actionType: action.type, card: chosen, player: targetPlayer,
+      sourceCard: options.sourceCard ?? null, effectId: options.effect?.id ?? null,
+    })) return false;
     removeCardFromZones(targetPlayer, chosen);
     applySummonState(
       chosen,
