@@ -524,7 +524,7 @@ export function bindGeneratedMainPhaseAction(
   let zone: CanonicalZone;
   switch (action.type) {
     case "summon": case "spell": case "set_spell_trap":
-    case "handIgnition": case "handSummonProcedure": case "special_summon_sanctum_protector":
+    case "handIgnition": case "handSummonProcedure":
       zone = "hand";
       source = bot.hand[resolveHandIndexForAction(bot, action)];
       break;
@@ -677,21 +677,6 @@ export function filterValidActionsForCurrentState(
         { activationContext },
       );
       return preview ? preview.ok !== false : true;
-    }
-    if (action.type === "special_summon_sanctum_protector") {
-      const handIndex = resolveHandIndexForAction(bot, action, "monster");
-      if (handIndex < 0) return false;
-      const materialIndex = Number.isInteger(action.materialIndex)
-        ? action.materialIndex
-        : bot.field.findIndex(
-            (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown,
-          );
-      const material = bot.field[materialIndex!];
-      return !!(
-        material &&
-        material.name === "Luminarch Aegisbearer" &&
-        !material.isFacedown
-      );
     }
     if (action.type === "handIgnition") {
       const handIndex = resolveHandIndexForAction(bot, action, "monster");

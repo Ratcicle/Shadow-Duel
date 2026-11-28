@@ -71,7 +71,6 @@ interface LuminarchAction {
   index?: number;
   fieldIndex?: number;
   zoneIndex?: number;
-  materialIndex?: number | undefined;
   position?: "attack" | "defense" | "choice";
   facedown?: boolean;
   targetRef?: string;
@@ -101,12 +100,6 @@ interface LuminarchSimulationOptions extends Pick<NonNullable<Parameters<typeof 
   citadelTempBuff?: unknown;
   sourceAction?: LuminarchAction;
   activationContext?: LuminarchActivationContext;
-  actionOverrides?: {
-    handIgnition?: (input: LuminarchActionOverrideInput) => unknown;
-    special_summon_sanctum_protector?: (
-      input: LuminarchActionOverrideInput,
-    ) => unknown;
-  };
 }
 
 interface LuminarchSearchContext {
@@ -130,25 +123,6 @@ interface LuminarchPositionContext extends LuminarchSearchContext {
   action?: LuminarchAction | undefined;
   sourceAction?: LuminarchAction | undefined;
   options?: LuminarchSimulationOptions | undefined;
-}
-
-interface LuminarchActionOverrideInput {
-  state: LuminarchState;
-  action: LuminarchAction;
-  options: LuminarchSimulationOptions;
-  player?: SimulatedPlayerState;
-  card?: SimulatedCardState;
-  newCard?: SimulatedCardState;
-  resolveSimulatedHandIndex(
-    player: SimulatedPlayerState,
-    action: LuminarchAction,
-    expectedKind?: string | string[] | null,
-  ): number;
-  resolveSimulatedFieldIndex(
-    player: SimulatedPlayerState,
-    action: Partial<LuminarchAction>,
-    predicate?: ((card: SimulatedCardState) => boolean) | null,
-  ): number;
 }
 
 interface LuminarchBattleEvent {
@@ -431,44 +405,6 @@ export function simulateLuminarchSearch(
     }),
   } });
   return player.hand.find(card => !before.has(card)) || null;
-}
-
-function handleSanctumProtectorShortcut({
-  state,
-  action,
-  options,
-  resolveSimulatedHandIndex,
-}: LuminarchActionOverrideInput): true {
-  const player = state.bot;
-  const handIndex = resolveSimulatedHandIndex(
-    player,
-    {
-      ...action,
-      cardName: action.cardName || "Luminarch Sanctum Protector",
-    },
-    "monster",
-  );
-  if (handIndex < 0) return true;
-  const materialIndex = Number.isInteger(action.materialIndex) ? action.materialIndex! :
-    player.field.findIndex(card => card.name === AEGISBEARER_NAME && !card.isFacedown);
-  if (materialIndex < 0) return true;
-  const material = player.field[materialIndex];
-  const protector = player.hand[handIndex];
-  if (!protector || protector.name !== "Luminarch Sanctum Protector" || !material ||
-    material.name !== AEGISBEARER_NAME || material.isFacedown || material.instanceId === undefined) return true;
-  const effect = protector.effects?.find(effect => effect.timing === "ignition" && effect.activationZones?.includes("hand"));
-  const costTarget = effect?.targets?.find(target => target.intent === "cost");
-  if (!effect || !costTarget) return true;
-  applyGenericSimulatedMainPhaseAction(state, {
-    type: "handIgnition", index: handIndex, cardName: protector.name, effectId: effect.id, priority: 0,
-    activationContext: {
-      decisions: { selections: { [costTarget.id]: [material.instanceId] } },
-      actionContext: { specialSummonPositions: {
-        byName: { [protector.name]: action.position === "attack" ? "attack" : "defense" },
-      } },
-    },
-  }, options);
-  return true;
 }
 
 function ensureLuminarchSimMeta(
@@ -1418,10 +1354,6 @@ export function buildLuminarchSimulationOptions(
           options,
           activationContext: context?.activationContext,
         }),
-      actionOverrides: {
-        ...(options.actionOverrides || {}),
-        special_summon_sanctum_protector: handleSanctumProtectorShortcut,
-      },
     };
 }
 

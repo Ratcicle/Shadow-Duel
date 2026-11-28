@@ -70,6 +70,7 @@ export function createPlanningOwnerPolicy(
   if (policy.evaluateRecruitCandidate) result.evaluateRecruitCandidate = (cards, ctx) => policy.evaluateRecruitCandidate!(cards, context(ctx));
   if (policy.chooseSpecialSummonPosition) result.chooseSpecialSummonPosition = (card, ctx) => policy.chooseSpecialSummonPosition!(card, context(ctx));
   if (policy.chooseActionCase) result.chooseActionCase = (cases, ctx) => policy.chooseActionCase!(cases, context(ctx));
+  if (policy.optionalSummonResponder) result.optionalSummonResponder = { ...policy.optionalSummonResponder, seatId: owner.id };
   if (policy.evaluateSimulatedConditions) result.evaluateSimulatedConditions = (conditions, ctx) => policy.evaluateSimulatedConditions!(conditions, context(ctx));
   if (policy.onEffectActivated) result.onEffectActivated = payload => policy.onEffectActivated!(context(payload));
   if (policy.onAfterSpecialSummon) result.onAfterSpecialSummon = payload => policy.onAfterSpecialSummon!(context(payload));

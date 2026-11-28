@@ -162,10 +162,15 @@ export function selectBestAscension(
     // Base: ATK
     score += (asc.atk || 0) / 100;
 
-    // Shadow-Heart Arctroth Pursuer (123): melhor contra ameaças únicas fortes
-    if (asc.id === 123 && oppHasThreats) {
-      score += 5; // O drain de ATK/DEF é ótimo contra bosses
-    }
+    // Ajuste do pacote da estratégia, na mesma ordem do antigo bônus por carta
+    const adjustment = bot.strategy?.adjustAutomaticAscensionScore?.({
+      material,
+      ascensionCard: asc,
+      game,
+      bot,
+      opponent,
+    });
+    if (adjustment) score += adjustment;
 
     // Priorizar ATK maior se não há contexto específico
     if (!oppHasThreats && oppFieldSize === 0) {
@@ -181,25 +186,15 @@ export function selectBestAscension(
   return scored[0]!.asc;
 }
 
+/**
+ * The declarative fallback (the card's ascension.position or "choice"); a strategy decides concrete
+ * positions through its Ascension hooks, its planned actions or chooseSpecialSummonPosition.
+ */
 export function getAscensionPositionPreference(
-  bot: BotRuntimePort,
+  _bot: BotRuntimePort,
   ascensionCard: GameCard,
   _material: GameCard,
-  game: BotGamePort,
+  _game: BotGamePort,
 ): BattlePositionInput {
-  if (ascensionCard?.name !== "Metal Armored Dragon") {
-    return ascensionCard?.ascension?.position || "choice";
-  }
-
-  const opponent = resolvePublicOpponent(bot, game);
-  const oppStrongestATK = (opponent?.field || []).reduce(
-    (max, monster) => Math.max(max, monster?.atk || 0),
-    0,
-  );
-
-  if (oppStrongestATK >= (ascensionCard.atk || 0)) {
-    return "defense";
-  }
-
-  return "attack";
+  return ascensionCard?.ascension?.position || "choice";
 }

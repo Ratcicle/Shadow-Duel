@@ -12,9 +12,11 @@ import {
   getPiercingDamage,
 } from "./cardStats.js";
 import { getCardComparableAttribute } from "../../Card.js";
-import AutoSelector, { allowsUnplannedFallback, resolvePlannedSelection } from "../../AutoSelector.js";
+import AutoSelector, {
+  allowsUnplannedFallback, resolvePlannedSelection, resolvePreferredSelectionCount,
+} from "../../AutoSelector.js";
 import { getCounterValue } from "./counters.js";
-import type { AIDecisionPlan } from "../../contracts/ai.js";
+import type { AIDecisionPlan, AITargetCountPreference } from "../../contracts/ai.js";
 import { cardMatchesFilter } from "./cardFilters.js";
 import {
   estimateCardValue,
@@ -98,7 +100,7 @@ interface TargetSelectionOptions {
   opponentLp?: number;
 }
 
-interface TargetPreference {
+interface TargetPreference extends AITargetCountPreference {
   intent?: TargetIntent;
   role?: "recursion" | "temporary_stat_buff" | "temporary_stat_debuff" | string;
   purpose?: "combat" | "defense" | "offense" | "pressure" | "stabilize" | "value" | string;
@@ -272,20 +274,37 @@ export function getCardInstanceId(
   ) as CardInstanceKey | null;
 }
 
+function getTargetPreferenceMap(options: TargetSelectionOptions): TargetPreferenceMap {
+  return (
+    options.targetPreferences ||
+    options.activationContext?.actionContext?.targetPreferences ||
+    options.actionContext?.targetPreferences ||
+    {}
+  );
+}
+
 export function getTargetPreference(
   options: TargetSelectionOptions = {},
   targetId: string | null | undefined = null,
 ): TargetPreference | null {
-  const byTarget =
-    options.targetPreferences ||
-    options.activationContext?.actionContext?.targetPreferences ||
-    options.actionContext?.targetPreferences ||
-    {};
+  const byTarget = getTargetPreferenceMap(options);
   return (
     (targetId && byTarget?.[targetId]) ||
     options.targetPreference ||
     null
   );
+}
+
+/**
+ * D9: the count declared in the requirement's own entry of the simulation's
+ * preference map; a shared `targetPreference` never declares one. The runtime
+ * reads only `activationContext.actionContext.targetPreferences`.
+ */
+export function getDeclaredPreferredCount(
+  options: TargetSelectionOptions,
+  targetId: string,
+): number | undefined {
+  return getTargetPreferenceMap(options)[targetId]?.preferredCount;
 }
 
 export function getCostPreference(
@@ -993,10 +1012,14 @@ export function selectSimulatedTargets({
     const exact = exactSelection(target.id, filtered, count, mandatoryFallback && intent !== "cost");
     // Outside costs, take as many targets as the runtime AutoSelector does
     // for the bot: the minimum of a range, or one optional target only when
-    // it would choose it. An exact plan keeps its own count.
-    let pickCount = intent === "cost" || exact !== undefined
+    // it would choose it. An exact plan keeps its own count; a count the
+    // strategy declared for this requirement (D9) replaces the default.
+    const preferred = exact === undefined
+      ? resolvePreferredSelectionCount(getDeclaredPreferredCount(options, target.id), count, ordered.length)
+      : null;
+    let pickCount = preferred ?? (intent === "cost" || exact !== undefined
       ? min
-      : selectRuntimeOptionalCount(target, ordered, count, self, opponent, intent);
+      : selectRuntimeOptionalCount(target, ordered, count, self, opponent, intent));
     const pooledCost = intent === "cost" ? effect?.activationCosts?.find(action =>
       action.type === "remove_counters_from_field" && action.targetRef === target.id) : undefined;
     if (exact === undefined && pooledCost?.type === "remove_counters_from_field") {

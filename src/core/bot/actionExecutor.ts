@@ -2,7 +2,6 @@ import { executeAscensionAction } from "./actionExecutors/ascension.js";
 import { isPlanningActionPresenceCurrent } from "../ai/common/actionIdentity.js";
 import { executeExtraDeckProcedureAction, executeSynchroAction } from "./actionExecutors/extraDeck.js";
 import {
-  executeSpecialSummonSanctumProtectorAction,
   executeHandSummonProcedureAction,
   executeSummonAction,
 } from "./actionExecutors/summon.js";
@@ -28,7 +27,6 @@ const EXECUTORS = {
   synchro: executeSynchroAction,
   extraDeckProcedure: executeExtraDeckProcedureAction,
   handSummonProcedure: executeHandSummonProcedureAction,
-  special_summon_sanctum_protector: executeSpecialSummonSanctumProtectorAction,
   position_change: executePositionChangeAction,
   summon: executeSummonAction,
   spell: executeSpellAction,

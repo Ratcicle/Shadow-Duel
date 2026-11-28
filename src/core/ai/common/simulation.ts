@@ -23,7 +23,7 @@ import { getGraveyardBanishBurnEntries } from "./simulatedActions/destruction.js
 import { collectProcedureCounterSources, getCounterValue, setCounterValue } from "./counters.js";
 import { prepareSimulatedFieldCounterPayment } from "./simulatedActions/counters.js";
 import { getBaseLpCost } from "../../effects/costs/lpCost.js";
-import { chooseSpecialSummonPosition, resolveActionPlayer, resolveSimulatedLpCost } from "./simulatedActions/shared.js";
+import { chooseSpecialSummonPosition, getOptionalSummonResponder, resolveActionPlayer, resolveSimulatedLpCost } from "./simulatedActions/shared.js";
 import { resolveTargetsForAction, captureSimulatedReferences, captureSimulatedSourceSnapshot, isSimulatedReferencePresenceValid, isSimulatedSourcePresenceValid, areRequiredContextualReferencesValid, recordCompletedSimulatedSummon } from "./simulatedActions/shared.js";
 import { buildEventReferenceContext } from "../../effects/targeting/references.js";
 import { appendSimulatedZoneCard } from "./zones.js";
@@ -569,12 +569,14 @@ export function normalizePlanningOwnerPolicy(
     normalized.strategy?.chooseSpecialSummonPosition?.bind(normalized.strategy);
   const chooseActionCase = normalized.chooseActionCase ||
     normalized.strategy?.chooseActionCase?.bind(normalized.strategy);
+  const optionalSummonResponder = getOptionalSummonResponder(normalized);
   return {
     ...normalized,
     ...(rankSearchCandidates ? { rankSearchCandidates } : {}),
     ...(evaluateRecruitCandidate ? { evaluateRecruitCandidate } : {}),
     ...(chooseSpecialSummonPosition ? { chooseSpecialSummonPosition } : {}),
     ...(chooseActionCase ? { chooseActionCase } : {}),
+    ...(optionalSummonResponder ? { optionalSummonResponder } : {}),
     ...(options.onEffectActivated ? { onEffectActivated: options.onEffectActivated } : {}),
     ...(strategy?.buildActivationContextForEffect ? {
       buildActivationContextForEffect: strategy.buildActivationContextForEffect.bind(strategy),
@@ -2664,7 +2666,7 @@ export function applyGenericSimulatedMainPhaseAction<
 
   // Authoritative physical references are checked before strategy overrides.
   // This prevents an adapter from substituting an absent/expired copy.
-  const handTypes = ["summon", "spell", "set_spell_trap", "handIgnition", "handSummonProcedure", "special_summon_sanctum_protector"];
+  const handTypes = ["summon", "spell", "set_spell_trap", "handIgnition", "handSummonProcedure"];
   if (handTypes.includes(action.type)) {
     const bound = resolvePlanningCard(state.bot.hand, action.card, state.bot.id, "hand", action);
     if (bound.explicit && !bound.card) return state;
@@ -3661,9 +3663,6 @@ export function applyGenericSimulatedMainPhaseAction<
       break;
     }
 
-    // These actions are handled by strategy overrides, or leave this generic simulation unchanged.
-    case "special_summon_sanctum_protector":
-      break;
     default:
       action satisfies never;
       break;

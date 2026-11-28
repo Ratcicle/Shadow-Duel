@@ -32,6 +32,8 @@ import type {
 } from "../../../contracts/actions.js";
 import type {
   AIActivationContext,
+  AIOptionalSummonPolicy,
+  AIOptionalSummonResponder,
   SimulatedActionHandlerContext as CanonicalSimulatedActionHandlerContext,
 } from "../../../contracts/ai.js";
 import type {
@@ -159,7 +161,9 @@ interface SimulatedRecruitResult {
   best?: SimulatedCardState | null;
 }
 
-export interface SimulatedStrategyCapabilities {
+export interface SimulatedStrategyCapabilities extends AIOptionalSummonPolicy {
+  /** The strategy's seat, the only controller its optional-summon hook answers for. */
+  readonly bot?: { readonly id?: PlayerId | string | undefined } | null | undefined;
   buildActivationContextForEffect?(input: {
     sourceCard: SimulatedCardState;
     effect: EffectDefinition;
@@ -318,6 +322,7 @@ export interface SimulatedActionOptions {
   targetPreference?: object | null;
   targetPreferences?: object;
   costPreferences?: object;
+  optionalSummonResponder?: AIOptionalSummonResponder;
   rankSearchCandidates?(
     candidates: SimulatedCardState[],
     action: CardAction,
@@ -1105,6 +1110,17 @@ export function getRecruitEvaluator(
     options.strategy?.evaluateRecruitCandidate?.bind(options.strategy) ||
     null
   );
+}
+
+/** B6: the simulated AI's optional-summon hook and its seat, as the runtime reads its strategy's. */
+export function getOptionalSummonResponder(
+  options: SimulatedActionOptions = {},
+): AIOptionalSummonResponder | null {
+  if (options.optionalSummonResponder) return options.optionalSummonResponder;
+  const strategy = options.strategy;
+  const confirm = strategy?.confirmOptionalSummon;
+  const seatId = strategy?.bot?.id;
+  return confirm && seatId != null ? { seatId, confirm: confirm.bind(strategy) } : null;
 }
 
 export function chooseRankedCards(

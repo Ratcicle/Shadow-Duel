@@ -60,7 +60,6 @@ type ExpectedAIActionType =
   | "synchro"
   | "extraDeckProcedure"
   | "handSummonProcedure"
-  | "special_summon_sanctum_protector"
   | "position_change"
   | "summon"
   | "spell"

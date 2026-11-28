@@ -1,4 +1,5 @@
 import type { ActionOf, ActionType, CardAction } from "./actions.js";
+import type { AIOptionalSummonPolicy } from "./ai.js";
 import type { FieldSlot } from "./placement.js";
 import type { DecisionBrokerPort } from "./decisions.js";
 import type { AdditionalNormalSummonPermission, NormalSummonOptions, NormalSummonRecord } from "./player.js";
@@ -235,7 +236,7 @@ export interface ActionRuntimePlayer {
   ): MaybePromise<number | boolean | void>;
 }
 
-export interface ActionRuntimeStrategyPort {
+export interface ActionRuntimeStrategyPort extends AIOptionalSummonPolicy {
   selectCardsForEffect?(
     candidates: ActionRuntimeCard[],
     count: number,

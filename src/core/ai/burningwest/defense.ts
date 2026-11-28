@@ -1,6 +1,6 @@
 import { BW, hasPeacemakerAttachment } from "./knowledge.js";
 import type { AIState } from "../../contracts/ai.js";
-import type { BurningWestActivationContext, BurningWestActivationOptions } from "./contracts.js";
+import type { BurningWestActivationContext } from "./contracts.js";
 import type { EffectDefinition } from "../../contracts/effects.js";
 import type { ChainEffect } from "../../contracts/chainRuntime.js";
 import type { CanonicalZone } from "../../contracts/zones.js";
@@ -42,8 +42,6 @@ type Option = { card?: Card; effect?: EffectDefinition | ChainEffect; zone?: Can
 type Chain = { getChainSummary?(): Array<{ cardName?: string | null; controllerId?: string | null }> };
 type Evaluation = { reason?: string; ownTarget?: Card | null; opponentTarget?: Card | null; bestCandidate?: Card | null; threat?: Threat };
 type DefenseResponse<Candidate extends Option> = Evaluation & { option: Candidate; pass: boolean; score: number; reason: string; threatenedCards?: Card[] };
-type ActionContext = NonNullable<BurningWestActivationContext["actionContext"]>;
-type BuilderInput = { option?: Option; analysis?: Analysis; context?: Context; evaluation?: Evaluation; buildActivationContext?(card: Card | undefined, analysis: Analysis, options: Omit<BurningWestActivationOptions, "effect"> & { effect?: EffectDefinition | ChainEffect | undefined; reason?: string | undefined }): BurningWestActivationContext };
 type ReplacementInput = { game?: Game | null; player?: Player | null; sourceCard?: Card | null; effect?: EffectDefinition; replacementEffect?: unknown; targetCard?: Card | null; cause?: unknown; fromZone?: string; context?: Context; kind?: string; analysis?: Analysis };
 
 
@@ -457,13 +455,6 @@ function getDefenseCandidates(player: Player | null | undefined) {
   ].filter((card) => isMonster(card) && isBurningWest(card) && numberValue(card?.level, 0) <= 5);
 }
 
-function getPreferredAmbushPosition(card: Card | null | undefined, threat: Threat | null | undefined) {
-  const name = getCardName(card);
-  if (name === BW.PREACHER || name === BW.UNDERTAKER) return "defense";
-  if (threat?.attacker && getEffectiveAtk(card) + 500 >= getEffectiveAtk(threat.attacker)) return "attack";
-  return getEffectiveDef(card) + 500 >= getEffectiveAtk(threat?.attacker) ? "defense" : "attack";
-}
-
 function scoreAmbushCandidate(card: Card | null | undefined, threat: Threat | null | undefined, analysis: Analysis = {}) {
   if (!card || !threat?.attacker) return 0;
   const name = getCardName(card);
@@ -781,91 +772,6 @@ export function evaluateBurningWestLawResponse<Candidate extends Option>(option:
       ? "Law target value is too low"
       : `Law protects ${protectedName}`,
     threatenedCards: important.map((entry) => entry.card)
-  };
-}
-
-function getPreferredInstanceIds(cards: Cards) {
-  return compactCards(cards)
-    .map((card) => card?.instanceId || card?.uuid || card?.id)
-    .filter(Boolean) as Array<string | number>;
-}
-
-function mergeActionContext(base: ActionContext | null | undefined, addition: ActionContext | null | undefined) {
-  return {
-    ...(base || {}),
-    ...(addition || {}),
-    targetPreferences: {
-      ...(base?.targetPreferences || {}),
-      ...(addition?.targetPreferences || {})
-    },
-    specialSummonPositions: {
-      ...(base?.specialSummonPositions || {}),
-      ...(addition?.specialSummonPositions || {}),
-      byName: {
-        ...(base?.specialSummonPositions?.byName || {}),
-        ...(addition?.specialSummonPositions?.byName || {})
-      }
-    }
-  };
-}
-
-export function buildBurningWestDefenseActivationContext({
-  option,
-  analysis = {},
-  context = {},
-  evaluation = {},
-  buildActivationContext
-}: BuilderInput = {}) {
-  const card = option?.card;
-  const base = typeof buildActivationContext === "function"
-    ? buildActivationContext(card, analysis, {
-        zone: option?.zone,
-        sourceZone: option?.zone,
-        activationZone: option?.zone,
-        effect: option?.effect,
-        reason: evaluation.reason
-      })
-    : {};
-
-  const name = getCardName(card);
-  let actionContext = base?.actionContext || {};
-
-  if (name === BW.QUICK_DRAW) {
-    actionContext = mergeActionContext(actionContext, {
-      targetPreferences: {
-        quick_draw_burning_west_target: {
-          intent: "benefit",
-          role: "named_preference",
-          preferredInstanceIds: getPreferredInstanceIds([evaluation.ownTarget]),
-          preferredNames: [getCardName(evaluation.ownTarget)].filter(Boolean)
-        },
-        quick_draw_opponent_target: {
-          intent: "harm",
-          role: "named_preference",
-          preferredInstanceIds: getPreferredInstanceIds([evaluation.opponentTarget]),
-          preferredNames: [getCardName(evaluation.opponentTarget)].filter(Boolean)
-        }
-      }
-    });
-  }
-
-  if (name === BW.AMBUSH && evaluation.bestCandidate) {
-    actionContext = mergeActionContext(actionContext, {
-      specialSummonPositions: {
-        byName: {
-          [getCardName(evaluation.bestCandidate)]: getPreferredAmbushPosition(evaluation.bestCandidate, evaluation.threat)
-        }
-      }
-    });
-  }
-
-  return {
-    ...base,
-    sourceName: name,
-    sourceZone: option?.zone || base?.sourceZone,
-    activationZone: option?.zone || base?.activationZone,
-    chainContext: context,
-    actionContext
   };
 }
 

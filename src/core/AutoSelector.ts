@@ -22,7 +22,7 @@ import type {
   SelectionStrategy,
 } from "./contracts/selection.js";
 import type { SelectionCandidateKey } from "./contracts/primitives.js";
-import type { AIDecisionPlan } from "./contracts/ai.js";
+import type { AIDecisionPlan, AITargetCountPreference } from "./contracts/ai.js";
 import type { CardAction } from "./contracts/actions.js";
 import type { TriggerRequirement } from "./contracts/effects.js";
 
@@ -128,7 +128,7 @@ type AutoSelectorRole =
   | "temporary_stat_buff"
   | "stance_dance_buff";
 
-interface AutoSelectorPreference {
+interface AutoSelectorPreference extends AITargetCountPreference {
   intent?: SelectionIntent;
   role?: AutoSelectorRole;
   purpose?: string;
@@ -255,6 +255,20 @@ export function allowsResolutionChoiceFallback(
   activationContext: { readonly payingActivationCosts?: boolean | undefined } | null | undefined,
 ): boolean {
   return activationContext?.payingActivationCosts !== true && allowsUnplannedFallback(effect);
+}
+
+/**
+ * D9: the count a strategy declared for one requirement, clamped to its range
+ * and candidates, or null when nothing valid was declared (today's count).
+ * Shared by the AutoSelector and the simulation, so both take the same count.
+ */
+export function resolvePreferredSelectionCount(
+  preferredCount: number | undefined,
+  limits: { readonly min: number; readonly max: number },
+  available: number,
+): number | null {
+  if (preferredCount === undefined || !Number.isInteger(preferredCount) || preferredCount < 0) return null;
+  return Math.max(0, Math.min(Math.max(preferredCount, limits.min), limits.max, available));
 }
 
 export type PlannedSelectionResolution<Card> =
@@ -600,6 +614,13 @@ export default class AutoSelector {
     const max = Number(limits.max ?? min);
     const available = Array.isArray(candidates) ? candidates.length : 0;
     if (available <= 0) return 0;
+
+    const preferred = resolvePreferredSelectionCount(
+      getDeclaredPreferredCount(requirement, context),
+      { min, max },
+      available,
+    );
+    if (preferred !== null) return preferred;
 
     if (min > 0) {
       return Math.min(min, max, available);
@@ -1052,6 +1073,16 @@ function getTargetPreference(
   const byTarget = actionContext.targetPreferences || {};
   if (requirementId && byTarget[requirementId]) return byTarget[requirementId];
   return actionContext.targetPreference || null;
+}
+
+/** D9: only the requirement's own entry declares a count, never the shared or cost preference. */
+function getDeclaredPreferredCount(
+  requirement: AutoSelectionRequirement,
+  context: AutoSelectorContext,
+): number | undefined {
+  const requirementId = requirement.id || null;
+  const byTarget = context.activationContext?.actionContext?.targetPreferences;
+  return requirementId ? byTarget?.[requirementId]?.preferredCount : undefined;
 }
 
 function mergeCostPreference(

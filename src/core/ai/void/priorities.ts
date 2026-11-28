@@ -6,6 +6,7 @@ import type { NormalSummonPlayerReadView, NormalSummonGameReadView } from "../..
 import { canUseNormalSummonForCard } from "../../Player.js";
 import { getNormalSummonTributeOptions } from "../../game/summon/tributeValue.js";
 import type { buildStrategyAnalysis } from "../common/analysis.js";
+import type { ChainStrategyPort, ChainStrategyResponse } from "../../contracts/chainRuntime.js";
 type StrategyCard = (GameCard | SimulatedCardState) & { usedEffectThisTurn?: boolean };
 type Player = Partial<Omit<AIStrategyBotPort, "field">> & { field?: StrategyCard[]; game?: Game };
 interface Game extends Partial<Omit<AiStateShape, "effectEngine" | "_gameRef" | "bot" | "player" | "opponent" | "_isPerspectiveState">> {
@@ -1223,4 +1224,31 @@ function hasVoidFaceupNormalSummonValue(card: StrategyCard) {
             effect.summonMethods.includes("normal") ||
             effect.summonMethods.includes("tribute")))),
   );
+}
+
+type VoidChainResponseInput = Parameters<NonNullable<ChainStrategyPort["chooseChainResponse"]>>[0];
+
+const VOID_MIRROR_DIMENSION = "Void Mirror Dimension";
+
+/**
+ * Chain response of the Void pack: Void Mirror Dimension answers a Summon
+ * when the hand holds monsters of the summoned Level. The bonus shifts its
+ * generic fallback score; the generic fallback still ranks and rolls.
+ */
+export function chooseVoidChainResponse(
+  { player, activatable, context }: VoidChainResponseInput,
+): ChainStrategyResponse | null {
+  if (context?.type !== "summon") return null;
+  const mirrors = activatable.filter(option => option?.card?.name === VOID_MIRROR_DIMENSION);
+  if (mirrors.length === 0) return null;
+  const summonedLevel = context.card?.level || 0;
+  const matchingMonsters =
+    player?.hand?.filter(
+      (card) => card.cardKind === "monster" && card.level === summonedLevel,
+    ).length || 0;
+  if (matchingMonsters <= 0) return null;
+  const bonus = 60 + matchingMonsters * 10;
+  return {
+    fallbackPriorityAdjustments: Object.fromEntries(mirrors.map(option => [option.candidateKey, bonus])),
+  };
 }

@@ -6,7 +6,6 @@ import type { BloomrotDefenseContext } from "./bloomrot/defense.js";
 type ExtraDeckInput = NonNullable<Parameters<typeof getBloomrotExtraDeckActions>[0]>;
 type BloomrotGame = AIState & NonNullable<ExtraDeckInput["game"]> & BloomrotPlanningGame;
 type PlanningContext = NonNullable<Parameters<typeof buildBloomrotPlanningProfile>[1]> & { analysis?: BloomrotAnalysis };
-type ActivationContext = ReturnType<typeof buildBloomrotActivationContext>;
 type ActivationInput = { sourceCard?: BloomrotCard; effect?: AIActivationContext["effect"]; player?: AIStrategyBotPort; game?: BloomrotGame; activationZone?: AIActivationContext["activationZone"] };
 type ChainInput = Partial<Parameters<NonNullable<ChainStrategyPort["chooseChainResponse"]>>[0]>;
 type ChainOption = ChainActivationCandidate & { card: BloomrotCard };
@@ -65,32 +64,6 @@ import {
 } from "./bloomrot/priorities.js";
 import { evaluateBoardBloomrot } from "./bloomrot/scoring.js";
 import { rankBloomrotSearchCandidates } from "./bloomrot/targeting.js";
-
-function bloomrotInstanceIds(card: BloomrotCard | null | undefined) {
-  return [
-    card?.instanceId,
-    card?.fieldPresenceId,
-    card?.uid,
-    card?.uuid,
-  ].filter((id) => id !== null && id !== undefined);
-}
-
-function removeAttackerFromSuddenGerminationBonusPreference(
-  activationContext: ActivationContext,
-  context: BloomrotDefenseContext = {},
-) {
-  const attacker = (context?.attacker?.card || context?.attacker || null) as BloomrotCard | null;
-  const attackerIds = new Set(bloomrotInstanceIds(attacker));
-  if (attackerIds.size === 0) return;
-
-  const preference =
-    activationContext?.actionContext?.targetPreferences
-      ?.bloomrot_sudden_germination_bonus_target;
-  if (!Array.isArray(preference?.preferredInstanceIds)) return;
-  preference.preferredInstanceIds = preference.preferredInstanceIds.filter(
-    (id) => !attackerIds.has(id),
-  );
-}
 
 export default class BloomrotStrategy extends BaseStrategy {
   declare currentAnalysis: ReturnType<typeof buildBloomrotAnalysis> | null;
@@ -251,7 +224,7 @@ export default class BloomrotStrategy extends BaseStrategy {
     player,
     activatable = [],
     context = {},
-  }: ChainInput = {}): Promise<(ChainStrategyResponse & { priority?: number }) | null> {
+  }: ChainInput = {}): Promise<ChainStrategyResponse | null> {
     if (!player || !Array.isArray(activatable) || activatable.length === 0) {
       return null;
     }
@@ -289,30 +262,13 @@ export default class BloomrotStrategy extends BaseStrategy {
     if (!best) {
       return { pass: true, reason: "no valuable Bloomrot defense response" };
     }
-    const activationContext = this.buildBloomrotActivationContext(
-      best.option.card,
-      analysis,
-      {
-        zone: "spellTrap",
-        activationZone: "spellTrap",
-        sourceZone: "spellTrap",
-        effect: best.option.effect as NonNullable<AIActivationContext["effect"]>,
-      },
-    );
-    removeAttackerFromSuddenGerminationBonusPreference(
-      activationContext,
-      context as BloomrotDefenseContext,
-    );
-
+    // The Chain response contract carries only the canonical candidate (plus exact
+    // activationContext.decisions); any other context key rejects the choice.
     return {
-      ...best.option,
-      priority: best.score,
+      card: best.option.card,
+      effect: best.option.effect,
+      candidateKey: best.option.candidateKey,
       reason: best.reason,
-      activationContext,
-      context: {
-        ...(best.option.context || context || {}),
-        activationContext,
-      },
     };
   }
 

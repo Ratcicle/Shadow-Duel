@@ -40,7 +40,7 @@ import {
   getUIText,
 } from "../i18n.js";
 import {
-  aiConfirmsFollowupSummon,
+  aiConfirmsLiveFollowupSummon,
   buildZoneSelectionCandidates,
   getUI,
   requestOptionalConfirmation,
@@ -1410,6 +1410,7 @@ export async function handleSearchThenOptionalSpecialSummonFromHand(
     game,
     player,
     searchedCard,
+    source ?? null,
     resolutionChoiceContext(game, source, ctx.effect?.id),
   );
 
@@ -1531,6 +1532,7 @@ async function shouldPerformOptionalSummon(
   game: ActionRuntimeGamePort,
   player: ActionRuntimePlayer,
   card: ActionRuntimeCard,
+  source: ActionRuntimeCard | null,
   context: ResolutionChoiceContext,
 ): Promise<boolean> {
   if (action.optional === false) return true;
@@ -1555,7 +1557,9 @@ async function shouldPerformOptionalSummon(
       },
     );
     return isPromiseLikeBoolean(result) ? !!(await result) : !!result;
-  }, aiConfirmsFollowupSummon, context);
+  }, () => aiConfirmsLiveFollowupSummon(game, {
+    actionType: action.type, card, player, sourceCard: source, effectId: context.effectId,
+  }), context);
 }
 
 /**

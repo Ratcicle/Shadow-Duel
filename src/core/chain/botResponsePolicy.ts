@@ -1,9 +1,8 @@
 import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
-import { hasActivePiercing } from "../game/combat/availability.js";
 import { normalizeChainResponseCandidate } from "../game/decisions/chainResponse.js";
 import type {
   ChainActivationCandidate,
-  ChainCard,
+  ChainEffect,
   ChainGamePort,
   ChainPlayer,
   ChainRuntimePort,
@@ -11,6 +10,14 @@ import type {
   ChainStrategyResponse,
   FastEffectContextInput,
 } from "../contracts/chainRuntime.js";
+import type { ActionType } from "../contracts/actions.js";
+
+/**
+ * Quick Spell bonus of the generic fallback score. A strategy pack whose
+ * fallbackPriorityAdjustments aim at an absolute final score for a Quick
+ * Spell derives its adjustment from this value.
+ */
+export const GENERIC_QUICK_SPELL_RESPONSE_PRIORITY = 10;
 
 function getStrategyForPlayer(
   game: ChainGamePort | null,
@@ -42,6 +49,20 @@ function buildResponseContext(
   };
 }
 
+/** Adjustment a strategy hook declared for one offered candidate, if any. */
+function fallbackPriorityAdjustment(
+  adjustments: Readonly<Record<string, number>> | null,
+  candidateKey: string,
+): number | null {
+  if (!adjustments || !Object.hasOwn(adjustments, candidateKey)) return null;
+  const value = adjustments[candidateKey];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function effectHasAction(effect: ChainEffect | null | undefined, type: ActionType): boolean {
+  return (effect?.actions || []).some(action => action?.type === type);
+}
+
 /**
  * Bot AI for choosing chain response
  * @param {Object} player
@@ -60,6 +81,7 @@ export async function botChooseChainResponse(
   const game = this.game;
   const opponent = this.getOpponent(player);
   const strategy = getStrategyForPlayer(game, player);
+  let priorityAdjustments: Readonly<Record<string, number>> | null = null;
   if (typeof strategy?.chooseChainResponse === "function") {
     const strategyResponse = await strategy.chooseChainResponse({
       chainSystem: this,
@@ -93,108 +115,28 @@ export async function botChooseChainResponse(
         return null;
       }
       const responseContext = buildResponseContext(canonicalChoice.context, strategyResponse);
-      return normalizeChainResponseCandidate(canonicalChoice, {
+      const normalized = normalizeChainResponseCandidate(canonicalChoice, {
         ...canonicalChoice,
         context: responseContext,
       });
+      if (!normalized) {
+        // The strategy chose a canonical candidate but changed its context in a
+        // way the contract refuses; the choice becomes a pass, now observable.
+        this.game?.notify?.("ai_activation_rejected", {
+          playerId: player?.id || null,
+          candidateKey: canonicalChoice.candidateKey,
+          effectId: canonicalChoice.effectId,
+          reason: "choice_not_normalizable",
+        });
+      }
+      return normalized;
     }
     if (strategyResponse?.declinedCandidateKeys?.length) {
       const declined = new Set(strategyResponse.declinedCandidateKeys);
       activatable = activatable.filter(candidate => !declined.has(candidate.candidateKey));
       if (activatable.length === 0) return null;
     }
-  }
-  const holyShieldOption = activatable.find(
-    (option) => option?.card?.name === "Luminarch Holy Shield",
-  );
-  if (holyShieldOption) {
-    const luminarchTargets = (player?.field || []).filter(
-      (card) =>
-        card &&
-        card.cardKind === "monster" &&
-        card.archetype === "Luminarch" &&
-        !card.isFacedown,
-    );
-    const oppAttackers = (opponent?.field || []).filter(
-      (card) =>
-        card &&
-        card.cardKind === "monster" &&
-        !card.isFacedown &&
-        card.position === "attack",
-    );
-
-    const wouldLoseOrTakeDamage = (
-      attacker: ChainCard | null | undefined,
-      defender: ChainCard | null | undefined,
-    ) => {
-      if (!attacker || !defender)
-        return { loseMonster: false, takeDamage: false };
-      const atk = attacker.atk || 0;
-      const isDefense = defender.position === "defense";
-      const defStat = isDefense ? defender.def || 0 : defender.atk || 0;
-
-      if (!isDefense) {
-        if (atk > defStat) return { loseMonster: true, takeDamage: true };
-        if (atk === defStat) return { loseMonster: true, takeDamage: false };
-        return { loseMonster: false, takeDamage: false };
-      }
-
-      if (atk > defStat) {
-        return {
-          loseMonster: true,
-          takeDamage: hasActivePiercing(attacker),
-        };
-      }
-      return { loseMonster: false, takeDamage: false };
-    };
-
-    const attacker = context?.attacker || null;
-    const defender = context?.defender || context?.target || null;
-    const defenderOwnerId =
-      context?.defenderOwner?.id ||
-      context?.targetOwner?.id ||
-      (defender?.owner === "player"
-        ? this.game?.player?.id
-        : this.game?.bot?.id);
-    const attackerOwnerId = context?.attackerOwner?.id || attacker?.owner;
-
-    const isDefendingSelf =
-      defender && defenderOwnerId && defenderOwnerId === player.id;
-    const isOpponentAttack =
-      attacker && attackerOwnerId && attackerOwnerId !== player.id;
-    const isBattleContext =
-      context?.type === "attack_declaration" ||
-      context?.type === "battle_damage";
-    const isHolyShieldTiming =
-      isBattleContext &&
-      isOpponentAttack &&
-      isDefendingSelf &&
-      defender?.archetype === "Luminarch" &&
-      !defender?.isFacedown;
-
-    let directBattleThreat = false;
-    if (isHolyShieldTiming) {
-      const outcome = wouldLoseOrTakeDamage(attacker, defender);
-      directBattleThreat = outcome.loseMonster || outcome.takeDamage;
-    }
-
-    const multipleAttackers = oppAttackers.length >= 2;
-    const anyVulnerableTarget =
-      multipleAttackers &&
-      luminarchTargets.some((monster) =>
-        oppAttackers.some((opp) => {
-          const outcome = wouldLoseOrTakeDamage(opp, monster);
-          return outcome.loseMonster || outcome.takeDamage;
-        }),
-      );
-
-    if (
-      isHolyShieldTiming &&
-      luminarchTargets.length > 0 &&
-      (directBattleThreat || anyVulnerableTarget)
-    ) {
-      return holyShieldOption;
-    }
+    priorityAdjustments = strategyResponse?.fallbackPriorityAdjustments ?? null;
   }
 
   // Evaluate each activatable card for strategic value
@@ -208,9 +150,9 @@ export async function botChooseChainResponse(
       priority += 100;
     }
 
-    // Mirror Force: High priority when opponent attacks with multiple monsters
+    // Destroy-all-attackers trap: High priority when opponent attacks with multiple monsters
     if (
-      card.name === "Mirror Force" &&
+      effectHasAction(effect, "mirror_force_destroy_all") &&
       context?.type === "attack_declaration"
     ) {
       const opponentAttackMonsters =
@@ -220,8 +162,8 @@ export async function botChooseChainResponse(
       priority += 50 + opponentAttackMonsters * 20;
     }
 
-    // Call of the Haunted: Value based on graveyard monsters
-    if (card.name === "Call of the Haunted") {
+    // Revive-and-bind trap: Value based on graveyard monsters
+    if (effectHasAction(effect, "call_of_haunted_summon_and_bind")) {
       const graveyardMonsters =
         player?.graveyard?.filter((c) => c.cardKind === "monster").length ||
         0;
@@ -235,18 +177,6 @@ export async function botChooseChainResponse(
         30 +
         Math.min(graveyardMonsters * 5, 25) +
         Math.floor(bestMonsterAtk / 100);
-    }
-
-    // Void Mirror Dimension: High priority if we have matching level monsters
-    if (card.name === "Void Mirror Dimension" && context?.type === "summon") {
-      const summonedLevel = context.card?.level || 0;
-      const matchingMonsters =
-        player?.hand?.filter(
-          (c) => c.cardKind === "monster" && c.level === summonedLevel,
-        ).length || 0;
-      if (matchingMonsters > 0) {
-        priority += 60 + matchingMonsters * 10;
-      }
     }
 
     // General trap value: consider game state
@@ -264,38 +194,12 @@ export async function botChooseChainResponse(
       }
     }
 
-    if (isQuickSpell(card)) {
-      priority += 10;
-      if (card.name === "Luminarch Holy Shield") {
-        // CRITICAL: Holy Shield só deve ser ativado em contextos de batalha do OPONENTE
-        // Nunca ativar no próprio turno ou em resposta aos próprios summons
-        const isOpponentAction =
-          typeof context?.isOpponentAttack === "boolean"
-            ? context.isOpponentAttack
-            : context?.player?.id !== player?.id;
-        const isBattleContext =
-          context?.type === "attack_declaration" ||
-          context?.type === "battle_damage";
+    if (isQuickSpell(card)) priority += GENERIC_QUICK_SPELL_RESPONSE_PRIORITY;
 
-        if (isBattleContext) {
-          // Battle threats are handled by the dedicated Holy Shield block
-          // above. If execution reaches this fallback, the attack is not
-          // worth spending the shield on.
-          priority = -100;
-        } else if (!isOpponentAction) {
-          // Próprio turno ou própria ação = NÃO ATIVAR
-          priority = -100;
-        } else if (context?.type === "effect_targeted") {
-          priority += 40;
-        } else {
-          // Contexto não-battle do oponente = baixa prioridade
-          priority -= 20;
-        }
-        if (isOpponentAction && isBattleContext && player?.lp < 3000) {
-          priority += 10;
-        }
-      }
-    }
+    // Archetype knowledge lives in the strategy packs; they only shift the
+    // generic score, and this fallback still ranks and rolls.
+    const adjustment = fallbackPriorityAdjustment(priorityAdjustments, option.candidateKey);
+    if (adjustment !== null) priority += adjustment;
 
     return { ...option, priority };
   });

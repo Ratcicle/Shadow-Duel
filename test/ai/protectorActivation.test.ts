@@ -13,7 +13,7 @@ for (const seat of ["player", "bot"] as const) {
       const source = required(actor.hand[0]), cost = required(actor.field[0]), target = required(actor.field[1]);
       const discard = required(opponent.hand[0]), leviathan = required(opponent.field[0]);
       const action = generatedAction();
-      assert.equal(action.cardId, 157); assert.equal(actor.field[required(action.materialIndex)], cost);
+      assert.equal(action.cardId, 157); assert.deepEqual(action.activationContext?.decisions?.selections, { aegisbearer_cost: [cost.instanceId] });
       let offered = 0, activated = 0, costMoves = 0, summons = 0;
       game.on("effect_activated", event => { if (event.effectId === protectorEffect) activated++; });
       game.on("card_to_grave", event => { if (event.card === cost) costMoves++; });
@@ -48,7 +48,7 @@ for (const seat of ["player", "bot"] as const) {
     const chosen = required(actor.field[0]), other = required(actor.deck.find(card => card.id === 153));
     actor.deck.splice(actor.deck.indexOf(other), 1); placeFieldCards(actor.field, other);
     const action = generatedAction();
-    assert.equal(actor.field[required(action.materialIndex)], chosen);
+    assert.deepEqual(action.activationContext?.decisions?.selections, { aegisbearer_cost: [chosen.instanceId] });
     game.ui.showChainResponseModal = async () => null;
     const session = new MainPhaseSession(actor, live, async () => {});
     assert.equal(await session.execute(action, session.capture()), true);
@@ -127,11 +127,11 @@ for (const seat of ["player", "bot"] as const) {
     t.after(() => game.dispose()); await initialize();
     await game.moveCard(required(opponent.field[0]), opponent, "graveyard", { fromZone: "field", awaitEvents: true });
     const action = generatedAction(), source = required(actor.hand[0]);
-    assert.equal(action.position, "defense");
+    assert.deepEqual(action.activationContext?.actionContext, { specialSummonPositions: { byName: { [source.name]: "defense" } } });
     game.ui.showChainResponseModal = async () => null;
     const session = new MainPhaseSession(actor, live, async () => {});
     assert.equal(await session.execute(action, session.capture()), true);
-    assert.equal(source.position, action.position);
+    assert.equal(source.position, "defense");
   });
 
   test(`a forced summon position takes precedence over an AI preference (${seat})`, async t => {

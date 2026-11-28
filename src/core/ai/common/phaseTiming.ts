@@ -232,7 +232,6 @@ export function isPreBattleValueAction(
   return (
     type === "summon" ||
     type === "handSummonProcedure" ||
-    type === "special_summon_sanctum_protector" ||
     type === "extraDeckProcedure" ||
     type === "synchro" ||
     type === "ascension" ||

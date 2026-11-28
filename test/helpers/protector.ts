@@ -49,10 +49,11 @@ export function createProtectorScenario(seat: ProtectorSeat, full = false, optio
     initializeOnly: true, startAtDrawPhase: true, startingPlayer: seat, announceStartingPlayer: false,
     playerDeck: [157, 153, 153, 1, 1, 1, 1, 3, 3, 3],
     botDeck: [157, 153, 153, 1, 1, 1, 1, 3, 3, 3], playerExtraDeck: [27], botExtraDeck: [27] });
-  const generatedAction = (): AIActionOf<"special_summon_sanctum_protector"> => {
+  const generatedAction = (): AIActionOf<"handIgnition"> => {
     assert.ok(actor.strategy instanceof LuminarchStrategy);
     const action = required(actor.generateMainPhaseActions(live)
-      .find(action => action.type === "special_summon_sanctum_protector"));
+      .find((action): action is AIActionOf<"handIgnition"> =>
+        action.type === "handIgnition" && action.effectId === protectorEffect));
     assert.equal(actor.filterValidActionsForCurrentState([action], live).length, 1);
     return action;
   };

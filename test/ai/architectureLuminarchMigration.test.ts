@@ -71,7 +71,7 @@ for (const actor of ["bot", "player"] as const) {
     });
   }
   for (const configuration of ["valid", "full_field", "stale_material", "facedown_material", "negated_material"] as const) {
-    test(`Protector public shortcut delegates its exact cost and summon to runtime (${configuration}, ${actor})`, async t => {
+    test(`Protector hand ignition delegates its exact cost and summon to runtime (${configuration}, ${actor})`, async t => {
       const { game, executionGame, owner, strategy } = scenario(t, actor);
       const protector = required(game.createCardForOwner(157, owner));
       const aegis = required(game.createCardForOwner(153, owner));
@@ -83,9 +83,11 @@ for (const actor of ["bot", "player"] as const) {
       if (configuration === "full_field") {
         for (let index = 0; index < 3; index++) placeFieldCards(owner.field, required(game.createCardForOwner(151, owner)));
       }
-      const action: AIAction = { type: "special_summon_sanctum_protector", index: 0,
-        cardName: protector.name, cardId: protector.id, materialIndex: configuration === "stale_material" ? 9 : 1,
-        position: "defense", priority: 1 };
+      const material = configuration === "stale_material" ? required(game.createCardForOwner(153, owner)) : sister;
+      const action: AIAction = { type: "handIgnition", index: 0, cardName: protector.name, cardId: protector.id,
+        effectId: "luminarch_sanctum_protector_special_summon_hand", priority: 1,
+        activationContext: { decisions: { selections: { aegisbearer_cost: [required(material.instanceId)] } },
+          actionContext: { specialSummonPositions: { byName: { [protector.name]: "defense" } } } } };
       const { state } = createGameTreeCopy(game, owner);
       const executed = await owner.executeMainPhaseAction(executionGame, action);
       strategy.simulateMainPhaseAction(state, action);
@@ -94,7 +96,7 @@ for (const actor of ["bot", "player"] as const) {
       assert.deepEqual(state.bot.hand.map(card => card.instanceId), owner.hand.map(card => card.instanceId));
       assert.deepEqual(state.bot.graveyard.map(card => card.instanceId), owner.graveyard.map(card => card.instanceId));
       assert.ok(owner.field.includes(aegis), "the unselected sister copy remains on the field");
-      assert.deepEqual(state._simUnsupportedActions || [], []);
+      assert.deepEqual(state._simUnsupportedActions || [], executed ? [] : ["exact_selection:aegisbearer_cost"]);
     });
   }
   for (const configuration of ["valid", "full_field", "wrong_phase", "blocked_source"] as const) {

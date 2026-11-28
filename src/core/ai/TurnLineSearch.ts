@@ -335,8 +335,7 @@ function actionRequiresHand(actionType: AIActionType): boolean {
     actionType === "handSummonProcedure" ||
     actionType === "spell" ||
     actionType === "handIgnition" ||
-    actionType === "set_spell_trap" ||
-    actionType === "special_summon_sanctum_protector"
+    actionType === "set_spell_trap"
   );
 }
 
@@ -346,8 +345,7 @@ function expectedHandKind(
   if (
     actionType === "summon" ||
     actionType === "handSummonProcedure" ||
-    actionType === "handIgnition" ||
-    actionType === "special_summon_sanctum_protector"
+    actionType === "handIgnition"
   ) {
     return "monster";
   }

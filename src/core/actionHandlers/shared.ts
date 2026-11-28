@@ -36,6 +36,11 @@ import type {
   SelectionDecisionKind,
 } from "../contracts/decisions.js";
 import type { SelectionCandidateKey } from "../contracts/primitives.js";
+import type {
+  AIOptionalSummonContext,
+  AIOptionalSummonRequest,
+  AIOptionalSummonResponder,
+} from "../contracts/ai.js";
 
 type RuntimeCardId = number | string | null;
 
@@ -124,11 +129,39 @@ export async function requestOptionalConfirmation(
 }
 
 /**
- * AI answer to an optional Special Summon that follows a search. The runtime
- * resolver and the AI simulation read this one policy, so they cannot drift.
+ * AI answer to an optional Special Summon from the hand offered by an effect
+ * (search_then_optional_special_summon_from_hand, conditional_summon_from_hand,
+ * draw_and_summon). The runtime resolvers and the AI simulation read this one
+ * policy, so they cannot drift: the hook is asked only for its own seat, by id,
+ * and only its `false` declines. The context is built only when it is asked.
  */
-export function aiConfirmsFollowupSummon(): boolean {
-  return true;
+export function aiConfirmsFollowupSummon(
+  responder: AIOptionalSummonResponder | null,
+  player: { readonly id: string },
+  context: () => AIOptionalSummonContext,
+): boolean {
+  if (!responder || responder.seatId !== player.id) return true;
+  return responder.confirm(context()) !== false;
+}
+
+/** The runtime answer of an AI seat: its own strategy's hook (phase 2.4 B6). */
+export function aiConfirmsLiveFollowupSummon(
+  game: Pick<ActionRuntimeGamePort, "phase" | "turnCounter">,
+  request: AIOptionalSummonRequest<ActionRuntimeCard, ActionRuntimePlayer>,
+): boolean {
+  const { player } = request;
+  const strategy = player.strategy;
+  const confirm = strategy?.confirmOptionalSummon;
+  return aiConfirmsFollowupSummon(
+    confirm ? { seatId: player.id, confirm: confirm.bind(strategy) } : null,
+    player,
+    () => ({
+      ...request,
+      mode: "live",
+      phase: game.phase ?? null,
+      turnCounter: game.turnCounter ?? null,
+    }),
+  );
 }
 
 /** Preserve card choices made by a resolution modal in canonical replay. */
